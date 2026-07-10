@@ -2,6 +2,9 @@
 
 namespace App\Providers\Filament;
 
+use App\Http\Middleware\SetPermissionsTeamId;
+use App\Models\Tenant;
+use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -30,6 +33,11 @@ class AdminPanelProvider extends PanelProvider
             ->colors([
                 'primary' => Color::Amber,
             ])
+            // Tenancy nativa Filament: schema condiviso, un tenant = un partner
+            // (o il tenant master Alex). Niente self-registration: i tenant li
+            // crea solo lo staff Alex (docs/architecture.md §3, §5.1).
+            ->tenant(Tenant::class, slugAttribute: 'slug')
+            ->plugin(FilamentShieldPlugin::make())
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
             ->pages([
@@ -53,6 +61,9 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
-            ]);
+            ])
+            ->tenantMiddleware([
+                SetPermissionsTeamId::class,
+            ], isPersistent: true);
     }
 }

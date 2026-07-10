@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use Filament\Models\Contracts\HasName;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
-class Tenant extends Model
+class Tenant extends Model implements HasName
 {
     use HasUuids;
 
@@ -67,5 +68,10 @@ class Tenant extends Model
     public function deadlines(): MorphMany
     {
         return $this->morphMany(Deadline::class, 'deadlinable');
+    }
+
+    public function getFilamentName(): string
+    {
+        return $this->name;
     }
 }
