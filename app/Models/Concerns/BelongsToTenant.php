@@ -10,7 +10,11 @@ trait BelongsToTenant
     protected static function bootBelongsToTenant(): void
     {
         static::creating(function ($model) {
-            if (! $model->tenant_id && $tenant = Filament::getTenant()) {
+            // array_key_exists (non un semplice check di falsy) per distinguere
+            // "tenant_id non toccato dal form" da "impostato esplicitamente a
+            // null" - il secondo caso serve al catalogo condiviso (§4.2/§11.2),
+            // dove un master admin sceglie deliberatamente NULL = condiviso.
+            if (! array_key_exists('tenant_id', $model->getAttributes()) && $tenant = Filament::getTenant()) {
                 $model->tenant_id = $tenant->id;
             }
         });
