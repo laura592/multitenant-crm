@@ -401,6 +401,39 @@ corregge solo l'ultima, senza dover fare rollback su tutto. Prima di eseguire in
 backup fresco (il dump che hai condiviso oggi va bene come baseline, rifallo comunque appena prima
 del deploy) e dry-run su una copia locale del DB reale — non sul seed/fixture di sviluppo.
 
+### 8.2 Import dati reali in locale (`import:legacy`, eseguito 2026-07-14)
+
+Ambiente di sviluppo passato da SQLite a Docker/Sail (PHP 8.4 + MySQL 8.0, stesso stack del
+vecchio progetto — porte diverse per poter girare in parallelo: `APP_PORT=8092`,
+`FORWARD_DB_PORT=3309`, vedi `.env.example`). Il dump di produzione
+(`nbalexca_app_preventivi.sql`) è stato importato in un database separato `legacy_preventivi`
+sullo stesso container MySQL (connessione Laravel dedicata `legacy` in `config/database.php`,
+usata solo in lettura).
+
+Il comando `php artisan import:legacy` (`app/Console/Commands/ImportLegacyData.php`) legge da
+quella connessione e scrive nel nuovo schema multi-tenant:
+
+- **Catalogo** (categorie, prodotti, prezzi, compatibilità) → `tenant_id = NULL`, condiviso con
+  tutti i partner (§4.2). I gruppi di opzioni, stringa libera nello schema legacy, diventano
+  `ProductOptionGroup` distinti (selezione multipla di default — da affinare a "singola" per i
+  gruppi realmente esclusivi tramite l'interfaccia).
+- **Tutto il resto** (clienti, preventivi, righe preventivo, email, richieste informazioni,
+  comodato macchine) → tenant master (Alex), creato automaticamente se non esiste.
+- **Utenti**: `role = admin` → `is_super_admin = true`; `role = user` → assegnato al tenant
+  master. Le password (bcrypt) sono importate così come sono, restano valide.
+- Ogni riga collegata a un ID legacy mancante nella mappa (es. un `product_id` NULL) viene
+  **saltata**, non sostituita con un valore fittizio — es. 77 righe su 82 in
+  `information_request_product` avevano già `product_id NULL` in produzione, dato incompleto
+  preesistente e non un problema di import.
+
+Risultato reale importato: 210 prodotti, 205 prezzi, 1014 compatibilità, 11 categorie, 125
+clienti, 40 preventivi, 300 righe preventivo, 39 email, 96 richieste informazioni, 6 comodato
+macchine, 3 utenti (2 diventati `is_super_admin`), 7 metodi di pagamento.
+
+**Nota di sicurezza**: il database MySQL locale contiene ora dati reali di produzione (clienti,
+email, password hashate) — resta solo nel volume Docker locale, non va mai committato o condiviso;
+`.env` (con le credenziali) è già escluso da git.
+
 ## 9. Decisioni prese (2026-07-09)
 
 Tutti i punti aperti della versione precedente sono stati chiusi:
