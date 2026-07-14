@@ -2,11 +2,24 @@
 
 namespace App\Models\Concerns;
 
+use App\Models\Tenant;
 use Filament\Facades\Filament;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 trait BelongsToTenant
 {
+    /**
+     * Richiesta da Filament stesso per lo scoping automatico dei pannelli
+     * tenant-aware (whereBelongsTo cerca per convenzione un metodo chiamato
+     * come il modello del tenant). Un modello puo' definire un proprio
+     * tenant() per sovrascriverla, se mai servisse.
+     */
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
+    }
+
     protected static function bootBelongsToTenant(): void
     {
         static::creating(function ($model) {

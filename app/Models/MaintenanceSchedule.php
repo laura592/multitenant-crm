@@ -53,6 +53,19 @@ class MaintenanceSchedule extends Model
         return $this->morphMany(Deadline::class, 'deadlinable');
     }
 
+    protected static function booted(): void
+    {
+        // Tiene sempre sincronizzata un'unica Deadline per il prossimo
+        // appuntamento di manutenzione, cosi confluisce nel tableau unificato
+        // insieme alle scadenze di automezzi/tenant (docs/architecture.md §13.2).
+        static::saved(function (self $schedule) {
+            $schedule->deadlines()->updateOrCreate(
+                ['type' => Deadline::TYPE_MANUTENZIONE_ORDINARIA],
+                ['tenant_id' => $schedule->tenant_id, 'due_date' => $schedule->next_due_date, 'status' => 'attiva']
+            );
+        });
+    }
+
     /**
      * Da chiamare quando si chiude un ServiceReport di manutenzione collegato
      * a questo piano (docs/architecture.md §13.1).

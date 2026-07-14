@@ -15,6 +15,10 @@ class PaymentMethodResource extends Resource
 {
     protected static ?string $model = PaymentMethod::class;
 
+    // Tassonomia globale (nessuna colonna tenant_id, §4.2): niente scoping
+    // automatico Filament.
+    protected static bool $isScopedToTenant = false;
+
     protected static ?string $navigationIcon = 'heroicon-o-credit-card';
 
     protected static ?string $navigationGroup = 'Impostazioni';

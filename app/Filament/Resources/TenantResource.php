@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\TenantResource\Pages;
+use App\Filament\Resources\TenantResource\RelationManagers\DeadlinesRelationManager;
 use App\Models\Tenant;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -14,6 +15,10 @@ use Illuminate\Support\Str;
 class TenantResource extends Resource
 {
     protected static ?string $model = Tenant::class;
+
+    // Un tenant non "appartiene" a se stesso: niente scoping automatico
+    // Filament, l'accesso e' gia' ristretto via canViewAny() a is_super_admin.
+    protected static bool $isScopedToTenant = false;
 
     protected static ?string $navigationIcon = 'heroicon-o-building-office-2';
 
@@ -162,6 +167,13 @@ class TenantResource extends Resource
                     Tables\Actions\DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            DeadlinesRelationManager::class,
+        ];
     }
 
     public static function getPages(): array
