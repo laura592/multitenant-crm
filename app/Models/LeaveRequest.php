@@ -37,6 +37,10 @@ class LeaveRequest extends Model
         'approved_at' => 'datetime',
     ];
 
+    protected $attributes = [
+        'status' => 'richiesto',
+    ];
+
     protected static function booted(): void
     {
         static::creating(function (self $request) {

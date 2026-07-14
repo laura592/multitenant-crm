@@ -39,6 +39,10 @@ class ServiceReport extends Model
         'notes',
     ];
 
+    protected $attributes = [
+        'status' => 'bozza',
+    ];
+
     protected $casts = [
         'intervention_date' => 'date',
         'arrival_at' => 'datetime',

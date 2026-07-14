@@ -22,6 +22,11 @@ class TimeEntry extends Model
         'notes',
     ];
 
+    protected $attributes = [
+        'source' => 'app',
+        'status' => 'aperta',
+    ];
+
     protected $casts = [
         'clock_in' => 'datetime',
         'clock_out' => 'datetime',

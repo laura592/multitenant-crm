@@ -30,6 +30,7 @@ class AllResourcesSmokeTest extends TestCase
             'categories', 'product-families', 'product-option-groups', 'products',
             'customers', 'payment-methods', 'quotes', 'service-reports',
             'vehicles', 'maintenance-schedules', 'deadlines',
+            'time-entries', 'leave-requests', 'riepilogo-ore',
         ];
 
         foreach ($paths as $path) {

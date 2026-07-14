@@ -12,6 +12,7 @@
         "filament/filament": "^3.2",
         "laravel/framework": "^12.0",
         "laravel/tinker": "^2.10.1",
+        "pxlrbt/filament-excel": "^2.5",
         "spatie/laravel-permission": "^6.25"
     },
     "require-dev": {
