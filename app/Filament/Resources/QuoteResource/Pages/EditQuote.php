@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\QuoteResource\Pages;
 
+use App\Filament\Actions\ConfigureMachineAction;
 use App\Filament\Resources\QuoteResource;
 use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
@@ -13,6 +14,7 @@ class EditQuote extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
+            ConfigureMachineAction::make(),
             Actions\DeleteAction::make(),
         ];
     }
