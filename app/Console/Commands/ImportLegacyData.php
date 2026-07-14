@@ -9,6 +9,7 @@ use App\Models\InformationRequest;
 use App\Models\PaymentMethod;
 use App\Models\Product;
 use App\Models\ProductCompatibility;
+use App\Models\ProductFamily;
 use App\Models\ProductOptionGroup;
 use App\Models\ProductPrice;
 use App\Models\Quote;
@@ -36,6 +37,9 @@ class ImportLegacyData extends Command
 
     /** @var array<int, string> */
     protected array $categoryMap = [];
+
+    /** @var array<int, string> id legacy -> nome categoria, per dedurre la source dei prodotti */
+    protected array $categoryNameMap = [];
 
     /** @var array<int, string> */
     protected array $productMap = [];
@@ -158,26 +162,56 @@ class ImportLegacyData extends Command
             ]);
 
             $this->categoryMap[$row->id] = $category->id;
+            $this->categoryNameMap[$row->id] = $row->name;
         }
 
         $this->info("Categorie importate: {$rows->count()}");
     }
+
+    /**
+     * Il catalogo legacy include piu' marchi (Franke, Dalla Corte, Jura), non
+     * solo Franke: la sorgente va dedotta dal nome categoria, non assunta
+     * fissa. Ambiguo (es. trattamento acqua) -> null, non un valore a caso.
+     */
+    protected const CATEGORY_SOURCE_MAP = [
+        'Macchine Caffè Franke' => Product::SOURCE_FRANKE,
+        'Opzioni Franke' => Product::SOURCE_FRANKE,
+        'Accessori Franke' => Product::SOURCE_FRANKE,
+        'Macchine NEW A Line' => Product::SOURCE_FRANKE,
+        'Opzioni NEW A Line' => Product::SOURCE_FRANKE,
+        'Opzioni Alex' => Product::SOURCE_THIRD_PARTY,
+        'Macchine Dalla Corte' => Product::SOURCE_THIRD_PARTY,
+        'Opzioni Dalla Corte' => Product::SOURCE_THIRD_PARTY,
+        'Macinacaffè Dalla Corte' => Product::SOURCE_THIRD_PARTY,
+        'Macchine Jura' => Product::SOURCE_THIRD_PARTY,
+    ];
+
+    /** Famiglie macchina reali Franke (dal listino ufficiale). */
+    protected const FAMILY_CODES = ['SB1200', 'A1000', 'A300', 'A400', 'A600', 'A800', 'S700'];
+
+    /** @var array<string, string> nome famiglia -> id */
+    protected array $familyMap = [];
 
     protected function importProducts($legacy): void
     {
         $rows = $legacy->table('products')->get();
 
         foreach ($rows as $row) {
+            $categoryName = $this->categoryNameMap[$row->category_id] ?? null;
+            $type = $row->type === 'base' ? Product::TYPE_MACHINE : Product::TYPE_OPTION;
+
             $product = Product::create([
-                'tenant_id' => null, // catalogo condiviso: è il listino Franke ufficiale
+                'tenant_id' => null, // catalogo condiviso (§4.2)
                 'category_id' => $this->categoryMap[$row->category_id] ?? null,
-                'product_family_id' => null, // nessuna famiglia nello schema legacy
+                'product_family_id' => $type === Product::TYPE_MACHINE
+                    ? $this->resolveFamily($row->sku, $row->name)
+                    : null,
                 'sku' => $row->sku ?: "LEGACY-{$row->id}",
-                'type' => $row->type === 'base' ? Product::TYPE_MACHINE : Product::TYPE_OPTION,
+                'type' => $type,
                 'name' => $row->name,
                 'description' => $row->description,
                 'image' => $row->image,
-                'source' => Product::SOURCE_FRANKE,
+                'source' => self::CATEGORY_SOURCE_MAP[$categoryName] ?? null,
                 'created_at' => $row->created_at,
                 'updated_at' => $row->updated_at,
             ]);
@@ -186,6 +220,28 @@ class ImportLegacyData extends Command
         }
 
         $this->info("Prodotti importati: {$rows->count()}");
+    }
+
+    /**
+     * Deduce la famiglia (A300, A600, SB1200, ...) dal codice iniziale dello
+     * SKU o del nome, ignorando prefissi tipo "2X-" (doppia macchina).
+     */
+    protected function resolveFamily(?string $sku, ?string $name): ?string
+    {
+        $haystack = strtoupper(preg_replace('/^2X-?/i', '', $sku ?? $name ?? ''));
+
+        foreach (self::FAMILY_CODES as $code) {
+            if (str_starts_with($haystack, $code)) {
+                if (! isset($this->familyMap[$code])) {
+                    $family = ProductFamily::create(['tenant_id' => null, 'name' => $code]);
+                    $this->familyMap[$code] = $family->id;
+                }
+
+                return $this->familyMap[$code];
+            }
+        }
+
+        return null;
     }
 
     protected function importProductPrices($legacy): void

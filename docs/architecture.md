@@ -434,6 +434,36 @@ macchine, 3 utenti (2 diventati `is_super_admin`), 7 metodi di pagamento.
 email, password hashate) — resta solo nel volume Docker locale, non va mai committato o condiviso;
 `.env` (con le credenziali) è già escluso da git.
 
+### 8.3 Correzioni post-import sui prodotti (2026-07-14)
+
+Un primo giro di verifica sui prodotti importati ha rivelato tre problemi, tutti corretti in
+`ImportLegacyData.php` e riprodotti con un secondo import pulito:
+
+- **Encoding**: l'import iniziale del dump usava il charset di default del client MySQL
+  (`latin1`) invece di `utf8mb4`, corrompendo ogni carattere accentato ("2° Macinacaffè" diventava
+  "2� Macinacaff�") — sia nel DB `legacy_preventivi` sia, di conseguenza, nel nuovo schema.
+  Corretto ricreando `legacy_preventivi` con `CHARACTER SET utf8mb4` e reimportando il dump con
+  `mysql --default-character-set=utf8mb4`.
+- **`source` (Franke/terzo) sbagliato**: il catalogo legacy non è solo Franke — include anche
+  Dalla Corte, Jura e prodotti "Alex" propri, distinguibili dal nome categoria
+  (`Macchine Dalla Corte`, `Macchine Jura`, `Opzioni Alex`, ...). Il primo import marcava *tutti*
+  i 210 prodotti come `franke_ufficiale`, sbagliato per gli altri marchi e rilevante per la
+  garanzia (art. 11.3). Corretto con una mappa nome-categoria → source
+  (`CATEGORY_SOURCE_MAP` in `ImportLegacyData`); le categorie realmente ambigue (es. "Trattamento
+  acqua", ricambi generici che potrebbero essere sia OEM Franke che compatibili) restano `NULL`
+  invece di un valore indovinato — da confermare manualmente.
+- **Nessuna famiglia macchina**: uno SKU/nome legacy come `A300-FM-EC-1G-H1-W3` corrisponde
+  esattamente alla nomenclatura ufficiale Franke vista nei listini (§11.2) — `resolveFamily()`
+  estrae il codice famiglia (`A300`, `A400`, `A600`, `A800`, `A1000`, `S700`, `SB1200`) dal
+  prefisso dello SKU e crea/riusa il `ProductFamily` corrispondente. Le macchine di altri marchi
+  (Dalla Corte, Jura) non hanno questo pattern e restano correttamente senza famiglia — 33 macchine
+  Franke raggruppate in 7 famiglie, 25 macchine di altri marchi lasciate senza famiglia forzata.
+
+Le **immagini prodotto** risultano invece genuinamente assenti nel dato di produzione stesso
+(colonna `image` sempre `NULL` già in `legacy_preventivi`), non un problema di import — non c'è
+nulla da recuperare lato codice, andranno caricate manualmente o tramite un futuro import da
+gestionale (§10.4) se disponibili altrove.
+
 ## 9. Decisioni prese (2026-07-09)
 
 Tutti i punti aperti della versione precedente sono stati chiusi:
