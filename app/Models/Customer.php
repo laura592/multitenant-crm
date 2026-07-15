@@ -42,8 +42,19 @@ class Customer extends Model
         return $this->hasMany(InformationRequest::class);
     }
 
+    /**
+     * Ragione sociale prima di tutto (contesto B2B): se c'è anche un
+     * referente, viene mostrato tra parentesi come informazione aggiuntiva,
+     * non al posto della ragione sociale.
+     */
     public function getFullNameAttribute(): string
     {
-        return trim("{$this->first_name} {$this->last_name}") ?: (string) $this->company_name;
+        $contact = trim("{$this->first_name} {$this->last_name}");
+
+        if ($this->company_name && $contact) {
+            return "{$this->company_name} ({$contact})";
+        }
+
+        return $this->company_name ?: $contact;
     }
 }

@@ -1,0 +1,127 @@
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Filament\Resources\InformationRequestResource\Pages;
+use App\Models\InformationRequest;
+use Filament\Facades\Filament;
+use Filament\Forms;
+use Filament\Forms\Form;
+use Filament\Resources\Resource;
+use Filament\Tables;
+use Filament\Tables\Table;
+
+class InformationRequestResource extends Resource
+{
+    protected static ?string $model = InformationRequest::class;
+
+    protected static ?string $navigationIcon = 'heroicon-o-inbox-arrow-down';
+
+    protected static ?string $navigationGroup = 'Vendite';
+
+    protected static ?string $navigationLabel = 'Richieste informazioni';
+
+    protected static ?string $modelLabel = 'Richiesta informazioni';
+
+    protected static ?string $pluralModelLabel = 'Richieste informazioni';
+
+    public static function form(Form $form): Form
+    {
+        return $form->schema([
+            Forms\Components\TextInput::make('number')
+                ->label('Numero')
+                ->disabled()
+                ->dehydrated(false)
+                ->visibleOn('edit')
+                ->default(fn () => InformationRequest::nextNumberForTenant(Filament::getTenant()?->id)),
+            Forms\Components\Select::make('customer_id')
+                ->label('Cliente')
+                ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
+                ->getOptionLabelFromRecordUsing(fn ($record) => $record->full_name)
+                ->searchable(['company_name', 'first_name', 'last_name'])
+                ->preload()
+                ->required()
+                ->createOptionForm([
+                    Forms\Components\TextInput::make('company_name')->label('Ragione sociale'),
+                    Forms\Components\TextInput::make('first_name')->label('Nome'),
+                    Forms\Components\TextInput::make('last_name')->label('Cognome'),
+                    Forms\Components\TextInput::make('email')->label('Email')->email(),
+                    Forms\Components\TextInput::make('mobile')->label('Cellulare'),
+                    Forms\Components\TextInput::make('city')->label('Città'),
+                ]),
+            Forms\Components\Select::make('status')
+                ->label('Stato')
+                ->options([
+                    'nuova' => 'Nuova',
+                    'in_lavorazione' => 'In lavorazione',
+                    'gestita' => 'Gestita',
+                    'chiusa' => 'Chiusa',
+                ])
+                ->default('nuova')
+                ->required(),
+            Forms\Components\Select::make('products')
+                ->label('Prodotti di interesse')
+                ->relationship('products', 'name')
+                ->multiple()
+                ->searchable()
+                ->preload(),
+            Forms\Components\Textarea::make('request_details')
+                ->label('Dettagli richiesta')
+                ->rows(3)
+                ->columnSpanFull(),
+            Forms\Components\Select::make('handled_by_user_id')
+                ->label('Gestita da')
+                ->relationship('handledByUser', 'name')
+                ->searchable()
+                ->preload(),
+        ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->defaultSort('created_at', 'desc')
+            ->columns([
+                Tables\Columns\TextColumn::make('number')->label('Numero')->searchable(),
+                Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->searchable(),
+                Tables\Columns\TextColumn::make('status')
+                    ->label('Stato')
+                    ->badge()
+                    ->color(fn (string $state) => match ($state) {
+                        'gestita', 'chiusa' => 'success',
+                        'in_lavorazione' => 'warning',
+                        default => 'gray',
+                    }),
+                Tables\Columns\TextColumn::make('handledByUser.name')->label('Gestita da')->placeholder('—'),
+                Tables\Columns\TextColumn::make('created_at')->label('Ricevuta il')->dateTime('d/m/Y H:i'),
+            ])
+            ->filters([
+                Tables\Filters\SelectFilter::make('status')
+                    ->label('Stato')
+                    ->options([
+                        'nuova' => 'Nuova',
+                        'in_lavorazione' => 'In lavorazione',
+                        'gestita' => 'Gestita',
+                        'chiusa' => 'Chiusa',
+                    ]),
+            ])
+            ->actions([
+                Tables\Actions\EditAction::make(),
+                Tables\Actions\DeleteAction::make(),
+            ])
+            ->bulkActions([
+                Tables\Actions\BulkActionGroup::make([
+                    Tables\Actions\DeleteBulkAction::make(),
+                ]),
+            ]);
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListInformationRequests::route('/'),
+            'create' => Pages\CreateInformationRequest::route('/create'),
+            'edit' => Pages\EditInformationRequest::route('/{record}/edit'),
+        ];
+    }
+}

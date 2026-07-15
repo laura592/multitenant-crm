@@ -28,7 +28,7 @@ class AllResourcesSmokeTest extends TestCase
 
         $paths = [
             'categories', 'product-families', 'product-option-groups', 'products',
-            'customers', 'payment-methods', 'quotes', 'service-reports',
+            'customers', 'payment-methods', 'quotes', 'service-reports', 'information-requests',
             'vehicles', 'maintenance-schedules', 'deadlines',
             'time-entries', 'leave-requests', 'riepilogo-ore',
         ];

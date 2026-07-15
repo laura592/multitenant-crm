@@ -43,7 +43,7 @@ class ServiceReportResource extends Resource
                         ->visibleOn('edit'),
                     Forms\Components\Select::make('customer_id')
                         ->label('Cliente')
-                        ->relationship('customer', 'company_name')
+                        ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
                         ->getOptionLabelFromRecordUsing(fn ($record) => $record->full_name)
                         ->searchable(['company_name', 'first_name', 'last_name'])
                         ->preload()
