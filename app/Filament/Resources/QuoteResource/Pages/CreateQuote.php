@@ -13,4 +13,15 @@ class CreateQuote extends CreateRecord
     {
         $this->record->updateTotal();
     }
+
+    /**
+     * Dopo la creazione (cliente/data/stato), si passa subito alla modifica
+     * con il wizard di configurazione macchina già aperto: è il flusso
+     * principale per aggiungere una macchina al preventivo, non un'azione
+     * secondaria da scoprire da soli.
+     */
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('edit', ['record' => $this->getRecord()]).'?openWizard=1';
+    }
 }

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\QuoteResource\Pages\CreateQuote;
 use App\Filament\Resources\QuoteResource\Pages\EditQuote;
 use App\Models\Customer;
 use App\Models\Product;
@@ -145,5 +146,31 @@ class ConfigureMachineWizardTest extends TestCase
         $this->quote->refresh();
 
         $this->assertSame(0, $this->quote->quoteProducts()->count(), 'Nessuna riga deve essere creata se un vincolo requires non è soddisfatto');
+    }
+
+    public function test_creating_a_quote_redirects_to_edit_with_the_wizard_already_open(): void
+    {
+        $customer = Customer::create(['tenant_id' => $this->tenant->id, 'company_name' => 'Nuovo Cliente']);
+
+        Livewire::test(CreateQuote::class)
+            ->fillForm([
+                'customer_id' => $customer->id,
+                'date' => now()->toDateString(),
+                'status' => 'bozza',
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors()
+            ->assertRedirectContains('openWizard=1');
+
+        $newQuote = Quote::where('customer_id', $customer->id)->firstOrFail();
+
+        $response = $this->get(route('filament.admin.resources.quotes.edit', [
+            'tenant' => $this->tenant->slug,
+            'record' => $newQuote->getRouteKey(),
+        ]).'?openWizard=1');
+
+        $response->assertOk();
+        // Testo visibile solo se il wizard "configureMachine" è davvero montato/aperto
+        $response->assertSee('Unità ausiliarie e opzioni');
     }
 }

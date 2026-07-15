@@ -70,6 +70,83 @@ class Tenant extends Model implements HasName
         return $this->morphMany(Deadline::class, 'deadlinable');
     }
 
+    /**
+     * Relazioni richieste da Filament stesso per creare record tramite il
+     * pannello (Resources\Pages\CreateRecord::associateRecordWithTenant()),
+     * non solo per la lettura: senza queste, il pulsante "Nuovo" lancia
+     * un'eccezione anche se il nostro global scope custom (BelongsToTenant)
+     * gestisce gia' correttamente lettura e assegnazione automatica.
+     */
+    public function categories(): HasMany
+    {
+        return $this->hasMany(Category::class);
+    }
+
+    public function products(): HasMany
+    {
+        return $this->hasMany(Product::class);
+    }
+
+    public function productFamilies(): HasMany
+    {
+        return $this->hasMany(ProductFamily::class);
+    }
+
+    public function productOptionGroups(): HasMany
+    {
+        return $this->hasMany(ProductOptionGroup::class);
+    }
+
+    public function customers(): HasMany
+    {
+        return $this->hasMany(Customer::class);
+    }
+
+    public function quotes(): HasMany
+    {
+        return $this->hasMany(Quote::class);
+    }
+
+    public function quoteGroups(): HasMany
+    {
+        return $this->hasMany(QuoteGroup::class);
+    }
+
+    public function informationRequests(): HasMany
+    {
+        return $this->hasMany(InformationRequest::class);
+    }
+
+    public function comodatoMacchinas(): HasMany
+    {
+        return $this->hasMany(ComodatoMacchina::class);
+    }
+
+    public function serviceReports(): HasMany
+    {
+        return $this->hasMany(ServiceReport::class);
+    }
+
+    public function vehicles(): HasMany
+    {
+        return $this->hasMany(Vehicle::class);
+    }
+
+    public function maintenanceSchedules(): HasMany
+    {
+        return $this->hasMany(MaintenanceSchedule::class);
+    }
+
+    public function timeEntries(): HasMany
+    {
+        return $this->hasMany(TimeEntry::class);
+    }
+
+    public function leaveRequests(): HasMany
+    {
+        return $this->hasMany(LeaveRequest::class);
+    }
+
     public function getFilamentName(): string
     {
         return $this->name;
