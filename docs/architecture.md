@@ -464,6 +464,23 @@ Le **immagini prodotto** risultano invece genuinamente assenti nel dato di produ
 nulla da recuperare lato codice, andranno caricate manualmente o tramite un futuro import da
 gestionale (§10.4) se disponibili altrove.
 
+### 8.4 Verifica contro i listini ufficiali Franke 2026 (2026-07-15)
+
+Confrontando il catalogo importato con i listini reali (`Alex/Listini/37 Italy RRP EUR Classic A
+Line ITA_2026_V1.0.pdf` e `Alex/Listini/Listino Nuova A Line.pdf`, entrambi validi dal
+01.01.2026): il DB di produzione legacy conteneva **già** l'intero listino Franke digitalizzato,
+prezzi 2026 inclusi — non solo la struttura, i valori numerici stessi (es. A300 NM 1G H1 W3 →
+4815€, SU06 CM Pro New A Line → 3535€, FrankeCloud Manage → 1040€) coincidono esattamente con
+quanto scritto nei PDF, `valid_from` già `2026-01-01`. Nessun aggiornamento prezzi necessario.
+
+L'unico gap reale: i lettori di carte/gettoniere specifici per marca (Coges, Nayax, Ingenico,
+Dallmayr, Contidata, ecc. — sezione "Sistemi di conteggio" del listino, pag. 24-26) non erano
+presenti come SKU individuali, solo le 4 versioni generiche di alloggiamento (AC125/AC200
+standard e con VIP-1). Aggiunti con `php artisan import:franke-card-readers`
+(`app/Console/Commands/ImportFrankeCardReaders.php`, idempotente via `updateOrCreate` sullo SKU =
+numero ordine Franke reale): 47 prodotti, categoria "Accessori Franke", catalogo condiviso.
+Catalogo totale: 257 prodotti.
+
 ## 9. Decisioni prese (2026-07-09)
 
 Tutti i punti aperti della versione precedente sono stati chiusi:
