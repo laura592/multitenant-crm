@@ -99,8 +99,17 @@ class ConfigureMachineAction
             ->modalWidth('3xl')
             ->modalHeading('Configura macchina')
             ->steps($steps)
-            ->action(function (array $data, Quote $record) {
+            ->action(function (array $data, Quote $record, $livewire) {
                 static::createQuoteProducts($record, $data);
+
+                // Le righe sono create scrivendo sul modello, non tramite il
+                // form della pagina: senza un refresh esplicito, "Righe
+                // preventivo" resta con lo stato di quando la pagina e' stata
+                // aperta finche' non si ricarica manualmente (bug reale
+                // segnalato: "se ricarico la pagina" le righe compaiono).
+                if (method_exists($livewire, 'refreshAfterMachineConfigured')) {
+                    $livewire->refreshAfterMachineConfigured();
+                }
             });
     }
 

@@ -122,6 +122,31 @@ class ConfigureMachineWizardTest extends TestCase
         $this->assertEquals(10168.70, (float) $this->quote->total);
     }
 
+    /**
+     * Bug reale segnalato: dopo aver confermato il wizard, "Righe preventivo"
+     * mostrava le nuove righe solo ricaricando manualmente la pagina - il
+     * form della pagina di modifica non si aggiornava da solo, perche' il
+     * wizard scrive le righe direttamente sul modello, fuori dal form.
+     */
+    public function test_edit_page_shows_new_lines_immediately_without_reloading(): void
+    {
+        $test = Livewire::test(EditQuote::class, ['record' => $this->quote->getRouteKey()])
+            ->mountAction('configureMachine')
+            ->setActionData([
+                'product_family_id' => $this->machine->product_family_id,
+                'machine_product_id' => $this->machine->id,
+                "group_{$this->steamGroup->id}" => $this->steamOption2->id,
+            ])
+            ->callMountedAction()
+            ->assertHasNoActionErrors();
+
+        // stesso componente Livewire, nessuna nuova richiesta HTTP: e'
+        // esattamente lo stato che l'utente vede senza ricaricare la pagina.
+        $test->assertSee($this->machine->name)
+            ->assertSee($this->requiredAux->name)
+            ->assertSee($this->steamOption2->name);
+    }
+
     public function test_wizard_blocks_when_a_required_dependency_is_missing(): void
     {
         // Un'opzione fittizia che richiede un prodotto MAI selezionabile in questa configurazione
