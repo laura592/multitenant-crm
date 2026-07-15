@@ -30,7 +30,8 @@ class MaintenanceScheduleResource extends Resource
             Forms\Components\Select::make('customer_id')
                 ->label('Cliente')
                 ->relationship('customer', 'company_name')
-                ->searchable()
+                ->getOptionLabelFromRecordUsing(fn ($record) => $record->full_name)
+                ->searchable(['company_name', 'first_name', 'last_name'])
                 ->preload()
                 ->required(),
             Forms\Components\Select::make('comodato_macchina_id')

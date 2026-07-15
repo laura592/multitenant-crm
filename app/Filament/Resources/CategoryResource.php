@@ -14,6 +14,12 @@ class CategoryResource extends Resource
 {
     protected static ?string $model = Category::class;
 
+    // Catalogo condiviso (tenant_id nullable, §4.2): lo scoping automatico
+    // nativo di Filament filtra con uguaglianza stretta (tenant_id = tenant
+    // corrente) e nasconderebbe tutte le righe condivise (tenant_id NULL).
+    // Lo scoping vero lo fa gia' il trait BelongsToTenant sul modello.
+    protected static bool $isScopedToTenant = false;
+
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
 
     protected static ?string $navigationGroup = 'Catalogo';

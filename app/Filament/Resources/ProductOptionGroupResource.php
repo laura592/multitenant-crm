@@ -14,6 +14,9 @@ class ProductOptionGroupResource extends Resource
 {
     protected static ?string $model = ProductOptionGroup::class;
 
+    // Catalogo condiviso (tenant_id nullable): vedi nota identica su CategoryResource.
+    protected static bool $isScopedToTenant = false;
+
     protected static ?string $navigationIcon = 'heroicon-o-adjustments-horizontal';
 
     protected static ?string $navigationGroup = 'Catalogo';

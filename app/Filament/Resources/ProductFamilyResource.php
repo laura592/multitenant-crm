@@ -14,6 +14,9 @@ class ProductFamilyResource extends Resource
 {
     protected static ?string $model = ProductFamily::class;
 
+    // Catalogo condiviso (tenant_id nullable): vedi nota identica su CategoryResource.
+    protected static bool $isScopedToTenant = false;
+
     protected static ?string $navigationIcon = 'heroicon-o-squares-2x2';
 
     protected static ?string $navigationGroup = 'Catalogo';
