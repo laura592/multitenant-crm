@@ -29,6 +29,9 @@ class QuoteResource extends Resource
 
     public static function form(Form $form): Form
     {
+        $isCreating = $form->getOperation() === 'create';
+        $canEditCommission = fn () => auth()->user()?->is_super_admin ?? false;
+
         return $form->schema([
             Forms\Components\Section::make('Dati preventivo')
                 ->columns(4)
@@ -79,35 +82,13 @@ class QuoteResource extends Resource
                         ->label('Note')
                         ->columnSpan(2),
                 ]),
-            Forms\Components\Section::make('Provvigione partner')
-                ->columns(3)
-                ->visible(fn () => ! (Filament::getTenant()?->is_master ?? true))
-                ->schema([
-                    Forms\Components\Select::make('commission_scenario')
-                        ->label('Scenario')
-                        ->options([
-                            'A' => 'A - Segnalazione cliente',
-                            'B' => 'B - Partner procura cliente, installazione Alex',
-                            'C' => 'C - Partner installa in autonomia',
-                        ])
-                        ->default(fn () => Filament::getTenant()?->default_commission_scenario),
-                    Forms\Components\Select::make('commission_status')
-                        ->label('Stato fatturazione')
-                        ->options([
-                            'da_fatturare' => 'Da fatturare',
-                            'fatturata' => 'Fatturata',
-                            'pagata' => 'Pagata',
-                        ]),
-                    Forms\Components\TextInput::make('commission_invoice_number')->label('N. fattura'),
-                    Forms\Components\Placeholder::make('commission_amount_display')
-                        ->label('Importo provvigione (calcolato)')
-                        ->content(fn (?Quote $record) => $record?->commission_amount !== null
-                            ? number_format((float) $record->commission_amount, 2, ',', '.').' €'
-                            : '—'),
-                    Forms\Components\DatePicker::make('commission_invoiced_at')->label('Data fattura'),
-                    Forms\Components\DatePicker::make('commission_paid_at')->label('Data pagamento'),
-                ]),
             Forms\Components\Section::make('Righe preventivo')
+                // Solo in modifica: in creazione si passa subito al wizard
+                // "Configura macchina" (vedi CreateQuote::getRedirectUrl), che
+                // e' il flusso guidato per aggiungere le righe - mostrare qui
+                // anche un repeater manuale confonderebbe le idee su quale sia
+                // il percorso da seguire.
+                ->visible(! $isCreating)
                 ->schema([
                     Forms\Components\Repeater::make('quoteProducts')
                         ->relationship('quoteProducts')
@@ -128,6 +109,48 @@ class QuoteResource extends Resource
                         ->defaultItems(0)
                         ->addActionLabel('Aggiungi riga')
                         ->reorderable(false),
+                ]),
+            Forms\Components\Section::make('Provvigione partner')
+                ->columns(3)
+                // Solo in modifica, mai in creazione: e' un dato di back-office
+                // calcolato dopo, non qualcosa da compilare mentre si crea il
+                // preventivo (docs/architecture.md §4.3).
+                ->visible(fn () => ! $isCreating && ! (bool) Filament::getTenant()?->is_master)
+                ->schema([
+                    Forms\Components\Select::make('commission_scenario')
+                        ->label('Scenario')
+                        ->options([
+                            'A' => 'A - Segnalazione cliente',
+                            'B' => 'B - Partner procura cliente, installazione Alex',
+                            'C' => 'C - Partner installa in autonomia',
+                        ])
+                        ->default(fn () => Filament::getTenant()?->default_commission_scenario)
+                        ->disabled(fn () => ! $canEditCommission()),
+                    Forms\Components\Select::make('commission_status')
+                        ->label('Stato fatturazione')
+                        ->options([
+                            'da_fatturare' => 'Da fatturare',
+                            'fatturata' => 'Fatturata',
+                            'pagata' => 'Pagata',
+                        ])
+                        // Solo lo staff Alex (is_super_admin) puo' segnare una
+                        // provvigione come fatturata/pagata: il partner la vede
+                        // ma non può auto-certificarsi il pagamento.
+                        ->disabled(fn () => ! $canEditCommission()),
+                    Forms\Components\TextInput::make('commission_invoice_number')
+                        ->label('N. fattura')
+                        ->disabled(fn () => ! $canEditCommission()),
+                    Forms\Components\Placeholder::make('commission_amount_display')
+                        ->label('Importo provvigione (calcolato)')
+                        ->content(fn (?Quote $record) => $record?->commission_amount !== null
+                            ? number_format((float) $record->commission_amount, 2, ',', '.').' €'
+                            : '—'),
+                    Forms\Components\DatePicker::make('commission_invoiced_at')
+                        ->label('Data fattura')
+                        ->disabled(fn () => ! $canEditCommission()),
+                    Forms\Components\DatePicker::make('commission_paid_at')
+                        ->label('Data pagamento')
+                        ->disabled(fn () => ! $canEditCommission()),
                 ]),
         ]);
     }
