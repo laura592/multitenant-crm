@@ -171,6 +171,38 @@ class ConfigureMachineWizardTest extends TestCase
 
         $response->assertOk();
         // Testo visibile solo se il wizard "configureMachine" è davvero montato/aperto
-        $response->assertSee('Unità ausiliarie e opzioni');
+        // (nessuna macchina ancora scelta a questo punto: solo Macchina + Riepilogo)
+        $response->assertSee('Riepilogo');
+    }
+
+    public function test_wizard_shows_a_dedicated_step_per_known_category_with_prices_visible(): void
+    {
+        $machineWithPrice = Product::create([
+            'product_family_id' => $this->machine->product_family_id,
+            'sku' => 'A300-PRICED',
+            'type' => Product::TYPE_MACHINE,
+            'name' => 'A300 Priced',
+        ]);
+        $machineWithPrice->prices()->create(['price' => 6400]);
+
+        $steamGroupKnown = ProductOptionGroup::create(['name' => 'steam', 'label' => 'Steam', 'selection_type' => 'single']);
+        $steamOption = Product::create(['sku' => 'S1-PRICED', 'type' => Product::TYPE_OPTION, 'name' => 'Lancia vapore S1']);
+        $steamOption->prices()->create(['price' => 500]);
+        ProductCompatibility::create([
+            'base_product_id' => $machineWithPrice->id,
+            'option_product_id' => $steamOption->id,
+            'option_group_id' => $steamGroupKnown->id,
+            'constraint_type' => 'compatible',
+        ]);
+
+        Livewire::test(EditQuote::class, ['record' => $this->quote->getRouteKey()])
+            ->mountAction('configureMachine')
+            ->setActionData([
+                'product_family_id' => $machineWithPrice->product_family_id,
+                'machine_product_id' => $machineWithPrice->id,
+            ])
+            ->assertSee('A300 Priced — 6.400,00 €')
+            ->assertSee('Lancia vapore') // etichetta step, mappata dal gruppo "steam"
+            ->assertSee('Lancia vapore S1 — 500,00 €');
     }
 }
