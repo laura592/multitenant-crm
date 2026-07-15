@@ -7,6 +7,7 @@ use App\Models\LeaveRequest;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -25,7 +26,7 @@ use Maatwebsite\Excel\Facades\Excel;
  */
 class RiepilogoOre extends Page implements HasForms
 {
-    use InteractsWithForms;
+    use HasPageShield, InteractsWithForms;
 
     protected static ?string $navigationIcon = 'heroicon-o-document-chart-bar';
 

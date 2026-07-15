@@ -9,18 +9,25 @@ use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
+use Tests\Concerns\AssignsPermissionRoles;
 use Tests\TestCase;
 
 class ProductCreationTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, AssignsPermissionRoles;
 
-    public function test_partner_user_creating_a_product_gets_it_assigned_to_their_own_tenant(): void
+    /**
+     * Il ruolo "partner" (es. Gifar) vede il catalogo condiviso Franke in
+     * sola lettura, non lo gestisce: chi crea un prodotto/accessorio proprio
+     * del tenant e' un "admin" di tenant (docs/architecture.md §5.3).
+     */
+    public function test_tenant_admin_creating_a_product_gets_it_assigned_to_their_own_tenant(): void
     {
         $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);
         $user = User::create([
             'tenant_id' => $tenant->id, 'name' => 'Test Gifar', 'email' => 'test@gifar.it', 'password' => bcrypt('password'),
         ]);
+        $this->giveRole($user, $tenant, 'admin');
 
         $this->actingAs($user);
         Filament::setTenant($tenant);

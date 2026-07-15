@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 
 /**
  * Il dipendente vede/corregge solo i propri record; un responsabile
- * (is_super_admin, o ruolo "partner_owner" assegnato via Shield nel tenant
+ * (is_super_admin, o ruolo "admin" assegnato via Shield nel tenant
  * corrente) vede tutto il tenant (docs/architecture.md §12.2).
  */
 trait ScopesToOwnUserUnlessResponsabile
@@ -25,6 +25,6 @@ trait ScopesToOwnUserUnlessResponsabile
 
     public static function isResponsabile($user): bool
     {
-        return $user->is_super_admin || $user->hasRole('partner_owner');
+        return $user->is_super_admin || $user->hasRole('admin');
     }
 }

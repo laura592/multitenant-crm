@@ -3,11 +3,14 @@
 namespace App\Filament\Widgets;
 
 use App\Models\TimeEntry;
+use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
 use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\Auth;
 
 class TimbraWidget extends Widget
 {
+    use HasWidgetShield;
+
     protected static string $view = 'filament.widgets.timbra-widget';
 
     protected int|string|array $columnSpan = 'full';

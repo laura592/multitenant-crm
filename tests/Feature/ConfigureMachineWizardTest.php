@@ -16,11 +16,12 @@ use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
+use Tests\Concerns\AssignsPermissionRoles;
 use Tests\TestCase;
 
 class ConfigureMachineWizardTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, AssignsPermissionRoles;
 
     protected Tenant $tenant;
 
@@ -49,6 +50,7 @@ class ConfigureMachineWizardTest extends TestCase
             'email' => 'test@gifar.it',
             'password' => bcrypt('password'),
         ]);
+        $this->giveRole($this->user, $this->tenant, 'dipendente');
 
         $family = ProductFamily::create(['name' => 'A300']);
         $this->machine = Product::create([

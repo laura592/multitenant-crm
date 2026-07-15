@@ -304,9 +304,35 @@ In questo modo ogni tenant ha ruoli/permessi indipendenti (es. il Partner può d
 "Tecnico" con permessi solo su `ComodatoMacchina` e `InformationRequest`, senza toccare i preventivi),
 e i ruoli di un tenant non compaiono in un altro.
 
-Ruoli di partenza suggeriti: `master_admin` (staff Alex, cross-tenant), `partner_owner`
-(titolare azienda partner, full CRUD sul proprio tenant), `partner_staff` (vendite/preventivi,
-no gestione utenti/impostazioni azienda).
+#### 5.3.1 Ruoli implementati (2026-07-15)
+
+4 ruoli applicativi, definiti in `App\Support\RolePermissions` (fonte unica usata sia dal
+`RolesAndPermissionsSeeder` che dai test tramite `Tests\Concerns\AssignsPermissionRoles`) e creati
+per ogni tenant da quel seeder:
+
+- **`dipendente`**: vede il catalogo condiviso in sola lettura; CRUD completo su
+  clienti/preventivi/richieste informazioni/rapportini/piani di manutenzione; sola visualizzazione
+  su scadenze e veicoli; può timbrare (`widget_TimbraWidget`) e vedere solo le proprie
+  ferie/timbrature (vedi `ScopesToOwnUserUnlessResponsabile`); niente metodi di pagamento.
+- **`collaboratore`** (es. Filippo, collaboratore esterno che raccoglie contatti in fiera): **solo**
+  `InformationRequest` (CRUD) + `create_customer` per censire un nuovo lead al volo. Nessun accesso
+  a Clienti/Preventivi/Catalogo come risorse navigabili.
+- **`partner`** (es. Gifar): catalogo Franke condiviso in sola lettura, clienti e preventivi propri
+  (view/create/update, niente delete). Non vede scadenzario, presenze, rapportini, metodi di
+  pagamento, né la gestione tenant — "non gli serve vedere tutto".
+- **`admin`** (es. Alessandro, titolare Alex): CRUD completo su tutte le risorse del proprio tenant,
+  scadenze incluse, ed è il "responsabile" che approva ferie/permessi
+  (`ScopesToOwnUserUnlessResponsabile::isResponsabile()` controlla `hasRole('admin')`).
+
+**Gestione Tenant e Ruoli stessi restano fuori da tutti e 4 i ruoli**: solo lo staff master
+(`users.is_super_admin`, bypass via `Gate::before`) può creare/modificare tenant o toccare
+`RoleResource`, per evitare che un admin di tenant si auto-assegni permessi più ampi.
+
+I permessi/policy sono generati da Shield (`php artisan shield:generate --all`) per tutte le
+Resource; **widget e pagine NON sono gated di default** — serve applicare esplicitamente
+`HasWidgetShield`/`HasPageShield` (fatto solo su `TimbraWidget` e `RiepilogoOre`, gli unici la cui
+visibilità dipende dal ruolo; gli altri widget dashboard restano sempre visibili perché già
+tenant-scoped a monte, non c'è nulla da nascondere).
 
 ### 5.4 Nuove Resource Filament
 

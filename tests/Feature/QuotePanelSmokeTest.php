@@ -9,11 +9,12 @@ use App\Models\Quote;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\AssignsPermissionRoles;
 use Tests\TestCase;
 
 class QuotePanelSmokeTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, AssignsPermissionRoles;
 
     public function test_partner_user_can_see_own_tenant_quote_in_panel(): void
     {
@@ -26,6 +27,7 @@ class QuotePanelSmokeTest extends TestCase
             'email' => 'test@gifar.it',
             'password' => bcrypt('password'),
         ]);
+        $this->giveRole($user, $gifar, 'partner');
 
         $family = ProductFamily::create(['name' => 'A300']);
         $machine = Product::create([

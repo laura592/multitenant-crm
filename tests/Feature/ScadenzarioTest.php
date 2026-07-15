@@ -9,11 +9,12 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\AssignsPermissionRoles;
 use Tests\TestCase;
 
 class ScadenzarioTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, AssignsPermissionRoles;
 
     public function test_maintenance_schedule_keeps_a_synced_deadline(): void
     {
@@ -48,6 +49,7 @@ class ScadenzarioTest extends TestCase
             'email' => 'test@gifar.it',
             'password' => bcrypt('password'),
         ]);
+        $this->giveRole($user, $tenant, 'dipendente');
 
         $vehicle = Vehicle::create(['tenant_id' => $tenant->id, 'plate' => 'AB123CD']);
         $vehicle->deadlines()->create([

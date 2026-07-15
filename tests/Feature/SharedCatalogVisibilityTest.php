@@ -9,6 +9,7 @@ use App\Models\ProductOptionGroup;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\AssignsPermissionRoles;
 use Tests\TestCase;
 
 /**
@@ -21,7 +22,7 @@ use Tests\TestCase;
  */
 class SharedCatalogVisibilityTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, AssignsPermissionRoles;
 
     public function test_shared_catalog_is_visible_in_the_panel_for_a_partner_tenant(): void
     {
@@ -29,6 +30,7 @@ class SharedCatalogVisibilityTest extends TestCase
         $user = User::create([
             'tenant_id' => $tenant->id, 'name' => 'Test Gifar', 'email' => 'test@gifar.it', 'password' => bcrypt('password'),
         ]);
+        $this->giveRole($user, $tenant, 'partner');
 
         $category = Category::create(['tenant_id' => null, 'name' => 'Macchine Caffè Franke Test']);
         $family = ProductFamily::create(['tenant_id' => null, 'name' => 'A300 Test']);

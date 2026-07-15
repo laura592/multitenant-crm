@@ -11,11 +11,12 @@ use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
+use Tests\Concerns\AssignsPermissionRoles;
 use Tests\TestCase;
 
 class PresenzeTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, AssignsPermissionRoles;
 
     public function test_employee_can_clock_in_and_out_from_widget(): void
     {
@@ -23,6 +24,7 @@ class PresenzeTest extends TestCase
         $employee = User::create([
             'tenant_id' => $tenant->id, 'name' => 'Mario Rossi', 'email' => 'mario@gifar.it', 'password' => bcrypt('password'),
         ]);
+        $this->giveRole($employee, $tenant, 'dipendente');
 
         $this->actingAs($employee);
         Filament::setTenant($tenant);

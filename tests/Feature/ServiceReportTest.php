@@ -14,11 +14,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
+use Tests\Concerns\AssignsPermissionRoles;
 use Tests\TestCase;
 
 class ServiceReportTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, AssignsPermissionRoles;
 
     public function test_technician_can_create_report_with_signature_and_parts_then_send_it(): void
     {
@@ -29,6 +30,7 @@ class ServiceReportTest extends TestCase
         $tech = User::create([
             'tenant_id' => $tenant->id, 'name' => 'Tecnico Uno', 'email' => 'tech@gifar.it', 'password' => bcrypt('password'),
         ]);
+        $this->giveRole($tech, $tenant, 'dipendente');
         $customer = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Bar Centrale', 'email' => 'bar@centrale.it']);
         $part = Product::create(['sku' => 'GUARNIZIONE', 'type' => Product::TYPE_OPTION, 'name' => 'Gruppo guarnizioni']);
 
