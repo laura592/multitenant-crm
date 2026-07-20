@@ -65,6 +65,19 @@ class MaterialOrderResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('number')->label('Numero')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('supplier.name')->label('Fornitore')->placeholder('—'),
+                Tables\Columns\TextColumn::make('status')
+                    ->label('Stato')
+                    ->badge()
+                    ->formatStateUsing(fn (string $state) => match ($state) {
+                        'inviato' => 'Inviato',
+                        'ricevuto' => 'Ricevuto',
+                        default => 'Bozza',
+                    })
+                    ->color(fn (string $state) => match ($state) {
+                        'inviato' => 'warning',
+                        'ricevuto' => 'success',
+                        default => 'gray',
+                    }),
                 Tables\Columns\TextColumn::make('created_at')->label('Data')->dateTime('d/m/Y H:i')->sortable(),
                 Tables\Columns\TextColumn::make('items_count')->label('Materiali')->counts('items'),
                 Tables\Columns\TextColumn::make('notes')
@@ -82,6 +95,13 @@ class MaterialOrderResource extends Resource
                 Tables\Filters\SelectFilter::make('supplier_id')
                     ->label('Fornitore')
                     ->relationship('supplier', 'name'),
+                Tables\Filters\SelectFilter::make('status')
+                    ->label('Stato')
+                    ->options([
+                        'bozza' => 'Bozza',
+                        'inviato' => 'Inviato',
+                        'ricevuto' => 'Ricevuto',
+                    ]),
             ])
             ->actions([
                 Tables\Actions\Action::make('pdf')
@@ -92,6 +112,27 @@ class MaterialOrderResource extends Resource
                     ->label('Excel')
                     ->icon('heroicon-o-table-cells')
                     ->action(fn (MaterialOrder $record) => static::streamExcel($record)),
+                Tables\Actions\Action::make('duplicate')
+                    ->label('Duplica')
+                    ->icon('heroicon-o-document-duplicate')
+                    ->requiresConfirmation()
+                    ->modalHeading('Duplicare questo ordine?')
+                    ->modalDescription('Crea un nuovo ordine in bozza con lo stesso fornitore e le stesse righe (le note non vengono copiate).')
+                    ->action(function (MaterialOrder $record) {
+                        $new = MaterialOrder::create([
+                            'tenant_id' => $record->tenant_id,
+                            'supplier_id' => $record->supplier_id,
+                        ]);
+
+                        foreach ($record->items as $item) {
+                            $new->items()->create([
+                                'material_id' => $item->material_id,
+                                'quantity' => $item->quantity,
+                            ]);
+                        }
+
+                        return redirect(static::getUrl('edit', ['record' => $new]));
+                    }),
                 Tables\Actions\EditAction::make(),
                 Tables\Actions\DeleteAction::make(),
             ])
@@ -300,7 +341,12 @@ class MaterialOrderResource extends Resource
             ->all();
     }
 
-    public static function streamPdf(MaterialOrder $record)
+    /**
+     * Costruisce il PDF senza deciderne la destinazione (download o
+     * allegato email): usato sia da streamPdf() sia dall'azione "Invia al
+     * fornitore" su EditMaterialOrder.
+     */
+    public static function buildPdf(MaterialOrder $record)
     {
         $record->load(['items.material', 'tenant', 'supplier']);
 
@@ -309,7 +355,7 @@ class MaterialOrderResource extends Resource
             ->map(fn ($item) => ['material' => $item->material, 'quantity' => $item->quantity])
             ->values();
 
-        $pdf = Pdf::loadView('pdf.ordine-materiali', [
+        return Pdf::loadView('pdf.ordine-materiali', [
             'rows' => $rows,
             'notes' => $record->notes,
             'tenant' => $record->tenant,
@@ -317,6 +363,11 @@ class MaterialOrderResource extends Resource
             'number' => $record->number,
             'date' => $record->created_at,
         ]);
+    }
+
+    public static function streamPdf(MaterialOrder $record)
+    {
+        $pdf = static::buildPdf($record);
 
         return response()->streamDownload(
             fn () => print ($pdf->output()),

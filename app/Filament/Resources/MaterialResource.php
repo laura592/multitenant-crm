@@ -23,11 +23,11 @@ class MaterialResource extends Resource
 
     protected static ?string $navigationGroup = 'Catalogo';
 
-    protected static ?string $navigationLabel = 'Materiali idraulici';
+    protected static ?string $navigationLabel = 'Materiali';
 
     protected static ?string $modelLabel = 'Materiale';
 
-    protected static ?string $pluralModelLabel = 'Materiali idraulici';
+    protected static ?string $pluralModelLabel = 'Materiali';
 
     protected static ?string $recordTitleAttribute = 'code';
 

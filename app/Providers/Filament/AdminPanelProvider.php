@@ -4,6 +4,7 @@ namespace App\Providers\Filament;
 
 use App\Filament\Widgets\DashboardStatsWidget;
 use App\Filament\Widgets\LatestQuotesWidget;
+use App\Filament\Widgets\MagazzinoStatsWidget;
 use App\Filament\Widgets\QuotesChartWidget;
 use App\Filament\Widgets\TimbraWidget;
 use App\Filament\Widgets\UpcomingDeadlinesWidget;
@@ -74,6 +75,7 @@ class AdminPanelProvider extends PanelProvider
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->widgets([
                 DashboardStatsWidget::class,
+                MagazzinoStatsWidget::class,
                 QuotesChartWidget::class,
                 TimbraWidget::class,
                 LatestQuotesWidget::class,

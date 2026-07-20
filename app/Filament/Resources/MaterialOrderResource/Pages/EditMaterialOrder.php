@@ -4,12 +4,14 @@ namespace App\Filament\Resources\MaterialOrderResource\Pages;
 
 use App\Filament\Resources\MaterialOrderResource;
 use App\Filament\Resources\MaterialResource;
+use App\Mail\MaterialOrderMail;
 use App\Models\Material;
 use App\Models\MaterialOrder;
 use Filament\Actions;
 use Filament\Forms;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
+use Illuminate\Support\Facades\Mail;
 
 class EditMaterialOrder extends EditRecord
 {
@@ -19,6 +21,8 @@ class EditMaterialOrder extends EditRecord
     {
         return [
             $this->addMaterialsAction(),
+            $this->sendToSupplierAction(),
+            $this->markReceivedAction(),
             Actions\Action::make('pdf')
                 ->label('Genera PDF ordine')
                 ->icon('heroicon-o-document-arrow-down')
@@ -29,6 +33,68 @@ class EditMaterialOrder extends EditRecord
                 ->action(fn () => MaterialOrderResource::streamExcel($this->record)),
             Actions\DeleteAction::make(),
         ];
+    }
+
+    /**
+     * Stesso schema di "Invia" in ServiceReportResource: form con
+     * destinatario (precompilato dall'email del fornitore, se presente) +
+     * CC opzionale, log dell'invio in material_order_emails, stato
+     * dell'ordine aggiornato a "inviato" solo se l'invio va a buon fine.
+     */
+    protected function sendToSupplierAction(): Actions\Action
+    {
+        return Actions\Action::make('sendToSupplier')
+            ->label('Invia al fornitore')
+            ->icon('heroicon-o-paper-airplane')
+            ->form([
+                Forms\Components\TextInput::make('recipient_email')
+                    ->label('Email destinatario')
+                    ->email()
+                    ->required()
+                    ->default(fn (MaterialOrder $record) => $record->supplier?->email),
+                Forms\Components\TextInput::make('cc_email')->label('CC (opzionale)')->email(),
+            ])
+            ->action(function (array $data) {
+                /** @var MaterialOrder $order */
+                $order = $this->record;
+
+                $pdf = MaterialOrderResource::buildPdf($order);
+
+                $email = $order->emails()->create([
+                    'user_id' => auth()->id(),
+                    'recipient_email' => $data['recipient_email'],
+                    'cc_email' => $data['cc_email'] ?? null,
+                    'subject' => "Ordine materiali {$order->number}",
+                    'status' => 'sent',
+                ]);
+
+                try {
+                    Mail::to($data['recipient_email'])
+                        ->cc($data['cc_email'] ?? [])
+                        ->send(new MaterialOrderMail($order, $pdf->output()));
+
+                    $order->update(['status' => 'inviato']);
+                    Notification::make()->title('Ordine inviato al fornitore')->success()->send();
+                } catch (\Throwable $e) {
+                    $email->update(['status' => 'failed', 'error_message' => $e->getMessage()]);
+                    Notification::make()->title('Invio fallito')->body($e->getMessage())->danger()->send();
+                }
+            });
+    }
+
+    protected function markReceivedAction(): Actions\Action
+    {
+        return Actions\Action::make('markReceived')
+            ->label('Segna come ricevuto')
+            ->icon('heroicon-o-check-circle')
+            ->color('success')
+            ->visible(fn (MaterialOrder $record) => $record->status === 'inviato')
+            ->requiresConfirmation()
+            ->action(function () {
+                $this->record->update(['status' => 'ricevuto']);
+
+                Notification::make()->title('Ordine segnato come ricevuto')->success()->send();
+            });
     }
 
     /**
