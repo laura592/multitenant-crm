@@ -13,7 +13,10 @@ class EditUser extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\DeleteAction::make(),
+            // Non permettere di eliminare il proprio account dalla pagina di modifica:
+            // si perderebbe l'accesso al pannello senza un altro admin che lo ripristini.
+            Actions\DeleteAction::make()
+                ->hidden(fn () => $this->record->id === auth()->id()),
         ];
     }
 }

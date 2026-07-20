@@ -52,7 +52,7 @@ class CategoryResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('name')->label('Nome')->searchable(),
+                Tables\Columns\TextColumn::make('name')->label('Nome')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('parent.name')->label('Categoria padre')->placeholder('—'),
                 Tables\Columns\TextColumn::make('tenant.name')->label('Tenant')->placeholder('Condivisa'),
                 Tables\Columns\TextColumn::make('products_count')->label('Prodotti')->counts('products'),

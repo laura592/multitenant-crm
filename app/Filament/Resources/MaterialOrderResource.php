@@ -2,17 +2,19 @@
 
 namespace App\Filament\Resources;
 
+use App\Exports\MaterialOrderExport;
 use App\Filament\Resources\MaterialOrderResource\Pages;
+use App\Filament\Resources\MaterialOrderResource\RelationManagers;
 use App\Models\Material;
 use App\Models\MaterialOrder;
+use App\Models\Supplier;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Forms\Form;
-use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Maatwebsite\Excel\Facades\Excel;
 
 class MaterialOrderResource extends Resource
 {
@@ -38,136 +40,21 @@ class MaterialOrderResource extends Resource
             Forms\Components\TextInput::make('number')
                 ->label('Numero')
                 ->required()
-                ->disabled(fn (?MaterialOrder $record) => $record !== null)
-                ->dehydrated()
-                ->default(fn () => MaterialOrder::nextNumberForTenant(Filament::getTenant()?->id)),
-            // Ripiegata quando si riapre un ordine gia' compilato: la priorita'
-            // a quel punto e' rivedere/correggere le righe esistenti qui sotto,
-            // non ritrovarsi subito 4 filtri + una griglia di quantita'.
-            Forms\Components\Section::make('Aggiungi materiali')
-                ->icon('heroicon-o-plus-circle')
-                ->collapsible()
-                ->collapsed(fn (?MaterialOrder $record) => $record !== null)
-                ->schema([
-                    Forms\Components\Select::make('category_filter')
-                        ->label('Categoria')
-                        ->options(fn () => Material::query()->distinct()->orderBy('category')->pluck('category', 'category'))
-                        ->live()
-                        ->afterStateUpdated(function (Forms\Set $set) {
-                            $set('type_filter', null);
-                            $set('variant_filter', null);
-                            $set('category_quantities', []);
-                        })
-                        ->dehydrated(false),
-                    // Il resto compare solo dopo aver scelto la categoria, per non
-                    // buttare in faccia tutti i filtri fin da subito.
-                    Forms\Components\Grid::make(3)
-                        ->schema([
-                            Forms\Components\Select::make('type_filter')
-                                ->label('Tipo')
-                                ->options(fn (Forms\Get $get) => Material::query()->where('category', $get('category_filter'))->distinct()->orderBy('type')->pluck('type', 'type'))
-                                ->live()
-                                ->afterStateUpdated(fn (Forms\Set $set) => $set('variant_filter', null))
-                                ->dehydrated(false),
-                            // Es. "Terminale diritto" nella grigia in pollici ha ~13 varianti
-                            // (Filettatura conica, cilindrica, NPTF, Whitworth...): senza
-                            // questo filtro resterebbero tutte mischiate nell'elenco sotto.
-                            Forms\Components\Select::make('variant_filter')
-                                ->label('Variante')
-                                ->options(fn (Forms\Get $get) => static::distinctVariants($get('category_filter'), $get('type_filter')))
-                                ->live()
-                                ->visible(fn (Forms\Get $get) => filled($get('type_filter')) && static::distinctVariants($get('category_filter'), $get('type_filter')) !== [])
-                                ->dehydrated(false),
-                            Forms\Components\TextInput::make('category_search')
-                                ->label('Filtro per codice')
-                                ->live(debounce: 400)
-                                ->dehydrated(false),
-                        ])
-                        ->visible(fn (Forms\Get $get) => filled($get('category_filter'))),
-                    // La lista di quantita' resta nascosta finche' non si sceglie
-                    // anche il tipo: una categoria intera puo' avere 100+ righe,
-                    // troppe da mostrare tutte insieme.
-                    Forms\Components\Grid::make(2)
-                        ->schema(fn (Forms\Get $get) => static::categoryMaterialInputs($get))
-                        ->visible(fn (Forms\Get $get) => filled($get('type_filter'))),
-                    Forms\Components\Actions::make([
-                        Forms\Components\Actions\Action::make('addFromCategory')
-                            ->label('Aggiungi selezionati')
-                            ->icon('heroicon-o-plus')
-                            ->button()
-                            ->visible(fn (Forms\Get $get) => filled($get('type_filter')))
-                            ->action(function (Forms\Get $get, Forms\Set $set) {
-                                $quantities = collect($get('category_quantities') ?? [])
-                                    ->map(fn ($qty) => (int) $qty)
-                                    ->filter(fn (int $qty) => $qty > 0);
-
-                                if ($quantities->isEmpty()) {
-                                    return;
-                                }
-
-                                // Array semplice, non Collection: l'assegnazione annidata
-                                // $items[$key]['quantity'] = ... non muta una Collection
-                                // (ArrayAccess restituisce per valore), serve un array vero.
-                                $items = $get('items') ?? [];
-
-                                foreach ($quantities as $materialId => $quantity) {
-                                    $existingKey = collect($items)->search(fn (array $item) => ($item['material_id'] ?? null) === $materialId);
-
-                                    if ($existingKey !== false) {
-                                        $items[$existingKey]['quantity'] = (int) ($items[$existingKey]['quantity'] ?? 0) + $quantity;
-                                    } else {
-                                        $items[] = ['material_id' => $materialId, 'quantity' => $quantity];
-                                    }
-                                }
-
-                                $set('items', array_values($items));
-
-                                // Le quantita' restano visibili nei campi (non si
-                                // azzerano): serve a vedere subito cosa e' stato
-                                // appena aggiunto, invece di ritrovarsi campi vuoti
-                                // e il dubbio se il click abbia funzionato o no.
-                                Notification::make()
-                                    ->title($quantities->count().' material'.($quantities->count() === 1 ? 'e aggiunto' : 'i aggiunti')." all'ordine")
-                                    ->success()
-                                    ->send();
-                            }),
-                    ]),
+                ->disabled()
+                ->dehydrated(),
+            Forms\Components\Select::make('supplier_id')
+                ->label('Fornitore')
+                ->relationship('supplier', 'name')
+                ->searchable()
+                ->preload()
+                ->createOptionForm([
+                    Forms\Components\TextInput::make('name')->label('Ragione sociale')->required(),
                 ])
-                ->columnSpanFull(),
-            Forms\Components\Section::make('Materiali nell\'ordine')
-                ->icon('heroicon-o-clipboard-document-list')
-                ->schema([
-                    // Righe compilate solo da "Aggiungi materiali" qui sopra: niente
-                    // tendina "materiale" da riempire a mano, altrimenti risulterebbe
-                    // sempre vuota/obbligatoria anche quando le righe arrivano gia'
-                    // popolate dal blocco per categoria.
-                    Forms\Components\Repeater::make('items')
-                        ->hiddenLabel()
-                        ->relationship()
-                        // Etichetta della riga nella testata della card: e' li' che
-                        // Filament mette anche il pulsante cestino, cosi' finiscono
-                        // allineati sulla stessa riga invece di scontrarsi col
-                        // contenuto sotto.
-                        ->itemLabel(fn (array $state) => static::materialLabel($state['material_id'] ?? null) ?? 'Materiale')
-                        ->schema([
-                            Forms\Components\Hidden::make('material_id')->required(),
-                            Forms\Components\TextInput::make('quantity')
-                                ->label('Quantità')
-                                ->numeric()
-                                ->minValue(1)
-                                ->required(),
-                        ])
-                        ->addable(false)
-                        ->deletable()
-                        ->reorderable(false)
-                        ->required()
-                        ->minItems(1)
-                        ->columnSpanFull(),
-                    Forms\Components\Textarea::make('notes')
-                        ->label('Note per il fornitore')
-                        ->rows(2)
-                        ->columnSpanFull(),
-                ])
+                ->createOptionUsing(fn (array $data) => Supplier::create($data)->id)
+                ->helperText('Compare nel PDF come destinatario dell\'ordine.'),
+            Forms\Components\Textarea::make('notes')
+                ->label('Note per il fornitore')
+                ->rows(2)
                 ->columnSpanFull(),
         ]);
     }
@@ -177,16 +64,34 @@ class MaterialOrderResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('number')->label('Numero')->searchable()->sortable(),
+                Tables\Columns\TextColumn::make('supplier.name')->label('Fornitore')->placeholder('—'),
                 Tables\Columns\TextColumn::make('created_at')->label('Data')->dateTime('d/m/Y H:i')->sortable(),
                 Tables\Columns\TextColumn::make('items_count')->label('Materiali')->counts('items'),
-                Tables\Columns\TextColumn::make('notes')->label('Note')->limit(50)->placeholder('—'),
+                Tables\Columns\TextColumn::make('notes')
+                    ->label('Note')
+                    ->limit(50)
+                    ->placeholder('—')
+                    ->tooltip(function (Tables\Columns\TextColumn $column) {
+                        $state = $column->getState();
+
+                        return is_string($state) && strlen($state) > 50 ? $state : null;
+                    }),
             ])
             ->defaultSort('created_at', 'desc')
+            ->filters([
+                Tables\Filters\SelectFilter::make('supplier_id')
+                    ->label('Fornitore')
+                    ->relationship('supplier', 'name'),
+            ])
             ->actions([
                 Tables\Actions\Action::make('pdf')
                     ->label('PDF')
                     ->icon('heroicon-o-document-arrow-down')
                     ->action(fn (MaterialOrder $record) => static::streamPdf($record)),
+                Tables\Actions\Action::make('excel')
+                    ->label('Excel')
+                    ->icon('heroicon-o-table-cells')
+                    ->action(fn (MaterialOrder $record) => static::streamExcel($record)),
                 Tables\Actions\EditAction::make(),
                 Tables\Actions\DeleteAction::make(),
             ])
@@ -198,31 +103,132 @@ class MaterialOrderResource extends Resource
     }
 
     /**
-     * Un campo quantità per ogni materiale della categoria scelta (più
-     * l'eventuale filtro testuale), per compilarli tutti insieme invece di
-     * ripetere "cerca codice, seleziona, aggiungi" una riga alla volta.
+     * Form del picker "Aggiungi materiali", usato dall'azione header su
+     * EditMaterialOrder dentro una modale: categoria -> tipo -> variante ->
+     * griglia di quantita'. Statico e senza effetti collaterali: chi lo usa
+     * decide cosa fare del risultato (vedi addSelectedMaterialsToOrder).
+     *
+     * Se l'ordine ha gia' un fornitore assegnato, i materiali dello stesso
+     * fornitore vengono proposti per primi (non filtrati via: un ordine puo'
+     * comunque contenere materiali di fornitori diversi).
+     *
+     * @return array<Forms\Components\Component>
+     */
+    public static function addMaterialsFormSchema(?MaterialOrder $order = null): array
+    {
+        $preferredSupplierId = $order?->supplier_id;
+
+        return [
+            Forms\Components\Grid::make(2)
+                ->schema([
+                    // Ricerca diretta per codice John Guest, indipendente dai
+                    // filtri sotto: a volte si parte gia' sapendo il codice
+                    // (bolla fornitore, catalogo cartaceo) e non serve passare
+                    // da categoria/tipo.
+                    Forms\Components\TextInput::make('code_search')
+                        ->label('Cerca per codice')
+                        ->placeholder('Es. PI0108S')
+                        ->live(debounce: 400)
+                        ->afterStateUpdated(fn (Forms\Set $set) => $set('category_quantities', []))
+                        ->dehydrated(false),
+                    Forms\Components\Select::make('category_filter')
+                        ->label('...oppure sfoglia per categoria')
+                        ->options(fn () => Material::query()->distinct()->orderBy('category')->pluck('category', 'category'))
+                        ->live()
+                        ->afterStateUpdated(function (Forms\Set $set) {
+                            $set('type_filter', null);
+                            $set('variant_filter', null);
+                            $set('category_quantities', []);
+                        })
+                        ->dehydrated(false),
+                ]),
+            // Tipo/variante compaiono solo sfogliando per categoria (non ha
+            // senso restringerli mentre si cerca gia' per codice).
+            Forms\Components\Grid::make(2)
+                ->schema([
+                    Forms\Components\Select::make('type_filter')
+                        ->label('Tipo')
+                        ->options(fn (Forms\Get $get) => Material::query()->where('category', $get('category_filter'))->distinct()->orderBy('type')->pluck('type', 'type'))
+                        ->live()
+                        ->afterStateUpdated(fn (Forms\Set $set) => $set('variant_filter', null))
+                        ->dehydrated(false),
+                    // Es. "Terminale diritto" nella grigia in pollici ha ~13 varianti
+                    // (Filettatura conica, cilindrica, NPTF, Whitworth...): senza
+                    // questo filtro resterebbero tutte mischiate nell'elenco sotto.
+                    Forms\Components\Select::make('variant_filter')
+                        ->label('Variante')
+                        ->options(fn (Forms\Get $get) => static::distinctVariants($get('category_filter'), $get('type_filter')))
+                        ->live()
+                        ->visible(fn (Forms\Get $get) => filled($get('type_filter')) && static::distinctVariants($get('category_filter'), $get('type_filter')) !== [])
+                        ->dehydrated(false),
+                ])
+                ->visible(fn (Forms\Get $get) => blank($get('code_search')) && filled($get('category_filter'))),
+            // La lista di quantita' resta nascosta finche' non si cerca un
+            // codice o si sceglie anche il tipo: una categoria intera puo'
+            // avere 100+ righe, troppe da mostrare tutte insieme.
+            Forms\Components\Grid::make(2)
+                ->schema(fn (Forms\Get $get) => static::materialQuantityInputs($get, $preferredSupplierId))
+                ->visible(fn (Forms\Get $get) => filled($get('code_search')) || filled($get('type_filter'))),
+        ];
+    }
+
+    /**
+     * Somma le quantita' scelte nel picker sulle righe gia' presenti
+     * nell'ordine, scrivendo subito su DB (non su stato di form): un
+     * refresh della pagina non deve mai far perdere niente.
+     *
+     * @return int numero di materiali aggiunti/aggiornati
+     */
+    public static function addSelectedMaterialsToOrder(MaterialOrder $order, array $categoryQuantities): int
+    {
+        $quantities = collect($categoryQuantities)
+            ->map(fn ($qty) => (int) $qty)
+            ->filter(fn (int $qty) => $qty > 0);
+
+        foreach ($quantities as $materialId => $quantity) {
+            $item = $order->items()->firstOrNew(['material_id' => $materialId]);
+            $item->quantity = ($item->exists ? $item->quantity : 0) + $quantity;
+            $item->save();
+        }
+
+        return $quantities->count();
+    }
+
+    /**
+     * Un campo quantità per ogni materiale trovato, per compilarli tutti
+     * insieme invece di ripetere "cerca codice, seleziona, aggiungi" una
+     * riga alla volta. Due modalita': ricerca diretta per codice su tutto
+     * il catalogo (code_search valorizzato, ignora categoria/tipo/variante),
+     * oppure sfoglia per categoria/tipo/variante scelti.
      *
      * @return array<Forms\Components\TextInput>
      */
-    private static function categoryMaterialInputs(Forms\Get $get): array
+    private static function materialQuantityInputs(Forms\Get $get, ?string $preferredSupplierId = null): array
     {
-        $category = $get('category_filter');
+        $codeSearch = $get('code_search');
 
-        if (blank($category)) {
-            return [];
+        $query = Material::query();
+
+        if (filled($codeSearch)) {
+            $query->where('code', 'like', "%{$codeSearch}%")->limit(30);
+        } else {
+            $category = $get('category_filter');
+
+            if (blank($category)) {
+                return [];
+            }
+
+            $type = $get('type_filter');
+            $variant = $get('variant_filter');
+
+            $query->where('category', $category)
+                ->when(filled($type), fn ($q) => $q->where('type', $type))
+                ->when(filled($variant), fn ($q) => $q->where('variant', $variant));
         }
 
-        $type = $get('type_filter');
-        $variant = $get('variant_filter');
-        $search = $get('category_search');
-
-        return Material::query()
-            ->where('category', $category)
-            ->when(filled($type), fn ($query) => $query->where('type', $type))
-            ->when(filled($variant), fn ($query) => $query->where('variant', $variant))
-            ->when(filled($search), fn ($query) => $query->where(
-                fn ($q) => $q->where('code', 'like', "%{$search}%")->orWhere('type', 'like', "%{$search}%")
-            ))
+        return $query
+            ->when($preferredSupplierId, fn ($q) => $q->orderByRaw('CASE WHEN supplier_id = ? THEN 0 ELSE 1 END', [$preferredSupplierId]))
+            ->orderBy('category')
             ->orderBy('type')
             ->orderBy('variant')
             ->orderBy('code')
@@ -242,7 +248,7 @@ class MaterialOrderResource extends Resource
      * diametro tubo: l'etichetta deve riportare anche quelli o le righe
      * risultano indistinguibili nell'elenco per categoria.
      */
-    private static function materialLabel(Material|string|null $material): ?string
+    public static function materialLabel(Material|string|null $material): ?string
     {
         if (is_string($material)) {
             $material = Material::find($material);
@@ -278,7 +284,7 @@ class MaterialOrderResource extends Resource
     /**
      * @return array<string, string>
      */
-    private static function distinctVariants(?string $category, ?string $type): array
+    public static function distinctVariants(?string $category, ?string $type): array
     {
         if (blank($category) || blank($type)) {
             return [];
@@ -296,7 +302,7 @@ class MaterialOrderResource extends Resource
 
     public static function streamPdf(MaterialOrder $record)
     {
-        $record->load(['items.material', 'tenant']);
+        $record->load(['items.material', 'tenant', 'supplier']);
 
         $rows = $record->items
             ->sortBy(fn ($item) => $item->material->category.$item->material->code)
@@ -307,6 +313,7 @@ class MaterialOrderResource extends Resource
             'rows' => $rows,
             'notes' => $record->notes,
             'tenant' => $record->tenant,
+            'supplier' => $record->supplier,
             'number' => $record->number,
             'date' => $record->created_at,
         ]);
@@ -317,11 +324,24 @@ class MaterialOrderResource extends Resource
         );
     }
 
+    public static function streamExcel(MaterialOrder $record)
+    {
+        $record->load('items.material');
+
+        return Excel::download(new MaterialOrderExport($record), "{$record->number}.xlsx");
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            RelationManagers\ItemsRelationManager::class,
+        ];
+    }
+
     public static function getPages(): array
     {
         return [
             'index' => Pages\ListMaterialOrders::route('/'),
-            'create' => Pages\CreateMaterialOrder::route('/create'),
             'edit' => Pages\EditMaterialOrder::route('/{record}/edit'),
         ];
     }

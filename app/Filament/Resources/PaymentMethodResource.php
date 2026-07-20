@@ -63,7 +63,7 @@ class PaymentMethodResource extends Resource
             ->defaultSort('sort_order')
             ->columns([
                 Tables\Columns\TextColumn::make('name')->label('Nome')->searchable(),
-                Tables\Columns\TextColumn::make('slug')->label('Slug'),
+                Tables\Columns\TextColumn::make('slug')->label('Slug')->searchable(),
                 Tables\Columns\IconColumn::make('is_active')->label('Attivo')->boolean(),
             ])
             ->actions([

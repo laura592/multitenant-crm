@@ -52,10 +52,19 @@ class LeaveRequestResource extends Resource
                     Forms\Components\Select::make('type')
                         ->label('Tipo')
                         ->options(['ferie' => 'Ferie', 'permesso' => 'Permesso', 'malattia' => 'Malattia'])
+                        ->live()
                         ->required(),
-                    Forms\Components\TextInput::make('hours')->label('Ore (per permesso orario)')->numeric(),
+                    // Solo il permesso orario ha bisogno delle ore: per ferie/malattia
+                    // il campo restava visibile ma inutile, con rischio di lasciarlo
+                    // valorizzato per errore da una richiesta precedente.
+                    Forms\Components\TextInput::make('hours')
+                        ->label('Ore')
+                        ->numeric()
+                        ->minValue(0)
+                        ->visible(fn (Forms\Get $get) => $get('type') === 'permesso')
+                        ->required(fn (Forms\Get $get) => $get('type') === 'permesso'),
                     Forms\Components\DatePicker::make('date_from')->label('Dal')->required(),
-                    Forms\Components\DatePicker::make('date_to')->label('Al')->required(),
+                    Forms\Components\DatePicker::make('date_to')->label('Al')->required()->afterOrEqual('date_from'),
                     Forms\Components\Textarea::make('notes')->label('Note')->columnSpanFull(),
                 ]),
         ]);
@@ -66,10 +75,24 @@ class LeaveRequestResource extends Resource
         return $table
             ->defaultSort('date_from', 'desc')
             ->columns([
-                Tables\Columns\TextColumn::make('user.name')->label('Dipendente')->searchable(),
-                Tables\Columns\TextColumn::make('type')->label('Tipo')->badge(),
-                Tables\Columns\TextColumn::make('date_from')->label('Dal')->date(),
-                Tables\Columns\TextColumn::make('date_to')->label('Al')->date(),
+                Tables\Columns\TextColumn::make('user.name')->label('Dipendente')->searchable()->sortable(),
+                Tables\Columns\TextColumn::make('type')
+                    ->label('Tipo')
+                    ->badge()
+                    ->formatStateUsing(fn (string $state) => match ($state) {
+                        'ferie' => 'Ferie',
+                        'permesso' => 'Permesso',
+                        'malattia' => 'Malattia',
+                        default => $state,
+                    })
+                    ->color(fn (string $state) => match ($state) {
+                        'ferie' => 'info',
+                        'permesso' => 'warning',
+                        'malattia' => 'danger',
+                        default => 'gray',
+                    }),
+                Tables\Columns\TextColumn::make('date_from')->label('Dal')->date()->sortable(),
+                Tables\Columns\TextColumn::make('date_to')->label('Al')->date()->sortable(),
                 Tables\Columns\TextColumn::make('days')->label('Giorni')->state(fn (LeaveRequest $record) => $record->days),
                 Tables\Columns\TextColumn::make('status')
                     ->label('Stato')
@@ -84,6 +107,9 @@ class LeaveRequestResource extends Resource
                 Tables\Filters\SelectFilter::make('status')
                     ->label('Stato')
                     ->options(['richiesto' => 'Richiesto', 'approvato' => 'Approvato', 'rifiutato' => 'Rifiutato']),
+                Tables\Filters\SelectFilter::make('type')
+                    ->label('Tipo')
+                    ->options(['ferie' => 'Ferie', 'permesso' => 'Permesso', 'malattia' => 'Malattia']),
             ])
             ->actions([
                 Tables\Actions\Action::make('approve')

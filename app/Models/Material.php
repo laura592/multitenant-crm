@@ -6,6 +6,7 @@ use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\SharedAcrossTenants;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Material extends Model
 {
@@ -13,6 +14,7 @@ class Material extends Model
 
     protected $fillable = [
         'tenant_id',
+        'supplier_id',
         'code',
         'category',
         'type',
@@ -24,4 +26,9 @@ class Material extends Model
         'barb_diameter',
         'notes',
     ];
+
+    public function supplier(): BelongsTo
+    {
+        return $this->belongsTo(Supplier::class);
+    }
 }

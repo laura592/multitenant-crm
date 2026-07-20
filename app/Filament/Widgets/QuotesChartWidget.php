@@ -17,10 +17,16 @@ class QuotesChartWidget extends ChartWidget
     {
         $months = collect(range(5, 0))->map(fn (int $i) => now()->subMonths($i));
 
-        $values = $months->map(fn ($month) => Quote::whereMonth('date', $month->month)
-            ->whereYear('date', $month->year)
+        // Una sola query per i 6 mesi invece di una per ciascuno: raggruppiamo
+        // per anno/mese in PHP per restare indipendenti dal dialetto SQL del DB.
+        $totalsByMonth = Quote::query()
             ->where('status', 'accettato')
-            ->sum('total'));
+            ->where('date', '>=', $months->first()->copy()->startOfMonth())
+            ->get(['date', 'total'])
+            ->groupBy(fn (Quote $quote) => $quote->date->format('Y-m'))
+            ->map(fn ($quotes) => $quotes->sum('total'));
+
+        $values = $months->map(fn ($month) => $totalsByMonth->get($month->format('Y-m'), 0));
 
         return [
             'datasets' => [

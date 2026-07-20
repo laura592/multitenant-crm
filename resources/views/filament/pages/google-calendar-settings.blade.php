@@ -4,6 +4,9 @@
 
         @if ($account)
             <div class="flex flex-col gap-y-2">
+                <x-filament::badge color="success" icon="heroicon-o-check-circle">
+                    Connesso
+                </x-filament::badge>
                 <p>
                     Collegato come <strong>{{ $account->google_account_email }}</strong>
                     dal {{ $account->connected_at->translatedFormat('d/m/Y') }}.
@@ -17,6 +20,9 @@
                 </p>
             </div>
         @else
+            <x-filament::badge color="gray" icon="heroicon-o-x-circle" class="mb-2">
+                Non connesso
+            </x-filament::badge>
             <p class="text-sm text-gray-500 dark:text-gray-400">
                 Collega il tuo account Google per vedere i tuoi appuntamenti anche sul tuo calendario
                 personale (Google Calendar e, se lo aggiungi su iPhone/iPad, anche Calendario di Apple).

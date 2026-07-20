@@ -50,9 +50,9 @@ class UserResource extends Resource
                     Forms\Components\Select::make('roles')
                         ->label('Ruolo')
                         ->relationship('roles', 'name')
-                        ->multiple()
                         ->preload()
-                        ->required(),
+                        ->required()
+                        ->helperText('Ogni utente ha un solo ruolo applicativo.'),
                     Forms\Components\Hidden::make('tenant_id')->default(fn () => Filament::getTenant()?->id),
                     Forms\Components\Toggle::make('is_super_admin')
                         ->label('Staff master (accesso a tutti i tenant)')
@@ -72,6 +72,7 @@ class UserResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->defaultSort('name')
             ->columns([
                 Tables\Columns\TextColumn::make('name')->label('Nome')->searchable(),
                 Tables\Columns\TextColumn::make('email')->label('Email')->searchable(),
@@ -79,13 +80,34 @@ class UserResource extends Resource
                 Tables\Columns\IconColumn::make('is_super_admin')->label('Staff master')->boolean(),
                 Tables\Columns\TextColumn::make('created_at')->label('Creato il')->date('d/m/Y'),
             ])
+            ->filters([
+                Tables\Filters\SelectFilter::make('roles')
+                    ->label('Ruolo')
+                    ->relationship('roles', 'name'),
+            ])
             ->actions([
                 Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                // Non permettere di cancellare il proprio account dalla lista utenti:
+                // si perderebbe l'accesso al pannello senza un altro admin che lo ripristini.
+                Tables\Actions\DeleteAction::make()
+                    ->hidden(fn (User $record) => $record->id === auth()->id()),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                            $ownAccount = $records->contains('id', auth()->id());
+                            $records->reject(fn (User $record) => $record->id === auth()->id())
+                                ->each->delete();
+
+                            if ($ownAccount) {
+                                \Filament\Notifications\Notification::make()
+                                    ->title('Il tuo account non è stato eliminato')
+                                    ->body('Non puoi eliminare l\'utente con cui hai effettuato l\'accesso.')
+                                    ->warning()
+                                    ->send();
+                            }
+                        }),
                 ]),
             ]);
     }

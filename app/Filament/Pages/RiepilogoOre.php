@@ -105,6 +105,20 @@ class RiepilogoOre extends Page implements HasForms
         });
     }
 
+    /**
+     * Totale di riga in fondo alla tabella: utile al commercialista per un
+     * controllo rapido senza dover sommare a mano tutte le righe.
+     */
+    public function getTotals(Collection $rows): array
+    {
+        return [
+            'ordinarie' => round($rows->sum('ordinarie'), 2),
+            'straordinario' => round($rows->sum('straordinario'), 2),
+            'ferie_giorni' => round($rows->sum('ferie_giorni'), 2),
+            'permessi_ore' => round($rows->sum('permessi_ore'), 2),
+        ];
+    }
+
     protected function getHeaderActions(): array
     {
         return [

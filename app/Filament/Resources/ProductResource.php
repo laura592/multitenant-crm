@@ -125,8 +125,8 @@ class ProductResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\ImageColumn::make('image')->label(''),
-                Tables\Columns\TextColumn::make('sku')->label('SKU')->searchable(),
-                Tables\Columns\TextColumn::make('name')->label('Nome')->searchable(),
+                Tables\Columns\TextColumn::make('sku')->label('SKU')->searchable()->sortable(),
+                Tables\Columns\TextColumn::make('name')->label('Nome')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('type')
                     ->label('Tipo')
                     ->badge()
@@ -137,8 +137,16 @@ class ProductResource extends Resource
                         Product::TYPE_ACCESSORY => 'Accessorio',
                         Product::TYPE_SERVICE => 'Servizio',
                         default => $state,
+                    })
+                    ->color(fn (string $state) => match ($state) {
+                        Product::TYPE_MACHINE => 'primary',
+                        Product::TYPE_AUXILIARY_UNIT => 'info',
+                        Product::TYPE_OPTION => 'warning',
+                        Product::TYPE_ACCESSORY => 'gray',
+                        Product::TYPE_SERVICE => 'success',
+                        default => 'gray',
                     }),
-                Tables\Columns\TextColumn::make('family.name')->label('Famiglia'),
+                Tables\Columns\TextColumn::make('family.name')->label('Famiglia')->sortable(),
                 Tables\Columns\TextColumn::make('tenant.name')->label('Visibilità')->placeholder('Condiviso')->badge(),
                 Tables\Columns\TextColumn::make('prices.price')
                     ->label('Prezzo corrente')
@@ -155,6 +163,11 @@ class ProductResource extends Resource
                         Product::TYPE_ACCESSORY => 'Accessorio',
                         Product::TYPE_SERVICE => 'Servizio',
                     ]),
+                Tables\Filters\SelectFilter::make('product_family_id')
+                    ->label('Famiglia')
+                    ->relationship('family', 'name')
+                    ->searchable()
+                    ->preload(),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),

@@ -58,6 +58,7 @@ class RolePermissions
                 ...self::expand('machine::unit', self::MANAGE),
                 ...self::expand('material', self::VIEW),
                 ...self::expand('material::order', self::MANAGE),
+                ...self::expand('supplier', self::VIEW),
                 // Vede solo le proprie ore/ferie (ScopesToOwnUserUnlessResponsabile).
                 ...self::expand('time::entry', ['view_any', 'view', 'create', 'update']),
                 ...self::expand('leave::request', ['view_any', 'view', 'create', 'update']),
@@ -96,6 +97,7 @@ class RolePermissions
                 ...self::expand('vehicle', self::MANAGE),
                 ...self::expand('material', self::MANAGE),
                 ...self::expand('material::order', self::MANAGE),
+                ...self::expand('supplier', self::MANAGE),
                 ...self::expand('time::entry', self::MANAGE),
                 ...self::expand('leave::request', self::MANAGE),
                 ...self::expand('payment::method', self::MANAGE),

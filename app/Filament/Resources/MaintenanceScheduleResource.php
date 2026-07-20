@@ -81,6 +81,17 @@ class MaintenanceScheduleResource extends Resource
                     ->color(fn (MaintenanceSchedule $record) => $record->next_due_date->isPast() ? 'danger' : ($record->next_due_date->diffInDays(now()) <= 30 ? 'warning' : 'success')),
                 Tables\Columns\TextColumn::make('lastServiceReport.number')->label('Ultimo intervento')->placeholder('Mai eseguito'),
             ])
+            ->filters([
+                Tables\Filters\SelectFilter::make('customer_id')
+                    ->label('Cliente')
+                    ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
+                    ->getOptionLabelFromRecordUsing(fn ($record) => $record->full_name)
+                    ->searchable()
+                    ->preload(),
+                Tables\Filters\Filter::make('due_soon')
+                    ->label('In scadenza entro 30 giorni')
+                    ->query(fn ($query) => $query->where('next_due_date', '<=', now()->addDays(30))),
+            ])
             ->actions([
                 Tables\Actions\EditAction::make(),
                 Tables\Actions\DeleteAction::make(),

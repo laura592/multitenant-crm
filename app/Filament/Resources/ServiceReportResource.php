@@ -56,7 +56,11 @@ class ServiceReportResource extends Resource
                             default => $state,
                         }),
                     TextEntry::make('intervention_date')->label('Data intervento')->date(),
-                    TextEntry::make('status')->label('Stato')->badge(),
+                    TextEntry::make('status')
+                        ->label('Stato')
+                        ->badge()
+                        ->formatStateUsing(fn (string $state) => self::statusLabels()[$state] ?? ucfirst($state))
+                        ->color(fn (string $state) => self::statusColors()[$state] ?? 'gray'),
                     TextEntry::make('arrival_at')->label('Orario arrivo')->dateTime('d/m/Y H:i')->placeholder('—'),
                     TextEntry::make('departure_at')->label('Orario uscita')->dateTime('d/m/Y H:i')->placeholder('—'),
                 ]),
@@ -141,12 +145,7 @@ class ServiceReportResource extends Resource
                         ->required(),
                     Forms\Components\Select::make('status')
                         ->label('Stato')
-                        ->options([
-                            'bozza' => 'Bozza',
-                            'completato' => 'Completato',
-                            'firmato' => 'Firmato',
-                            'inviato' => 'Inviato',
-                        ])
+                        ->options(fn () => self::statusLabels())
                         ->default('bozza')
                         ->required(),
                     Forms\Components\DateTimePicker::make('arrival_at')->label('Orario arrivo'),
@@ -225,7 +224,11 @@ class ServiceReportResource extends Resource
                         default => $state,
                     }),
                 Tables\Columns\TextColumn::make('intervention_date')->label('Data')->date(),
-                Tables\Columns\TextColumn::make('status')->label('Stato')->badge(),
+                Tables\Columns\TextColumn::make('status')
+                    ->label('Stato')
+                    ->badge()
+                    ->formatStateUsing(fn (string $state) => self::statusLabels()[$state] ?? ucfirst($state))
+                    ->color(fn (string $state) => self::statusColors()[$state] ?? 'gray'),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('intervention_type')
@@ -237,6 +240,18 @@ class ServiceReportResource extends Resource
                         ServiceReport::TYPE_RIPARAZIONE => 'Riparazione',
                         ServiceReport::TYPE_GARANZIA => 'Garanzia',
                     ]),
+                Tables\Filters\SelectFilter::make('status')
+                    ->label('Stato')
+                    ->options(fn () => self::statusLabels()),
+                Tables\Filters\SelectFilter::make('customer_id')
+                    ->label('Cliente')
+                    ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
+                    ->getOptionLabelFromRecordUsing(fn ($record) => $record->full_name)
+                    ->searchable()
+                    ->preload(),
+                Tables\Filters\SelectFilter::make('technician_id')
+                    ->label('Tecnico')
+                    ->relationship('technician', 'name'),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),
@@ -299,6 +314,31 @@ class ServiceReportResource extends Resource
             'create' => Pages\CreateServiceReport::route('/create'),
             'view' => Pages\ViewServiceReport::route('/{record}'),
             'edit' => Pages\EditServiceReport::route('/{record}/edit'),
+        ];
+    }
+
+    /**
+     * Il modello non ha costanti per lo stato (campo stringa libero storico):
+     * le etichette/colori restano centralizzati qui per non duplicarli tra
+     * tabella, infolist e form.
+     */
+    public static function statusLabels(): array
+    {
+        return [
+            'bozza' => 'Bozza',
+            'completato' => 'Completato',
+            'firmato' => 'Firmato',
+            'inviato' => 'Inviato',
+        ];
+    }
+
+    public static function statusColors(): array
+    {
+        return [
+            'bozza' => 'gray',
+            'completato' => 'info',
+            'firmato' => 'warning',
+            'inviato' => 'success',
         ];
     }
 }

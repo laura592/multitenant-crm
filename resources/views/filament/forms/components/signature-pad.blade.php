@@ -29,9 +29,16 @@
                 }
             },
             pos(e) {
+                // Il canvas ha risoluzione interna fissa (500x180, attributi width/
+                // height) ma in CSS e' width:100% con max-width:500px: su schermi
+                // stretti (mobile) la larghezza visualizzata (rect.width) e' minore
+                // di 500, quindi va riproporzionata altrimenti il punto disegnato
+                // non corrisponde a dove tocchi (firma "scalata" verso sinistra).
                 const rect = this.$refs.canvas.getBoundingClientRect();
+                const scaleX = this.$refs.canvas.width / rect.width;
+                const scaleY = this.$refs.canvas.height / rect.height;
                 const p = e.touches && e.touches.length ? e.touches[0] : e;
-                return { x: p.clientX - rect.left, y: p.clientY - rect.top };
+                return { x: (p.clientX - rect.left) * scaleX, y: (p.clientY - rect.top) * scaleY };
             },
             start(e) {
                 this.drawing = true;

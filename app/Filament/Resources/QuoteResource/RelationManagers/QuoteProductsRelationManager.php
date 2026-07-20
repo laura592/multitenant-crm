@@ -8,6 +8,7 @@ use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
+use Filament\Tables\Columns\Summarizers\Sum;
 use Filament\Tables\Table;
 use Livewire\Attributes\On;
 
@@ -45,7 +46,8 @@ class QuoteProductsRelationManager extends RelationManager
                 Tables\Columns\TextColumn::make('price')->label('Prezzo')->money('EUR'),
                 Tables\Columns\TextColumn::make('discount')->label('Sconto')->suffix('%'),
                 Tables\Columns\TextColumn::make('tax')->label('IVA')->suffix('%'),
-                Tables\Columns\TextColumn::make('total')->label('Totale')->money('EUR'),
+                Tables\Columns\TextColumn::make('total')->label('Totale')->money('EUR')
+                    ->summarize(Sum::make()->label('Totale complessivo')->money('EUR')),
             ])
             ->headerActions([
                 Tables\Actions\CreateAction::make()

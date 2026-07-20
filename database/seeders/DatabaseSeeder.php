@@ -14,6 +14,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             MunicipalityPostalCodeSeeder::class,
             BrandSeeder::class,
+            SupplierSeeder::class,
             MaterialSeeder::class,
             TenantSeeder::class,
             UserSeeder::class,

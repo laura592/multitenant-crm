@@ -4,6 +4,7 @@ namespace App\Filament\Widgets;
 
 use App\Models\TimeEntry;
 use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
+use Filament\Notifications\Notification;
 use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\Auth;
 
@@ -34,6 +35,8 @@ class TimbraWidget extends Widget
             'source' => 'app',
             'status' => 'aperta',
         ]);
+
+        Notification::make()->title('Entrata registrata alle '.now()->format('H:i'))->success()->send();
     }
 
     public function clockOut(): void
@@ -45,5 +48,7 @@ class TimbraWidget extends Widget
         }
 
         $entry->update(['clock_out' => now(), 'status' => 'chiusa']);
+
+        Notification::make()->title('Uscita registrata alle '.now()->format('H:i'))->success()->send();
     }
 }

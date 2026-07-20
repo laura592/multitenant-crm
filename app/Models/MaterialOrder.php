@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class MaterialOrder extends Model
@@ -13,6 +14,7 @@ class MaterialOrder extends Model
 
     protected $fillable = [
         'tenant_id',
+        'supplier_id',
         'number',
         'notes',
     ];
@@ -29,6 +31,11 @@ class MaterialOrder extends Model
     public function items(): HasMany
     {
         return $this->hasMany(MaterialOrderItem::class);
+    }
+
+    public function supplier(): BelongsTo
+    {
+        return $this->belongsTo(Supplier::class);
     }
 
     /**

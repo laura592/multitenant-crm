@@ -122,6 +122,16 @@ class AppointmentResource extends Resource
                         Appointment::STATUS_COMPLETATO => 'Completato',
                         Appointment::STATUS_ANNULLATO => 'Annullato',
                     ]),
+                Tables\Filters\SelectFilter::make('customer_id')
+                    ->label('Cliente')
+                    ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
+                    ->getOptionLabelFromRecordUsing(fn ($record) => $record->full_name)
+                    ->searchable()
+                    ->preload(),
+                Tables\Filters\Filter::make('upcoming')
+                    ->label('Solo futuri')
+                    ->query(fn ($query) => $query->where('starts_at', '>=', now()->startOfDay()))
+                    ->default(),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),

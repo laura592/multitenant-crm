@@ -90,8 +90,8 @@ class InformationRequestResource extends Resource
         return $table
             ->defaultSort('created_at', 'desc')
             ->columns([
-                Tables\Columns\TextColumn::make('number')->label('Numero')->searchable(),
-                Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->searchable(),
+                Tables\Columns\TextColumn::make('number')->label('Numero')->searchable()->sortable(),
+                Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('status')
                     ->label('Stato')
                     ->badge()
@@ -101,7 +101,7 @@ class InformationRequestResource extends Resource
                         default => 'gray',
                     }),
                 Tables\Columns\TextColumn::make('handledByUser.name')->label('Gestita da')->placeholder('—'),
-                Tables\Columns\TextColumn::make('created_at')->label('Ricevuta il')->dateTime('d/m/Y H:i'),
+                Tables\Columns\TextColumn::make('created_at')->label('Ricevuta il')->dateTime('d/m/Y H:i')->sortable(),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('status')

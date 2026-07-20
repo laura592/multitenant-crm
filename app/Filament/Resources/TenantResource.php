@@ -154,13 +154,32 @@ class TenantResource extends Resource
                 Tables\Columns\TextColumn::make('machine_discount_percent')->label('Sconto')->suffix('%'),
                 Tables\Columns\TextColumn::make('contract_start_date')->label('Inizio contratto')->date(),
             ])
+            ->filters([
+                Tables\Filters\TernaryFilter::make('is_active')->label('Attivo'),
+            ])
             ->actions([
                 Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                // Il tenant master (Alex) e' quello dello staff che gestisce tutti gli
+                // altri partner: eliminarlo per errore blocca l'accesso di tutto lo staff.
+                Tables\Actions\DeleteAction::make()
+                    ->hidden(fn (Tenant $record) => $record->is_master),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                            $hadMaster = $records->contains('is_master', true);
+                            $records->reject(fn (Tenant $record) => $record->is_master)
+                                ->each->delete();
+
+                            if ($hadMaster) {
+                                \Filament\Notifications\Notification::make()
+                                    ->title('Il tenant master non è stato eliminato')
+                                    ->body('Il tenant master (Alex) non può essere eliminato dal pannello.')
+                                    ->warning()
+                                    ->send();
+                            }
+                        }),
                 ]),
             ]);
     }

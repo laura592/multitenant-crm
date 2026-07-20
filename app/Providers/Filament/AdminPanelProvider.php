@@ -43,7 +43,16 @@ class AdminPanelProvider extends PanelProvider
             ->favicon(asset('img/logo.png'))
             ->renderHook(
                 'panels::sidebar.footer',
-                fn () => '<div style="text-align:center;padding:0.75rem 1rem;border-top:1px solid rgba(128,128,128,0.15);"><img src="'.asset('img/franke_partner_logo.png').'" alt="Franke Approved Partner" style="max-width:160px;height:auto;opacity:0.8;"></div>'
+                // NOTA: x-show legato allo store Alpine della sidebar, come fa il logo
+                // nell'header di Filament (vendor/filament/filament/resources/views/
+                // components/sidebar/index.blade.php). Senza questo, il div ha una
+                // larghezza fissa (160px + padding) che non dipende dallo stato
+                // collassato: Filament collassa la sidebar SOLO nascondendo le label/
+                // icone dei link (nessuna classe di larghezza esplicita viene applicata
+                // sull'<aside> da chiuso), quindi la larghezza finale è quella del
+                // contenuto più largo. Un footer sempre visibile a 160px costringe la
+                // sidebar a restare larga anche "collassata".
+                fn () => '<div x-show="$store.sidebar.isOpen" x-cloak x-transition:enter="lg:transition lg:delay-100" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" style="text-align:center;padding:0.75rem 1rem;border-top:1px solid rgba(128,128,128,0.15);"><img src="'.asset('img/franke_partner_logo.png').'" alt="Franke Approved Partner" style="max-width:160px;height:auto;opacity:0.8;"></div>'
             )
             ->colors([
                 'primary' => Color::Amber,

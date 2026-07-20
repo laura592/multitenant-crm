@@ -78,6 +78,16 @@ class VehicleResource extends Resource
                     }),
                 Tables\Columns\TextColumn::make('assignedUser.name')->label('Assegnato a'),
             ])
+            ->filters([
+                Tables\Filters\SelectFilter::make('assigned_user_id')
+                    ->label('Assegnato a')
+                    ->relationship('assignedUser', 'name'),
+                Tables\Filters\Filter::make('deadlines_due_soon')
+                    ->label('Assicurazione/revisione in scadenza (30 gg)')
+                    ->query(fn ($query) => $query->where(fn ($query) => $query
+                        ->where('insurance_due_date', '<=', now()->addDays(30))
+                        ->orWhere('revision_due_date', '<=', now()->addDays(30)))),
+            ])
             ->actions([
                 Tables\Actions\EditAction::make(),
                 Tables\Actions\DeleteAction::make(),

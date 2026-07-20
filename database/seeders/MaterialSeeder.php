@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Material;
+use App\Models\Supplier;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
@@ -64,11 +65,13 @@ class MaterialSeeder extends Seeder
             ->merge($this->tubiLldpe())
             ->merge($this->accessori());
 
-        DB::transaction(function () use ($rows) {
+        $supplierId = Supplier::where('name', 'John Guest')->value('id');
+
+        DB::transaction(function () use ($rows, $supplierId) {
             foreach ($rows as $row) {
                 $code = $row['code'];
                 unset($row['code']);
-                Material::updateOrCreate(['code' => $code, 'tenant_id' => null], $row);
+                Material::updateOrCreate(['code' => $code, 'tenant_id' => null], $row + ['supplier_id' => $supplierId]);
             }
         });
 

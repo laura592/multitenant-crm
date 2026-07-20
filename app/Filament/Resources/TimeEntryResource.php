@@ -10,6 +10,7 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class TimeEntryResource extends Resource
 {
@@ -41,7 +42,9 @@ class TimeEntryResource extends Resource
                         ->dehydrated()
                         ->required(),
                     Forms\Components\DateTimePicker::make('clock_in')->label('Entrata')->required(),
-                    Forms\Components\DateTimePicker::make('clock_out')->label('Uscita'),
+                    Forms\Components\DateTimePicker::make('clock_out')
+                        ->label('Uscita')
+                        ->after('clock_in'),
                     Forms\Components\Select::make('source')
                         ->label('Origine')
                         ->options(['app' => 'App (tempo reale)', 'manuale' => 'Inserimento manuale'])
@@ -66,12 +69,50 @@ class TimeEntryResource extends Resource
         return $table
             ->defaultSort('clock_in', 'desc')
             ->columns([
-                Tables\Columns\TextColumn::make('user.name')->label('Dipendente')->searchable(),
-                Tables\Columns\TextColumn::make('clock_in')->label('Entrata')->dateTime('d/m/Y H:i'),
-                Tables\Columns\TextColumn::make('clock_out')->label('Uscita')->dateTime('d/m/Y H:i')->placeholder('In corso'),
-                Tables\Columns\TextColumn::make('worked_hours')->label('Ore')->state(fn (TimeEntry $record) => $record->worked_hours),
-                Tables\Columns\TextColumn::make('source')->label('Origine')->badge(),
-                Tables\Columns\TextColumn::make('status')->label('Stato')->badge(),
+                Tables\Columns\TextColumn::make('user.name')->label('Dipendente')->searchable()->sortable(),
+                Tables\Columns\TextColumn::make('clock_in')->label('Entrata')->dateTime('d/m/Y H:i')->sortable(),
+                Tables\Columns\TextColumn::make('clock_out')->label('Uscita')->dateTime('d/m/Y H:i')->placeholder('In corso')->sortable(),
+                Tables\Columns\TextColumn::make('worked_hours')->label('Ore')->state(fn (TimeEntry $record) => $record->worked_hours)->placeholder('—'),
+                Tables\Columns\TextColumn::make('source')
+                    ->label('Origine')
+                    ->badge()
+                    ->color(fn (string $state) => match ($state) {
+                        'app' => 'info',
+                        default => 'gray',
+                    })
+                    ->formatStateUsing(fn (string $state) => match ($state) {
+                        'app' => 'App (tempo reale)',
+                        'manuale' => 'Manuale',
+                        default => $state,
+                    }),
+                Tables\Columns\TextColumn::make('status')
+                    ->label('Stato')
+                    ->badge()
+                    ->color(fn (string $state) => match ($state) {
+                        'aperta' => 'warning',
+                        'chiusa' => 'success',
+                        'corretta' => 'info',
+                        default => 'gray',
+                    }),
+            ])
+            ->filters([
+                Tables\Filters\SelectFilter::make('status')
+                    ->label('Stato')
+                    ->options(['aperta' => 'Aperta', 'chiusa' => 'Chiusa', 'corretta' => 'Corretta']),
+                Tables\Filters\SelectFilter::make('source')
+                    ->label('Origine')
+                    ->options(['app' => 'App (tempo reale)', 'manuale' => 'Inserimento manuale']),
+                Tables\Filters\Filter::make('clock_in')
+                    ->label('Periodo')
+                    ->form([
+                        Forms\Components\DatePicker::make('from')->label('Dal'),
+                        Forms\Components\DatePicker::make('until')->label('Al'),
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return $query
+                            ->when($data['from'] ?? null, fn (Builder $q, $date) => $q->whereDate('clock_in', '>=', $date))
+                            ->when($data['until'] ?? null, fn (Builder $q, $date) => $q->whereDate('clock_in', '<=', $date));
+                    }),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),

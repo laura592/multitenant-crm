@@ -46,6 +46,7 @@ class DeadlineResource extends Resource
                             Forms\Components\MorphToSelect\Type::make(Vehicle::class)->titleAttribute('plate'),
                             Forms\Components\MorphToSelect\Type::make(Tenant::class)->titleAttribute('name'),
                         ])
+                        ->searchable()
                         ->columnSpanFull()
                         ->required(),
                     Forms\Components\Select::make('type')
@@ -58,7 +59,8 @@ class DeadlineResource extends Resource
                     Forms\Components\TextInput::make('reminder_days_before')
                         ->label('Preavviso (giorni)')
                         ->numeric()
-                        ->default(30),
+                        ->default(30)
+                        ->helperText('Da quanti giorni prima della scadenza viene segnalata come urgente.'),
                 ]),
             Forms\Components\Section::make('Stato')
                 ->columns(2)
@@ -101,7 +103,12 @@ class DeadlineResource extends Resource
                 Tables\Columns\TextColumn::make('status')
                     ->label('Stato')
                     ->badge()
-                    ->formatStateUsing(fn (string $state) => Deadline::statusLabels()[$state] ?? ucfirst($state)),
+                    ->formatStateUsing(fn (string $state) => Deadline::statusLabels()[$state] ?? ucfirst($state))
+                    ->color(fn (string $state) => match ($state) {
+                        Deadline::STATUS_SCADUTA => 'danger',
+                        Deadline::STATUS_RINNOVATA => 'success',
+                        default => 'gray',
+                    }),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('type')
@@ -112,7 +119,9 @@ class DeadlineResource extends Resource
                     ->options(fn () => Deadline::statusLabels()),
                 Tables\Filters\Filter::make('urgent')
                     ->label('Solo urgenti/scadute')
-                    ->query(fn ($query) => $query->where('due_date', '<=', now()->addDays(30))),
+                    ->query(fn ($query) => $query
+                        ->where('status', Deadline::STATUS_ATTIVA)
+                        ->where('due_date', '<=', now()->addDays(30))),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),

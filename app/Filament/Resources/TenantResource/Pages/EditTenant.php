@@ -13,7 +13,10 @@ class EditTenant extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\DeleteAction::make(),
+            // Il tenant master (Alex) non va mai eliminato dal pannello: e' quello
+            // dello staff che gestisce tutti gli altri partner.
+            Actions\DeleteAction::make()
+                ->hidden(fn () => $this->record->is_master),
         ];
     }
 }

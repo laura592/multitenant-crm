@@ -30,7 +30,8 @@ trait HasDeadlinesTable
                     Forms\Components\TextInput::make('reminder_days_before')
                         ->label('Preavviso (giorni)')
                         ->numeric()
-                        ->default(30),
+                        ->default(30)
+                        ->helperText('Da quanti giorni prima della scadenza viene segnalata come urgente.'),
                     Forms\Components\Select::make('status')
                         ->label('Stato')
                         ->options(fn () => Deadline::statusLabels())
@@ -66,7 +67,15 @@ trait HasDeadlinesTable
                         $record->isUrgent() => 'warning',
                         default => 'success',
                     }),
-                Tables\Columns\TextColumn::make('status')->label('Stato')->badge(),
+                Tables\Columns\TextColumn::make('status')
+                    ->label('Stato')
+                    ->badge()
+                    ->formatStateUsing(fn (string $state) => Deadline::statusLabels()[$state] ?? ucfirst($state))
+                    ->color(fn (string $state) => match ($state) {
+                        Deadline::STATUS_SCADUTA => 'danger',
+                        Deadline::STATUS_RINNOVATA => 'success',
+                        default => 'gray',
+                    }),
             ])
             ->headerActions([
                 Tables\Actions\CreateAction::make(),

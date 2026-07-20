@@ -52,6 +52,8 @@ class GoogleCalendarSettings extends Page
         return [
             Action::make('connect')
                 ->label('Collega Google Calendar')
+                ->icon('heroicon-o-link')
+                ->color('primary')
                 ->url(fn () => route('google-calendar.connect')),
         ];
     }
