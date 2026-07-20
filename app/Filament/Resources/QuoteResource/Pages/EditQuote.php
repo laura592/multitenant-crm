@@ -39,15 +39,4 @@ class EditQuote extends EditRecord
     {
         $this->record->updateTotal();
     }
-
-    /**
-     * Il wizard "Configura macchina" crea le righe (quoteProducts) scrivendo
-     * direttamente sul modello, fuori dal form della pagina: senza questo, il
-     * repeater "Righe preventivo" resta con lo stato caricato al mount finche'
-     * non si ricarica manualmente la pagina (docs/architecture.md §11.2).
-     */
-    public function refreshAfterMachineConfigured(): void
-    {
-        $this->fillForm();
-    }
 }

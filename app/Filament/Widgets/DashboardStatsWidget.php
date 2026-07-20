@@ -35,7 +35,7 @@ class DashboardStatsWidget extends BaseWidget
                 ->description('Richieste informazioni aperte')
                 ->icon('heroicon-o-inbox-arrow-down')
                 ->color($openRequests > 0 ? 'warning' : 'success'),
-            Stat::make('Scadenze urgenti', Deadline::where('status', 'attiva')->get()->filter->isUrgent()->count())
+            Stat::make('Scadenze urgenti', Deadline::where('status', Deadline::STATUS_ATTIVA)->get()->filter->isUrgent()->count())
                 ->description('Entro il periodo di preavviso')
                 ->icon('heroicon-o-exclamation-triangle')
                 ->color('danger'),

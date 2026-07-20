@@ -20,7 +20,7 @@ class AllResourcesSmokeTest extends TestCase
 {
     use RefreshDatabase, AssignsPermissionRoles;
 
-    private const CATALOG_PATHS = ['categories', 'product-families', 'product-option-groups', 'products'];
+    private const CATALOG_PATHS = ['categories', 'product-families', 'brands', 'products'];
 
     private const SALES_PATHS = ['customers', 'quotes'];
 

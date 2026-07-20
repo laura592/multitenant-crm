@@ -4,11 +4,11 @@ namespace Tests\Feature;
 
 use App\Filament\Resources\QuoteResource\Pages\CreateQuote;
 use App\Filament\Resources\QuoteResource\Pages\EditQuote;
+use App\Filament\Resources\QuoteResource\RelationManagers\QuoteProductsRelationManager;
 use App\Models\Customer;
 use App\Models\Product;
-use App\Models\ProductCompatibility;
 use App\Models\ProductFamily;
-use App\Models\ProductOptionGroup;
+use App\Models\ProductOptionSlot;
 use App\Models\ProductRequirement;
 use App\Models\Quote;
 use App\Models\Tenant;
@@ -21,7 +21,7 @@ use Tests\TestCase;
 
 class ConfigureMachineWizardTest extends TestCase
 {
-    use RefreshDatabase, AssignsPermissionRoles;
+    use AssignsPermissionRoles, RefreshDatabase;
 
     protected Tenant $tenant;
 
@@ -33,7 +33,7 @@ class ConfigureMachineWizardTest extends TestCase
 
     protected Product $requiredAux;
 
-    protected ProductOptionGroup $steamGroup;
+    protected ProductOptionSlot $steamSlot;
 
     protected Product $steamOption1;
 
@@ -63,27 +63,29 @@ class ConfigureMachineWizardTest extends TestCase
 
         $this->requiredAux = Product::create(['sku' => 'SU03-EC', 'type' => Product::TYPE_AUXILIARY_UNIT, 'name' => 'SU03 EC']);
         $this->requiredAux->prices()->create(['price' => 1170]);
-        $auxGroup = ProductOptionGroup::create(['name' => 'raffreddamento', 'label' => 'Raffreddamento', 'selection_type' => 'single']);
-        ProductCompatibility::create([
-            'base_product_id' => $this->machine->id,
-            'option_product_id' => $this->requiredAux->id,
-            'option_group_id' => $auxGroup->id,
-            'constraint_type' => 'required',
+        $auxSlot = ProductOptionSlot::create([
+            'product_id' => $this->machine->id,
+            'slot_name' => 'raffreddamento',
+            'label' => 'Raffreddamento',
+            'required' => true,
+            'min_qty' => 1,
+            'max_qty' => 1,
         ]);
+        $auxSlot->items()->create(['component_product_id' => $this->requiredAux->id]);
 
-        $this->steamGroup = ProductOptionGroup::create(['name' => 'lancia_vapore', 'label' => 'Lancia vapore', 'selection_type' => 'single']);
+        $this->steamSlot = ProductOptionSlot::create([
+            'product_id' => $this->machine->id,
+            'slot_name' => 'lancia_vapore',
+            'label' => 'Lancia vapore',
+            'max_qty' => 1,
+        ]);
         $this->steamOption1 = Product::create(['sku' => 'S1', 'type' => Product::TYPE_OPTION, 'name' => 'Lancia vapore S1']);
         $this->steamOption1->prices()->create(['price' => 500]);
         $this->steamOption2 = Product::create(['sku' => 'S2', 'type' => Product::TYPE_OPTION, 'name' => 'Autosteam S2']);
         $this->steamOption2->prices()->create(['price' => 765]);
 
         foreach ([$this->steamOption1, $this->steamOption2] as $option) {
-            ProductCompatibility::create([
-                'base_product_id' => $this->machine->id,
-                'option_product_id' => $option->id,
-                'option_group_id' => $this->steamGroup->id,
-                'constraint_type' => 'compatible',
-            ]);
+            $this->steamSlot->items()->create(['component_product_id' => $option->id]);
         }
 
         $customer = Customer::create(['tenant_id' => $this->tenant->id, 'company_name' => 'Bar Centrale']);
@@ -104,7 +106,7 @@ class ConfigureMachineWizardTest extends TestCase
             ->setActionData([
                 'product_family_id' => $this->machine->product_family_id,
                 'machine_product_id' => $this->machine->id,
-                "group_{$this->steamGroup->id}" => $this->steamOption2->id,
+                "slot_{$this->steamSlot->id}" => $this->steamOption2->id,
             ])
             ->callMountedAction()
             ->assertHasNoActionErrors();
@@ -123,28 +125,34 @@ class ConfigureMachineWizardTest extends TestCase
     }
 
     /**
-     * Bug reale segnalato: dopo aver confermato il wizard, "Righe preventivo"
-     * mostrava le nuove righe solo ricaricando manualmente la pagina - il
-     * form della pagina di modifica non si aggiornava da solo, perche' il
-     * wizard scrive le righe direttamente sul modello, fuori dal form.
+     * Bug reale segnalato: dopo aver confermato il wizard, il tab "Righe
+     * preventivo" mostrava le nuove righe solo ricaricando manualmente la
+     * pagina - perche' il wizard scrive le righe direttamente sul modello,
+     * fuori dal ciclo tabella del RelationManager. ConfigureMachineAction
+     * ora dispatcha l'evento Livewire "quoteProductsUpdated", a cui il
+     * RelationManager e' abbonato (vedi
+     * QuoteProductsRelationManager::refreshAfterMachineConfigured): questo
+     * test verifica che il dispatch di quell'evento, sullo stesso componente
+     * gia' montato, basti a far comparire righe scritte nel frattempo senza
+     * un nuovo mount/reload.
      */
-    public function test_edit_page_shows_new_lines_immediately_without_reloading(): void
+    public function test_relation_manager_shows_new_lines_after_the_refresh_event_without_reloading(): void
     {
-        $test = Livewire::test(EditQuote::class, ['record' => $this->quote->getRouteKey()])
-            ->mountAction('configureMachine')
-            ->setActionData([
-                'product_family_id' => $this->machine->product_family_id,
-                'machine_product_id' => $this->machine->id,
-                "group_{$this->steamGroup->id}" => $this->steamOption2->id,
-            ])
-            ->callMountedAction()
-            ->assertHasNoActionErrors();
+        $component = Livewire::test(QuoteProductsRelationManager::class, [
+            'ownerRecord' => $this->quote,
+            'pageClass' => EditQuote::class,
+        ]);
 
-        // stesso componente Livewire, nessuna nuova richiesta HTTP: e'
-        // esattamente lo stato che l'utente vede senza ricaricare la pagina.
-        $test->assertSee($this->machine->name)
-            ->assertSee($this->requiredAux->name)
-            ->assertSee($this->steamOption2->name);
+        $component->assertDontSee($this->machine->name);
+
+        // Simula cio' che fa ConfigureMachineAction: scrive le righe
+        // direttamente sul modello, fuori dal ciclo del componente.
+        $this->quote->quoteProducts()->create([
+            'product_id' => $this->machine->id, 'quantity' => 1, 'price' => 6400, 'discount' => 0, 'tax' => 22,
+        ]);
+
+        $component->dispatch('quoteProductsUpdated')
+            ->assertSee($this->machine->name);
     }
 
     public function test_wizard_blocks_when_a_required_dependency_is_missing(): void
@@ -154,19 +162,14 @@ class ConfigureMachineWizardTest extends TestCase
         $selfServe = Product::create(['sku' => 'SSP', 'type' => Product::TYPE_OPTION, 'name' => 'Self-Serve Package']);
         ProductRequirement::create(['product_id' => $dualMilk->id, 'requires_product_id' => $selfServe->id]);
 
-        ProductCompatibility::create([
-            'base_product_id' => $this->machine->id,
-            'option_product_id' => $dualMilk->id,
-            'option_group_id' => $this->steamGroup->id,
-            'constraint_type' => 'compatible',
-        ]);
+        $this->steamSlot->items()->create(['component_product_id' => $dualMilk->id]);
 
         Livewire::test(EditQuote::class, ['record' => $this->quote->getRouteKey()])
             ->mountAction('configureMachine')
             ->setActionData([
                 'product_family_id' => $this->machine->product_family_id,
                 'machine_product_id' => $this->machine->id,
-                "group_{$this->steamGroup->id}" => $dualMilk->id,
+                "slot_{$this->steamSlot->id}" => $dualMilk->id,
             ])
             ->callMountedAction();
 
@@ -212,15 +215,15 @@ class ConfigureMachineWizardTest extends TestCase
         ]);
         $machineWithPrice->prices()->create(['price' => 6400]);
 
-        $steamGroupKnown = ProductOptionGroup::create(['name' => 'steam', 'label' => 'Steam', 'selection_type' => 'single']);
+        $steamSlotKnown = ProductOptionSlot::create([
+            'product_id' => $machineWithPrice->id,
+            'slot_name' => 'steam',
+            'label' => 'Steam',
+            'max_qty' => 1,
+        ]);
         $steamOption = Product::create(['sku' => 'S1-PRICED', 'type' => Product::TYPE_OPTION, 'name' => 'Lancia vapore S1']);
         $steamOption->prices()->create(['price' => 500]);
-        ProductCompatibility::create([
-            'base_product_id' => $machineWithPrice->id,
-            'option_product_id' => $steamOption->id,
-            'option_group_id' => $steamGroupKnown->id,
-            'constraint_type' => 'compatible',
-        ]);
+        $steamSlotKnown->items()->create(['component_product_id' => $steamOption->id]);
 
         Livewire::test(EditQuote::class, ['record' => $this->quote->getRouteKey()])
             ->mountAction('configureMachine')
@@ -229,7 +232,42 @@ class ConfigureMachineWizardTest extends TestCase
                 'machine_product_id' => $machineWithPrice->id,
             ])
             ->assertSee('A300 Priced — 6.400,00 €')
-            ->assertSee('Lancia vapore') // etichetta step, mappata dal gruppo "steam"
+            ->assertSee('Lancia vapore') // etichetta step, mappata dallo slot "steam"
             ->assertSee('Lancia vapore S1 — 500,00 €');
+    }
+
+    /**
+     * A differenza del vecchio grafo di compatibilita' (che non aveva un
+     * concetto di "massimo selezionabile"), uno slot multi-scelta puo'
+     * limitare quante opzioni si possono prendere insieme.
+     */
+    public function test_wizard_blocks_selecting_more_items_than_slot_max_qty(): void
+    {
+        $addonSlot = ProductOptionSlot::create([
+            'product_id' => $this->machine->id,
+            'slot_name' => 'addon',
+            'label' => 'Accessori aggiuntivi',
+            'max_qty' => 2,
+        ]);
+        $addon1 = Product::create(['sku' => 'ADD1', 'type' => Product::TYPE_ACCESSORY, 'name' => 'Accessorio 1']);
+        $addon2 = Product::create(['sku' => 'ADD2', 'type' => Product::TYPE_ACCESSORY, 'name' => 'Accessorio 2']);
+        $addon3 = Product::create(['sku' => 'ADD3', 'type' => Product::TYPE_ACCESSORY, 'name' => 'Accessorio 3']);
+
+        foreach ([$addon1, $addon2, $addon3] as $addon) {
+            $addonSlot->items()->create(['component_product_id' => $addon->id]);
+        }
+
+        Livewire::test(EditQuote::class, ['record' => $this->quote->getRouteKey()])
+            ->mountAction('configureMachine')
+            ->setActionData([
+                'product_family_id' => $this->machine->product_family_id,
+                'machine_product_id' => $this->machine->id,
+                "slot_{$addonSlot->id}" => [$addon1->id, $addon2->id, $addon3->id],
+            ])
+            ->callMountedAction()
+            ->assertHasActionErrors(["slot_{$addonSlot->id}"]);
+
+        $this->quote->refresh();
+        $this->assertSame(0, $this->quote->quoteProducts()->count(), 'Nessuna riga deve essere creata se il massimo dello slot viene superato');
     }
 }

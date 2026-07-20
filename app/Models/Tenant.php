@@ -147,6 +147,11 @@ class Tenant extends Model implements HasName
         return $this->hasMany(LeaveRequest::class);
     }
 
+    public function materialOrders(): HasMany
+    {
+        return $this->hasMany(MaterialOrder::class);
+    }
+
     public function getFilamentName(): string
     {
         return $this->name;

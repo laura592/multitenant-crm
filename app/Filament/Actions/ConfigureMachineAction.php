@@ -4,6 +4,7 @@ namespace App\Filament\Actions;
 
 use App\Models\Product;
 use App\Models\ProductFamily;
+use App\Models\ProductOptionSlot;
 use App\Models\Quote;
 use Filament\Actions\Action;
 use Filament\Forms;
@@ -12,24 +13,29 @@ use Filament\Notifications\Notification;
 use Illuminate\Support\Collection;
 
 /**
- * Wizard di configurazione macchina (docs/architecture.md §11.2): famiglia ->
- * variante base -> uno step per ciascuna categoria nota (unità di
+ * Wizard di configurazione macchina (files/PRD.md §3.1, files/DATABASE-SCHEMA.md):
+ * famiglia -> variante base -> uno step per ciascuno slot noto (unità di
  * raffreddamento, macinacaffè, dosatori, vapore, ...) -> riepilogo. Ogni
- * step e' nascosto automaticamente se non ci sono opzioni compatibili in
- * quella categoria per la macchina scelta - "Altre opzioni" fa da rete di
- * sicurezza per qualunque gruppo non tra quelli noti, cosi' nessuna opzione
- * sparisce mai anche se in futuro comparira' un gruppo nuovo. La lista di
- * step resta STATICA tra un render e l'altro (solo contenuto/visibilita'
- * sono reattivi): un closure sull'intero array di step spezza l'idratazione
- * Livewire dei componenti.
+ * step e' nascosto automaticamente se la macchina scelta non ha uno slot
+ * di quel nome - "Altre opzioni" fa da rete di sicurezza per qualunque slot
+ * non tra quelli noti, cosi' nessuno slot sparisce mai anche se in futuro
+ * comparira' un nome nuovo. La lista di step resta STATICA tra un render e
+ * l'altro (solo contenuto/visibilita' sono reattivi): un closure sull'intero
+ * array di step spezza l'idratazione Livewire dei componenti.
+ *
+ * Uno slot obbligatorio con un solo componente ammesso e' auto-incluso senza
+ * scelta dell'utente (equivalente al vecchio "compatibilita' required");
+ * uno slot obbligatorio con piu' componenti ammessi richiede comunque una
+ * scelta dell'utente (min 1), a differenza del vecchio sistema che non
+ * supportava "obbligatorio ma a scelta".
  *
  * Prezzo sempre visibile accanto a ogni opzione (nome variante inclusa),
  * per poter decidere consapevolmente durante la selezione.
  */
 class ConfigureMachineAction
 {
-    /** name gruppo -> etichetta step */
-    protected const KNOWN_GROUPS = [
+    /** slot_name -> etichetta step */
+    protected const KNOWN_SLOTS = [
         'cooling_unit' => 'Unità di raffreddamento',
         'grinder' => 'Macinacaffè',
         'powder' => 'Dosatori polvere',
@@ -62,27 +68,27 @@ class ConfigureMachineAction
                         ->disabled(fn (Forms\Get $get) => blank($get('product_family_id'))),
                 ]),
             Step::make('Incluse automaticamente')
-                ->visible(fn (Forms\Get $get) => static::requiredCompatibilities($get)->isNotEmpty())
+                ->visible(fn (Forms\Get $get) => static::autoIncludedSlots($get)->isNotEmpty())
                 ->schema([
                     Forms\Components\Placeholder::make('required_info')
                         ->label('Obbligatorie per questa variante')
-                        ->content(fn (Forms\Get $get) => static::requiredCompatibilities($get)
-                            ->map(fn ($c) => static::formatOptionLabel($c->optionProduct))
+                        ->content(fn (Forms\Get $get) => static::autoIncludedSlots($get)
+                            ->map(fn (ProductOptionSlot $slot) => static::formatOptionLabel($slot->items->first()->component))
                             ->implode(', ')),
                 ]),
         ];
 
-        foreach (self::KNOWN_GROUPS as $groupName => $stepLabel) {
+        foreach (self::KNOWN_SLOTS as $slotName => $stepLabel) {
             $steps[] = Step::make($stepLabel)
-                ->visible(fn (Forms\Get $get) => static::groupCompatibilities($get, $groupName)->isNotEmpty())
-                ->schema(fn (Forms\Get $get) => static::groupStepSchema($get, $groupName));
+                ->visible(fn (Forms\Get $get) => static::choosableSlots($get, $slotName)->isNotEmpty())
+                ->schema(fn (Forms\Get $get) => static::slotStepSchema($get, $slotName));
         }
 
-        // Rete di sicurezza: qualsiasi gruppo non elencato sopra (nome
+        // Rete di sicurezza: qualunque slot non elencato sopra (nome
         // sconosciuto/futuro) finisce comunque qui, mai perso silenziosamente.
         $steps[] = Step::make('Altre opzioni')
-            ->visible(fn (Forms\Get $get) => static::groupCompatibilities($get, null)->isNotEmpty())
-            ->schema(fn (Forms\Get $get) => static::groupStepSchema($get, null));
+            ->visible(fn (Forms\Get $get) => static::choosableSlots($get, null)->isNotEmpty())
+            ->schema(fn (Forms\Get $get) => static::slotStepSchema($get, null));
 
         $steps[] = Step::make('Riepilogo')
             ->schema([
@@ -102,14 +108,12 @@ class ConfigureMachineAction
             ->action(function (array $data, Quote $record, $livewire) {
                 static::createQuoteProducts($record, $data);
 
-                // Le righe sono create scrivendo sul modello, non tramite il
-                // form della pagina: senza un refresh esplicito, "Righe
-                // preventivo" resta con lo stato di quando la pagina e' stata
-                // aperta finche' non si ricarica manualmente (bug reale
-                // segnalato: "se ricarico la pagina" le righe compaiono).
-                if (method_exists($livewire, 'refreshAfterMachineConfigured')) {
-                    $livewire->refreshAfterMachineConfigured();
-                }
+                // Le righe sono create scrivendo sul modello, fuori dal ciclo
+                // form/tabella del RelationManager "Righe preventivo": senza
+                // questo evento il tab resta con lo stato di quando e' stato
+                // aperto finche' non si interagisce di nuovo con la tabella
+                // (bug reale segnalato: "se ricarico la pagina" le righe compaiono).
+                $livewire->dispatch('quoteProductsUpdated');
             });
     }
 
@@ -120,7 +124,7 @@ class ConfigureMachineAction
         return $machineId ? Product::find($machineId) : null;
     }
 
-    protected static function requiredCompatibilities(Forms\Get $get): Collection
+    protected static function allSlots(Forms\Get $get): Collection
     {
         $machine = static::currentMachine($get);
 
@@ -128,63 +132,76 @@ class ConfigureMachineAction
             return collect();
         }
 
-        return $machine->compatibilities()
-            ->with('optionProduct')
-            ->where('constraint_type', 'required')
-            ->get();
+        return $machine->slots()->with('items.component')->get();
     }
 
     /**
-     * Compatibilità "compatible" (non obbligatorie) per un dato nome gruppo.
-     * $groupName = null -> rete di sicurezza: tutti i gruppi NON elencati
-     * in KNOWN_GROUPS.
+     * Slot obbligatori con un solo componente ammesso: nessuna scelta per
+     * l'utente, aggiunti automaticamente (equivalente al vecchio
+     * "constraint_type = required").
      */
-    protected static function groupCompatibilities(Forms\Get $get, ?string $groupName): Collection
+    protected static function autoIncludedSlots(Forms\Get $get): Collection
     {
-        $machine = static::currentMachine($get);
+        return static::allSlots($get)->filter(
+            fn (ProductOptionSlot $slot) => $slot->required && $slot->items->count() === 1
+        );
+    }
 
-        if (! $machine) {
-            return collect();
-        }
+    /**
+     * Slot che richiedono una scelta dell'utente (non auto-inclusi) per un
+     * dato slot_name. $slotName = null -> rete di sicurezza: tutti gli slot
+     * con nome NON tra quelli noti (KNOWN_SLOTS).
+     */
+    protected static function choosableSlots(Forms\Get $get, ?string $slotName): Collection
+    {
+        $known = array_keys(self::KNOWN_SLOTS);
 
-        $known = array_keys(self::KNOWN_GROUPS);
-
-        return $machine->compatibilities()
-            ->with(['optionProduct', 'optionGroup'])
-            ->where('constraint_type', 'compatible')
-            ->get()
-            ->filter(function ($c) use ($groupName, $known) {
-                $name = $c->optionGroup->name;
-
-                return $groupName === null ? ! in_array($name, $known) : $name === $groupName;
+        return static::allSlots($get)
+            ->reject(fn (ProductOptionSlot $slot) => $slot->required && $slot->items->count() === 1)
+            ->filter(function (ProductOptionSlot $slot) use ($slotName, $known) {
+                return $slotName === null ? ! in_array($slot->slot_name, $known) : $slot->slot_name === $slotName;
             });
     }
 
     /**
      * @return array<int, Forms\Components\Component>
      */
-    protected static function groupStepSchema(Forms\Get $get, ?string $groupName): array
+    protected static function slotStepSchema(Forms\Get $get, ?string $slotName): array
     {
-        $compatibilities = static::groupCompatibilities($get, $groupName);
+        $slots = static::choosableSlots($get, $slotName);
 
-        if ($compatibilities->isEmpty()) {
+        if ($slots->isEmpty()) {
             return [];
         }
 
-        // Un gruppo "sicurezza" (null) può in realtà raggruppare piu' gruppi
-        // DB diversi: un field per ciascun option_group_id realmente presente.
+        // Un gruppo "sicurezza" (null) puo' in realta' raggruppare piu'
+        // slot diversi: un field per ciascuno slot realmente presente.
         $schema = [];
 
-        foreach ($compatibilities->groupBy('option_group_id') as $groupId => $items) {
-            $group = $items->first()->optionGroup;
-            $fieldName = "group_{$groupId}";
-            $options = $items->pluck('optionProduct')->mapWithKeys(
-                fn (Product $p) => [$p->id => static::formatOptionLabel($p)]
+        foreach ($slots as $slot) {
+            $fieldName = "slot_{$slot->id}";
+            $options = $slot->items->mapWithKeys(
+                fn ($item) => [$item->component_product_id => static::formatOptionLabel($item->component)]
             );
+            $label = $slotName === null ? $slot->label : '';
 
-            $schema[] = $group->isSingleChoice()
-                ? Forms\Components\Radio::make($fieldName)->label($groupName === null ? $group->label : '')->options($options)
-                : Forms\Components\CheckboxList::make($fieldName)->label($groupName === null ? $group->label : '')->options($options)->columns(2);
+            if ($slot->isSingleChoice()) {
+                $schema[] = Forms\Components\Radio::make($fieldName)->label($label)->options($options)->required($slot->required);
+
+                continue;
+            }
+
+            $checkboxList = Forms\Components\CheckboxList::make($fieldName)->label($label)->options($options)->columns(2);
+
+            if ($slot->required && $slot->min_qty > 0) {
+                $checkboxList = $checkboxList->required()->minItems($slot->min_qty);
+            }
+
+            if ($slot->max_qty !== null) {
+                $checkboxList = $checkboxList->maxItems($slot->max_qty);
+            }
+
+            $schema[] = $checkboxList;
         }
 
         return $schema;
@@ -215,12 +232,12 @@ class ConfigureMachineAction
             return;
         }
 
-        $selectedIds = $machine->compatibilities()
-            ->where('constraint_type', 'required')
-            ->pluck('option_product_id');
+        $selectedIds = $machine->slots()->with('items')->get()
+            ->filter(fn (ProductOptionSlot $slot) => $slot->required && $slot->items->count() === 1)
+            ->flatMap(fn (ProductOptionSlot $slot) => $slot->items->pluck('component_product_id'));
 
         foreach ($data as $key => $value) {
-            if (! str_starts_with($key, 'group_')) {
+            if (! str_starts_with($key, 'slot_')) {
                 continue;
             }
 
@@ -260,7 +277,7 @@ class ConfigureMachineAction
     }
 
     /**
-     * Verifica i vincoli requires/excludes (docs/architecture.md §11.2).
+     * Verifica i vincoli requires/excludes (files/DATABASE-SCHEMA.md).
      * Ritorna un messaggio d'errore se un vincolo è violato, altrimenti null.
      */
     protected static function findConstraintViolation(Collection $selectedIds): ?string

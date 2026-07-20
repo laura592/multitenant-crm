@@ -18,20 +18,12 @@ class UpcomingDeadlinesWidget extends BaseWidget
     public function table(Table $table): Table
     {
         return $table
-            ->query(Deadline::query()->where('status', 'attiva')->orderBy('due_date')->limit(5))
+            ->query(Deadline::query()->where('status', Deadline::STATUS_ATTIVA)->orderBy('due_date')->limit(5))
             ->columns([
                 Tables\Columns\TextColumn::make('type')
                     ->label('Tipo')
                     ->badge()
-                    ->formatStateUsing(fn (string $state) => match ($state) {
-                        Deadline::TYPE_ASSICURAZIONE => 'Assicurazione',
-                        Deadline::TYPE_REVISIONE => 'Revisione',
-                        Deadline::TYPE_POLIZZA_RCT => 'Polizza RCT',
-                        Deadline::TYPE_MANUTENZIONE_ORDINARIA => 'Manutenzione',
-                        Deadline::TYPE_LICENZA => 'Licenza',
-                        Deadline::TYPE_CONTRATTO => 'Contratto',
-                        default => 'Altro',
-                    }),
+                    ->formatStateUsing(fn (string $state) => Deadline::typeLabels()[$state] ?? 'Altro'),
                 Tables\Columns\TextColumn::make('due_date')
                     ->label('Scadenza')
                     ->date()

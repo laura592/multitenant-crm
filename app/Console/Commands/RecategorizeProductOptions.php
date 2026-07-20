@@ -3,28 +3,29 @@
 namespace App\Console\Commands;
 
 use App\Models\Product;
-use App\Models\ProductCompatibility;
-use App\Models\ProductOptionGroup;
+use App\Models\ProductOptionSlot;
+use App\Models\ProductOptionSlotItem;
 use Illuminate\Console\Command;
+use Illuminate\Support\Str;
 
 /**
- * Molte compatibilita' importate dal DB legacy sono finite nel gruppo
- * generico "other" invece che nella categoria giusta (grinder/steam/powder/
- * ecc.), perche' il catalogo originale non le classificava - la macchina
+ * Molti item importati dal DB legacy sono finiti nello slot generico "other"
+ * di ciascuna macchina invece che nello slot giusto (grinder/steam/powder/
+ * ecc.), perche' il catalogo originale non li classificava - la macchina
  * risultava quindi con quasi tutte le opzioni ammassate nello step "Altre
  * opzioni" del wizard invece che negli step dedicati (bug segnalato:
  * "non tutto è ben configurato nelle categorie giuste").
  *
  * Rimappa per NOME prodotto (non tocca nulla che non riconosce: qualsiasi
- * opzione non elencata qui resta in "other" e continua a comparire in
- * "Altre opzioni", mai persa silenziosamente). Idempotente: rieseguibile,
- * aggiorna solo righe ancora in "other".
+ * opzione non elencata qui resta nello slot "other" della sua macchina e
+ * continua a comparire in "Altre opzioni", mai persa silenziosamente).
+ * Idempotente: rieseguibile, sposta solo gli item ancora nello slot "other".
  */
 class RecategorizeProductOptions extends Command
 {
     protected $signature = 'products:recategorize-options';
 
-    protected $description = 'Riassegna le compatibilità "other" alla categoria (option group) corretta in base al nome prodotto';
+    protected $description = 'Sposta gli item ancora nello slot "other" di ogni macchina nello slot corretto, in base al nome prodotto';
 
     /** nome prodotto (esatto) -> slug del gruppo di destinazione */
     private const MAPPING = [
@@ -122,27 +123,10 @@ class RecategorizeProductOptions extends Command
 
     public function handle(): int
     {
-        $otherGroup = ProductOptionGroup::where('name', 'other')->first();
-
-        if (! $otherGroup) {
-            $this->error('Gruppo "other" non trovato.');
-
-            return self::FAILURE;
-        }
-
-        $groupIdsByName = ProductOptionGroup::pluck('id', 'name');
-        $totalUpdated = 0;
+        $totalMoved = 0;
         $notFound = [];
 
-        foreach (self::MAPPING as $productName => $targetSlug) {
-            $targetGroupId = $groupIdsByName[$targetSlug] ?? null;
-
-            if (! $targetGroupId) {
-                $this->warn("Gruppo di destinazione sconosciuto: {$targetSlug}");
-
-                continue;
-            }
-
+        foreach (self::MAPPING as $productName => $targetSlotName) {
             $productIds = Product::where('name', $productName)->pluck('id');
 
             if ($productIds->isEmpty()) {
@@ -151,25 +135,34 @@ class RecategorizeProductOptions extends Command
                 continue;
             }
 
-            $updated = ProductCompatibility::where('constraint_type', 'compatible')
-                ->where('option_group_id', $otherGroup->id)
-                ->whereIn('option_product_id', $productIds)
-                ->update(['option_group_id' => $targetGroupId]);
+            $otherItems = ProductOptionSlotItem::whereIn('component_product_id', $productIds)
+                ->whereHas('slot', fn ($query) => $query->where('slot_name', 'other'))
+                ->with('slot')
+                ->get();
 
-            $totalUpdated += $updated;
+            foreach ($otherItems as $item) {
+                // Uno slot appartiene a UN prodotto base: la stessa macchina
+                // che aveva l'item in "other" riceve (o gia' ha) lo slot di
+                // destinazione, senza toccare le altre macchine.
+                $targetSlot = ProductOptionSlot::firstOrCreate(
+                    ['product_id' => $item->slot->product_id, 'slot_name' => $targetSlotName],
+                    ['label' => Str::headline($targetSlotName)]
+                );
+
+                $item->update(['slot_id' => $targetSlot->id]);
+                $totalMoved++;
+            }
         }
 
-        $this->info("Righe riassegnate: {$totalUpdated}");
+        $this->info("Item spostati: {$totalMoved}");
 
         if ($notFound) {
             $this->warn('Nomi prodotto non trovati nel catalogo (mappatura da rivedere): '.implode(', ', $notFound));
         }
 
-        $remaining = ProductCompatibility::where('constraint_type', 'compatible')
-            ->where('option_group_id', $otherGroup->id)
-            ->count();
+        $remaining = ProductOptionSlotItem::whereHas('slot', fn ($query) => $query->where('slot_name', 'other'))->count();
 
-        $this->info("Compatibilità ancora in 'other' (mai nascoste, visibili in \"Altre opzioni\"): {$remaining}");
+        $this->info("Item ancora in 'other' (mai nascosti, visibili in \"Altre opzioni\"): {$remaining}");
 
         return self::SUCCESS;
     }

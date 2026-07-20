@@ -10,6 +10,11 @@ use App\Models\ServiceReport;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Infolists\Components\ImageEntry;
+use Filament\Infolists\Components\RepeatableEntry;
+use Filament\Infolists\Components\Section as InfolistSection;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Infolist;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
@@ -22,13 +27,72 @@ class ServiceReportResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-check';
 
-    protected static ?string $navigationGroup = 'Vendite';
+    protected static ?string $navigationGroup = 'Interventi tecnici';
 
     protected static ?string $navigationLabel = 'Rapportini tecnici';
 
     protected static ?string $modelLabel = 'Rapportino';
 
     protected static ?string $pluralModelLabel = 'Rapportini tecnici';
+
+    public static function infolist(Infolist $infolist): Infolist
+    {
+        return $infolist->schema([
+            InfolistSection::make('Intervento')
+                ->columns(3)
+                ->schema([
+                    TextEntry::make('number')->label('Numero'),
+                    TextEntry::make('customer.full_name')->label('Cliente'),
+                    TextEntry::make('technician.name')->label('Tecnico'),
+                    TextEntry::make('intervention_type')
+                        ->label('Tipo intervento')
+                        ->badge()
+                        ->formatStateUsing(fn (string $state) => match ($state) {
+                            ServiceReport::TYPE_INSTALLAZIONE => 'Installazione',
+                            ServiceReport::TYPE_MANUTENZIONE_ORDINARIA => 'Manutenzione ordinaria',
+                            ServiceReport::TYPE_MANUTENZIONE_STRAORDINARIA => 'Manutenzione straordinaria',
+                            ServiceReport::TYPE_RIPARAZIONE => 'Riparazione',
+                            ServiceReport::TYPE_GARANZIA => 'Garanzia',
+                            default => $state,
+                        }),
+                    TextEntry::make('intervention_date')->label('Data intervento')->date(),
+                    TextEntry::make('status')->label('Stato')->badge(),
+                    TextEntry::make('arrival_at')->label('Orario arrivo')->dateTime('d/m/Y H:i')->placeholder('—'),
+                    TextEntry::make('departure_at')->label('Orario uscita')->dateTime('d/m/Y H:i')->placeholder('—'),
+                ]),
+            InfolistSection::make('Macchina')
+                ->columns(3)
+                ->schema([
+                    TextEntry::make('quote.number')->label('Preventivo collegato')->placeholder('—'),
+                    TextEntry::make('comodatoMacchina.nome_macchina')->label('Comodato collegato')->placeholder('—'),
+                    TextEntry::make('machineProduct.name')->label('Modello macchina')->placeholder('—'),
+                    TextEntry::make('machine_serial_number')->label('Matricola')->placeholder('—'),
+                ]),
+            InfolistSection::make('Descrizione')
+                ->schema([
+                    TextEntry::make('problem_description')->label('Problema riscontrato')->placeholder('—'),
+                    TextEntry::make('work_performed')->label('Lavoro svolto'),
+                    TextEntry::make('notes')->label('Note')->placeholder('—'),
+                ]),
+            InfolistSection::make('Ricambi/materiali utilizzati')
+                ->schema([
+                    RepeatableEntry::make('partsUsed')
+                        ->label('')
+                        ->columns(2)
+                        ->schema([
+                            TextEntry::make('product.name')->label('Prodotto'),
+                            TextEntry::make('quantity')->label('Quantità'),
+                        ]),
+                ]),
+            InfolistSection::make('Firma cliente')
+                ->schema([
+                    ImageEntry::make('customer_signature_path')
+                        ->label('')
+                        ->disk('public')
+                        ->placeholder('Non ancora firmato'),
+                ]),
+        ]);
+    }
 
     public static function form(Form $form): Form
     {
@@ -175,48 +239,51 @@ class ServiceReportResource extends Resource
                     ]),
             ])
             ->actions([
-                Tables\Actions\Action::make('pdf')
-                    ->label('PDF')
-                    ->icon('heroicon-o-document-arrow-down')
-                    ->url(fn (ServiceReport $record) => route('service-reports.pdf', $record))
-                    ->openUrlInNewTab(),
-                Tables\Actions\Action::make('send')
-                    ->label('Invia')
-                    ->icon('heroicon-o-paper-airplane')
-                    ->form([
-                        Forms\Components\TextInput::make('recipient_email')
-                            ->label('Email destinatario')
-                            ->email()
-                            ->required()
-                            ->default(fn (ServiceReport $record) => $record->customer->email),
-                        Forms\Components\TextInput::make('cc_email')->label('CC (opzionale)')->email(),
-                    ])
-                    ->action(function (array $data, ServiceReport $record) {
-                        $record->load(['customer', 'technician', 'machineProduct', 'partsUsed.product', 'tenant']);
-                        $pdf = Pdf::loadView('pdf.service-report', ['report' => $record]);
+                Tables\Actions\ViewAction::make(),
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\Action::make('pdf')
+                        ->label('PDF')
+                        ->icon('heroicon-o-document-arrow-down')
+                        ->url(fn (ServiceReport $record) => route('service-reports.pdf', $record))
+                        ->openUrlInNewTab(),
+                    Tables\Actions\Action::make('send')
+                        ->label('Invia')
+                        ->icon('heroicon-o-paper-airplane')
+                        ->form([
+                            Forms\Components\TextInput::make('recipient_email')
+                                ->label('Email destinatario')
+                                ->email()
+                                ->required()
+                                ->default(fn (ServiceReport $record) => $record->customer->email),
+                            Forms\Components\TextInput::make('cc_email')->label('CC (opzionale)')->email(),
+                        ])
+                        ->action(function (array $data, ServiceReport $record) {
+                            $record->load(['customer', 'technician', 'machineProduct', 'partsUsed.product', 'tenant']);
+                            $pdf = Pdf::loadView('pdf.service-report', ['report' => $record]);
 
-                        $email = $record->emails()->create([
-                            'user_id' => auth()->id(),
-                            'recipient_email' => $data['recipient_email'],
-                            'cc_email' => $data['cc_email'] ?? null,
-                            'subject' => "Rapportino di intervento {$record->number}",
-                            'status' => 'sent',
-                        ]);
+                            $email = $record->emails()->create([
+                                'user_id' => auth()->id(),
+                                'recipient_email' => $data['recipient_email'],
+                                'cc_email' => $data['cc_email'] ?? null,
+                                'subject' => "Rapportino di intervento {$record->number}",
+                                'status' => 'sent',
+                            ]);
 
-                        try {
-                            Mail::to($data['recipient_email'])
-                                ->cc($data['cc_email'] ?? [])
-                                ->send(new ServiceReportMail($record, $pdf->output()));
+                            try {
+                                Mail::to($data['recipient_email'])
+                                    ->cc($data['cc_email'] ?? [])
+                                    ->send(new ServiceReportMail($record, $pdf->output()));
 
-                            $record->update(['status' => 'inviato']);
-                            Notification::make()->title('Rapportino inviato')->success()->send();
-                        } catch (\Throwable $e) {
-                            $email->update(['status' => 'failed', 'error_message' => $e->getMessage()]);
-                            Notification::make()->title('Invio fallito')->body($e->getMessage())->danger()->send();
-                        }
-                    }),
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                                $record->update(['status' => 'inviato']);
+                                Notification::make()->title('Rapportino inviato')->success()->send();
+                            } catch (\Throwable $e) {
+                                $email->update(['status' => 'failed', 'error_message' => $e->getMessage()]);
+                                Notification::make()->title('Invio fallito')->body($e->getMessage())->danger()->send();
+                            }
+                        }),
+                    Tables\Actions\EditAction::make(),
+                    Tables\Actions\DeleteAction::make(),
+                ]),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
@@ -230,6 +297,7 @@ class ServiceReportResource extends Resource
         return [
             'index' => Pages\ListServiceReports::route('/'),
             'create' => Pages\CreateServiceReport::route('/create'),
+            'view' => Pages\ViewServiceReport::route('/{record}'),
             'edit' => Pages\EditServiceReport::route('/{record}/edit'),
         ];
     }

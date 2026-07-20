@@ -11,6 +11,7 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Support\Arr;
 
 /**
  * Scadenzario unificato (docs/architecture.md §13.2): assicurazioni/revisioni
@@ -25,7 +26,7 @@ class DeadlineResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-calendar-days';
 
-    protected static ?string $navigationGroup = 'Gestione';
+    protected static ?string $navigationGroup = 'Interventi tecnici';
 
     protected static ?string $navigationLabel = 'Scadenzario';
 
@@ -36,35 +37,39 @@ class DeadlineResource extends Resource
     public static function form(Form $form): Form
     {
         return $form->schema([
-            Forms\Components\MorphToSelect::make('deadlinable')
-                ->label('Collegata a')
-                ->types([
-                    Forms\Components\MorphToSelect\Type::make(Vehicle::class)->titleAttribute('plate'),
-                    Forms\Components\MorphToSelect\Type::make(Tenant::class)->titleAttribute('name'),
-                ])
-                ->required(),
-            Forms\Components\Select::make('type')
-                ->label('Tipo')
-                ->options([
-                    Deadline::TYPE_ASSICURAZIONE => 'Assicurazione',
-                    Deadline::TYPE_REVISIONE => 'Revisione',
-                    Deadline::TYPE_POLIZZA_RCT => 'Polizza RCT',
-                    Deadline::TYPE_LICENZA => 'Licenza',
-                    Deadline::TYPE_CONTRATTO => 'Contratto',
-                    Deadline::TYPE_ALTRO => 'Altro',
-                ])
-                ->required(),
-            Forms\Components\DatePicker::make('due_date')->label('Scadenza')->required(),
-            Forms\Components\TextInput::make('reminder_days_before')
-                ->label('Preavviso (giorni)')
-                ->numeric()
-                ->default(30),
-            Forms\Components\Select::make('status')
-                ->label('Stato')
-                ->options(['attiva' => 'Attiva', 'scaduta' => 'Scaduta', 'rinnovata' => 'Rinnovata'])
-                ->default('attiva')
-                ->required(),
-            Forms\Components\Textarea::make('notes')->label('Note')->columnSpanFull(),
+            Forms\Components\Section::make('Scadenza')
+                ->columns(2)
+                ->schema([
+                    Forms\Components\MorphToSelect::make('deadlinable')
+                        ->label('Collegata a')
+                        ->types([
+                            Forms\Components\MorphToSelect\Type::make(Vehicle::class)->titleAttribute('plate'),
+                            Forms\Components\MorphToSelect\Type::make(Tenant::class)->titleAttribute('name'),
+                        ])
+                        ->columnSpanFull()
+                        ->required(),
+                    Forms\Components\Select::make('type')
+                        ->label('Tipo')
+                        // manutenzione_ordinaria non e' selezionabile qui: viene
+                        // creata solo automaticamente da MaintenanceSchedule.
+                        ->options(fn () => Arr::except(Deadline::typeLabels(), [Deadline::TYPE_MANUTENZIONE_ORDINARIA]))
+                        ->required(),
+                    Forms\Components\DatePicker::make('due_date')->label('Scadenza')->required(),
+                    Forms\Components\TextInput::make('reminder_days_before')
+                        ->label('Preavviso (giorni)')
+                        ->numeric()
+                        ->default(30),
+                ]),
+            Forms\Components\Section::make('Stato')
+                ->columns(2)
+                ->schema([
+                    Forms\Components\Select::make('status')
+                        ->label('Stato')
+                        ->options(fn () => Deadline::statusLabels())
+                        ->default(Deadline::STATUS_ATTIVA)
+                        ->required(),
+                    Forms\Components\Textarea::make('notes')->label('Note')->columnSpanFull(),
+                ]),
         ]);
     }
 
@@ -76,15 +81,7 @@ class DeadlineResource extends Resource
                 Tables\Columns\TextColumn::make('type')
                     ->label('Tipo')
                     ->badge()
-                    ->formatStateUsing(fn (string $state) => match ($state) {
-                        Deadline::TYPE_ASSICURAZIONE => 'Assicurazione',
-                        Deadline::TYPE_REVISIONE => 'Revisione',
-                        Deadline::TYPE_POLIZZA_RCT => 'Polizza RCT',
-                        Deadline::TYPE_MANUTENZIONE_ORDINARIA => 'Manutenzione',
-                        Deadline::TYPE_LICENZA => 'Licenza',
-                        Deadline::TYPE_CONTRATTO => 'Contratto',
-                        default => 'Altro',
-                    }),
+                    ->formatStateUsing(fn (string $state) => Deadline::typeLabels()[$state] ?? 'Altro'),
                 Tables\Columns\TextColumn::make('deadlinable')
                     ->label('Collegata a')
                     ->state(fn (Deadline $record) => match (true) {
@@ -104,22 +101,15 @@ class DeadlineResource extends Resource
                 Tables\Columns\TextColumn::make('status')
                     ->label('Stato')
                     ->badge()
-                    ->formatStateUsing(fn (string $state) => ucfirst($state)),
+                    ->formatStateUsing(fn (string $state) => Deadline::statusLabels()[$state] ?? ucfirst($state)),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('type')
                     ->label('Tipo')
-                    ->options([
-                        Deadline::TYPE_ASSICURAZIONE => 'Assicurazione',
-                        Deadline::TYPE_REVISIONE => 'Revisione',
-                        Deadline::TYPE_POLIZZA_RCT => 'Polizza RCT',
-                        Deadline::TYPE_MANUTENZIONE_ORDINARIA => 'Manutenzione',
-                        Deadline::TYPE_LICENZA => 'Licenza',
-                        Deadline::TYPE_CONTRATTO => 'Contratto',
-                    ]),
+                    ->options(fn () => Deadline::typeLabels()),
                 Tables\Filters\SelectFilter::make('status')
                     ->label('Stato')
-                    ->options(['attiva' => 'Attiva', 'scaduta' => 'Scaduta', 'rinnovata' => 'Rinnovata']),
+                    ->options(fn () => Deadline::statusLabels()),
                 Tables\Filters\Filter::make('urgent')
                     ->label('Solo urgenti/scadute')
                     ->query(fn ($query) => $query->where('due_date', '<=', now()->addDays(30))),

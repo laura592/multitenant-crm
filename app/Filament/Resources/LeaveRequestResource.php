@@ -20,7 +20,7 @@ class LeaveRequestResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-calendar';
 
-    protected static ?string $navigationGroup = 'Gestione';
+    protected static ?string $navigationGroup = 'Personale';
 
     protected static ?string $navigationLabel = 'Ferie e permessi';
 
@@ -31,21 +31,33 @@ class LeaveRequestResource extends Resource
     public static function form(Form $form): Form
     {
         return $form->schema([
-            Forms\Components\Select::make('user_id')
-                ->label('Dipendente')
-                ->relationship('user', 'name')
-                ->default(fn () => auth()->id())
-                ->disabled(fn () => ! static::isResponsabile(auth()->user()))
-                ->dehydrated()
-                ->required(),
-            Forms\Components\Select::make('type')
-                ->label('Tipo')
-                ->options(['ferie' => 'Ferie', 'permesso' => 'Permesso', 'malattia' => 'Malattia'])
-                ->required(),
-            Forms\Components\DatePicker::make('date_from')->label('Dal')->required(),
-            Forms\Components\DatePicker::make('date_to')->label('Al')->required(),
-            Forms\Components\TextInput::make('hours')->label('Ore (per permesso orario)')->numeric(),
-            Forms\Components\Textarea::make('notes')->label('Note')->columnSpanFull(),
+            Forms\Components\Section::make('Richiesta')
+                ->columns(3)
+                ->schema([
+                    Forms\Components\Select::make('user_id')
+                        ->label('Dipendente')
+                        ->relationship('user', 'name')
+                        ->default(fn () => auth()->id())
+                        ->disabled(fn () => ! static::isResponsabile(auth()->user()))
+                        ->dehydrated()
+                        ->live()
+                        ->required()
+                        ->helperText(function (Forms\Get $get) {
+                            $userId = $get('user_id') ?? auth()->id();
+                            $user = $userId ? \App\Models\User::find($userId) : null;
+                            $remaining = $user?->remainingFerieDays();
+
+                            return $remaining === null ? null : "Residuo ferie anno corrente: {$remaining} giorni";
+                        }),
+                    Forms\Components\Select::make('type')
+                        ->label('Tipo')
+                        ->options(['ferie' => 'Ferie', 'permesso' => 'Permesso', 'malattia' => 'Malattia'])
+                        ->required(),
+                    Forms\Components\TextInput::make('hours')->label('Ore (per permesso orario)')->numeric(),
+                    Forms\Components\DatePicker::make('date_from')->label('Dal')->required(),
+                    Forms\Components\DatePicker::make('date_to')->label('Al')->required(),
+                    Forms\Components\Textarea::make('notes')->label('Note')->columnSpanFull(),
+                ]),
         ]);
     }
 

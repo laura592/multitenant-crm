@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Forms\ItalianAddressFields;
 use App\Filament\Resources\TenantResource\Pages;
 use App\Filament\Resources\TenantResource\RelationManagers\DeadlinesRelationManager;
 use App\Models\Tenant;
@@ -22,7 +23,7 @@ class TenantResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-building-office-2';
 
-    protected static ?string $navigationGroup = 'Gestione';
+    protected static ?string $navigationGroup = 'Amministrazione';
 
     protected static ?string $navigationLabel = 'Aziende partner';
 
@@ -70,12 +71,7 @@ class TenantResource extends Resource
                 ]),
             Forms\Components\Section::make('Indirizzo')
                 ->columns(3)
-                ->schema([
-                    Forms\Components\TextInput::make('street')->label('Via')->maxLength(255)->columnSpanFull(),
-                    Forms\Components\TextInput::make('postal_code')->label('CAP')->maxLength(10),
-                    Forms\Components\TextInput::make('city')->label('Città')->maxLength(255),
-                    Forms\Components\TextInput::make('province')->label('Provincia')->maxLength(255),
-                ]),
+                ->schema(ItalianAddressFields::schema()),
             Forms\Components\Section::make('Branding')
                 ->columns(2)
                 ->schema([

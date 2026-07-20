@@ -19,7 +19,7 @@ class TimeEntryResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-clock';
 
-    protected static ?string $navigationGroup = 'Gestione';
+    protected static ?string $navigationGroup = 'Personale';
 
     protected static ?string $navigationLabel = 'Presenze';
 
@@ -30,26 +30,34 @@ class TimeEntryResource extends Resource
     public static function form(Form $form): Form
     {
         return $form->schema([
-            Forms\Components\Select::make('user_id')
-                ->label('Dipendente')
-                ->relationship('user', 'name')
-                ->default(fn () => auth()->id())
-                ->disabled(fn () => ! static::isResponsabile(auth()->user()))
-                ->dehydrated()
-                ->required(),
-            Forms\Components\DateTimePicker::make('clock_in')->label('Entrata')->required(),
-            Forms\Components\DateTimePicker::make('clock_out')->label('Uscita'),
-            Forms\Components\Select::make('source')
-                ->label('Origine')
-                ->options(['app' => 'App (tempo reale)', 'manuale' => 'Inserimento manuale'])
-                ->default('manuale')
-                ->required(),
-            Forms\Components\Select::make('status')
-                ->label('Stato')
-                ->options(['aperta' => 'Aperta', 'chiusa' => 'Chiusa', 'corretta' => 'Corretta'])
-                ->default('chiusa')
-                ->required(),
-            Forms\Components\Textarea::make('notes')->label('Note')->columnSpanFull(),
+            Forms\Components\Section::make('Turno')
+                ->columns(3)
+                ->schema([
+                    Forms\Components\Select::make('user_id')
+                        ->label('Dipendente')
+                        ->relationship('user', 'name')
+                        ->default(fn () => auth()->id())
+                        ->disabled(fn () => ! static::isResponsabile(auth()->user()))
+                        ->dehydrated()
+                        ->required(),
+                    Forms\Components\DateTimePicker::make('clock_in')->label('Entrata')->required(),
+                    Forms\Components\DateTimePicker::make('clock_out')->label('Uscita'),
+                    Forms\Components\Select::make('source')
+                        ->label('Origine')
+                        ->options(['app' => 'App (tempo reale)', 'manuale' => 'Inserimento manuale'])
+                        ->default('manuale')
+                        ->required(),
+                ]),
+            Forms\Components\Section::make('Stato')
+                ->columns(2)
+                ->schema([
+                    Forms\Components\Select::make('status')
+                        ->label('Stato')
+                        ->options(['aperta' => 'Aperta', 'chiusa' => 'Chiusa', 'corretta' => 'Corretta'])
+                        ->default('chiusa')
+                        ->required(),
+                    Forms\Components\Textarea::make('notes')->label('Note')->columnSpanFull(),
+                ]),
         ]);
     }
 

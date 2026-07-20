@@ -8,9 +8,8 @@ use App\Models\Customer;
 use App\Models\InformationRequest;
 use App\Models\PaymentMethod;
 use App\Models\Product;
-use App\Models\ProductCompatibility;
 use App\Models\ProductFamily;
-use App\Models\ProductOptionGroup;
+use App\Models\ProductOptionSlot;
 use App\Models\ProductPrice;
 use App\Models\Quote;
 use App\Models\QuoteEmail;
@@ -44,8 +43,11 @@ class ImportLegacyData extends Command
     /** @var array<int, string> */
     protected array $productMap = [];
 
-    /** @var array<string, string> */
-    protected array $optionGroupMap = [];
+    /** @var array<string, string> chiave "product_id|slot_name" -> id slot */
+    protected array $slotMap = [];
+
+    /** @var array<string, bool> id slot -> almeno una riga legacy is_required */
+    protected array $slotRequiredFlags = [];
 
     /** @var array<int, string> */
     protected array $customerMap = [];
@@ -84,7 +86,7 @@ class ImportLegacyData extends Command
             $this->importCategories($legacy);
             $this->importProducts($legacy);
             $this->importProductPrices($legacy);
-            $this->importProductCompatibilities($legacy);
+            $this->importProductOptionSlots($legacy);
             $this->importCustomers($legacy, $master);
             $this->importQuotes($legacy, $master);
             $this->importQuoteProducts($legacy);
@@ -268,7 +270,14 @@ class ImportLegacyData extends Command
         $this->info("Prezzi prodotto importati: {$count}");
     }
 
-    protected function importProductCompatibilities($legacy): void
+    /**
+     * Nello schema legacy le compatibilita' erano righe base<->opzione con un
+     * option_group libero + is_required. Nel nuovo schema a slot
+     * (files/DATABASE-SCHEMA.md) uno slot appartiene a UN prodotto base
+     * preciso: ogni combinazione (prodotto base, option_group) diventa uno
+     * slot di quel prodotto, con gli item ammessi al suo interno.
+     */
+    protected function importProductOptionSlots($legacy): void
     {
         $rows = $legacy->table('product_compatibilities')->get();
         $count = 0;
@@ -278,42 +287,54 @@ class ImportLegacyData extends Command
                 continue;
             }
 
-            ProductCompatibility::create([
-                'base_product_id' => $this->productMap[$row->base_product_id],
-                'option_product_id' => $this->productMap[$row->option_product_id],
-                'option_group_id' => $this->resolveOptionGroup($row->option_group),
-                'constraint_type' => $row->is_required ? ProductCompatibility::CONSTRAINT_REQUIRED : ProductCompatibility::CONSTRAINT_COMPATIBLE,
-                'sort_order' => $row->sort_order,
-                'created_at' => $row->created_at,
-                'updated_at' => $row->updated_at,
-            ]);
+            $baseProductId = $this->productMap[$row->base_product_id];
+            $slot = $this->resolveSlot($baseProductId, $row->option_group, $row->sort_order);
+
+            $slot->items()->firstOrCreate(
+                ['component_product_id' => $this->productMap[$row->option_product_id]],
+                ['sort_order' => $row->sort_order, 'created_at' => $row->created_at, 'updated_at' => $row->updated_at]
+            );
+
+            if ($row->is_required) {
+                $this->slotRequiredFlags[$slot->id] = true;
+            }
             $count++;
         }
 
-        $this->info("Compatibilità prodotto importate: {$count}");
+        // Rimandato a fine importazione: solo qui si conosce, per ogni slot,
+        // se ALMENO una riga legacy era is_required su tutte le sue righe.
+        // min/max restano quelli di default (0/illimitato): l'admin affina a
+        // "singola scelta" i slot realmente esclusivi tramite l'interfaccia,
+        // come gia' avveniva per selection_type nel vecchio sistema.
+        foreach ($this->slotRequiredFlags as $slotId => $isRequired) {
+            ProductOptionSlot::whereKey($slotId)->update(['required' => true, 'min_qty' => 1]);
+        }
+
+        $this->info("Slot di configurazione importati: {$count}");
     }
 
     /**
-     * Nello schema legacy option_group era una stringa libera. Ogni valore
-     * distinto diventa un ProductOptionGroup condiviso (default: selezione
-     * multipla, l'admin potrà affinare a "single" i gruppi realmente
-     * esclusivi tramite l'interfaccia, §11.2).
+     * Nello schema legacy option_group era una stringa libera condivisa fra
+     * prodotti base diversi. Nel nuovo schema uno slot e' sempre di UN
+     * prodotto base: la stessa chiave "option_group" genera uno slot
+     * distinto per ciascun prodotto base che la usa.
      */
-    protected function resolveOptionGroup(?string $key): string
+    protected function resolveSlot(string $baseProductId, ?string $key, int $sortOrder): ProductOptionSlot
     {
         $key = $key ?: 'other';
+        $mapKey = "{$baseProductId}|{$key}";
 
-        if (! isset($this->optionGroupMap[$key])) {
-            $group = ProductOptionGroup::create([
-                'tenant_id' => null,
-                'name' => $key,
+        if (! isset($this->slotMap[$mapKey])) {
+            $slot = ProductOptionSlot::create([
+                'product_id' => $baseProductId,
+                'slot_name' => $key,
                 'label' => Str::headline($key),
-                'selection_type' => ProductOptionGroup::SELECTION_MULTIPLE,
+                'sort_order' => $sortOrder,
             ]);
-            $this->optionGroupMap[$key] = $group->id;
+            $this->slotMap[$mapKey] = $slot->id;
         }
 
-        return $this->optionGroupMap[$key];
+        return ProductOptionSlot::find($this->slotMap[$mapKey]);
     }
 
     protected function importCustomers($legacy, Tenant $master): void

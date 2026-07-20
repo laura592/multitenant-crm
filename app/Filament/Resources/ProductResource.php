@@ -67,6 +67,11 @@ class ProductResource extends Resource
                         ->relationship('category', 'name')
                         ->searchable()
                         ->preload(),
+                    Forms\Components\Select::make('brand_id')
+                        ->label('Brand')
+                        ->relationship('brand', 'name')
+                        ->searchable()
+                        ->preload(),
                     Forms\Components\Select::make('source')
                         ->label('Origine')
                         ->options([
@@ -165,7 +170,7 @@ class ProductResource extends Resource
     public static function getRelations(): array
     {
         return [
-            RelationManagers\CompatibilitiesRelationManager::class,
+            RelationManagers\SlotsRelationManager::class,
         ];
     }
 

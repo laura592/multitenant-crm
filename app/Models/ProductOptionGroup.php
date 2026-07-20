@@ -7,6 +7,13 @@ use App\Models\Concerns\SharedAcrossTenants;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * Sostituito da ProductOptionSlot (files/DATABASE-SCHEMA.md): la tabella
+ * viene droppata da 2026_07_16_010400_drop_product_compatibilities_and_option_groups_tables.
+ * Il model resta solo perche' quella migrazione lo usa per la conversione
+ * dati una tantum (App\Console\Commands\MigrateCompatibilitiesToSlots) -
+ * nessun altro codice applicativo deve farvi riferimento.
+ */
 class ProductOptionGroup extends Model
 {
     use BelongsToTenant, HasUuids, SharedAcrossTenants;

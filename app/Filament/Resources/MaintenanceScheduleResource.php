@@ -16,7 +16,7 @@ class MaintenanceScheduleResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-wrench-screwdriver';
 
-    protected static ?string $navigationGroup = 'Gestione';
+    protected static ?string $navigationGroup = 'Interventi tecnici';
 
     protected static ?string $navigationLabel = 'Piani di manutenzione';
 
@@ -27,32 +27,40 @@ class MaintenanceScheduleResource extends Resource
     public static function form(Form $form): Form
     {
         return $form->schema([
-            Forms\Components\Select::make('customer_id')
-                ->label('Cliente')
-                ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
-                ->getOptionLabelFromRecordUsing(fn ($record) => $record->full_name)
-                ->searchable(['company_name', 'first_name', 'last_name'])
-                ->preload()
-                ->required(),
-            Forms\Components\Select::make('comodato_macchina_id')
-                ->label('Macchina (comodato)')
-                ->relationship('comodatoMacchina', 'nome_macchina')
-                ->searchable()
-                ->preload(),
-            Forms\Components\Select::make('frequency')
-                ->label('Frequenza')
-                ->options([
-                    'mensile' => 'Mensile',
-                    'trimestrale' => 'Trimestrale',
-                    'semestrale' => 'Semestrale',
-                    'annuale' => 'Annuale',
-                ])
-                ->required(),
-            Forms\Components\DatePicker::make('next_due_date')
-                ->label('Prossima scadenza')
-                ->required()
-                ->default(now()->addMonth()),
-            Forms\Components\Textarea::make('notes')->label('Note')->columnSpanFull(),
+            Forms\Components\Section::make('Cliente e macchina')
+                ->columns(2)
+                ->schema([
+                    Forms\Components\Select::make('customer_id')
+                        ->label('Cliente')
+                        ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
+                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->full_name)
+                        ->searchable(['company_name', 'first_name', 'last_name'])
+                        ->preload()
+                        ->required(),
+                    Forms\Components\Select::make('comodato_macchina_id')
+                        ->label('Macchina (comodato)')
+                        ->relationship('comodatoMacchina', 'nome_macchina')
+                        ->searchable()
+                        ->preload(),
+                ]),
+            Forms\Components\Section::make('Pianificazione')
+                ->columns(2)
+                ->schema([
+                    Forms\Components\Select::make('frequency')
+                        ->label('Frequenza')
+                        ->options([
+                            'mensile' => 'Mensile',
+                            'trimestrale' => 'Trimestrale',
+                            'semestrale' => 'Semestrale',
+                            'annuale' => 'Annuale',
+                        ])
+                        ->required(),
+                    Forms\Components\DatePicker::make('next_due_date')
+                        ->label('Prossima scadenza')
+                        ->required()
+                        ->default(now()->addMonth()),
+                    Forms\Components\Textarea::make('notes')->label('Note')->columnSpanFull(),
+                ]),
         ]);
     }
 

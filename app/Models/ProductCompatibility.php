@@ -6,6 +6,14 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * Sostituito da ProductOptionSlot/ProductOptionSlotItem (files/DATABASE-SCHEMA.md):
+ * la tabella viene droppata da
+ * 2026_07_16_010400_drop_product_compatibilities_and_option_groups_tables.
+ * Il model resta solo per la conversione dati una tantum
+ * (App\Console\Commands\MigrateCompatibilitiesToSlots) - nessun altro
+ * codice applicativo deve farvi riferimento.
+ */
 class ProductCompatibility extends Model
 {
     use HasUuids;

@@ -37,6 +37,14 @@ class CategoryResource extends Resource
                 ->label('Nome')
                 ->required()
                 ->maxLength(255),
+            Forms\Components\Select::make('parent_id')
+                ->label('Categoria padre')
+                ->options(fn (?Category $record) => Category::query()
+                    ->when($record, fn ($query) => $query->whereKeyNot($record->getKey()))
+                    ->orderBy('name')
+                    ->pluck('name', 'id'))
+                ->searchable()
+                ->native(false),
         ]);
     }
 
@@ -45,6 +53,7 @@ class CategoryResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('name')->label('Nome')->searchable(),
+                Tables\Columns\TextColumn::make('parent.name')->label('Categoria padre')->placeholder('—'),
                 Tables\Columns\TextColumn::make('tenant.name')->label('Tenant')->placeholder('Condivisa'),
                 Tables\Columns\TextColumn::make('products_count')->label('Prodotti')->counts('products'),
             ])

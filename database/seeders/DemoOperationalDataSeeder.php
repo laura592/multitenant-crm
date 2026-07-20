@@ -5,8 +5,6 @@ namespace Database\Seeders;
 use App\Models\Customer;
 use App\Models\LeaveRequest;
 use App\Models\Product;
-use App\Models\Quote;
-use App\Models\QuoteGroup;
 use App\Models\ServiceReport;
 use App\Models\Tenant;
 use App\Models\TimeEntry;
@@ -15,8 +13,8 @@ use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 
 /**
- * Riempie i moduli ancora vuoti (presenze, ferie, rapportini, preventivi
- * raggruppati) con dati plausibili/reali sull'organigramma Alex, cosi' i
+ * Riempie i moduli ancora vuoti (presenze, ferie, rapportini) con dati
+ * plausibili/reali sull'organigramma Alex, cosi' i
  * moduli costruiti in questa sessione hanno qualcosa da mostrare invece di
  * apparire vuoti alla prima demo. Idempotente sui dati con date fisse
  * (Laura); il resto e' generico e rieseguibile senza duplicare in modo
@@ -59,7 +57,6 @@ class DemoOperationalDataSeeder extends Seeder
         }
 
         $this->seedServiceReport($alex, $laura ?? $alessandro);
-        $this->seedQuoteGroup($alex);
     }
 
     private function seedFerie(Tenant $tenant, User $user, User $approver, string $from, string $to): void
@@ -147,7 +144,7 @@ class DemoOperationalDataSeeder extends Seeder
             return;
         }
 
-        $report = ServiceReport::create([
+        $report = new ServiceReport([
             'tenant_id' => $tenant->id,
             'customer_id' => $customer->id,
             'machine_product_id' => $machine->id,
@@ -160,56 +157,13 @@ class DemoOperationalDataSeeder extends Seeder
             'work_performed' => 'Sostituzione guarnizioni gruppo erogazione, pulizia caldaia, verifica pressione.',
             'status' => 'inviato',
         ]);
+        // Il numero e' normalmente assegnato dall'evento "creating" del model, ma
+        // DatabaseSeeder usa WithoutModelEvents: lo calcoliamo qui a mano.
+        $report->number = ServiceReport::nextNumberForTenant($tenant->id);
+        $report->save();
 
         if ($part) {
             $report->partsUsed()->create(['product_id' => $part->id, 'quantity' => 1]);
-        }
-    }
-
-    /**
-     * Esempio di preventivi multipli raggruppati (docs/architecture.md §14):
-     * due opzioni per lo stesso cliente inviate come un'unica email di
-     * confronto, invece di due preventivi separati e slegati.
-     */
-    private function seedQuoteGroup(Tenant $tenant): void
-    {
-        if (QuoteGroup::where('tenant_id', $tenant->id)->exists()) {
-            return;
-        }
-
-        $customer = Customer::where('tenant_id', $tenant->id)->first()
-            ?? Customer::whereNull('tenant_id')->first();
-        $machines = Product::where('type', Product::TYPE_MACHINE)->whereNotNull('name')->limit(2)->get();
-
-        if (! $customer || $machines->count() < 2) {
-            return;
-        }
-
-        $group = QuoteGroup::create([
-            'tenant_id' => $tenant->id,
-            'customer_id' => $customer->id,
-            'status' => 'inviato',
-        ]);
-
-        foreach ($machines as $machine) {
-            $price = (float) optional($machine->prices()->latest()->first())->price;
-
-            if ($price <= 0) {
-                continue;
-            }
-
-            $quote = Quote::create([
-                'tenant_id' => $tenant->id,
-                'quote_group_id' => $group->id,
-                'customer_id' => $customer->id,
-                'date' => now(),
-                'status' => 'inviato',
-            ]);
-
-            $quote->quoteProducts()->create([
-                'product_id' => $machine->id, 'quantity' => 1, 'price' => $price, 'discount' => 0, 'tax' => 22,
-            ]);
-            $quote->updateTotal();
         }
     }
 }

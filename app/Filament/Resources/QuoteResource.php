@@ -2,13 +2,17 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Forms\ItalianAddressFields;
 use App\Filament\Resources\QuoteResource\Pages;
+use App\Filament\Resources\QuoteResource\RelationManagers\QuoteProductsRelationManager;
 use App\Models\PaymentMethod;
-use App\Models\Product;
 use App\Models\Quote;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Infolists\Components\Section as InfolistSection;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Infolist;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -26,6 +30,38 @@ class QuoteResource extends Resource
     protected static ?string $modelLabel = 'Preventivo';
 
     protected static ?string $pluralModelLabel = 'Preventivi';
+
+    public static function infolist(Infolist $infolist): Infolist
+    {
+        return $infolist->schema([
+            InfolistSection::make('Dati preventivo')
+                ->columns(4)
+                ->schema([
+                    TextEntry::make('number')->label('Numero'),
+                    TextEntry::make('customer.full_name')->label('Cliente'),
+                    TextEntry::make('date')->label('Data')->date(),
+                    TextEntry::make('status')->label('Stato')->badge()->formatStateUsing(fn (string $state) => ucfirst($state)),
+                    TextEntry::make('paymentMethodRelation.name')->label('Metodo di pagamento')->placeholder('—'),
+                    TextEntry::make('discount')->label('Sconto generale')->suffix('%'),
+                    TextEntry::make('notes')->label('Note')->placeholder('—')->columnSpanFull(),
+                ]),
+            InfolistSection::make('Totali')
+                ->columns(3)
+                ->schema([
+                    TextEntry::make('subtotal')->label('Imponibile')->money('EUR'),
+                    TextEntry::make('tax_total')->label('IVA')->money('EUR'),
+                    TextEntry::make('total')->label('Totale')->money('EUR'),
+                ]),
+            InfolistSection::make('Provvigione partner')
+                ->columns(3)
+                ->visible(fn (Quote $record) => ! (bool) $record->tenant?->is_master)
+                ->schema([
+                    TextEntry::make('commission_scenario')->label('Scenario')->placeholder('—'),
+                    TextEntry::make('commission_status')->label('Stato fatturazione')->placeholder('—'),
+                    TextEntry::make('commission_amount')->label('Importo')->money('EUR')->placeholder('—'),
+                ]),
+        ]);
+    }
 
     public static function form(Form $form): Form
     {
@@ -55,6 +91,7 @@ class QuoteResource extends Resource
                             Forms\Components\TextInput::make('last_name')->label('Cognome'),
                             Forms\Components\TextInput::make('email')->label('Email')->email(),
                             Forms\Components\TextInput::make('mobile')->label('Cellulare'),
+                            ...ItalianAddressFields::schema(),
                         ]),
                     Forms\Components\DatePicker::make('date')
                         ->label('Data')
@@ -81,34 +118,14 @@ class QuoteResource extends Resource
                     Forms\Components\Textarea::make('notes')
                         ->label('Note')
                         ->columnSpan(2),
-                ]),
-            Forms\Components\Section::make('Righe preventivo')
-                // Solo in modifica: in creazione si passa subito al wizard
-                // "Configura macchina" (vedi CreateQuote::getRedirectUrl), che
-                // e' il flusso guidato per aggiungere le righe - mostrare qui
-                // anche un repeater manuale confonderebbe le idee su quale sia
-                // il percorso da seguire.
-                ->visible(! $isCreating)
-                ->schema([
-                    Forms\Components\Repeater::make('quoteProducts')
-                        ->relationship('quoteProducts')
-                        ->label('')
-                        ->columns(5)
-                        ->schema([
-                            Forms\Components\Select::make('product_id')
-                                ->label('Prodotto')
-                                ->options(fn () => Product::query()->pluck('name', 'id'))
-                                ->searchable()
-                                ->required()
-                                ->columnSpan(2),
-                            Forms\Components\TextInput::make('quantity')->label('Quantità')->numeric()->default(1)->required(),
-                            Forms\Components\TextInput::make('price')->label('Prezzo (€)')->numeric()->prefix('€')->required(),
-                            Forms\Components\TextInput::make('discount')->label('Sconto (%)')->numeric()->default(0),
-                            Forms\Components\TextInput::make('tax')->label('IVA (%)')->numeric()->default(22),
-                        ])
-                        ->defaultItems(0)
-                        ->addActionLabel('Aggiungi riga')
-                        ->reorderable(false),
+                    // Le righe si gestiscono nel tab "Righe preventivo" (RelationManager),
+                    // qui resta solo il totale calcolato come riferimento rapido.
+                    Forms\Components\Placeholder::make('total_display')
+                        ->label('Totale (calcolato)')
+                        ->content(fn (?Quote $record) => $record?->total !== null
+                            ? number_format((float) $record->total, 2, ',', '.').' €'
+                            : '—')
+                        ->visible(! $isCreating),
                 ]),
             Forms\Components\Section::make('Provvigione partner')
                 ->columns(3)
@@ -171,13 +188,16 @@ class QuoteResource extends Resource
                 Tables\Columns\TextColumn::make('commission_amount')->label('Provvigione')->money('EUR')->placeholder('—'),
             ])
             ->actions([
-                Tables\Actions\Action::make('recalculate')
-                    ->label('Ricalcola totali')
-                    ->icon('heroicon-o-arrow-path')
-                    ->action(fn (Quote $record) => $record->updateTotal())
-                    ->successNotificationTitle('Totali ricalcolati'),
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                Tables\Actions\ViewAction::make(),
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\Action::make('recalculate')
+                        ->label('Ricalcola totali')
+                        ->icon('heroicon-o-arrow-path')
+                        ->action(fn (Quote $record) => $record->updateTotal())
+                        ->successNotificationTitle('Totali ricalcolati'),
+                    Tables\Actions\EditAction::make(),
+                    Tables\Actions\DeleteAction::make(),
+                ]),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
@@ -186,11 +206,19 @@ class QuoteResource extends Resource
             ]);
     }
 
+    public static function getRelations(): array
+    {
+        return [
+            QuoteProductsRelationManager::class,
+        ];
+    }
+
     public static function getPages(): array
     {
         return [
             'index' => Pages\ListQuotes::route('/'),
             'create' => Pages\CreateQuote::route('/create'),
+            'view' => Pages\ViewQuote::route('/{record}'),
             'edit' => Pages\EditQuote::route('/{record}/edit'),
         ];
     }

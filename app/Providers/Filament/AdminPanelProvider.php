@@ -4,11 +4,13 @@ namespace App\Providers\Filament;
 
 use App\Filament\Widgets\DashboardStatsWidget;
 use App\Filament\Widgets\LatestQuotesWidget;
+use App\Filament\Widgets\QuotesChartWidget;
 use App\Filament\Widgets\TimbraWidget;
 use App\Filament\Widgets\UpcomingDeadlinesWidget;
 use App\Http\Middleware\SetPermissionsTeamId;
 use App\Models\Tenant;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
+use Saade\FilamentFullCalendar\FilamentFullCalendarPlugin;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -17,6 +19,7 @@ use Filament\Pages;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\Support\Enums\MaxWidth;
 use Filament\Widgets;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
@@ -47,11 +50,13 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->darkMode(true)
             ->sidebarCollapsibleOnDesktop()
+            ->maxContentWidth(MaxWidth::Full)
             // Tenancy nativa Filament: schema condiviso, un tenant = un partner
             // (o il tenant master Alex). Niente self-registration: i tenant li
             // crea solo lo staff Alex (docs/architecture.md §3, §5.1).
             ->tenant(Tenant::class, slugAttribute: 'slug')
             ->plugin(FilamentShieldPlugin::make())
+            ->plugin(FilamentFullCalendarPlugin::make())
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
             ->pages([
@@ -60,6 +65,7 @@ class AdminPanelProvider extends PanelProvider
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->widgets([
                 DashboardStatsWidget::class,
+                QuotesChartWidget::class,
                 TimbraWidget::class,
                 LatestQuotesWidget::class,
                 UpcomingDeadlinesWidget::class,
@@ -68,7 +74,11 @@ class AdminPanelProvider extends PanelProvider
             ->navigationGroups([
                 'Vendite',
                 'Catalogo',
-                'Gestione',
+                'Interventi tecnici',
+                'Magazzino',
+                'Personale',
+                'Impostazioni',
+                'Amministrazione',
             ])
             ->middleware([
                 EncryptCookies::class,

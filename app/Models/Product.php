@@ -26,6 +26,7 @@ class Product extends Model
     protected $fillable = [
         'tenant_id',
         'category_id',
+        'brand_id',
         'product_family_id',
         'sku',
         'type',
@@ -40,6 +41,11 @@ class Product extends Model
         return $this->belongsTo(Category::class);
     }
 
+    public function brand(): BelongsTo
+    {
+        return $this->belongsTo(Brand::class);
+    }
+
     public function family(): BelongsTo
     {
         return $this->belongsTo(ProductFamily::class, 'product_family_id');
@@ -51,27 +57,12 @@ class Product extends Model
     }
 
     /**
-     * Opzioni/unità ausiliarie compatibili quando questo prodotto è la variante base scelta.
+     * Slot di configurazione di questo prodotto (quando e' una "machine" base):
+     * ciascuno rappresenta una categoria di opzioni con min/max selezionabili.
      */
-    public function compatibleOptions(): BelongsToMany
+    public function slots(): HasMany
     {
-        return $this->belongsToMany(Product::class, 'product_compatibilities', 'base_product_id', 'option_product_id')
-            ->withPivot('option_group_id', 'constraint_type', 'sort_order')
-            ->orderByPivot('sort_order');
-    }
-
-    /**
-     * Varianti base con cui questo prodotto (opzione/unità ausiliaria) è compatibile.
-     */
-    public function compatibleBases(): BelongsToMany
-    {
-        return $this->belongsToMany(Product::class, 'product_compatibilities', 'option_product_id', 'base_product_id')
-            ->withPivot('option_group_id', 'constraint_type', 'sort_order');
-    }
-
-    public function compatibilities(): HasMany
-    {
-        return $this->hasMany(ProductCompatibility::class, 'base_product_id');
+        return $this->hasMany(ProductOptionSlot::class)->orderBy('sort_order');
     }
 
     /**

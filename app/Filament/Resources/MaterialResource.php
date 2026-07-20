@@ -1,0 +1,125 @@
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Filament\Resources\MaterialResource\Pages;
+use App\Models\Material;
+use Filament\Forms;
+use Filament\Forms\Form;
+use Filament\Resources\Resource;
+use Filament\Tables;
+use Filament\Tables\Table;
+
+class MaterialResource extends Resource
+{
+    protected static ?string $model = Material::class;
+
+    // Catalogo condiviso (tenant_id nullable): stessa nota di CategoryResource.
+    protected static bool $isScopedToTenant = false;
+
+    protected static ?string $navigationIcon = 'heroicon-o-wrench-screwdriver';
+
+    protected static ?string $navigationGroup = 'Catalogo';
+
+    protected static ?string $navigationLabel = 'Materiali idraulici';
+
+    protected static ?string $modelLabel = 'Materiale';
+
+    protected static ?string $pluralModelLabel = 'Materiali idraulici';
+
+    protected static ?string $recordTitleAttribute = 'code';
+
+    public static function form(Form $form): Form
+    {
+        return $form->schema([
+            Forms\Components\Section::make('Materiale')
+                ->columns(2)
+                ->schema([
+                    Forms\Components\TextInput::make('code')
+                        ->label('Codice')
+                        ->required()
+                        ->unique(ignoreRecord: true)
+                        ->maxLength(255),
+                    Forms\Components\Select::make('category')
+                        ->label('Categoria')
+                        ->options(fn () => Material::query()->distinct()->orderBy('category')->pluck('category', 'category'))
+                        ->searchable()
+                        ->createOptionForm([
+                            Forms\Components\TextInput::make('category')->label('Nuova categoria')->required(),
+                        ])
+                        ->createOptionUsing(fn (array $data) => $data['category'])
+                        ->required(),
+                    Forms\Components\TextInput::make('type')
+                        ->label('Tipo')
+                        ->required()
+                        ->maxLength(255),
+                    Forms\Components\TextInput::make('variant')
+                        ->label('Variante')
+                        ->maxLength(255),
+                    Forms\Components\TextInput::make('tube_diameter')
+                        ->label('Tubo Ø'),
+                    Forms\Components\TextInput::make('tube_diameter_2')
+                        ->label('Tubo Ø (2)'),
+                    Forms\Components\TextInput::make('thread_size')
+                        ->label('Filetto'),
+                    Forms\Components\TextInput::make('thread_type')
+                        ->label('Tipo filetto')
+                        ->helperText('Es. BSP, BSPT, NPTF, UNS, BSW, MFL, FFL'),
+                    Forms\Components\TextInput::make('barb_diameter')
+                        ->label('Codolo Ø'),
+                    Forms\Components\Textarea::make('notes')
+                        ->label('Note')
+                        ->columnSpanFull(),
+                ]),
+        ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                Tables\Columns\TextColumn::make('code')->label('Codice')->searchable()->sortable(),
+                Tables\Columns\TextColumn::make('category')->label('Categoria')->badge()->toggleable(),
+                Tables\Columns\TextColumn::make('type')->label('Tipo')->searchable()->wrap(),
+                Tables\Columns\TextColumn::make('variant')->label('Variante')->toggleable()->placeholder('—'),
+                Tables\Columns\TextColumn::make('tube_diameter')->label('Tubo Ø')->placeholder('—'),
+                Tables\Columns\TextColumn::make('tube_diameter_2')->label('Tubo Ø (2)')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('thread_size')->label('Filetto')->placeholder('—'),
+                Tables\Columns\TextColumn::make('thread_type')->label('Tipo filetto')->placeholder('—')->toggleable(),
+                Tables\Columns\TextColumn::make('barb_diameter')->label('Codolo Ø')->placeholder('—')->toggleable(),
+            ])
+            ->defaultSort('category')
+            ->filters([
+                Tables\Filters\SelectFilter::make('category')
+                    ->label('Categoria')
+                    ->options(fn () => Material::query()->distinct()->orderBy('category')->pluck('category', 'category')),
+            ])
+            ->actions([
+                Tables\Actions\EditAction::make(),
+                Tables\Actions\DeleteAction::make(),
+            ])
+            ->bulkActions([
+                Tables\Actions\BulkActionGroup::make([
+                    Tables\Actions\BulkAction::make('renameCategory')
+                        ->label('Rinomina categoria')
+                        ->icon('heroicon-o-pencil')
+                        ->form([
+                            Forms\Components\TextInput::make('category')
+                                ->label('Nuovo nome categoria')
+                                ->required(),
+                        ])
+                        ->action(fn (\Illuminate\Support\Collection $records, array $data) => $records
+                            ->each(fn (Material $material) => $material->update(['category' => $data['category']])))
+                        ->deselectRecordsAfterCompletion(),
+                    Tables\Actions\DeleteBulkAction::make(),
+                ]),
+            ]);
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ManageMaterials::route('/'),
+        ];
+    }
+}

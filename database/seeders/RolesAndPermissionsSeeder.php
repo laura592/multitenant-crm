@@ -12,9 +12,10 @@ use Spatie\Permission\PermissionRegistrar;
 /**
  * Crea i 4 ruoli applicativi (dipendente, collaboratore, partner, admin) per
  * ogni tenant esistente, coi permessi definiti in App\Support\RolePermissions,
- * e li assegna alle persone reali dell'organigramma Alex/Gifar. Gestione
- * Tenant e Ruoli resta riservata allo staff master (users.is_super_admin),
- * nessuno dei 4 ruoli la include (docs/architecture.md §5.3).
+ * e li assegna agli utenti di test creati da UserSeeder ({ruolo}@test.it).
+ * Gestione Tenant e Ruoli resta riservata allo staff master
+ * (users.is_super_admin), nessuno dei 4 ruoli la include
+ * (docs/architecture.md §5.3).
  *
  * Idempotente: rieseguibile senza duplicare ruoli o assegnazioni.
  */
@@ -39,49 +40,24 @@ class RolesAndPermissionsSeeder extends Seeder
             }
         });
 
-        $this->assignRealPeople();
+        $this->assignTestUsers();
     }
 
-    private function assignRealPeople(): void
+    private function assignTestUsers(): void
     {
-        $alex = Tenant::where('slug', 'alex')->first();
-        $gifar = Tenant::where('slug', 'gifar')->first();
+        $tenant = Tenant::where('slug', 'alex')->first();
 
-        if (! $alex) {
+        if (! $tenant) {
             return;
         }
 
-        $this->assign($alex, 's.alessandro@alexcaffe.com', 'admin', ['tenant_id' => $alex->id, 'is_super_admin' => true]);
-        $this->assign($alex, 'lauragrb.1990@gmail.com', 'dipendente', ['tenant_id' => $alex->id, 'is_super_admin' => false]);
-        $this->assign($alex, 'cristina.burato@alexcaffe.com', 'dipendente', ['tenant_id' => $alex->id]);
-        $this->assign($alex, 'igor.capiotto@alexcaffe.com', 'dipendente', ['tenant_id' => $alex->id]);
-        $this->assign($alex, 'info@filipponadalon.it', 'collaboratore', ['tenant_id' => $alex->id]);
+        foreach (RolePermissions::roles() as $role) {
+            $user = User::where('email', "{$role}@test.it")->first();
 
-        if (! $gifar) {
-            return;
+            if ($user) {
+                $this->assignRole($tenant, $user, $role);
+            }
         }
-
-        $partner = User::firstOrCreate(
-            ['email' => 'info@gifar.it'],
-            [
-                'tenant_id' => $gifar->id,
-                'name' => 'Gifar - Referente commerciale',
-                'password' => bcrypt(str()->random(32)),
-            ]
-        );
-        $this->assignRole($gifar, $partner, 'partner');
-    }
-
-    private function assign(Tenant $tenant, string $email, string $role, array $userAttributes = []): void
-    {
-        $user = User::where('email', $email)->first();
-
-        if (! $user) {
-            return;
-        }
-
-        $user->fill($userAttributes)->save();
-        $this->assignRole($tenant, $user, $role);
     }
 
     private function assignRole(Tenant $tenant, User $user, string $role): void

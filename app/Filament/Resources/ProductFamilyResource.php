@@ -30,21 +30,27 @@ class ProductFamilyResource extends Resource
     public static function form(Form $form): Form
     {
         return $form->schema([
-            Forms\Components\TextInput::make('name')
-                ->label('Nome (es. A300)')
-                ->required()
-                ->maxLength(255),
-            Forms\Components\Textarea::make('description')
-                ->label('Descrizione')
-                ->rows(2),
-            Forms\Components\FileUpload::make('image')
-                ->label('Immagine')
-                ->image()
-                ->directory('product-families'),
-            Forms\Components\TextInput::make('sort_order')
-                ->label('Ordine')
-                ->numeric()
-                ->default(0),
+            Forms\Components\Section::make('Dati famiglia')
+                ->columns(2)
+                ->schema([
+                    Forms\Components\TextInput::make('name')
+                        ->label('Nome (es. A300)')
+                        ->required()
+                        ->maxLength(255),
+                    Forms\Components\TextInput::make('sort_order')
+                        ->label('Ordine')
+                        ->numeric()
+                        ->default(0),
+                    Forms\Components\Textarea::make('description')
+                        ->label('Descrizione')
+                        ->rows(2)
+                        ->columnSpanFull(),
+                    Forms\Components\FileUpload::make('image')
+                        ->label('Immagine')
+                        ->image()
+                        ->directory('product-families')
+                        ->columnSpanFull(),
+                ]),
         ]);
     }
 

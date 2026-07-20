@@ -32,24 +32,28 @@ class PaymentMethodResource extends Resource
     public static function form(Form $form): Form
     {
         return $form->schema([
-            Forms\Components\TextInput::make('name')
-                ->label('Nome')
-                ->required()
-                ->maxLength(255)
-                ->live(onBlur: true)
-                ->afterStateUpdated(fn (string $state, Forms\Set $set) => $set('slug', Str::slug($state))),
-            Forms\Components\TextInput::make('slug')
-                ->label('Slug')
-                ->required()
-                ->unique(ignoreRecord: true)
-                ->maxLength(255),
-            Forms\Components\Toggle::make('is_active')
-                ->label('Attivo')
-                ->default(true),
-            Forms\Components\TextInput::make('sort_order')
-                ->label('Ordine')
-                ->numeric()
-                ->default(0),
+            Forms\Components\Section::make('Dati metodo')
+                ->columns(2)
+                ->schema([
+                    Forms\Components\TextInput::make('name')
+                        ->label('Nome')
+                        ->required()
+                        ->maxLength(255)
+                        ->live(onBlur: true)
+                        ->afterStateUpdated(fn (string $state, Forms\Set $set) => $set('slug', Str::slug($state))),
+                    Forms\Components\TextInput::make('slug')
+                        ->label('Slug')
+                        ->required()
+                        ->unique(ignoreRecord: true)
+                        ->maxLength(255),
+                    Forms\Components\Toggle::make('is_active')
+                        ->label('Attivo')
+                        ->default(true),
+                    Forms\Components\TextInput::make('sort_order')
+                        ->label('Ordine')
+                        ->numeric()
+                        ->default(0),
+                ]),
         ]);
     }
 

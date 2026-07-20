@@ -12,6 +12,8 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
@@ -90,5 +92,43 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     public function canAccessTenant(Model $tenant): bool
     {
         return $this->is_super_admin || $this->tenant_id === $tenant->getKey();
+    }
+
+    public function googleCalendarAccount(): HasOne
+    {
+        return $this->hasOne(GoogleCalendarAccount::class);
+    }
+
+    public function appointments(): HasMany
+    {
+        return $this->hasMany(Appointment::class, 'technician_id');
+    }
+
+    /**
+     * Giorni di ferie ancora disponibili nell'anno indicato (default l'anno
+     * corrente): monte annuo meno le richieste di tipo "ferie" gia' approvate
+     * che iniziano in quell'anno.
+     */
+    public function remainingFerieDays(?int $year = null): ?int
+    {
+        if ($this->annual_leave_days === null) {
+            return null;
+        }
+
+        $year ??= now()->year;
+
+        $usedDays = $this->leaveRequests()
+            ->where('type', LeaveRequest::TYPE_FERIE)
+            ->where('status', 'approvato')
+            ->whereYear('date_from', $year)
+            ->get()
+            ->sum(fn (LeaveRequest $request) => $request->days);
+
+        return $this->annual_leave_days - $usedDays;
+    }
+
+    public function leaveRequests(): HasMany
+    {
+        return $this->hasMany(LeaveRequest::class);
     }
 }

@@ -30,7 +30,7 @@ class RiepilogoOre extends Page implements HasForms
 
     protected static ?string $navigationIcon = 'heroicon-o-document-chart-bar';
 
-    protected static ?string $navigationGroup = 'Gestione';
+    protected static ?string $navigationGroup = 'Personale';
 
     protected static ?string $navigationLabel = 'Riepilogo ore';
 
