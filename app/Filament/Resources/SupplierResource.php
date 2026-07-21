@@ -22,7 +22,7 @@ class SupplierResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-truck';
 
-    protected static ?string $navigationGroup = 'Catalogo';
+    protected static ?string $navigationGroup = 'Magazzino';
 
     protected static ?string $navigationLabel = 'Fornitori';
 

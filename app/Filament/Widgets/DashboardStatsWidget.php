@@ -3,15 +3,17 @@
 namespace App\Filament\Widgets;
 
 use App\Models\Customer;
-use App\Models\Deadline;
-use App\Models\InformationRequest;
 use App\Models\Quote;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
+/**
+ * Solo andamento commerciale: cio' che richiede azione (richieste aperte,
+ * scadenze urgenti) e' in PrioritaWidget, ordinato prima di questo.
+ */
 class DashboardStatsWidget extends BaseWidget
 {
-    protected static ?int $sort = 0;
+    protected static ?int $sort = 2;
 
     protected function getStats(): array
     {
@@ -31,14 +33,6 @@ class DashboardStatsWidget extends BaseWidget
                 ->description('Totale clienti')
                 ->icon('heroicon-o-users')
                 ->color('gray'),
-            Stat::make('Richieste da gestire', $openRequests = InformationRequest::whereIn('status', ['nuova', 'in_lavorazione'])->count())
-                ->description('Richieste informazioni aperte')
-                ->icon('heroicon-o-inbox-arrow-down')
-                ->color($openRequests > 0 ? 'warning' : 'success'),
-            Stat::make('Scadenze urgenti', Deadline::where('status', Deadline::STATUS_ATTIVA)->get()->filter->isUrgent()->count())
-                ->description('Entro il periodo di preavviso')
-                ->icon('heroicon-o-exclamation-triangle')
-                ->color('danger'),
         ];
     }
 }

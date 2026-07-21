@@ -5,6 +5,7 @@ namespace App\Providers\Filament;
 use App\Filament\Widgets\DashboardStatsWidget;
 use App\Filament\Widgets\LatestQuotesWidget;
 use App\Filament\Widgets\MagazzinoStatsWidget;
+use App\Filament\Widgets\PrioritaWidget;
 use App\Filament\Widgets\QuotesChartWidget;
 use App\Filament\Widgets\TimbraWidget;
 use App\Filament\Widgets\UpcomingDeadlinesWidget;
@@ -21,7 +22,6 @@ use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
 use Filament\Support\Enums\MaxWidth;
-use Filament\Widgets;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
@@ -74,13 +74,13 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->widgets([
-                DashboardStatsWidget::class,
-                MagazzinoStatsWidget::class,
-                QuotesChartWidget::class,
                 TimbraWidget::class,
+                PrioritaWidget::class,
+                MagazzinoStatsWidget::class,
+                DashboardStatsWidget::class,
+                QuotesChartWidget::class,
                 LatestQuotesWidget::class,
                 UpcomingDeadlinesWidget::class,
-                Widgets\AccountWidget::class,
             ])
             ->navigationGroups([
                 'Vendite',

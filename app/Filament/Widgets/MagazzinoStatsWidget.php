@@ -9,13 +9,11 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
 
 /**
  * Area propria per l'ambito acquisti (ordini fornitori, materiali,
- * categorie), separata dai numeri commerciali di DashboardStatsWidget:
- * stesso sort (0) ma registrata subito dopo in AdminPanelProvider, cosi'
- * compare come blocco distinto appena sotto.
+ * categorie), separata dai numeri commerciali di DashboardStatsWidget.
  */
 class MagazzinoStatsWidget extends BaseWidget
 {
-    protected static ?int $sort = 0;
+    protected static ?int $sort = 1;
 
     protected function getStats(): array
     {

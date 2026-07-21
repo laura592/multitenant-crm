@@ -11,11 +11,7 @@ class LatestQuotesWidget extends BaseWidget
 {
     // Stesso sort di UpcomingDeadlinesWidget cosi le due tabelle (colSpan 1)
     // finiscono sulla stessa riga della griglia a 2 colonne, affiancate.
-    // Prima era 1 come QuotesChartWidget (colSpan 'full'): a parita di sort
-    // vince l'ordine alfabetico di discovery (LatestQuotesWidget prima di
-    // QuotesChartWidget), quindi questa tabella finiva da sola su una riga
-    // con meta griglia vuota, e "Prossime scadenze" restava isolata piu sotto.
-    protected static ?int $sort = 2;
+    protected static ?int $sort = 4;
 
     protected int|string|array $columnSpan = 1;
 

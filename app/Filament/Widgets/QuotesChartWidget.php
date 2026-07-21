@@ -9,7 +9,7 @@ class QuotesChartWidget extends ChartWidget
 {
     protected static ?string $heading = 'Andamento preventivi accettati (ultimi 6 mesi)';
 
-    protected static ?int $sort = 1;
+    protected static ?int $sort = 3;
 
     protected int|string|array $columnSpan = 'full';
 
