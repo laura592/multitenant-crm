@@ -22,7 +22,6 @@ class DatabaseSeeder extends Seeder
             ScadenzarioDemoSeeder::class,
             BeerLineMaintenanceDemoSeeder::class,
             DemoOperationalDataSeeder::class,
-            AppointmentSeeder::class,
         ]);
     }
 }

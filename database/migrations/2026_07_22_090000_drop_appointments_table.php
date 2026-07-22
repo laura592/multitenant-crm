@@ -8,6 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
+        Schema::dropIfExists('appointments');
+    }
+
+    public function down(): void
+    {
         Schema::create('appointments', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->foreignUuid('tenant_id')->constrained()->cascadeOnDelete();
@@ -24,19 +29,10 @@ return new class extends Migration
             $table->enum('status', ['pianificato', 'confermato', 'in_corso', 'completato', 'annullato'])->default('pianificato');
             $table->text('notes')->nullable();
 
-            $table->string('google_event_id')->nullable();
-            $table->dateTime('google_synced_at')->nullable();
-
             $table->timestamps();
 
             $table->index(['tenant_id', 'starts_at']);
             $table->index('technician_id');
-            $table->index('google_event_id');
         });
-    }
-
-    public function down(): void
-    {
-        Schema::dropIfExists('appointments');
     }
 };

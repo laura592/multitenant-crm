@@ -99,11 +99,6 @@ class User extends Authenticatable implements FilamentUser, HasTenants
         return $this->hasOne(GoogleCalendarAccount::class);
     }
 
-    public function appointments(): HasMany
-    {
-        return $this->hasMany(Appointment::class, 'technician_id');
-    }
-
     /**
      * Giorni di ferie ancora disponibili nell'anno indicato (default l'anno
      * corrente): monte annuo meno le richieste di tipo "ferie" gia' approvate

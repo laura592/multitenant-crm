@@ -62,10 +62,8 @@ class RolePermissions
                 // Vede solo le proprie ore/ferie (ScopesToOwnUserUnlessResponsabile).
                 ...self::expand('time::entry', ['view_any', 'view', 'create', 'update']),
                 ...self::expand('leave::request', ['view_any', 'view', 'create', 'update']),
-                ...self::expand('appointment', self::MANAGE),
                 'widget_TimbraWidget',
                 'page_RiepilogoOre',
-                'page_AppuntamentiCalendario',
                 'page_ClientiVicini',
             ],
             'amministrazione' => [
@@ -101,7 +99,6 @@ class RolePermissions
                 ...self::expand('time::entry', self::MANAGE),
                 ...self::expand('leave::request', self::MANAGE),
                 ...self::expand('payment::method', self::MANAGE),
-                ...self::expand('appointment', self::MANAGE),
                 ...self::expand('machine::unit', self::MANAGE),
                 // Unico ruolo (oltre allo staff master is_super_admin) che puo'
                 // creare/gestire utenti.
@@ -111,7 +108,6 @@ class RolePermissions
                 'widget_LatestQuotesWidget',
                 'widget_UpcomingDeadlinesWidget',
                 'page_RiepilogoOre',
-                'page_AppuntamentiCalendario',
                 'page_ClientiVicini',
             ],
             default => throw new \InvalidArgumentException("Ruolo sconosciuto: {$role}"),
