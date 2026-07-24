@@ -24,6 +24,10 @@ class MaintenanceScheduleResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Piani di manutenzione';
 
+    // Senza questo, Filament forza il Title Case e capitalizza anche il "di"
+    // ("Piani Di Manutenzione").
+    protected static bool $hasTitleCaseModelLabel = false;
+
     public static function form(Form $form): Form
     {
         return $form->schema([

@@ -6,7 +6,6 @@ use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class MaintenanceSchedule extends Model
 {
@@ -46,24 +45,6 @@ class MaintenanceSchedule extends Model
     public function lastServiceReport(): BelongsTo
     {
         return $this->belongsTo(ServiceReport::class, 'last_service_report_id');
-    }
-
-    public function deadlines(): MorphMany
-    {
-        return $this->morphMany(Deadline::class, 'deadlinable');
-    }
-
-    protected static function booted(): void
-    {
-        // Tiene sempre sincronizzata un'unica Deadline per il prossimo
-        // appuntamento di manutenzione, cosi confluisce nel tableau unificato
-        // insieme alle scadenze di automezzi/tenant (docs/architecture.md §13.2).
-        static::saved(function (self $schedule) {
-            $schedule->deadlines()->updateOrCreate(
-                ['type' => Deadline::TYPE_MANUTENZIONE_ORDINARIA],
-                ['tenant_id' => $schedule->tenant_id, 'due_date' => $schedule->next_due_date, 'status' => 'attiva']
-            );
-        });
     }
 
     /**
