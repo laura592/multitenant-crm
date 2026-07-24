@@ -1,0 +1,22 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+    - phpstan-baseline.neon
+
+parameters:
+    paths:
+        - app
+        - database
+        - routes
+
+    # Livello iniziale prudente: il progetto non ha mai avuto analisi statica,
+    # partire da un livello alto (9-10) produrrebbe centinaia di segnalazioni
+    # perlopiu' rumorose sui pattern dinamici tipici di Filament/Eloquent
+    # (magic properties, relazioni, form state). Si alza gradualmente man
+    # mano che il codice viene ripulito (vedi baseline).
+    level: 5
+
+    excludePaths:
+        - app/Console/Commands/*
+        - database/data/*
+
+    tmpDir: storage/phpstan

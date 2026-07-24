@@ -304,7 +304,7 @@ In questo modo ogni tenant ha ruoli/permessi indipendenti (es. il Partner può d
 "Tecnico" con permessi solo su `ComodatoMacchina` e `InformationRequest`, senza toccare i preventivi),
 e i ruoli di un tenant non compaiono in un altro.
 
-#### 5.3.1 Ruoli implementati (2026-07-15)
+#### 5.3.1 Ruoli implementati (2026-07-15, ruolo `collaboratore` unificato in `partner` il 2026-07-22)
 
 4 ruoli applicativi, definiti in `App\Support\RolePermissions` (fonte unica usata sia dal
 `RolesAndPermissionsSeeder` che dai test tramite `Tests\Concerns\AssignsPermissionRoles`) e creati
@@ -314,12 +314,14 @@ per ogni tenant da quel seeder:
   clienti/preventivi/richieste informazioni/rapportini/piani di manutenzione; sola visualizzazione
   su scadenze e veicoli; può timbrare (`widget_TimbraWidget`) e vedere solo le proprie
   ferie/timbrature (vedi `ScopesToOwnUserUnlessResponsabile`); niente metodi di pagamento.
-- **`collaboratore`** (es. Filippo, collaboratore esterno che raccoglie contatti in fiera): **solo**
-  `InformationRequest` (CRUD) + `create_customer` per censire un nuovo lead al volo. Nessun accesso
-  a Clienti/Preventivi/Catalogo come risorse navigabili.
-- **`partner`** (es. Gifar): catalogo Franke condiviso in sola lettura, clienti e preventivi propri
-  (view/create/update, niente delete). Non vede scadenzario, presenze, rapportini, metodi di
-  pagamento, né la gestione tenant — "non gli serve vedere tutto".
+- **`amministrazione`** (es. Cristina): profilo ufficio/HR, vede e corregge ore/ferie di tutto il
+  personale (deve compilarle per il commercialista) e clienti/rapportini in sola
+  visualizzazione/correzione, ma non ha l'autorità di approvazione ferie (resta solo a `admin`) e
+  non crea rapportini, solo li integra (vedi `App\Filament\Concerns\ScopesToOwnUserUnlessResponsabile`).
+- **`partner`** (es. Gifar, e Filippo come collaboratore esterno che raccoglie contatti in fiera —
+  ruolo unificato, prima distinto come `collaboratore`): catalogo Franke condiviso in sola lettura,
+  clienti e preventivi propri (view/create/update, niente delete). Non vede scadenzario, presenze,
+  rapportini, metodi di pagamento, né la gestione tenant — "non gli serve vedere tutto".
 - **`admin`** (es. Alessandro, titolare Alex): CRUD completo su tutte le risorse del proprio tenant,
   scadenze incluse, ed è il "responsabile" che approva ferie/permessi
   (`ScopesToOwnUserUnlessResponsabile::isResponsabile()` controlla `hasRole('admin')`).
@@ -812,16 +814,60 @@ ricalcolare altrove.
 Pacchetto da aggiungere ora: `pxlrbt/filament-excel` (già usato nel vecchio progetto per altri
 export, coerente con lo stack).
 
+### 12.3 Rifiniture (2026-07-22)
+
+La prima implementazione di §12.1-§12.2 aveva alcuni scostamenti dal disegno originale, corretti
+in questa sessione:
+
+- **Straordinario settimanale**: `weekly_contract_hours` era salvato ma non letto da nessuna
+  parte, solo il monte giornaliero veniva confrontato. Ora "Riepilogo Ore" somma le ore ordinarie
+  per settimana ISO e sposta l'eccedenza sul monte settimanale da ordinarie a straordinario (non
+  la aggiunge, altrimenti le stesse ore verrebbero contate due volte).
+- **Malattia assente dal riepilogo**: il tipo esisteva ed era richiedibile ma non compariva mai
+  nell'aggregato mensile né negli export. Aggiunta la colonna "Giorni malattia" ovunque
+  (schermo, Excel, PDF).
+- **`pxlrbt/filament-excel` era una dipendenza inutilizzata**: tutti gli export passavano da
+  chiamate dirette a `maatwebsite/excel`. Gli export dei dati grezzi di `TimeEntryResource` e
+  `LeaveRequestResource` (prima assenti: solo l'aggregato di "Riepilogo Ore" era esportabile) usano
+  ora `pxlrbt/filament-excel` come da intenzione originale; "Riepilogo Ore" resta su
+  `maatwebsite/excel` perché costruisce righe aggregate, non una tabella Eloquent diretta.
+- **Dettaglio giorno per giorno**: "Riepilogo Ore" esportava solo l'aggregato mensile. Aggiunti due
+  export ("Esporta Excel/PDF (dettaglio giorni)") con una riga per dipendente/giorno (ore
+  lavorate, ordinarie, straordinario giornaliero puro, assenza).
+- **Approvazione non autorizzata via Policy**: il controllo "chi può approvare" era un
+  `isResponsabile()` scritto a mano nella risorsa, non una policy. Aggiunti
+  `LeaveRequestPolicy::approve()` e `::updateAfterDecision()`.
+- **Richieste decise restavano modificabili**: una volta approvata/rifiutata, chiunque col
+  permesso generico di update/delete poteva ancora modificare o cancellare la richiesta,
+  disallineando silenziosamente il saldo ferie e il riepilogo già inviato al commercialista. Ora
+  solo un responsabile può correggerla dopo la decisione, e farlo la riporta a "richiesto" per una
+  nuova approvazione.
+- **Nessuna notifica al dipendente**: approvare/rifiutare mandava un flash solo a chi cliccava il
+  bottone (l'approvatore), non al dipendente. Aggiunta una notifica database (Filament
+  `sendToDatabase`, richiede la tabella `notifications` — non esisteva) al dipendente.
+- **"Amministrazione" non poteva inserire un'assenza per conto di un dipendente**: il campo
+  "Dipendente" nel form era sbloccato solo per `isResponsabile()`; il ruolo "amministrazione" aveva
+  già il permesso Shield di create/update su `leave::request` ma non poteva scegliere un
+  dipendente diverso da sé stesso nel menu. Sbloccato anche per questo ruolo.
+
 ## 13. Scadenzario e pianificazione assistenze (nuovo requisito, 2026-07-09)
 
-Tracciare scadenze assicurazioni, automezzi, manutenzioni ordinarie clienti, con un tableau delle
-assistenze programmate. Invece di una tabella diversa per ogni tipo di scadenza, un'unica entità
-**generica e polimorfica** riusa lo stesso meccanismo per casi che altrimenti sarebbero
-duplicati: la polizza RCT che il Partner deve mantenere per lo Scenario C (art. 17 del contratto),
-il rinnovo del contratto di distribuzione stesso (art. 13, `notice_period_days` già in `tenants`,
-§4.1), la licenza FrankeCloud (§11.2), l'assicurazione/revisione di un automezzo, la manutenzione
-ordinaria di una macchina cliente — sono tutti "una scadenza con una data e uno stato", non
-domini diversi.
+Tracciare scadenze assicurazioni/bollo/revisione automezzi, polizze RCT, rinnovi contratto. Invece
+di una tabella diversa per ogni tipo di scadenza, un'unica entità **generica e polimorfica** riusa
+lo stesso meccanismo per casi che altrimenti sarebbero duplicati: la polizza RCT che il Partner
+deve mantenere per lo Scenario C (art. 17 del contratto), il rinnovo del contratto di distribuzione
+stesso (art. 13, `notice_period_days` già in `tenants`, §4.1), la licenza FrankeCloud (§11.2),
+l'assicurazione/bollo/revisione di un automezzo — sono tutti "una scadenza con una data e uno
+stato", non domini diversi.
+
+> **Decisione (2026-07-22)**: i piani di manutenzione ordinaria (`maintenance_schedules`, §13.1)
+> sono **volutamente esclusi** da questo sistema. Nascevano sincronizzati automaticamente su una
+> `deadline` polimorfica, ma da quando lo Scadenzario è stato ristretto ai ruoli
+> amministrazione/admin (le scadenze assicurative/fiscali sono "roba da ufficio", non da tecnici
+> sul campo — vedi §5.3.1), tenerli accoppiati avrebbe nascosto le manutenzioni proprio a chi le usa
+> ogni giorno (`dipendente`). `MaintenanceScheduleResource` resta autonomo: gestisce
+> `next_due_date` sulla propria tabella, con la propria colonna/filtro di urgenza, senza passare da
+> `Deadline`.
 
 ### 13.1 Modello dati
 
@@ -833,18 +879,21 @@ assigned_user_id (FK users, nullable — tecnico a cui è assegnato),
 notes, created_at, updated_at
 ```
 
-**`deadlines`** — scadenze generiche, polimorfiche
+**`deadlines`** — scadenze amministrative, generiche e polimorfiche (NON i piani di manutenzione,
+vedi decisione sopra)
 
 ```
 id, tenant_id,
-deadlinable_type, deadlinable_id (morph — Vehicle, Tenant, Customer, MaintenanceSchedule, ...),
-type (enum: assicurazione, revisione, polizza_rct, manutenzione_ordinaria, licenza, contratto, altro),
-due_date, reminder_days_before (default 30),
+deadlinable_type, deadlinable_id (morph — Vehicle, Tenant, ...),
+type (enum: assicurazione, bollo, revisione, polizza_rct, licenza, contratto, altro),
+policy_number (nullable — numero polizza/riferimento),
+due_date, amount, paid_at (nullable — importo/data pagamento all'ultimo rinnovo),
+reminder_days_before (default 30),
 status (enum: attiva, scaduta, rinnovata),
 notes, created_at, updated_at
 ```
 
-**`maintenance_schedules`** — piani di manutenzione ordinaria per cliente/macchina
+**`maintenance_schedules`** — piani di manutenzione ordinaria per cliente/macchina, autonomi
 
 ```
 id, tenant_id, customer_id, comodato_macchina_id (nullable),
@@ -856,16 +905,15 @@ notes, created_at, updated_at
 
 Alla chiusura di un `ServiceReport` di tipo `manutenzione_ordinaria` collegato a un
 `maintenance_schedule`, un Observer aggiorna `last_service_report_id` e ricalcola `next_due_date`
-in base a `frequency`; una `deadline` polimorfica puntata al `maintenance_schedule` tiene traccia
-del prossimo appuntamento per il tableau.
+in base a `frequency`. `MaintenanceScheduleResource` mostra/filtra l'urgenza direttamente su questa
+colonna — nessuna `deadline` polimorfica coinvolta (vedi decisione sopra).
 
-### 13.2 Tableau assistenze programmate
+### 13.2 Scadenzario amministrativo
 
-Una pagina Filament (tabella nativa, nessun plugin esterno necessario per la v1) che unisce
-`deadlines` (tutti i tipi) e `maintenance_schedules.next_due_date`, raggruppata per urgenza
-(scadute / questa settimana / questo mese / più avanti), filtrabile per tenant, tipo e tecnico
-assegnato. Se in futuro serve una vista calendario/kanban più visuale, si valuta un plugin
-community dedicato in quel momento — non bloccante per la prima versione.
+Una pagina Filament (tabella nativa, nessun plugin esterno necessario) sulle sole `deadlines`
+(automezzi + tenant), riservata ai ruoli amministrazione/admin, ordinata per urgenza e filtrabile
+per tipo/stato. Nasconde di default le righe già rinnovate (storico): quello resta consultabile dal
+tab "Scadenze" di ogni veicolo/tenant, non nella vista principale.
 
 ## 14. Preventivi multipli raggruppati (nuovo requisito, 2026-07-09)
 
