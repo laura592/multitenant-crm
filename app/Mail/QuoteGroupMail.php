@@ -39,6 +39,7 @@ class QuoteGroupMail extends Mailable
     {
         return new Content(
             markdown: 'mail.quote-group',
+            text: 'mail.quote-group-text',
             with: [
                 'group' => $this->group,
                 'quotes' => $this->quotes,

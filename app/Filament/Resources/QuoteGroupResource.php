@@ -227,9 +227,10 @@ class QuoteGroupResource extends Resource
             if ($quote->payment_method === 'noleggio-operativo' && $quote->rental_monthly_fee) {
                 $months = max(1, (int) ($quote->rental_months ?? 1));
                 $monthlyFee = (float) $quote->rental_monthly_fee;
-                $totalRental = number_format($monthlyFee * $months, 2, ',', '.');
+                $totalRental = $monthlyFee * $months;
+                $formattedTotalRental = number_format($totalRental, 2, ',', '.');
 
-                $amountLabel = '€ '.number_format($monthlyFee, 2, ',', '.')."/mese x {$months} mesi (tot. € {$totalRental} + IVA)";
+                $amountLabel = '€ '.$formattedTotalRental.' + IVA ('.number_format($monthlyFee, 2, ',', '.')."/mese x {$months} mesi)";
             } else {
                 $amountLabel = '€ '.number_format((float) $quote->subtotal, 2, ',', '.').' + IVA';
             }

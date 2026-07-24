@@ -2,10 +2,6 @@
 @php
 	$tenant = $group->tenant ?: $group->customer?->tenant;
 	$resolvedSubject = trim((string) ($subjectText ?? "Offerta {$group->number}"));
-	$headerTitle = $tenant?->legal_name ?: ($tenant?->name ?? config('app.name'));
-	$headerAddress = $tenant?->pdfAddressLine();
-	$headerContacts = $tenant?->pdfContactLine();
-	$headerFiscal = $tenant?->pdfFiscalLine();
 	$footerCompany = $tenant?->legal_name ?: ($tenant?->name ?? config('app.name'));
 	$footerAddress = $tenant?->pdfAddressLine();
 	$footerFiscal = $tenant?->pdfFiscalLine();
@@ -18,19 +14,6 @@
 	<div style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;opacity:.75;margin-bottom:8px;">Offerta {{ $group->number }}</div>
 	<div style="font-size:18px;line-height:1.35;font-weight:700;">{{ $resolvedSubject }}</div>
 	<div style="font-size:13px;opacity:.8;margin-top:10px;">Destinatario: {{ $customerName }}</div>
-</div>
-
-<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:16px;">
-	<div style="font-size:14px;font-weight:700;color:#0f172a;">{{ $headerTitle }}</div>
-	@if($headerAddress)
-		<div style="font-size:12px;color:#475569;margin-top:5px;">{{ $headerAddress }}</div>
-	@endif
-	@if($headerContacts)
-		<div style="font-size:12px;color:#475569;margin-top:2px;">{{ $headerContacts }}</div>
-	@endif
-	@if($headerFiscal)
-		<div style="font-size:12px;color:#475569;margin-top:2px;">{{ $headerFiscal }}</div>
-	@endif
 </div>
 
 <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:10px;padding:16px;">
@@ -59,8 +42,8 @@
 					$monthlyFee = (float) $quote->rental_monthly_fee;
 					$totalRental = $monthlyFee * $months;
 				@endphp
-				<strong>€ {{ number_format($monthlyFee, 2, ',', '.') }}/mese</strong>
-				<div style="font-size:11px;color:#64748b;margin-top:2px;">{{ $months }} mesi - Tot. € {{ number_format($totalRental, 2, ',', '.') }} + IVA</div>
+				<strong>€ {{ number_format($totalRental, 2, ',', '.') }}</strong> + IVA
+				<div style="font-size:11px;color:#64748b;margin-top:2px;">{{ number_format($monthlyFee, 2, ',', '.') }}/mese x {{ $months }} mesi</div>
 			@else
 				<strong>€ {{ number_format((float) $quote->subtotal, 2, ',', '.') }}</strong> + IVA
 			@endif
