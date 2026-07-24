@@ -13,7 +13,7 @@
     <h1>Riepilogo ore {{ $month }}/{{ $year }}</h1>
     <table>
         <thead>
-            <tr><th>Dipendente</th><th>Ore ordinarie</th><th>Straordinario</th><th>Giorni ferie</th><th>Ore permesso</th></tr>
+            <tr><th>Dipendente</th><th>Ore ordinarie</th><th>Straordinario</th><th>Giorni ferie</th><th>Giorni malattia</th><th>Ore permesso</th></tr>
         </thead>
         <tbody>
         @foreach($rows as $row)
@@ -22,10 +22,12 @@
                 <td>{{ $row['ordinarie'] }}</td>
                 <td>{{ $row['straordinario'] }}</td>
                 <td>{{ $row['ferie_giorni'] }}</td>
+                <td>{{ $row['malattia_giorni'] }}</td>
                 <td>{{ $row['permessi_ore'] }}</td>
             </tr>
         @endforeach
         </tbody>
     </table>
+    @include('pdf.partials.page-numbers')
 </body>
 </html>

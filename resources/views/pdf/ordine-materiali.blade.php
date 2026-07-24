@@ -6,12 +6,7 @@
     <style>
         body { font-family: DejaVu Sans, sans-serif; font-size: 11px; color: #111827; }
 
-        .letterhead { width: 100%; border-bottom: 2px solid #111827; padding-bottom: 10px; margin-bottom: 18px; }
-        .letterhead td { border: none; padding: 0; vertical-align: top; }
-        .letterhead .logo img { max-height: 60px; max-width: 180px; }
-        .letterhead .company-name { font-size: 16px; font-weight: bold; }
-        .letterhead .company-details { color: #4b5563; font-size: 10px; line-height: 1.5; }
-        .letterhead .to-right { text-align: right; }
+        @include('pdf.partials.letterhead-styles')
 
         .title-bar { width: 100%; margin-bottom: 16px; }
         .title-bar td { border: none; padding: 0; vertical-align: bottom; }
@@ -48,38 +43,7 @@
     </style>
 </head>
 <body>
-    <table class="letterhead">
-        <tr>
-            <td class="logo">
-                @if($tenant?->logo_path && file_exists(public_path('storage/'.$tenant->logo_path)))
-                    <img src="{{ public_path('storage/'.$tenant->logo_path) }}" alt="Logo">
-                @endif
-            </td>
-            <td class="to-right">
-                @if($tenant)
-                    <div class="company-name">{{ $tenant->legal_name ?: $tenant->name }}</div>
-                    <div class="company-details">
-                        @if($tenant->street || $tenant->postal_code || $tenant->city)
-                            {{ trim("{$tenant->street}, {$tenant->postal_code} {$tenant->city} {$tenant->province}", ' ,') }}<br>
-                        @endif
-                        @if($tenant->vat_number)
-                            P.IVA {{ $tenant->vat_number }}
-                        @endif
-                        @if($tenant->tax_code)
-                            &nbsp;&ndash;&nbsp;C.F. {{ $tenant->tax_code }}
-                        @endif
-                        <br>
-                        @if($tenant->phone)
-                            Tel. {{ $tenant->phone }}
-                        @endif
-                        @if($tenant->email)
-                            &nbsp;&ndash;&nbsp;{{ $tenant->email }}
-                        @endif
-                    </div>
-                @endif
-            </td>
-        </tr>
-    </table>
+    <x-pdf-letterhead :tenant="$tenant" />
 
     @if($supplier)
         <div class="supplier-box">
@@ -182,5 +146,6 @@
     @endif
 
     <div class="footer-note">Generato automaticamente il {{ now()->format('d/m/Y \a\l\l\e H:i') }}</div>
+    @include('pdf.partials.page-numbers')
 </body>
 </html>

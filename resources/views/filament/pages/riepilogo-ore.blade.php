@@ -21,6 +21,7 @@
                         <th class="py-2 pr-4">Ore ordinarie</th>
                         <th class="py-2 pr-4">Straordinario</th>
                         <th class="py-2 pr-4">Giorni ferie</th>
+                        <th class="py-2 pr-4">Giorni malattia</th>
                         <th class="py-2 pr-4">Ore permesso</th>
                     </tr>
                 </thead>
@@ -31,10 +32,11 @@
                             <td class="py-2 pr-4">{{ $fmt($row['ordinarie']) }}</td>
                             <td class="py-2 pr-4">{{ $fmt($row['straordinario']) }}</td>
                             <td class="py-2 pr-4">{{ $fmt($row['ferie_giorni']) }}</td>
+                            <td class="py-2 pr-4">{{ $fmt($row['malattia_giorni']) }}</td>
                             <td class="py-2 pr-4">{{ $fmt($row['permessi_ore']) }}</td>
                         </tr>
                     @empty
-                        <tr><td colspan="5" class="py-4 text-gray-500">Nessun dipendente in questo tenant.</td></tr>
+                        <tr><td colspan="6" class="py-4 text-gray-500">Nessun dipendente in questo tenant.</td></tr>
                     @endforelse
                 </tbody>
                 @if($rows->isNotEmpty())
@@ -44,6 +46,7 @@
                             <td class="py-2 pr-4">{{ $fmt($totals['ordinarie']) }}</td>
                             <td class="py-2 pr-4">{{ $fmt($totals['straordinario']) }}</td>
                             <td class="py-2 pr-4">{{ $fmt($totals['ferie_giorni']) }}</td>
+                            <td class="py-2 pr-4">{{ $fmt($totals['malattia_giorni']) }}</td>
                             <td class="py-2 pr-4">{{ $fmt($totals['permessi_ore']) }}</td>
                         </tr>
                     </tfoot>

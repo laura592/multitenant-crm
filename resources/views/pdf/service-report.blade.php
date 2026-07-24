@@ -5,6 +5,7 @@
     <title>Rapportino {{ $report->number }}</title>
     <style>
         body { font-family: DejaVu Sans, sans-serif; font-size: 12px; color: #111827; }
+        @include('pdf.partials.letterhead-styles')
         h1 { font-size: 18px; margin-bottom: 0; }
         .muted { color: #6b7280; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
@@ -15,6 +16,8 @@
     </style>
 </head>
 <body>
+    <x-pdf-letterhead :tenant="$report->tenant" />
+
     <h1>Rapportino di Intervento {{ $report->number }}</h1>
     <p class="muted">{{ $report->tenant->name }}</p>
 
@@ -54,5 +57,6 @@
             <img src="{{ public_path('storage/'.$report->customer_signature_path) }}" alt="Firma">
         </div>
     @endif
+    @include('pdf.partials.page-numbers')
 </body>
 </html>
