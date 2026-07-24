@@ -16,7 +16,16 @@ class ScadenzarioTest extends TestCase
 {
     use RefreshDatabase, AssignsPermissionRoles;
 
-    public function test_maintenance_schedule_keeps_a_synced_deadline(): void
+    /**
+     * I piani di manutenzione sono uno strumento operativo dei tecnici sul
+     * campo, non una scadenza amministrativa: creare/aggiornare un piano non
+     * deve piu' generare/toccare nessuna riga Deadline (era cosi' prima,
+     * quando lo Scadenzario era ancora una vista unificata aperta a tutti i
+     * ruoli - ora che e' riservato ad amministrazione/admin, tenerli
+     * accoppiati avrebbe nascosto le manutenzioni ai tecnici che le usano
+     * ogni giorno).
+     */
+    public function test_maintenance_schedule_does_not_create_any_deadline(): void
     {
         $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);
         $customer = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Bar Centrale']);
@@ -28,16 +37,9 @@ class ScadenzarioTest extends TestCase
             'next_due_date' => now()->addDays(10),
         ]);
 
-        $this->assertCount(1, $schedule->deadlines);
-        $this->assertTrue($schedule->deadlines->first()->due_date->isSameDay($schedule->next_due_date));
-        $this->assertTrue($schedule->deadlines->first()->isUrgent());
-
-        // aggiornare next_due_date deve aggiornare la STESSA deadline, non crearne una seconda
         $schedule->update(['next_due_date' => now()->addDays(90)]);
-        $schedule->refresh();
 
-        $this->assertCount(1, $schedule->deadlines()->get());
-        $this->assertFalse($schedule->deadlines->first()->isUrgent());
+        $this->assertSame(0, Deadline::where('deadlinable_id', $schedule->id)->count());
     }
 
     public function test_deadline_panel_shows_vehicle_and_tenant_deadlines_ordered_by_urgency(): void
@@ -49,7 +51,7 @@ class ScadenzarioTest extends TestCase
             'email' => 'test@gifar.it',
             'password' => bcrypt('password'),
         ]);
-        $this->giveRole($user, $tenant, 'dipendente');
+        $this->giveRole($user, $tenant, 'amministrazione');
 
         $vehicle = Vehicle::create(['tenant_id' => $tenant->id, 'plate' => 'AB123CD']);
         $vehicle->deadlines()->create([
@@ -68,5 +70,35 @@ class ScadenzarioTest extends TestCase
         $response->assertOk();
         $response->assertSee('AB123CD');
         $response->assertSee('Gifar');
+    }
+
+    /**
+     * Assicurazione/revisione non hanno piu' colonne dedicate su vehicles
+     * (§13, dopo l'unificazione col sistema Deadline generico): la lista
+     * automezzi deve continuare a mostrare la scadenza attiva letta dalla
+     * relazione, non una colonna vuota per assenza del campo rimosso.
+     */
+    public function test_vehicle_list_shows_the_active_deadline_from_the_relation(): void
+    {
+        $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);
+        $user = User::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Test Gifar',
+            'email' => 'test@gifar.it',
+            'password' => bcrypt('password'),
+        ]);
+        $this->giveRole($user, $tenant, 'amministrazione');
+
+        $vehicle = Vehicle::create(['tenant_id' => $tenant->id, 'plate' => 'AB123CD']);
+        $vehicle->deadlines()->create([
+            'tenant_id' => $tenant->id,
+            'type' => Deadline::TYPE_ASSICURAZIONE,
+            'due_date' => now()->addMonths(2)->startOfDay(),
+        ]);
+
+        $response = $this->actingAs($user)->get("/admin/{$tenant->slug}/vehicles");
+
+        $response->assertOk();
+        $response->assertSee($vehicle->activeDeadline(Deadline::TYPE_ASSICURAZIONE)->due_date->translatedFormat('M j, Y'));
     }
 }

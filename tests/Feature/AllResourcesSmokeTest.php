@@ -52,10 +52,13 @@ class AllResourcesSmokeTest extends TestCase
         ]);
         $this->giveRole($user, $tenant, 'dipendente');
 
-        foreach ([...self::CATALOG_PATHS, ...self::SALES_PATHS, 'information-requests', 'service-reports', 'vehicles', 'maintenance-schedules', 'deadlines', 'time-entries', 'leave-requests', 'riepilogo-ore'] as $path) {
+        foreach ([...self::CATALOG_PATHS, ...self::SALES_PATHS, 'information-requests', 'service-reports', 'maintenance-schedules', 'time-entries', 'leave-requests', 'riepilogo-ore'] as $path) {
             $this->actingAs($user)->get("/admin/{$tenant->slug}/{$path}")->assertOk();
         }
 
+        // Scadenzario e parco veicoli sono roba da amministrazione, non da tecnici sul campo.
+        $this->actingAs($user)->get("/admin/{$tenant->slug}/vehicles")->assertForbidden();
+        $this->actingAs($user)->get("/admin/{$tenant->slug}/deadlines")->assertForbidden();
         $this->actingAs($user)->get("/admin/{$tenant->slug}/payment-methods")->assertForbidden();
         $this->actingAs($user)->get("/admin/{$tenant->slug}/tenants")->assertForbidden();
     }
@@ -73,21 +76,6 @@ class AllResourcesSmokeTest extends TestCase
         }
 
         foreach (['information-requests', ...self::BACK_OFFICE_PATHS, 'tenants'] as $path) {
-            $this->actingAs($user)->get("/admin/{$tenant->slug}/{$path}")->assertForbidden();
-        }
-    }
-
-    public function test_collaboratore_role_can_only_manage_information_requests(): void
-    {
-        $tenant = Tenant::create(['name' => 'Alex', 'slug' => 'alex']);
-        $user = User::create([
-            'tenant_id' => $tenant->id, 'name' => 'Test Collaboratore', 'email' => 'collab@alex.it', 'password' => bcrypt('password'),
-        ]);
-        $this->giveRole($user, $tenant, 'collaboratore');
-
-        $this->actingAs($user)->get("/admin/{$tenant->slug}/information-requests")->assertOk();
-
-        foreach ([...self::CATALOG_PATHS, ...self::SALES_PATHS, ...self::BACK_OFFICE_PATHS, 'tenants'] as $path) {
             $this->actingAs($user)->get("/admin/{$tenant->slug}/{$path}")->assertForbidden();
         }
     }

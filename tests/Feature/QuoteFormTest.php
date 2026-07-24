@@ -41,7 +41,14 @@ class QuoteFormTest extends TestCase
         $response->assertDontSee('Provvigione partner');
     }
 
-    public function test_partner_cannot_edit_commission_fields_but_can_see_them(): void
+    /**
+     * "Provvigione partner" e' nascosta ovunque su richiesta (poco chiara/
+     * prematura cosi' com'e' gestita oggi) - vedi ->hidden() su
+     * QuoteResource (form, infolist, colonna tabella). Il calcolo/i campi
+     * restano nel modello per quando verra' riattivata, ma nessun ruolo
+     * (partner o super admin) la vede piu' nell'interfaccia per ora.
+     */
+    public function test_commission_section_is_hidden_for_everyone_for_now(): void
     {
         $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar', 'default_commission_scenario' => 'A']);
         $partner = User::create([
@@ -49,29 +56,6 @@ class QuoteFormTest extends TestCase
         ]);
         $this->giveRole($partner, $tenant, 'partner');
 
-        $customer = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Bar Centrale']);
-        $quote = Quote::create([
-            'tenant_id' => $tenant->id, 'customer_id' => $customer->id, 'date' => now(),
-            'commission_status' => 'da_fatturare',
-        ]);
-
-        $this->actingAs($partner);
-        Filament::setTenant($tenant);
-
-        Livewire::test(EditQuote::class, ['record' => $quote->getRouteKey()])
-            ->assertSee('Provvigione partner')
-            ->fillForm(['commission_status' => 'pagata', 'commission_invoice_number' => 'FALSIFICATA-1'])
-            ->call('save')
-            ->assertHasNoFormErrors();
-
-        $quote->refresh();
-        $this->assertSame('da_fatturare', $quote->commission_status, 'Il partner non deve poter auto-certificarsi il pagamento della provvigione');
-        $this->assertNull($quote->commission_invoice_number);
-    }
-
-    public function test_super_admin_can_edit_commission_fields(): void
-    {
-        $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar', 'default_commission_scenario' => 'A']);
         $staff = User::create([
             'tenant_id' => null, 'is_super_admin' => true, 'name' => 'Staff Alex', 'email' => 'staff@alex.it', 'password' => bcrypt('password'),
         ]);
@@ -82,16 +66,16 @@ class QuoteFormTest extends TestCase
             'commission_status' => 'da_fatturare',
         ]);
 
+        $this->actingAs($partner);
+        Filament::setTenant($tenant);
+        Livewire::test(EditQuote::class, ['record' => $quote->getRouteKey()])->assertDontSee('Provvigione partner');
+
         $this->actingAs($staff);
         Filament::setTenant($tenant);
+        Livewire::test(EditQuote::class, ['record' => $quote->getRouteKey()])->assertDontSee('Provvigione partner');
 
-        Livewire::test(EditQuote::class, ['record' => $quote->getRouteKey()])
-            ->fillForm(['commission_status' => 'pagata', 'commission_invoice_number' => 'FT-2026-001'])
-            ->call('save')
-            ->assertHasNoFormErrors();
-
-        $quote->refresh();
-        $this->assertSame('pagata', $quote->commission_status);
-        $this->assertSame('FT-2026-001', $quote->commission_invoice_number);
+        $this->get(QuoteResource::getUrl('view', ['record' => $quote], tenant: $tenant))
+            ->assertOk()
+            ->assertDontSee('Provvigione partner');
     }
 }

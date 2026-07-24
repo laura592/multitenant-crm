@@ -241,6 +241,46 @@ class ConfigureMachineWizardTest extends TestCase
      * concetto di "massimo selezionabile"), uno slot multi-scelta puo'
      * limitare quante opzioni si possono prendere insieme.
      */
+    /**
+     * Bug reale segnalato: "la configurazione non avviene come desiderato".
+     * "product_family_id" e' ->live() ma senza afterStateUpdated(): se
+     * l'utente sceglie una famiglia/macchina, poi torna indietro e cambia
+     * famiglia (correzione naturale), "machine_product_id" non veniva mai
+     * azzerato. Il campo restava valorizzato con l'id della VECCHIA macchina
+     * (di un'altra famiglia), passava comunque la validazione ->required()
+     * e veniva salvata nel preventivo la macchina sbagliata rispetto a
+     * quella dell'ultima famiglia scelta dall'utente.
+     */
+    public function test_changing_family_resets_stale_machine_selection(): void
+    {
+        $otherFamily = ProductFamily::create(['name' => 'B500']);
+        $otherMachine = Product::create([
+            'product_family_id' => $otherFamily->id,
+            'sku' => 'B500-BASE',
+            'type' => Product::TYPE_MACHINE,
+            'name' => 'B500 Base',
+        ]);
+        $otherMachine->prices()->create(['price' => 3000]);
+
+        Livewire::test(EditQuote::class, ['record' => $this->quote->getRouteKey()])
+            ->mountAction('configureMachine')
+            ->setActionData([
+                'product_family_id' => $this->machine->product_family_id,
+                'machine_product_id' => $this->machine->id,
+            ])
+            // L'utente torna indietro e cambia famiglia, senza (ancora)
+            // riselezionare la macchina per la nuova famiglia.
+            ->setActionData([
+                'product_family_id' => $otherFamily->id,
+            ])
+            ->callMountedAction()
+            ->assertHasActionErrors(['machine_product_id']);
+
+        $this->quote->refresh();
+
+        $this->assertSame(0, $this->quote->quoteProducts()->count(), 'Nessuna riga deve essere creata: la macchina della vecchia famiglia non deve essere salvata per errore');
+    }
+
     public function test_wizard_blocks_selecting_more_items_than_slot_max_qty(): void
     {
         $addonSlot = ProductOptionSlot::create([
@@ -257,17 +297,122 @@ class ConfigureMachineWizardTest extends TestCase
             $addonSlot->items()->create(['component_product_id' => $addon->id]);
         }
 
+        // Checkbox individuali (non piu' un CheckboxList unico, vedi
+        // ConfigureMachineAction::slotStepSchema): required/min/max non sono
+        // piu' validati inline dal campo ma nell'action stessa
+        // (findSlotQuantityViolation), quindi qui si verifica la notifica di
+        // errore invece di assertHasActionErrors.
         Livewire::test(EditQuote::class, ['record' => $this->quote->getRouteKey()])
             ->mountAction('configureMachine')
             ->setActionData([
                 'product_family_id' => $this->machine->product_family_id,
                 'machine_product_id' => $this->machine->id,
-                "slot_{$addonSlot->id}" => [$addon1->id, $addon2->id, $addon3->id],
+                "slot_{$addonSlot->id}__{$addon1->id}" => true,
+                "slot_{$addonSlot->id}__{$addon2->id}" => true,
+                "slot_{$addonSlot->id}__{$addon3->id}" => true,
             ])
             ->callMountedAction()
-            ->assertHasActionErrors(["slot_{$addonSlot->id}"]);
+            ->assertNotified();
 
         $this->quote->refresh();
         $this->assertSame(0, $this->quote->quoteProducts()->count(), 'Nessuna riga deve essere creata se il massimo dello slot viene superato');
+    }
+
+    /**
+     * Bug reale segnalato: un CheckboxList unico con wire:model condiviso su
+     * piu' checkbox, dentro il wizard annidato in una modale action, si
+     * comportava in modo rotto lato client - un click su UNA opzione le
+     * selezionava TUTTE. Verificato dal vivo in browser (Playwright) prima
+     * di correggere: sostituito con un campo booleano indipendente per
+     * opzione (slot_{id}__{componentId}), che qui si verifica selezionando
+     * solo un'opzione su tre e controllando che le altre due NON vengano
+     * aggiunte.
+     */
+    public function test_selecting_only_one_checkbox_option_does_not_select_the_others(): void
+    {
+        $addonSlot = ProductOptionSlot::create([
+            'product_id' => $this->machine->id,
+            'slot_name' => 'addon',
+            'label' => 'Accessori aggiuntivi',
+        ]);
+        $addon1 = Product::create(['sku' => 'ADD1', 'type' => Product::TYPE_ACCESSORY, 'name' => 'Accessorio 1']);
+        $addon2 = Product::create(['sku' => 'ADD2', 'type' => Product::TYPE_ACCESSORY, 'name' => 'Accessorio 2']);
+        $addon3 = Product::create(['sku' => 'ADD3', 'type' => Product::TYPE_ACCESSORY, 'name' => 'Accessorio 3']);
+
+        foreach ([$addon1, $addon2, $addon3] as $addon) {
+            $addonSlot->items()->create(['component_product_id' => $addon->id]);
+        }
+
+        Livewire::test(EditQuote::class, ['record' => $this->quote->getRouteKey()])
+            ->mountAction('configureMachine')
+            ->setActionData([
+                'product_family_id' => $this->machine->product_family_id,
+                'machine_product_id' => $this->machine->id,
+                "slot_{$addonSlot->id}__{$addon1->id}" => true,
+            ])
+            ->callMountedAction()
+            ->assertHasNoActionErrors();
+
+        $this->quote->refresh();
+        $productIds = $this->quote->quoteProducts()->pluck('product_id');
+
+        $this->assertTrue($productIds->contains($addon1->id));
+        $this->assertFalse($productIds->contains($addon2->id));
+        $this->assertFalse($productIds->contains($addon3->id));
+    }
+
+    public function test_multi_choice_options_are_grouped_by_category_like_price_lists(): void
+    {
+        $addonSlot = ProductOptionSlot::create([
+            'product_id' => $this->machine->id,
+            'slot_name' => 'addon',
+            'label' => 'Accessori aggiuntivi',
+        ]);
+        $catA = \App\Models\Category::create(['name' => 'Macinini']);
+        $catB = \App\Models\Category::create(['name' => 'Dosatori']);
+
+        $addon1 = Product::create(['sku' => 'ADD1', 'type' => Product::TYPE_ACCESSORY, 'name' => 'Macinino 1', 'category_id' => $catA->id]);
+        $addon2 = Product::create(['sku' => 'ADD2', 'type' => Product::TYPE_ACCESSORY, 'name' => 'Dosatore 1', 'category_id' => $catB->id]);
+
+        foreach ([$addon1, $addon2] as $addon) {
+            $addonSlot->items()->create(['component_product_id' => $addon->id]);
+        }
+
+        Livewire::test(EditQuote::class, ['record' => $this->quote->getRouteKey()])
+            ->mountAction('configureMachine')
+            ->setActionData([
+                'product_family_id' => $this->machine->product_family_id,
+                'machine_product_id' => $this->machine->id,
+            ])
+            ->assertSee('Macinini')
+            ->assertSee('Dosatori');
+    }
+
+    /**
+     * Bug reale segnalato: il riepilogo finale era un testo fisso ("Conferma
+     * per aggiungere...") senza elencare cosa si stava per aggiungere ne' un
+     * totale - si confermava "alla cieca". Verifica che ora elenchi macchina
+     * + unita' obbligatoria auto-inclusa + opzione scelta, col totale corretto.
+     */
+    public function test_summary_step_lists_every_line_with_a_correct_total(): void
+    {
+        $component = Livewire::test(EditQuote::class, ['record' => $this->quote->getRouteKey()])
+            ->mountAction('configureMachine')
+            ->setActionData([
+                'product_family_id' => $this->machine->product_family_id,
+                'machine_product_id' => $this->machine->id,
+                "slot_{$this->steamSlot->id}" => $this->steamOption2->id,
+            ]);
+
+        // Nota: non verifico l'assenza di steamOption1 con assertDontSee - il
+        // Radio dello step precedente resta nel DOM (solo nascosto via CSS,
+        // il wizard non smonta gli altri step), quindi il suo testo sarebbe
+        // comunque presente in pagina indipendentemente dal riepilogo.
+        $component->assertSee($this->machine->name);
+        $component->assertSee($this->requiredAux->name);
+        $component->assertSee($this->steamOption2->name);
+
+        // 6400 (macchina) + 1170 (unità obbligatoria) + 765 (S2) = 8335,00 €
+        $component->assertSee('8.335,00');
     }
 }
