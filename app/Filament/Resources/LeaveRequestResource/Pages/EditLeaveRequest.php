@@ -16,4 +16,15 @@ class EditLeaveRequest extends EditRecord
             Actions\DeleteAction::make(),
         ];
     }
+
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        $user = auth()->user();
+
+        if (! LeaveRequestResource::isResponsabile($user) && ! $user->hasRole('amministrazione')) {
+            $data['user_id'] = $this->record->user_id;
+        }
+
+        return $data;
+    }
 }

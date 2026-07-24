@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Forms\CustomerContactFields;
 use App\Filament\Forms\ItalianAddressFields;
 use App\Filament\Resources\InformationRequestResource\Pages;
 use App\Models\InformationRequest;
@@ -26,6 +27,22 @@ class InformationRequestResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Richieste informazioni';
 
+    /**
+     * Stesso conteggio di PrioritaWidget ("Richieste da gestire"), ma visibile
+     * direttamente in sidebar senza dover aprire la Dashboard.
+     */
+    public static function getNavigationBadge(): ?string
+    {
+        $count = InformationRequest::whereIn('status', ['nuova', 'in_lavorazione'])->count();
+
+        return $count > 0 ? (string) $count : null;
+    }
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        return 'warning';
+    }
+
     public static function form(Form $form): Form
     {
         return $form->schema([
@@ -49,18 +66,12 @@ class InformationRequestResource extends Resource
                             Forms\Components\TextInput::make('company_name')->label('Ragione sociale'),
                             Forms\Components\TextInput::make('first_name')->label('Nome'),
                             Forms\Components\TextInput::make('last_name')->label('Cognome'),
-                            Forms\Components\TextInput::make('email')->label('Email')->email(),
-                            Forms\Components\TextInput::make('mobile')->label('Cellulare'),
+                            ...CustomerContactFields::schema(),
                             ...ItalianAddressFields::schema(),
                         ]),
                     Forms\Components\Select::make('status')
                         ->label('Stato')
-                        ->options([
-                            'nuova' => 'Nuova',
-                            'in_lavorazione' => 'In lavorazione',
-                            'gestita' => 'Gestita',
-                            'chiusa' => 'Chiusa',
-                        ])
+                        ->options(static::statusLabels())
                         ->default('nuova')
                         ->required(),
                     Forms\Components\Select::make('products')
@@ -95,23 +106,15 @@ class InformationRequestResource extends Resource
                 Tables\Columns\TextColumn::make('status')
                     ->label('Stato')
                     ->badge()
-                    ->color(fn (string $state) => match ($state) {
-                        'gestita', 'chiusa' => 'success',
-                        'in_lavorazione' => 'warning',
-                        default => 'gray',
-                    }),
+                    ->formatStateUsing(fn (string $state) => static::statusLabels()[$state] ?? ucfirst($state))
+                    ->color(fn (string $state) => static::statusColors()[$state] ?? 'gray'),
                 Tables\Columns\TextColumn::make('handledByUser.name')->label('Gestita da')->placeholder('—'),
                 Tables\Columns\TextColumn::make('created_at')->label('Ricevuta il')->dateTime('d/m/Y H:i')->sortable(),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('status')
                     ->label('Stato')
-                    ->options([
-                        'nuova' => 'Nuova',
-                        'in_lavorazione' => 'In lavorazione',
-                        'gestita' => 'Gestita',
-                        'chiusa' => 'Chiusa',
-                    ]),
+                    ->options(static::statusLabels()),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
@@ -130,6 +133,31 @@ class InformationRequestResource extends Resource
             'index' => Pages\ListInformationRequests::route('/'),
             'create' => Pages\CreateInformationRequest::route('/create'),
             'edit' => Pages\EditInformationRequest::route('/{record}/edit'),
+        ];
+    }
+
+    /**
+     * Centralizzato come QuoteResource::statusLabels(): la colonna tabella
+     * mostrava il valore grezzo del DB (es. "in_lavorazione") invece di
+     * un'etichetta leggibile, a differenza delle altre risorse a stato.
+     */
+    public static function statusLabels(): array
+    {
+        return [
+            'nuova' => 'Nuova',
+            'in_lavorazione' => 'In lavorazione',
+            'gestita' => 'Gestita',
+            'chiusa' => 'Chiusa',
+        ];
+    }
+
+    public static function statusColors(): array
+    {
+        return [
+            'nuova' => 'gray',
+            'in_lavorazione' => 'warning',
+            'gestita' => 'success',
+            'chiusa' => 'success',
         ];
     }
 }

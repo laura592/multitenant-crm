@@ -24,11 +24,11 @@ class EditMaterialOrder extends EditRecord
             $this->sendToSupplierAction(),
             $this->markReceivedAction(),
             Actions\Action::make('pdf')
-                ->label('Genera PDF ordine')
+                ->label('PDF')
                 ->icon('heroicon-o-document-arrow-down')
                 ->action(fn () => MaterialOrderResource::streamPdf($this->record)),
             Actions\Action::make('excel')
-                ->label('Esporta Excel')
+                ->label('Excel')
                 ->icon('heroicon-o-table-cells')
                 ->action(fn () => MaterialOrderResource::streamExcel($this->record)),
             Actions\DeleteAction::make(),

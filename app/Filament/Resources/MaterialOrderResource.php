@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Exports\MaterialOrderExport;
+use App\Filament\Concerns\StreamsPdfDownloads;
 use App\Filament\Resources\MaterialOrderResource\Pages;
 use App\Filament\Resources\MaterialOrderResource\RelationManagers;
 use App\Models\Material;
@@ -18,6 +19,8 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class MaterialOrderResource extends Resource
 {
+    use StreamsPdfDownloads;
+
     protected static ?string $model = MaterialOrder::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
@@ -37,25 +40,29 @@ class MaterialOrderResource extends Resource
     public static function form(Form $form): Form
     {
         return $form->schema([
-            Forms\Components\TextInput::make('number')
-                ->label('Numero')
-                ->required()
-                ->disabled()
-                ->dehydrated(),
-            Forms\Components\Select::make('supplier_id')
-                ->label('Fornitore')
-                ->relationship('supplier', 'name')
-                ->searchable()
-                ->preload()
-                ->createOptionForm([
-                    Forms\Components\TextInput::make('name')->label('Ragione sociale')->required(),
-                ])
-                ->createOptionUsing(fn (array $data) => Supplier::create($data)->id)
-                ->helperText('Compare nel PDF come destinatario dell\'ordine.'),
-            Forms\Components\Textarea::make('notes')
-                ->label('Note per il fornitore')
-                ->rows(2)
-                ->columnSpanFull(),
+            Forms\Components\Section::make('Dati ordine')
+                ->columns(2)
+                ->schema([
+                    Forms\Components\TextInput::make('number')
+                        ->label('Numero')
+                        ->required()
+                        ->disabled()
+                        ->dehydrated(),
+                    Forms\Components\Select::make('supplier_id')
+                        ->label('Fornitore')
+                        ->relationship('supplier', 'name')
+                        ->searchable()
+                        ->preload()
+                        ->createOptionForm([
+                            Forms\Components\TextInput::make('name')->label('Ragione sociale')->required(),
+                        ])
+                        ->createOptionUsing(fn (array $data) => Supplier::create($data)->id)
+                        ->helperText('Compare nel PDF come destinatario dell\'ordine.'),
+                    Forms\Components\Textarea::make('notes')
+                        ->label('Note per il fornitore')
+                        ->rows(2)
+                        ->columnSpanFull(),
+                ]),
         ]);
     }
 
@@ -68,16 +75,8 @@ class MaterialOrderResource extends Resource
                 Tables\Columns\TextColumn::make('status')
                     ->label('Stato')
                     ->badge()
-                    ->formatStateUsing(fn (string $state) => match ($state) {
-                        'inviato' => 'Inviato',
-                        'ricevuto' => 'Ricevuto',
-                        default => 'Bozza',
-                    })
-                    ->color(fn (string $state) => match ($state) {
-                        'inviato' => 'warning',
-                        'ricevuto' => 'success',
-                        default => 'gray',
-                    }),
+                    ->formatStateUsing(fn (string $state) => static::statusLabels()[$state] ?? ucfirst($state))
+                    ->color(fn (string $state) => static::statusColors()[$state] ?? 'gray'),
                 Tables\Columns\TextColumn::make('created_at')->label('Data')->dateTime('d/m/Y H:i')->sortable(),
                 Tables\Columns\TextColumn::make('items_count')->label('Materiali')->counts('items'),
                 Tables\Columns\TextColumn::make('notes')
@@ -97,50 +96,53 @@ class MaterialOrderResource extends Resource
                     ->relationship('supplier', 'name'),
                 Tables\Filters\SelectFilter::make('status')
                     ->label('Stato')
-                    ->options([
-                        'bozza' => 'Bozza',
-                        'inviato' => 'Inviato',
-                        'ricevuto' => 'Ricevuto',
-                    ]),
+                    ->options(static::statusLabels()),
             ])
             ->actions([
                 Tables\Actions\Action::make('pdf')
                     ->label('PDF')
                     ->icon('heroicon-o-document-arrow-down')
+                    ->color('gray')
                     ->action(fn (MaterialOrder $record) => static::streamPdf($record)),
-                Tables\Actions\Action::make('excel')
-                    ->label('Excel')
-                    ->icon('heroicon-o-table-cells')
-                    ->action(fn (MaterialOrder $record) => static::streamExcel($record)),
-                Tables\Actions\Action::make('duplicate')
-                    ->label('Duplica')
-                    ->icon('heroicon-o-document-duplicate')
-                    ->requiresConfirmation()
-                    ->modalHeading('Duplicare questo ordine?')
-                    ->modalDescription('Crea un nuovo ordine in bozza con lo stesso fornitore e le stesse righe (le note non vengono copiate).')
-                    ->action(function (MaterialOrder $record) {
-                        $new = MaterialOrder::create([
-                            'tenant_id' => $record->tenant_id,
-                            'supplier_id' => $record->supplier_id,
-                        ]);
-
-                        foreach ($record->items as $item) {
-                            $new->items()->create([
-                                'material_id' => $item->material_id,
-                                'quantity' => $item->quantity,
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\Action::make('excel')
+                        ->label('Excel')
+                        ->icon('heroicon-o-table-cells')
+                        ->action(fn (MaterialOrder $record) => static::streamExcel($record)),
+                    Tables\Actions\Action::make('duplicate')
+                        ->label('Duplica')
+                        ->icon('heroicon-o-document-duplicate')
+                        ->requiresConfirmation()
+                        ->modalHeading('Duplicare questo ordine?')
+                        ->modalDescription('Crea un nuovo ordine in bozza con lo stesso fornitore e le stesse righe (le note non vengono copiate).')
+                        ->action(function (MaterialOrder $record) {
+                            $new = MaterialOrder::create([
+                                'tenant_id' => $record->tenant_id,
+                                'supplier_id' => $record->supplier_id,
                             ]);
-                        }
 
-                        return redirect(static::getUrl('edit', ['record' => $new]));
-                    }),
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                            foreach ($record->items as $item) {
+                                $new->items()->create([
+                                    'material_id' => $item->material_id,
+                                    'quantity' => $item->quantity,
+                                ]);
+                            }
+
+                            return redirect(static::getUrl('edit', ['record' => $new]));
+                        }),
+                    Tables\Actions\EditAction::make()
+                        ->color('gray'),
+                    Tables\Actions\DeleteAction::make(),
+                ]),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make(),
                 ]),
-            ]);
+            ])
+            ->emptyStateHeading('Nessun ordine materiali ancora')
+            ->emptyStateDescription('Crea il primo ordine con "Nuovo ordine materiali".')
+            ->emptyStateIcon('heroicon-o-clipboard-document-list');
     }
 
     /**
@@ -367,10 +369,8 @@ class MaterialOrderResource extends Resource
 
     public static function streamPdf(MaterialOrder $record)
     {
-        $pdf = static::buildPdf($record);
-
-        return response()->streamDownload(
-            fn () => print ($pdf->output()),
+        return static::streamPdfDownload(
+            fn () => static::buildPdf($record),
             "{$record->number}.pdf"
         );
     }
@@ -394,6 +394,24 @@ class MaterialOrderResource extends Resource
         return [
             'index' => Pages\ListMaterialOrders::route('/'),
             'edit' => Pages\EditMaterialOrder::route('/{record}/edit'),
+        ];
+    }
+
+    public static function statusLabels(): array
+    {
+        return [
+            'bozza' => 'Bozza',
+            'inviato' => 'Inviato',
+            'ricevuto' => 'Ricevuto',
+        ];
+    }
+
+    public static function statusColors(): array
+    {
+        return [
+            'bozza' => 'gray',
+            'inviato' => 'warning',
+            'ricevuto' => 'success',
         ];
     }
 }

@@ -64,8 +64,10 @@ class TenantResource extends Resource
                     Forms\Components\TextInput::make('legal_name')->label('Ragione sociale')->maxLength(255),
                     Forms\Components\TextInput::make('vat_number')->label('P.IVA')->maxLength(255),
                     Forms\Components\TextInput::make('tax_code')->label('Codice fiscale')->maxLength(255),
+                    Forms\Components\TextInput::make('sdi')->label('Codice SDI')->maxLength(255),
                     Forms\Components\TextInput::make('email')->label('Email')->email()->maxLength(255),
                     Forms\Components\TextInput::make('phone')->label('Telefono')->tel()->maxLength(255),
+                    Forms\Components\TextInput::make('fax')->label('Fax')->tel()->maxLength(255),
                     Forms\Components\Toggle::make('is_master')->label('Tenant master (Alex)'),
                     Forms\Components\Toggle::make('is_active')->label('Attivo')->default(true),
                 ]),
@@ -75,7 +77,7 @@ class TenantResource extends Resource
             Forms\Components\Section::make('Branding')
                 ->columns(2)
                 ->schema([
-                    Forms\Components\FileUpload::make('logo_path')->label('Logo')->image()->directory('tenant-logos'),
+                    Forms\Components\FileUpload::make('logo_path')->label('Logo')->image()->directory('tenant-logos')->maxSize(5120),
                     Forms\Components\ColorPicker::make('primary_color')->label('Colore primario'),
                 ]),
             Forms\Components\Section::make('Condizioni contrattuali')
@@ -167,6 +169,7 @@ class TenantResource extends Resource
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make()
+                        /** @param \Illuminate\Database\Eloquent\Collection<int, Tenant> $records */
                         ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
                             $hadMaster = $records->contains('is_master', true);
                             $records->reject(fn (Tenant $record) => $record->is_master)
