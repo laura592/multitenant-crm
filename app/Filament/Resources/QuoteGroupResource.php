@@ -224,15 +224,12 @@ class QuoteGroupResource extends Resource
         ])->orderBy('number')->get();
 
         $rows = $quotes->map(function ($quote): string {
+            $amountLabel = '€ '.number_format((float) $quote->subtotal, 2, ',', '.').' + IVA';
+
             if ($quote->payment_method === 'noleggio-operativo' && $quote->rental_monthly_fee) {
                 $months = max(1, (int) ($quote->rental_months ?? 1));
                 $monthlyFee = (float) $quote->rental_monthly_fee;
-                $totalRental = $monthlyFee * $months;
-                $formattedTotalRental = number_format($totalRental, 2, ',', '.');
-
-                $amountLabel = '€ '.$formattedTotalRental.' + IVA ('.number_format($monthlyFee, 2, ',', '.')."/mese x {$months} mesi)";
-            } else {
-                $amountLabel = '€ '.number_format((float) $quote->subtotal, 2, ',', '.').' + IVA';
+                $amountLabel .= ' (canone '.number_format($monthlyFee, 2, ',', '.')."/mese x {$months} mesi)";
             }
 
             return '<tr>'

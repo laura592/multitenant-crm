@@ -40,10 +40,9 @@
 				@php
 					$months = max(1, (int) ($quote->rental_months ?? 1));
 					$monthlyFee = (float) $quote->rental_monthly_fee;
-					$totalRental = $monthlyFee * $months;
 				@endphp
-				<strong>€ {{ number_format($totalRental, 2, ',', '.') }}</strong> + IVA
-				<div style="font-size:11px;color:#64748b;margin-top:2px;">{{ number_format($monthlyFee, 2, ',', '.') }}/mese x {{ $months }} mesi</div>
+				<strong>€ {{ number_format((float) $quote->subtotal, 2, ',', '.') }}</strong> + IVA
+				<div style="font-size:11px;color:#64748b;margin-top:2px;">Canone: {{ number_format($monthlyFee, 2, ',', '.') }}/mese x {{ $months }} mesi</div>
 			@else
 				<strong>€ {{ number_format((float) $quote->subtotal, 2, ',', '.') }}</strong> + IVA
 			@endif

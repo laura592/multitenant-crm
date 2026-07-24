@@ -15,9 +15,8 @@ RIEPILOGO SOLUZIONI
 @php
     $months = max(1, (int) ($quote->rental_months ?? 1));
     $monthlyFee = (float) $quote->rental_monthly_fee;
-    $totalRental = $monthlyFee * $months;
 @endphp
-- {{ $quote->number }}: € {{ number_format($totalRental, 2, ',', '.') }} + IVA ({{ number_format($monthlyFee, 2, ',', '.') }}/mese x {{ $months }} mesi)
+- {{ $quote->number }}: € {{ number_format((float) $quote->subtotal, 2, ',', '.') }} + IVA (canone {{ number_format($monthlyFee, 2, ',', '.') }}/mese x {{ $months }} mesi)
 @else
 - {{ $quote->number }}: € {{ number_format((float) $quote->subtotal, 2, ',', '.') }} + IVA
 @endif
