@@ -9,12 +9,14 @@ use App\Models\QuoteGroup;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Forms\Get;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\HtmlString;
 
 /**
  * "Offerte": raggruppa piu' preventivi alternativi per lo stesso cliente
@@ -151,6 +153,14 @@ class QuoteGroupResource extends Resource
                 ->rows(14)
                 ->helperText('Questo testo viene inviato realmente nella mail. Puoi modificarlo liberamente.')
                 ->default(fn (QuoteGroup $record) => static::defaultGroupEmailBody($record)),
+            Forms\Components\Placeholder::make('automatic_sections_preview')
+                ->label('Riepilogo soluzioni e allegati (automatico)')
+                ->content(fn (QuoteGroup $record, Get $get): HtmlString => new HtmlString(
+                    static::buildAutomaticSectionsPreviewHtml(
+                        $record,
+                        is_string($get('subject')) ? $get('subject') : null,
+                    )
+                )),
         ];
     }
 
@@ -197,6 +207,51 @@ class QuoteGroupResource extends Resource
             $tenant?->legal_name && $tenant->legal_name !== $contact ? $tenant->legal_name : null,
             ! empty($contacts) ? implode(' - ', $contacts) : null,
         ]));
+    }
+
+    protected static function buildAutomaticSectionsPreviewHtml(QuoteGroup $record, ?string $subject): string
+    {
+        $resolvedSubject = filled(trim((string) $subject))
+            ? trim((string) $subject)
+            : static::defaultGroupEmailSubject($record);
+
+        $quotes = $record->quotes()->select([
+            'number',
+            'subtotal',
+            'payment_method',
+            'rental_monthly_fee',
+            'rental_months',
+        ])->orderBy('number')->get();
+
+        $rows = $quotes->map(function ($quote): string {
+            if ($quote->payment_method === 'noleggio-operativo' && $quote->rental_monthly_fee) {
+                $months = max(1, (int) ($quote->rental_months ?? 1));
+                $monthlyFee = (float) $quote->rental_monthly_fee;
+                $totalRental = number_format($monthlyFee * $months, 2, ',', '.');
+
+                $amountLabel = '€ '.number_format($monthlyFee, 2, ',', '.')."/mese x {$months} mesi (tot. € {$totalRental} + IVA)";
+            } else {
+                $amountLabel = '€ '.number_format((float) $quote->subtotal, 2, ',', '.').' + IVA';
+            }
+
+            return '<tr>'
+                .'<td style="padding:6px 8px;border:1px solid #e2e8f0;">'.e($quote->number).'</td>'
+                .'<td style="padding:6px 8px;border:1px solid #e2e8f0;text-align:right;">'.e($amountLabel).'</td>'
+                .'</tr>';
+        })->implode('');
+
+        $attachments = $quotes->map(fn ($quote): string => 'preventivo-'.$quote->number.'.pdf')->implode(', ');
+
+        return '<div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-100">'
+            .'<div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.04em;">Oggetto</div>'
+            .'<div style="font-weight:700;margin-top:2px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #e2e8f0;">'.e($resolvedSubject).'</div>'
+            .'<div style="margin-top:6px;font-weight:600;">Riepilogo soluzioni</div>'
+            .'<table style="width:100%;border-collapse:collapse;margin-top:6px;">'
+            .'<thead><tr><th style="padding:6px 8px;border:1px solid #e2e8f0;text-align:left;background:#f8fafc;">Preventivo</th><th style="padding:6px 8px;border:1px solid #e2e8f0;text-align:right;background:#f8fafc;">Totale proposta</th></tr></thead>'
+            .'<tbody>'.$rows.'</tbody>'
+            .'</table>'
+            .'<div style="margin-top:10px;"><strong>Allegati:</strong> '.e($attachments).'</div>'
+            .'</div>';
     }
 
     public static function sendGroupEmail(QuoteGroup $record, array $data): void
