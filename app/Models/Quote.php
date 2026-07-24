@@ -19,6 +19,7 @@ class Quote extends Model
         'subtotal' => 'decimal:2',
         'tax_total' => 'decimal:2',
         'total' => 'decimal:2',
+        'rental_monthly_fee' => 'decimal:2',
         'commission_rate_snapshot' => 'decimal:2',
         'commission_amount' => 'decimal:2',
         'commission_invoiced_at' => 'date',
@@ -36,6 +37,8 @@ class Quote extends Model
         'discount',
         'notes',
         'payment_method',
+        'rental_monthly_fee',
+        'rental_months',
         'subtotal',
         'tax_total',
         'total',
@@ -62,6 +65,25 @@ class Quote extends Model
         static::creating(function (self $quote) {
             if (! $quote->number) {
                 $quote->number = static::nextNumberForTenant($quote->tenant_id);
+            }
+        });
+
+        // Un'anagrafica nata nell'app non va inviata al gestionale finche' il
+        // cliente non approva un'offerta: appena un preventivo passa ad
+        // "accettato" segnamo il suo cliente come pronto per l'invio (vedi
+        // Customer::readyForGestionaleSync()). L'invio vero resta manuale.
+        static::updated(function (self $quote) {
+            if ($quote->wasChanged('status') && $quote->status === 'accettato') {
+                $quote->customer?->markApprovedForGestionale();
+
+                // Lo stato "Scelto" dell'offerta globale era un campo manuale
+                // indipendente: se nessuno lo aggiornava a mano restava
+                // "Inviato" anche con una soluzione gia' accettata dal
+                // cliente. Qui si allinea da solo, senza sovrascrivere uno
+                // stato "Scaduto" impostato volutamente a mano.
+                if ($quote->quote_group_id && $quote->quoteGroup && $quote->quoteGroup->status !== 'scaduto') {
+                    $quote->quoteGroup->update(['status' => 'scelto']);
+                }
             }
         });
     }
@@ -120,6 +142,16 @@ class Quote extends Model
     public function quoteProducts(): HasMany
     {
         return $this->hasMany(QuoteProduct::class);
+    }
+
+    /**
+     * Solo le righe "macchina" (non le opzioni figlie): usata dall'infolist
+     * per elencare le righe preventivo raggruppate, con le opzioni annidate
+     * sotto ciascuna tramite QuoteProduct::options().
+     */
+    public function baseQuoteProducts(): HasMany
+    {
+        return $this->hasMany(QuoteProduct::class)->whereNull('parent_quote_product_id');
     }
 
     public function emails(): HasMany

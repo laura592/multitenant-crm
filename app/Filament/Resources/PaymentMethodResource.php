@@ -29,6 +29,10 @@ class PaymentMethodResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Metodi di pagamento';
 
+    // Senza questo, Filament forza il Title Case e capitalizza anche il "di"
+    // ("Metodi Di Pagamento").
+    protected static bool $hasTitleCaseModelLabel = false;
+
     public static function form(Form $form): Form
     {
         return $form->schema([

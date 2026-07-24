@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\QuoteResource\RelationManagers;
 
+use App\Filament\Actions\ConfigureMachineAction;
+use App\Filament\Resources\QuoteResource\Pages\ViewQuote;
 use App\Models\Product;
 use App\Models\QuoteProduct;
 use Filament\Forms;
@@ -10,6 +12,7 @@ use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Columns\Summarizers\Sum;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 use Livewire\Attributes\On;
 
 class QuoteProductsRelationManager extends RelationManager
@@ -18,6 +21,21 @@ class QuoteProductsRelationManager extends RelationManager
 
     protected static ?string $title = 'Righe preventivo';
 
+    /**
+     * Solo su Modifica: su Visualizza le righe sono gia' elencate (in sola
+     * lettura, con opzioni annidate) dall'infolist di QuoteResource - due
+     * tabelle uguali una sotto l'altra (una editabile con "Nuovo"/azioni su
+     * una pagina di sola visualizzazione) confondevano piu' che aiutare.
+     */
+    public static function canViewForRecord(Model $ownerRecord, string $pageClass): bool
+    {
+        if ($pageClass === ViewQuote::class) {
+            return false;
+        }
+
+        return parent::canViewForRecord($ownerRecord, $pageClass);
+    }
+
     public function form(Form $form): Form
     {
         return $form->schema([
@@ -25,6 +43,17 @@ class QuoteProductsRelationManager extends RelationManager
                 ->label('Prodotto')
                 ->options(fn () => Product::query()->pluck('name', 'id'))
                 ->searchable()
+                ->live()
+                // A differenza del wizard macchina (ConfigureMachineAction),
+                // qui il prezzo restava vuoto e andava digitato a mano:
+                // rischio concreto di prezzo sbagliato/obsoleto sulle righe
+                // aggiunte manualmente (extra fuori wizard). Resta comunque
+                // modificabile dopo la precompilazione.
+                ->afterStateUpdated(function (?string $state, Forms\Set $set) {
+                    if ($state) {
+                        $set('price', Product::find($state)?->getCurrentPrice()?->price);
+                    }
+                })
                 ->required(),
             Forms\Components\TextInput::make('quantity')->label('Quantità')->numeric()->default(1)->required(),
             Forms\Components\TextInput::make('price')->label('Prezzo (€)')->numeric()->prefix('€')->required(),
@@ -37,7 +66,13 @@ class QuoteProductsRelationManager extends RelationManager
     {
         return $table
             ->recordTitleAttribute('product.name')
-            ->modifyQueryUsing(fn ($query) => $query->orderByRaw('parent_quote_product_id IS NOT NULL, parent_quote_product_id, created_at'))
+            ->paginated(false)
+            ->modifyQueryUsing(fn ($query) => $query
+                // Raggruppa per riga macchina base (id della base o parent_id)
+                // e mostra sempre la base prima delle sue opzioni figlie.
+                ->orderByRaw('COALESCE(parent_quote_product_id, id)')
+                ->orderByRaw('parent_quote_product_id IS NOT NULL')
+                ->orderBy('created_at'))
             ->columns([
                 Tables\Columns\TextColumn::make('product.name')
                     ->label('Prodotto')
@@ -54,6 +89,7 @@ class QuoteProductsRelationManager extends RelationManager
                     ->after(fn (RelationManager $livewire) => $livewire->getOwnerRecord()->updateTotal()),
             ])
             ->actions([
+                ConfigureMachineAction::makeEdit(),
                 Tables\Actions\EditAction::make()
                     ->after(fn (RelationManager $livewire) => $livewire->getOwnerRecord()->updateTotal()),
                 Tables\Actions\DeleteAction::make()

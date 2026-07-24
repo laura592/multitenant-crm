@@ -49,6 +49,7 @@ class ProductFamilyResource extends Resource
                         ->label('Immagine')
                         ->image()
                         ->directory('product-families')
+                        ->maxSize(5120)
                         ->columnSpanFull(),
                 ]),
         ]);
@@ -61,7 +62,8 @@ class ProductFamilyResource extends Resource
             ->columns([
                 Tables\Columns\ImageColumn::make('image')->label(''),
                 Tables\Columns\TextColumn::make('name')->label('Nome')->searchable()->sortable(),
-                Tables\Columns\TextColumn::make('tenant.name')->label('Tenant')->placeholder('Condivisa'),
+                Tables\Columns\TextColumn::make('tenant.name')->label('Tenant')->placeholder('Condivisa')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('products_count')->label('Varianti')->counts('products'),
             ])
             ->actions([

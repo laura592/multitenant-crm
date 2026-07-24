@@ -86,6 +86,7 @@ class ProductResource extends Resource
                         ->label('Immagine')
                         ->image()
                         ->directory('products')
+                        ->maxSize(5120)
                         ->columnSpanFull(),
                 ]),
             Forms\Components\Section::make('Visibilità')
@@ -126,7 +127,8 @@ class ProductResource extends Resource
             ->columns([
                 Tables\Columns\ImageColumn::make('image')->label(''),
                 Tables\Columns\TextColumn::make('sku')->label('SKU')->searchable()->sortable(),
-                Tables\Columns\TextColumn::make('name')->label('Nome')->searchable()->sortable(),
+                Tables\Columns\TextColumn::make('name')->label('Nome')->searchable()->sortable()
+                    ->limit(40)->tooltip(fn (Product $record) => strlen($record->name) > 40 ? $record->name : null),
                 Tables\Columns\TextColumn::make('type')
                     ->label('Tipo')
                     ->badge()
@@ -146,13 +148,16 @@ class ProductResource extends Resource
                         Product::TYPE_SERVICE => 'success',
                         default => 'gray',
                     }),
-                Tables\Columns\TextColumn::make('family.name')->label('Famiglia')->sortable(),
-                Tables\Columns\TextColumn::make('tenant.name')->label('Visibilità')->placeholder('Condiviso')->badge(),
+                Tables\Columns\TextColumn::make('family.name')->label('Famiglia')->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('tenant.name')->label('Visibilità')->placeholder('Condiviso')->badge()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('prices.price')
                     ->label('Prezzo corrente')
                     ->state(fn (Product $record) => $record->getCurrentPrice()?->price)
                     ->money('EUR'),
             ])
+            ->defaultSort('name')
             ->filters([
                 Tables\Filters\SelectFilter::make('type')
                     ->label('Tipo')
@@ -170,8 +175,11 @@ class ProductResource extends Resource
                     ->preload(),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\EditAction::make()
+                        ->color('gray'),
+                    Tables\Actions\DeleteAction::make(),
+                ]),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([

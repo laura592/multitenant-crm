@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Resources\QuoteResource;
 use App\Models\Quote;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -28,13 +29,8 @@ class LatestQuotesWidget extends BaseWidget
                 Tables\Columns\TextColumn::make('status')
                     ->label('Stato')
                     ->badge()
-                    ->formatStateUsing(fn (string $state) => ucfirst($state))
-                    ->color(fn (string $state) => match ($state) {
-                        'accettato' => 'success',
-                        'rifiutato' => 'danger',
-                        'inviato' => 'warning',
-                        default => 'gray',
-                    }),
+                    ->formatStateUsing(fn (string $state) => QuoteResource::statusLabels()[$state] ?? ucfirst($state))
+                    ->color(fn (string $state) => QuoteResource::statusColors()[$state] ?? 'gray'),
             ])
             ->paginated(false);
     }

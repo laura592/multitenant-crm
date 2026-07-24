@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\LogsAuditTrail;
 use App\Models\Concerns\SharedAcrossTenants;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
@@ -12,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Product extends Model
 {
-    use BelongsToTenant, HasUuids, SharedAcrossTenants;
+    use BelongsToTenant, HasUuids, LogsAuditTrail, SharedAcrossTenants;
 
     public const TYPE_MACHINE = 'machine';
     public const TYPE_AUXILIARY_UNIT = 'auxiliary_unit';
