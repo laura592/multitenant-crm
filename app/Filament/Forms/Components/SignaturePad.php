@@ -21,6 +21,13 @@ class SignaturePad extends Field
 
     protected string $signatureDirectory = 'signatures';
 
+    /**
+     * ~1.5MB decodificati (base64 e' ~33% piu' grande): ampiamente sufficiente per
+     * un tratto di firma disegnato su canvas, previene un payload Livewire manomesso
+     * usato per scrivere file enormi su disco pubblico.
+     */
+    private const MAX_BASE64_LENGTH = 2 * 1024 * 1024;
+
     public function disk(string $disk): static
     {
         $this->signatureDisk = $disk;
@@ -49,11 +56,37 @@ class SignaturePad extends Field
                 return $state; // nessuna nuova firma tracciata: lascia il path esistente (o null)
             }
 
-            [$meta, $data] = explode(',', $state, 2);
-            $extension = str_contains($meta, 'png') ? 'png' : 'jpg';
+            if (! str_contains($state, ',')) {
+                return null;
+            }
+
+            [, $data] = explode(',', $state, 2);
+
+            // Payload molto piu' grande di qualsiasi firma disegnata su canvas: il
+            // client Livewire e' stato manomesso, scarta prima di decodificare.
+            if (strlen($data) > self::MAX_BASE64_LENGTH) {
+                return null;
+            }
+
+            $decoded = base64_decode($data, strict: true);
+
+            if ($decoded === false) {
+                return null;
+            }
+
+            // Verifica sui byte decodificati, non sul prefisso "data:image/..." del
+            // client (falsificabile): solo cosi' siamo certi di scrivere su disco
+            // pubblico un'immagine vera e non un payload arbitrario.
+            $imageInfo = @getimagesizefromstring($decoded);
+
+            if ($imageInfo === false || ! in_array($imageInfo[2], [IMAGETYPE_PNG, IMAGETYPE_JPEG], true)) {
+                return null;
+            }
+
+            $extension = $imageInfo[2] === IMAGETYPE_PNG ? 'png' : 'jpg';
             $path = "{$this->signatureDirectory}/".Str::uuid().".{$extension}";
 
-            Storage::disk($this->signatureDisk)->put($path, base64_decode($data));
+            Storage::disk($this->signatureDisk)->put($path, $decoded);
 
             return $path;
         });

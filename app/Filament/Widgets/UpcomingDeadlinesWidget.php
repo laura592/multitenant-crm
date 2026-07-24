@@ -18,7 +18,11 @@ class UpcomingDeadlinesWidget extends BaseWidget
     public function table(Table $table): Table
     {
         return $table
-            ->query(Deadline::query()->where('status', Deadline::STATUS_ATTIVA)->orderBy('due_date')->limit(5))
+            ->query(Deadline::query()
+                ->where('status', Deadline::STATUS_ATTIVA)
+                ->where('due_date', '>=', now()->startOfDay())
+                ->orderBy('due_date')
+                ->limit(5))
             ->columns([
                 Tables\Columns\TextColumn::make('type')
                     ->label('Tipo')
@@ -27,7 +31,7 @@ class UpcomingDeadlinesWidget extends BaseWidget
                 Tables\Columns\TextColumn::make('due_date')
                     ->label('Scadenza')
                     ->date()
-                    ->color(fn (Deadline $record) => $record->due_date->isPast() ? 'danger' : ($record->isUrgent() ? 'warning' : 'success')),
+                    ->color(fn (Deadline $record) => $record->dueDateColor()),
                 Tables\Columns\TextColumn::make('notes')->label('Note')->limit(30)->placeholder('—'),
             ])
             ->paginated(false);
