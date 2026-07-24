@@ -10,7 +10,7 @@ use Illuminate\Database\Seeder;
 use Spatie\Permission\PermissionRegistrar;
 
 /**
- * Crea i 4 ruoli applicativi (dipendente, collaboratore, partner, admin) per
+ * Crea i 4 ruoli applicativi (dipendente, amministrazione, partner, admin) per
  * ogni tenant esistente, coi permessi definiti in App\Support\RolePermissions,
  * e li assegna agli utenti di test creati da UserSeeder ({ruolo}@test.it).
  * Gestione Tenant e Ruoli resta riservata allo staff master

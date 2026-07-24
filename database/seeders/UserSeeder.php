@@ -9,7 +9,7 @@ use Illuminate\Database\Seeder;
 
 /**
  * Un utente di test per ciascuno dei 4 ruoli applicativi (dipendente,
- * collaboratore, partner, admin), tutti sul tenant master "Alex". Servono a
+ * amministrazione, partner, admin), tutti sul tenant master "Alex". Servono a
  * testare login e permessi in locale senza usare indirizzi di persone reali.
  * L'"admin" di test e' anche is_super_admin, per poter testare anche le
  * schermate di gestione tenant/ruoli riservate allo staff master.

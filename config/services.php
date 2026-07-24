@@ -35,10 +35,11 @@ return [
         ],
     ],
 
-    'google' => [
-        'client_id' => env('GOOGLE_CLIENT_ID'),
-        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
-        'redirect' => env('GOOGLE_CALENDAR_REDIRECT_URI'),
+    'nominatim' => [
+        // Richiesto dalla usage policy di Nominatim/OpenStreetMap: deve identificare
+        // l'app chiamante (nome + contatto), non serve una chiave API. Personalizza
+        // NOMINATIM_USER_AGENT nel .env con un contatto reale del progetto.
+        'user_agent' => env('NOMINATIM_USER_AGENT', config('app.name').' CRM (lauragrb.1990@gmail.com)'),
     ],
 
 ];

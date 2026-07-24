@@ -9,3 +9,37 @@
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
 }
+
+/*
+ * Filament's StatsOverviewWidget applica Stat::color() solo alla riga di
+ * descrizione: l'icona resta sempre grigia (vedi il template del pacchetto),
+ * quindi ogni card della dashboard sembrava identica anche quando il colore
+ * semantico (danger/warning/success/primary) era gia' impostato nel widget.
+ * Qui coloriamo anche l'icona in base alla stessa classe fi-color-* che
+ * Filament mette sulla descrizione, cosi' le card tornano a distinguersi a
+ * colpo d'occhio senza toccare ogni singolo widget.
+ */
+.fi-wi-stats-overview-stat:has(.fi-color-danger) .fi-wi-stats-overview-stat-icon {
+    color: rgb(var(--danger-600));
+}
+.fi-wi-stats-overview-stat:has(.fi-color-warning) .fi-wi-stats-overview-stat-icon {
+    color: rgb(var(--warning-600));
+}
+.fi-wi-stats-overview-stat:has(.fi-color-success) .fi-wi-stats-overview-stat-icon {
+    color: rgb(var(--success-600));
+}
+.fi-wi-stats-overview-stat:has(.fi-color-primary) .fi-wi-stats-overview-stat-icon {
+    color: rgb(var(--primary-600));
+}
+.dark .fi-wi-stats-overview-stat:has(.fi-color-danger) .fi-wi-stats-overview-stat-icon {
+    color: rgb(var(--danger-400));
+}
+.dark .fi-wi-stats-overview-stat:has(.fi-color-warning) .fi-wi-stats-overview-stat-icon {
+    color: rgb(var(--warning-400));
+}
+.dark .fi-wi-stats-overview-stat:has(.fi-color-success) .fi-wi-stats-overview-stat-icon {
+    color: rgb(var(--success-400));
+}
+.dark .fi-wi-stats-overview-stat:has(.fi-color-primary) .fi-wi-stats-overview-stat-icon {
+    color: rgb(var(--primary-400));
+}

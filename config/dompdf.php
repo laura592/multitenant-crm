@@ -233,7 +233,11 @@ return [
          *
          * @var bool
          */
-        'enable_php' => false,
+        // Serve per la numerazione di pagina (page_text con {PAGE_NUM}/{PAGE_COUNT}
+        // in resources/views/pdf/partials/page-numbers.blade.php). Tutte le view
+        // PDF sono template Blade scritti da noi, mai HTML/dati esterni non
+        // fidati, quindi il rischio descritto sopra non si applica qui.
+        'enable_php' => true,
 
         /**
          * Enable inline JavaScript
