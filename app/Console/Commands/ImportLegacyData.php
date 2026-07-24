@@ -351,11 +351,14 @@ class ImportLegacyData extends Command
                 'postal_code' => $row->postal_code,
                 'city' => $row->city,
                 'province' => $row->province,
-                'email' => $row->email,
-                'mobile' => $row->mobile,
+                'emails' => $row->email ? [$row->email] : [],
+                'phones' => $row->mobile ? [$row->mobile] : [],
                 'tax_code' => $row->tax_code,
                 'vat_number' => $row->vat_number,
                 'sdi' => $row->sdi,
+                // Nato nel vecchio CRM preventivi (l'app), non nel gestionale
+                // contabile: vedi Customer::SOURCE_APP e docs sync gestionale.
+                'source' => Customer::SOURCE_APP,
                 'created_at' => $row->created_at,
                 'updated_at' => $row->updated_at,
             ]);
