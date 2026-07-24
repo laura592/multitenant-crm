@@ -11,6 +11,8 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use pxlrbt\FilamentExcel\Actions\Tables\ExportAction;
+use pxlrbt\FilamentExcel\Exports\ExcelExport;
 
 class TimeEntryResource extends Resource
 {
@@ -56,7 +58,7 @@ class TimeEntryResource extends Resource
                 ->schema([
                     Forms\Components\Select::make('status')
                         ->label('Stato')
-                        ->options(['aperta' => 'Aperta', 'chiusa' => 'Chiusa', 'corretta' => 'Corretta'])
+                        ->options(static::statusLabels())
                         ->default('chiusa')
                         ->required(),
                     Forms\Components\Textarea::make('notes')->label('Note')->columnSpanFull(),
@@ -68,6 +70,18 @@ class TimeEntryResource extends Resource
     {
         return $table
             ->defaultSort('clock_in', 'desc')
+            // Vista per mese: la lista piatta era scomoda da scorrere con
+            // storico lungo. Raggruppare per mese (con intestazione
+            // pieghevole) rende visibile a colpo d'occhio "quante timbrature
+            // in questo mese" senza dover ogni volta impostare il filtro
+            // Periodo a mano.
+            ->groups([
+                Tables\Grouping\Group::make('clock_in')
+                    ->label('Mese')
+                    ->getKeyFromRecordUsing(fn (TimeEntry $record) => $record->clock_in->format('Y-m'))
+                    ->getTitleFromRecordUsing(fn (TimeEntry $record) => $record->clock_in->translatedFormat('F Y')),
+            ])
+            ->defaultGroup('clock_in')
             ->columns([
                 Tables\Columns\TextColumn::make('user.name')->label('Dipendente')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('clock_in')->label('Entrata')->dateTime('d/m/Y H:i')->sortable(),
@@ -88,17 +102,13 @@ class TimeEntryResource extends Resource
                 Tables\Columns\TextColumn::make('status')
                     ->label('Stato')
                     ->badge()
-                    ->color(fn (string $state) => match ($state) {
-                        'aperta' => 'warning',
-                        'chiusa' => 'success',
-                        'corretta' => 'info',
-                        default => 'gray',
-                    }),
+                    ->formatStateUsing(fn (string $state) => static::statusLabels()[$state] ?? ucfirst($state))
+                    ->color(fn (string $state) => static::statusColors()[$state] ?? 'gray'),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('status')
                     ->label('Stato')
-                    ->options(['aperta' => 'Aperta', 'chiusa' => 'Chiusa', 'corretta' => 'Corretta']),
+                    ->options(static::statusLabels()),
                 Tables\Filters\SelectFilter::make('source')
                     ->label('Origine')
                     ->options(['app' => 'App (tempo reale)', 'manuale' => 'Inserimento manuale']),
@@ -113,6 +123,15 @@ class TimeEntryResource extends Resource
                             ->when($data['from'] ?? null, fn (Builder $q, $date) => $q->whereDate('clock_in', '>=', $date))
                             ->when($data['until'] ?? null, fn (Builder $q, $date) => $q->whereDate('clock_in', '<=', $date));
                     }),
+            ])
+            ->headerActions([
+                // Export dei dati grezzi (non l'aggregato di RiepilogoOre):
+                // prima non esisteva alcun export per le timbrature stesse.
+                ExportAction::make()
+                    ->label('Esporta')
+                    ->exports([
+                        ExcelExport::make('presenze')->fromTable(),
+                    ]),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
@@ -132,5 +151,19 @@ class TimeEntryResource extends Resource
             'create' => Pages\CreateTimeEntry::route('/create'),
             'edit' => Pages\EditTimeEntry::route('/{record}/edit'),
         ];
+    }
+
+    /**
+     * Il modello non ha costanti per lo stato: le etichette/colori restano
+     * centralizzati qui per non duplicarli tra form, tabella e filtro.
+     */
+    public static function statusLabels(): array
+    {
+        return ['aperta' => 'Aperta', 'chiusa' => 'Chiusa', 'corretta' => 'Corretta'];
+    }
+
+    public static function statusColors(): array
+    {
+        return ['aperta' => 'warning', 'chiusa' => 'success', 'corretta' => 'info'];
     }
 }

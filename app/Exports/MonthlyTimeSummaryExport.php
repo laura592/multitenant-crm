@@ -12,7 +12,7 @@ class MonthlyTimeSummaryExport implements FromCollection, WithHeadings
 
     public function headings(): array
     {
-        return ['Dipendente', 'Ore ordinarie', 'Straordinario', 'Giorni ferie', 'Ore permesso'];
+        return ['Dipendente', 'Ore ordinarie', 'Straordinario', 'Giorni ferie', 'Giorni malattia', 'Ore permesso'];
     }
 
     public function collection(): Collection
@@ -22,6 +22,7 @@ class MonthlyTimeSummaryExport implements FromCollection, WithHeadings
             $row['ordinarie'],
             $row['straordinario'],
             $row['ferie_giorni'],
+            $row['malattia_giorni'],
             $row['permessi_ore'],
         ]);
     }

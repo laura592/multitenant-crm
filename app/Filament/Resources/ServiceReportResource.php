@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Forms\Components\SignaturePad;
+use App\Filament\Forms\CustomerContactFields;
 use App\Filament\Resources\ServiceReportResource\Pages;
 use App\Mail\ServiceReportMail;
 use App\Models\Product;
@@ -120,7 +121,7 @@ class ServiceReportResource extends Resource
                             Forms\Components\TextInput::make('company_name')->label('Ragione sociale'),
                             Forms\Components\TextInput::make('first_name')->label('Nome'),
                             Forms\Components\TextInput::make('last_name')->label('Cognome'),
-                            Forms\Components\TextInput::make('mobile')->label('Cellulare'),
+                            ...CustomerContactFields::schema(),
                         ]),
                     Forms\Components\Select::make('technician_id')
                         ->label('Tecnico')
@@ -269,7 +270,7 @@ class ServiceReportResource extends Resource
                                 ->label('Email destinatario')
                                 ->email()
                                 ->required()
-                                ->default(fn (ServiceReport $record) => $record->customer->email),
+                                ->default(fn (ServiceReport $record) => $record->customer->primaryEmail()),
                             Forms\Components\TextInput::make('cc_email')->label('CC (opzionale)')->email(),
                         ])
                         ->action(function (array $data, ServiceReport $record) {
@@ -304,7 +305,10 @@ class ServiceReportResource extends Resource
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make(),
                 ]),
-            ]);
+            ])
+            ->emptyStateHeading('Nessun rapportino ancora')
+            ->emptyStateDescription('Crea il primo rapportino con "Nuovo".')
+            ->emptyStateIcon('heroicon-o-clipboard-document-check');
     }
 
     public static function getPages(): array
