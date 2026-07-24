@@ -146,6 +146,8 @@ class MaterialResource extends Resource
                                 ->label('Nuovo nome categoria')
                                 ->required(),
                         ])
+                        ->requiresConfirmation()
+                        ->modalDescription('La nuova categoria sostituira\' quella attuale su tutti i materiali selezionati.')
                         ->action(fn (\Illuminate\Support\Collection $records, array $data) => $records
                             ->each(fn (Material $material) => $material->update(['category' => $data['category']])))
                         ->deselectRecordsAfterCompletion(),

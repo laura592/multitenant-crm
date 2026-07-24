@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Forms\ItalianAddressFields;
 use App\Filament\Resources\SupplierResource\Pages;
 use App\Models\Supplier;
 use Filament\Forms;
@@ -43,19 +44,7 @@ class SupplierResource extends Resource
                         ->required()
                         ->maxLength(255)
                         ->columnSpanFull(),
-                    Forms\Components\TextInput::make('address')
-                        ->label('Indirizzo')
-                        ->maxLength(255)
-                        ->columnSpanFull(),
-                    Forms\Components\TextInput::make('postal_code')
-                        ->label('CAP')
-                        ->maxLength(10),
-                    Forms\Components\TextInput::make('city')
-                        ->label('Città')
-                        ->maxLength(255),
-                    Forms\Components\TextInput::make('province')
-                        ->label('Provincia')
-                        ->maxLength(2),
+                    ...ItalianAddressFields::schema(streetField: 'address'),
                     Forms\Components\TextInput::make('phone')
                         ->label('Telefono')
                         ->tel()

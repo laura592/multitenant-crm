@@ -3,31 +3,32 @@
 namespace App\Filament\Widgets;
 
 use App\Models\Material;
-use App\Models\MaterialOrder;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
 /**
- * Area propria per l'ambito acquisti (ordini fornitori, materiali,
- * categorie), separata dai numeri commerciali di DashboardStatsWidget.
+ * Area propria per l'ambito acquisti (materiali, categorie), separata dai
+ * numeri commerciali di DashboardStatsWidget. I conteggi ordini (bozza/da
+ * ricevere) non stanno piu' qui su richiesta: poco utili in dashboard,
+ * restano visibili nella lista Ordini materiali stessa.
  */
 class MagazzinoStatsWidget extends BaseWidget
 {
     protected static ?int $sort = 1;
 
+    // Affiancata a PrioritaWidget nella griglia a 2 colonne della dashboard:
+    // vedi commento su PrioritaWidget::$columnSpan.
+    protected int|string|array $columnSpan = 1;
+
+    // Vedi commento su PrioritaWidget::getColumns(): stesso motivo.
+    protected function getColumns(): int
+    {
+        return 2;
+    }
+
     protected function getStats(): array
     {
-        $inviati = MaterialOrder::where('status', 'inviato')->count();
-
         return [
-            Stat::make('Ordini in bozza', MaterialOrder::where('status', 'bozza')->count())
-                ->description('Non ancora inviati al fornitore')
-                ->icon('heroicon-o-clipboard-document-list')
-                ->color('gray'),
-            Stat::make('Ordini da ricevere', $inviati)
-                ->description('Inviati, in attesa di arrivo')
-                ->icon('heroicon-o-paper-airplane')
-                ->color($inviati > 0 ? 'warning' : 'success'),
             Stat::make('Materiali a catalogo', Material::count())
                 ->description('Totale articoli ordinabili')
                 ->icon('heroicon-o-wrench-screwdriver')
