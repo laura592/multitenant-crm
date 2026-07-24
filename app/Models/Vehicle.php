@@ -18,15 +18,8 @@ class Vehicle extends Model
         'brand',
         'model',
         'year',
-        'insurance_due_date',
-        'revision_due_date',
         'assigned_user_id',
         'notes',
-    ];
-
-    protected $casts = [
-        'insurance_due_date' => 'date',
-        'revision_due_date' => 'date',
     ];
 
     public function assignedUser(): BelongsTo
@@ -39,28 +32,19 @@ class Vehicle extends Model
         return $this->morphMany(Deadline::class, 'deadlinable');
     }
 
-    protected static function booted(): void
+    /**
+     * Scadenza attiva di un tipo (assicurazione/bollo/revisione) per la
+     * vista lista/scheda del veicolo: al piu' una per tipo, le altre sono
+     * storico (status "rinnovata"), vedi Deadline::renew().
+     */
+    public function activeDeadline(string $type): ?Deadline
     {
-        // Tiene sincronizzate le Deadline di assicurazione/revisione con le date
-        // inserite sul veicolo, stesso pattern di MaintenanceSchedule (§13.2):
-        // niente scadenza dimenticata quando si registra un nuovo automezzo.
-        static::saved(function (self $vehicle) {
-            $vehicle->syncDeadline(Deadline::TYPE_ASSICURAZIONE, $vehicle->insurance_due_date);
-            $vehicle->syncDeadline(Deadline::TYPE_REVISIONE, $vehicle->revision_due_date);
-        });
-    }
+        $deadline = $this->deadlines
+            ->where('type', $type)
+            ->where('status', Deadline::STATUS_ATTIVA)
+            ->sortByDesc('due_date')
+            ->first();
 
-    private function syncDeadline(string $type, ?\Carbon\Carbon $dueDate): void
-    {
-        if (! $dueDate) {
-            $this->deadlines()->where('type', $type)->delete();
-
-            return;
-        }
-
-        $this->deadlines()->updateOrCreate(
-            ['type' => $type],
-            ['tenant_id' => $this->tenant_id, 'due_date' => $dueDate, 'status' => Deadline::STATUS_ATTIVA]
-        );
+        return $deadline instanceof Deadline ? $deadline : null;
     }
 }

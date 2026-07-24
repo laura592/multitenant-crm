@@ -23,7 +23,13 @@ class ServiceReportPolicy
      */
     public function view(User $user, ServiceReport $serviceReport): bool
     {
-        return $user->can('view_service::report');
+        // Ticket sicurezza 1.1: la route service-reports.pdf vive fuori dal
+        // pannello Filament (Filament::getTenant() torna null li'), quindi lo
+        // scope automatico tenant di BelongsToTenant non si applica: senza il
+        // confronto esplicito col tenant del rapportino, il solo permesso di
+        // ruolo bastava a scaricare il rapportino di un ALTRO tenant.
+        // is_super_admin bypassa comunque tutto via Gate::before.
+        return $user->can('view_service::report') && $user->tenant_id === $serviceReport->tenant_id;
     }
 
     /**

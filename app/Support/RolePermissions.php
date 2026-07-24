@@ -3,8 +3,8 @@
 namespace App\Support;
 
 /**
- * Unica fonte dei permessi per i 5 ruoli applicativi (dipendente,
- * amministrazione, collaboratore, partner, admin). Usata sia dal seeder di
+ * Unica fonte dei permessi per i 4 ruoli applicativi (dipendente,
+ * amministrazione, partner, admin). Usata sia dal seeder di
  * produzione che dai test, cosi i due non rischiano di divergere
  * silenziosamente. Gestione Tenant e Ruoli resta riservata allo staff master
  * (is_super_admin), nessuno dei 5 ruoli le include (docs/architecture.md
@@ -27,10 +27,6 @@ class RolePermissions
     public static function for(string $role): array
     {
         return match ($role) {
-            'collaboratore' => [
-                ...self::expand('information::request', self::MANAGE),
-                'create_customer',
-            ],
             'partner' => [
                 ...self::expand('brand', self::VIEW),
                 ...self::expand('category', self::VIEW),
@@ -38,6 +34,9 @@ class RolePermissions
                 ...self::expand('product::family', self::VIEW),
                 ...self::expand('customer', ['view_any', 'view', 'create', 'update']),
                 ...self::expand('quote', ['view_any', 'view', 'create', 'update']),
+                ...self::expand('quote::group', ['view_any', 'view', 'create', 'update']),
+                ...self::expand('price::list', self::VIEW),
+                ...self::expand('comodato::macchina', self::VIEW),
                 'widget_DashboardStatsWidget',
                 'widget_LatestQuotesWidget',
             ],
@@ -50,15 +49,17 @@ class RolePermissions
                 // correggere/cancellare quelli esistenti (solo admin).
                 ...self::expand('customer', ['view_any', 'view', 'create']),
                 ...self::expand('quote', self::MANAGE),
+                ...self::expand('quote::group', self::MANAGE),
                 ...self::expand('information::request', self::MANAGE),
                 ...self::expand('service::report', self::MANAGE),
                 ...self::expand('maintenance::schedule', self::MANAGE),
-                ...self::expand('deadline', self::VIEW),
-                ...self::expand('vehicle', self::VIEW),
                 ...self::expand('machine::unit', self::MANAGE),
+                ...self::expand('comodato::macchina', self::MANAGE),
+                ...self::expand('lavaggio', self::MANAGE),
                 ...self::expand('material', self::VIEW),
                 ...self::expand('material::order', self::MANAGE),
                 ...self::expand('supplier', self::VIEW),
+                ...self::expand('price::list', self::VIEW),
                 // Vede solo le proprie ore/ferie (ScopesToOwnUserUnlessResponsabile).
                 ...self::expand('time::entry', ['view_any', 'view', 'create', 'update']),
                 ...self::expand('leave::request', ['view_any', 'view', 'create', 'update']),
@@ -78,6 +79,11 @@ class RolePermissions
                 // "responsabile": admin/staff master).
                 ...self::expand('time::entry', ['view_any', 'view', 'create', 'update']),
                 ...self::expand('leave::request', ['view_any', 'view', 'create', 'update']),
+                // Scadenzario e parco veicoli: gestione completa, non riguardano
+                // gli interventi sul campo ma l'amministrazione (assicurazioni,
+                // revisioni, rinnovi contratto).
+                ...self::expand('deadline', self::MANAGE),
+                ...self::expand('vehicle', self::MANAGE),
                 'widget_TimbraWidget',
                 'page_RiepilogoOre',
             ],
@@ -88,6 +94,7 @@ class RolePermissions
                 ...self::expand('product::family', self::MANAGE),
                 ...self::expand('customer', self::MANAGE),
                 ...self::expand('quote', self::MANAGE),
+                ...self::expand('quote::group', self::MANAGE),
                 ...self::expand('information::request', self::MANAGE),
                 ...self::expand('service::report', self::MANAGE),
                 ...self::expand('maintenance::schedule', self::MANAGE),
@@ -96,19 +103,28 @@ class RolePermissions
                 ...self::expand('material', self::MANAGE),
                 ...self::expand('material::order', self::MANAGE),
                 ...self::expand('supplier', self::MANAGE),
+                ...self::expand('price::list', self::MANAGE),
                 ...self::expand('time::entry', self::MANAGE),
                 ...self::expand('leave::request', self::MANAGE),
                 ...self::expand('payment::method', self::MANAGE),
                 ...self::expand('machine::unit', self::MANAGE),
+                ...self::expand('comodato::macchina', self::MANAGE),
+                ...self::expand('lavaggio', self::MANAGE),
                 // Unico ruolo (oltre allo staff master is_super_admin) che puo'
                 // creare/gestire utenti.
                 ...self::expand('user', self::MANAGE),
+                // Audit log (Epic 6): sola consultazione, nessun ruolo lo puo'
+                // creare/modificare/cancellare dal pannello (e' generato in
+                // automatico da spatie/laravel-activitylog). Riservato ad
+                // admin + staff master, come da ticket 6.3.
+                ...self::expand('audit::log', self::VIEW),
                 'widget_TimbraWidget',
                 'widget_DashboardStatsWidget',
                 'widget_LatestQuotesWidget',
                 'widget_UpcomingDeadlinesWidget',
                 'page_RiepilogoOre',
                 'page_ClientiVicini',
+                'page_NotificationSettings',
             ],
             default => throw new \InvalidArgumentException("Ruolo sconosciuto: {$role}"),
         };
@@ -116,7 +132,7 @@ class RolePermissions
 
     public static function roles(): array
     {
-        return ['dipendente', 'amministrazione', 'collaboratore', 'partner', 'admin'];
+        return ['dipendente', 'amministrazione', 'partner', 'admin'];
     }
 
     private static function expand(string $resource, array $prefixes): array

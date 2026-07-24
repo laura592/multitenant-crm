@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Models\Concerns\LogsAuditTrail;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Models\Contracts\HasTenants;
@@ -13,15 +14,16 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Jeffgreco13\FilamentBreezy\Traits\TwoFactorAuthenticatable;
+use Spatie\Activitylog\Support\LogOptions;
 use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable implements FilamentUser, HasTenants
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, HasRoles, HasUuids, Notifiable;
+    use HasFactory, HasRoles, HasUuids, LogsAuditTrail, Notifiable, TwoFactorAuthenticatable;
 
     /**
      * The attributes that are mass assignable.
@@ -34,6 +36,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
         'email',
         'password',
         'is_super_admin',
+        'is_active',
         'daily_contract_hours',
         'weekly_contract_hours',
         'annual_leave_days',
@@ -50,6 +53,15 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     ];
 
     /**
+     * Valori di default sull'oggetto in memoria (non solo a livello di DB): senza
+     * questo, un User appena creato senza specificare is_active resterebbe null
+     * finche' non viene ricaricato dal DB, facendo fallire canAccessPanel().
+     */
+    protected $attributes = [
+        'is_active' => true,
+    ];
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -60,10 +72,27 @@ class User extends Authenticatable implements FilamentUser, HasTenants
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_super_admin' => 'boolean',
+            'is_active' => 'boolean',
             'daily_contract_hours' => 'decimal:2',
             'weekly_contract_hours' => 'decimal:2',
             'annual_leave_days' => 'integer',
         ];
+    }
+
+    /**
+     * Come LogsAuditTrail di default (logFillable + logOnlyDirty +
+     * dontLogEmptyChanges), ma esclude "password": e' fillable (serve al
+     * form di creazione/reset) ma non ha senso tracciarne l'hash nell'audit
+     * log, ne' come valore ne' come semplice "e' cambiata" - chi ha accesso
+     * all'audit non deve avere alcun segnale sulle credenziali altrui.
+     */
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logFillable()
+            ->logExcept(['password'])
+            ->logOnlyDirty()
+            ->dontLogEmptyChanges();
     }
 
     public function tenant(): BelongsTo
@@ -73,7 +102,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
 
     public function canAccessPanel(Panel $panel): bool
     {
-        return true;
+        return (bool) $this->is_active;
     }
 
     /**
@@ -92,11 +121,6 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     public function canAccessTenant(Model $tenant): bool
     {
         return $this->is_super_admin || $this->tenant_id === $tenant->getKey();
-    }
-
-    public function googleCalendarAccount(): HasOne
-    {
-        return $this->hasOne(GoogleCalendarAccount::class);
     }
 
     /**
