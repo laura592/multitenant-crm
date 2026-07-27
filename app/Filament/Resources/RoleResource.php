@@ -9,6 +9,7 @@ use BezhanSalleh\FilamentShield\Support\Utils;
 use BezhanSalleh\FilamentShield\Traits\HasShieldFormComponents;
 use Filament\Facades\Filament;
 use Filament\Forms;
+use Filament\Forms\Components\Component;
 use Filament\Forms\Form;
 use Filament\Pages\SubNavigationPosition;
 use Filament\Resources\Resource;
@@ -83,6 +84,79 @@ class RoleResource extends Resource implements HasShieldPermissions
                     ]),
                 static::getShieldFormComponents(),
             ]);
+    }
+
+    /**
+     * Override del trait: senza "Visualizza" (view/view_any) le altre azioni
+     * su una risorsa (modifica, elimina, ecc.) sono irraggiungibili dall'utente,
+     * quindi la checkbox list si autocorregge in tempo reale.
+     */
+    public static function getCheckBoxListComponentForResource(array $entity): Component
+    {
+        $permissionsArray = static::getResourcePermissionOptions($entity);
+        $resource = $entity['resource'];
+
+        return static::getCheckboxListFormComponent(
+            name: $resource,
+            options: $permissionsArray,
+            columns: static::shield()->getResourceCheckboxListColumns(),
+            columnSpan: static::shield()->getResourceCheckboxListColumnSpan(),
+            searchable: false
+        )
+            ->live()
+            ->afterStateUpdated(
+                fn (Forms\Set $set, ?array $state) => $set(
+                    $resource,
+                    static::enforceViewDependencyForResourcePermissions($resource, $state ?? [])
+                )
+            )
+            ->helperText('Senza "Visualizza" le altre azioni non sono raggiungibili: vengono disattivate automaticamente.');
+    }
+
+    /**
+     * Rimuove dallo stato selezionato i permessi che non hanno senso senza le
+     * relative permission di visualizzazione:
+     * - nessun permesso (a parte "view_any") ha senso senza "view_any" (serve per
+     *   raggiungere l'elenco/la risorsa);
+     * - i permessi che operano su un singolo record (update, delete, restore,
+     *   force_delete, replicate, ...) non hanno senso senza "view".
+     *
+     * @param  array<int, string>  $state
+     * @return array<int, string>
+     */
+    protected static function enforceViewDependencyForResourcePermissions(string $resource, array $state): array
+    {
+        $selected = collect($state);
+
+        $viewAnyKey = "view_any_{$resource}";
+        $viewKey = "view_{$resource}";
+
+        $hasViewAny = $selected->contains($viewAnyKey);
+        $hasView = $selected->contains($viewKey);
+
+        // Azioni raggiungibili dall'elenco, senza dover aprire il singolo record.
+        $listLevelPrefixes = ['create', 'delete_any', 'restore_any', 'force_delete_any', 'reorder'];
+
+        return $selected
+            ->filter(function (string $permission) use ($viewAnyKey, $viewKey, $hasViewAny, $hasView, $resource, $listLevelPrefixes) {
+                if ($permission === $viewAnyKey) {
+                    return true;
+                }
+
+                if (! $hasViewAny) {
+                    return false;
+                }
+
+                if ($permission === $viewKey) {
+                    return true;
+                }
+
+                $prefix = Str::beforeLast($permission, "_{$resource}");
+
+                return in_array($prefix, $listLevelPrefixes, true) || $hasView;
+            })
+            ->values()
+            ->toArray();
     }
 
     public static function table(Table $table): Table
