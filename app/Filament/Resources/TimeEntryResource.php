@@ -211,8 +211,9 @@ class TimeEntryResource extends Resource
                     ->color('gray')
                     ->visible(fn () => (bool) auth()->user()?->hasStandardSchedule())
                     ->form([
-                        Forms\Components\DatePicker::make('from')->label('Dal')->required()->maxDate(today()),
-                        Forms\Components\DatePicker::make('until')->label('Al')->required()->maxDate(today()),
+                        Forms\Components\DatePicker::make('from')->label('Dal')->required()->maxDate(today())->live(),
+                        Forms\Components\DatePicker::make('until')->label('Al')->required()->maxDate(today())
+                            ->minDate(fn (Forms\Get $get) => $get('from')),
                     ])
                     ->requiresConfirmation()
                     ->modalDescription('Crea le timbrature mancanti in base al tuo orario standard per i giorni scelti (sabato e domenica esclusi). I giorni che hanno gia\' almeno una timbratura vengono saltati.')
