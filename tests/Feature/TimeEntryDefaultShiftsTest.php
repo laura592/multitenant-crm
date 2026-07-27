@@ -76,4 +76,52 @@ class TimeEntryDefaultShiftsTest extends TestCase
 
         $this->assertSame(2, TimeEntry::where('user_id', $employee->id)->count());
     }
+
+    public function test_quick_backfill_creates_shifts_for_missing_days_only(): void
+    {
+        $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);
+        $employee = User::create([
+            'tenant_id' => $tenant->id, 'name' => 'Laura', 'email' => 'laura@gifar.it', 'password' => bcrypt('password'),
+            'default_morning_in' => '08:00', 'default_morning_out' => '12:00',
+            'default_afternoon_in' => '13:00', 'default_afternoon_out' => '17:00',
+        ]);
+        $this->giveRole($employee, $tenant, 'dipendente');
+
+        $from = today()->subDays(3);
+        $middleDay = today()->subDays(2);
+        $until = today()->subDay();
+
+        $this->actingAs($employee);
+        Filament::setTenant($tenant);
+
+        // Il giorno di mezzo ha gia' una timbratura (inserita a mano): va saltato.
+        TimeEntry::create([
+            'tenant_id' => $tenant->id,
+            'user_id' => $employee->id,
+            'clock_in' => $middleDay->copy()->setTime(9, 0),
+            'clock_out' => $middleDay->copy()->setTime(13, 0),
+            'source' => 'manuale',
+            'status' => 'chiusa',
+        ]);
+
+        Livewire::test(ListTimeEntries::class)
+            ->callTableAction('quickBackfill', data: [
+                'from' => $from->toDateString(),
+                'until' => $until->toDateString(),
+            ]);
+
+        $this->assertSame(2, TimeEntry::where('user_id', $employee->id)->whereDate('clock_in', $from)->count());
+        $this->assertSame(1, TimeEntry::where('user_id', $employee->id)->whereDate('clock_in', $middleDay)->count());
+        $this->assertSame(2, TimeEntry::where('user_id', $employee->id)->whereDate('clock_in', $until)->count());
+        $this->assertSame(5, TimeEntry::where('user_id', $employee->id)->count());
+
+        // Un secondo lancio sullo stesso intervallo non deve creare doppioni.
+        Livewire::test(ListTimeEntries::class)
+            ->callTableAction('quickBackfill', data: [
+                'from' => $from->toDateString(),
+                'until' => $until->toDateString(),
+            ]);
+
+        $this->assertSame(5, TimeEntry::where('user_id', $employee->id)->count());
+    }
 }

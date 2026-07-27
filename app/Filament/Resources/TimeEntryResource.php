@@ -6,6 +6,7 @@ use App\Filament\Concerns\ScopesToOwnUserUnlessResponsabile;
 use App\Filament\Resources\TimeEntryResource\Pages;
 use App\Models\TimeEntry;
 use App\Models\User;
+use Carbon\Carbon;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Notifications\Notification;
@@ -185,6 +186,61 @@ class TimeEntryResource extends Resource
 
                         Notification::make()
                             ->title('Turni di oggi creati')
+                            ->success()
+                            ->send();
+                    }),
+                // Per chi e' rimasto indietro con piu' giorni: "Turno
+                // standard di oggi" copre solo oggi, qui si sceglie un
+                // intervallo di date e si salta ogni giorno gia' registrato
+                // (per non creare doppioni su giorni parzialmente inseriti
+                // a mano).
+                Tables\Actions\Action::make('quickBackfill')
+                    ->label('Recupera turni passati')
+                    ->icon('heroicon-o-clock')
+                    ->color('gray')
+                    ->visible(fn () => (bool) auth()->user()?->hasStandardSchedule())
+                    ->form([
+                        Forms\Components\DatePicker::make('from')->label('Dal')->required()->maxDate(today()),
+                        Forms\Components\DatePicker::make('until')->label('Al')->required()->maxDate(today()),
+                    ])
+                    ->requiresConfirmation()
+                    ->modalDescription('Crea le timbrature mancanti in base al tuo orario standard per i giorni scelti. I giorni che hanno gia\' almeno una timbratura vengono saltati.')
+                    ->action(function (array $data) {
+                        $user = auth()->user();
+                        $from = Carbon::parse($data['from'])->startOfDay();
+                        $until = Carbon::parse($data['until'])->startOfDay();
+
+                        if ($from->gt($until)) {
+                            [$from, $until] = [$until, $from];
+                        }
+
+                        $created = 0;
+
+                        for ($date = $from->copy(); $date->lte($until); $date->addDay()) {
+                            $alreadyLogged = TimeEntry::query()
+                                ->where('user_id', $user->id)
+                                ->whereDate('clock_in', $date)
+                                ->exists();
+
+                            if ($alreadyLogged) {
+                                continue;
+                            }
+
+                            foreach ($user->standardShifts($date) as $shift) {
+                                TimeEntry::create([
+                                    'user_id' => $user->id,
+                                    'clock_in' => $shift['clock_in'],
+                                    'clock_out' => $shift['clock_out'],
+                                    'source' => 'manuale',
+                                    'status' => 'chiusa',
+                                ]);
+                                $created++;
+                            }
+                        }
+
+                        Notification::make()
+                            ->title($created > 0 ? "Create {$created} timbrature" : 'Nessuna timbratura creata')
+                            ->body($created > 0 ? null : 'Per i giorni scelti risultano gia\' timbrature registrate.')
                             ->success()
                             ->send();
                     }),
