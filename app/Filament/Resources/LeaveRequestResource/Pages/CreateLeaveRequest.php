@@ -5,6 +5,7 @@ namespace App\Filament\Resources\LeaveRequestResource\Pages;
 use App\Filament\Resources\LeaveRequestResource;
 use App\Mail\NewLeaveRequestMail;
 use Filament\Resources\Pages\CreateRecord;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 class CreateLeaveRequest extends CreateRecord
@@ -39,6 +40,16 @@ class CreateLeaveRequest extends CreateRecord
             return;
         }
 
-        Mail::to($recipients)->send(new NewLeaveRequestMail($this->record));
+        // La richiesta e' gia' salvata a questo punto: un intoppo SMTP
+        // (credenziali, timeout) non deve far tornare un 500 al dipendente
+        // e fargli credere che la richiesta non sia stata registrata.
+        try {
+            Mail::to($recipients)->send(new NewLeaveRequestMail($this->record));
+        } catch (\Throwable $e) {
+            Log::error('Invio notifica nuova richiesta ferie/permesso fallito', [
+                'leave_request_id' => $this->record->id,
+                'exception' => $e->getMessage(),
+            ]);
+        }
     }
 }

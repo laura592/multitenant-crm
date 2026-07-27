@@ -13,6 +13,7 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use pxlrbt\FilamentExcel\Actions\Tables\ExportAction;
 use pxlrbt\FilamentExcel\Exports\ExcelExport;
@@ -78,7 +79,13 @@ class LeaveRequestResource extends Resource
                         ->minValue(0)
                         ->visible(fn (Forms\Get $get) => $get('type') === 'permesso')
                         ->required(fn (Forms\Get $get) => $get('type') === 'permesso'),
-                    Forms\Components\DatePicker::make('date_from')->label('Dal')->required(),
+                    // La malattia si segnala spesso a posteriori (il giorno dopo
+                    // l'assenza): il vincolo "non nel passato" vale solo per
+                    // ferie/permesso, che invece sono richieste pianificate.
+                    Forms\Components\DatePicker::make('date_from')
+                        ->label('Dal')
+                        ->required()
+                        ->minDate(fn (Forms\Get $get) => $get('type') === 'malattia' ? null : now()),
                     Forms\Components\DatePicker::make('date_to')->label('Al')->required()->afterOrEqual('date_from'),
                     Forms\Components\Textarea::make('notes')->label('Note')->columnSpanFull(),
                 ]),
@@ -177,9 +184,7 @@ class LeaveRequestResource extends Resource
                             ->sendToDatabase($record->user);
 
                         if ($record->user?->email) {
-                            Mail::to($record->user->email)
-                                ->cc($record->tenant?->notificationRecipients('leave_request') ?? [])
-                                ->send(new LeaveRequestDecisionMail($record));
+                            static::sendDecisionMail($record);
                         }
                     }),
                 Tables\Actions\Action::make('reject')
@@ -200,9 +205,7 @@ class LeaveRequestResource extends Resource
                             ->sendToDatabase($record->user);
 
                         if ($record->user?->email) {
-                            Mail::to($record->user->email)
-                                ->cc($record->tenant?->notificationRecipients('leave_request') ?? [])
-                                ->send(new LeaveRequestDecisionMail($record));
+                            static::sendDecisionMail($record);
                         }
                     }),
                 // Una volta decisa (approvato/rifiutato) solo un responsabile
@@ -240,6 +243,26 @@ class LeaveRequestResource extends Resource
             'create' => Pages\CreateLeaveRequest::route('/create'),
             'edit' => Pages\EditLeaveRequest::route('/{record}/edit'),
         ];
+    }
+
+    /**
+     * L'approvazione/rifiuto e' gia' salvata quando questa mail parte: un
+     * problema SMTP non deve far tornare un 500 al responsabile e fargli
+     * credere che l'azione non sia andata a buon fine (vedi anche
+     * CreateLeaveRequest::afterCreate() per lo stesso problema in creazione).
+     */
+    protected static function sendDecisionMail(LeaveRequest $record): void
+    {
+        try {
+            Mail::to($record->user->email)
+                ->cc($record->tenant?->notificationRecipients('leave_request') ?? [])
+                ->send(new LeaveRequestDecisionMail($record));
+        } catch (\Throwable $e) {
+            Log::error('Invio notifica decisione ferie/permesso fallito', [
+                'leave_request_id' => $record->id,
+                'exception' => $e->getMessage(),
+            ]);
+        }
     }
 
     protected static function decisionNotificationBody(LeaveRequest $record): string
