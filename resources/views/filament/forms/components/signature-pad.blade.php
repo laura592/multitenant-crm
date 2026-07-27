@@ -33,7 +33,7 @@
                 // height) ma in CSS e' width:100% con max-width:500px: su schermi
                 // stretti (mobile) la larghezza visualizzata (rect.width) e' minore
                 // di 500, quindi va riproporzionata altrimenti il punto disegnato
-                // non corrisponde a dove tocchi (firma "scalata" verso sinistra).
+                // non corrisponde a dove tocchi (firma scalata verso sinistra).
                 const rect = this.$refs.canvas.getBoundingClientRect();
                 const scaleX = this.$refs.canvas.width / rect.width;
                 const scaleY = this.$refs.canvas.height / rect.height;
