@@ -48,8 +48,8 @@ class RolePermissions
                 // Puo' censire un nuovo cliente incontrato sul campo, ma non
                 // correggere/cancellare quelli esistenti (solo admin).
                 ...self::expand('customer', ['view_any', 'view', 'create']),
-                ...self::expand('quote', self::MANAGE),
-                ...self::expand('quote::group', self::MANAGE),
+                // I preventivi non sono di sua competenza: li vedono/gestiscono
+                // solo partner e admin/staff master.
                 ...self::expand('information::request', self::MANAGE),
                 ...self::expand('service::report', self::MANAGE),
                 ...self::expand('maintenance::schedule', self::MANAGE),

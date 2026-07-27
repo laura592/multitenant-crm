@@ -50,7 +50,11 @@ class ConfigureMachineWizardTest extends TestCase
             'email' => 'test@gifar.it',
             'password' => bcrypt('password'),
         ]);
-        $this->giveRole($this->user, $this->tenant, 'dipendente');
+        // La wizard vive dentro il preventivo: e' uno strumento di
+        // quotazione (sceglie macchina+opzioni e calcola il prezzo), non di
+        // lavoro sul campo, quindi segue chi gestisce i preventivi (admin),
+        // non il dipendente (che non vede i preventivi).
+        $this->giveRole($this->user, $this->tenant, 'admin');
 
         $family = ProductFamily::create(['name' => 'A300']);
         $this->machine = Product::create([

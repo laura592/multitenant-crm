@@ -52,7 +52,7 @@ class AllResourcesSmokeTest extends TestCase
         ]);
         $this->giveRole($user, $tenant, 'dipendente');
 
-        foreach ([...self::CATALOG_PATHS, ...self::SALES_PATHS, 'information-requests', 'service-reports', 'maintenance-schedules', 'time-entries', 'leave-requests', 'riepilogo-ore'] as $path) {
+        foreach ([...self::CATALOG_PATHS, 'customers', 'information-requests', 'service-reports', 'maintenance-schedules', 'time-entries', 'leave-requests', 'riepilogo-ore'] as $path) {
             $this->actingAs($user)->get("/admin/{$tenant->slug}/{$path}")->assertOk();
         }
 
@@ -61,6 +61,9 @@ class AllResourcesSmokeTest extends TestCase
         $this->actingAs($user)->get("/admin/{$tenant->slug}/deadlines")->assertForbidden();
         $this->actingAs($user)->get("/admin/{$tenant->slug}/payment-methods")->assertForbidden();
         $this->actingAs($user)->get("/admin/{$tenant->slug}/tenants")->assertForbidden();
+        // I preventivi non sono di competenza del dipendente (solo partner/admin).
+        $this->actingAs($user)->get("/admin/{$tenant->slug}/quotes")->assertForbidden();
+        $this->actingAs($user)->get("/admin/{$tenant->slug}/quote-groups")->assertForbidden();
     }
 
     public function test_partner_role_sees_only_catalog_customers_and_quotes(): void
