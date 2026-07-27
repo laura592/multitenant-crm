@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Models\Concerns\LogsAuditTrail;
+use Carbon\Carbon;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Models\Contracts\HasTenants;
@@ -41,6 +42,10 @@ class User extends Authenticatable implements FilamentUser, HasTenants
         'daily_contract_hours',
         'weekly_contract_hours',
         'annual_leave_days',
+        'default_morning_in',
+        'default_morning_out',
+        'default_afternoon_in',
+        'default_afternoon_out',
     ];
 
     /**
@@ -77,6 +82,10 @@ class User extends Authenticatable implements FilamentUser, HasTenants
             'daily_contract_hours' => 'decimal:2',
             'weekly_contract_hours' => 'decimal:2',
             'annual_leave_days' => 'integer',
+            'default_morning_in' => 'datetime:H:i',
+            'default_morning_out' => 'datetime:H:i',
+            'default_afternoon_in' => 'datetime:H:i',
+            'default_afternoon_out' => 'datetime:H:i',
         ];
     }
 
@@ -150,5 +159,41 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     public function leaveRequests(): HasMany
     {
         return $this->hasMany(LeaveRequest::class);
+    }
+
+    /**
+     * Turni dell'orario standard (es. 8-12/13-17) configurati per questo
+     * dipendente, usati per pre-compilare il form Presenze e dal pulsante
+     * "Turno standard di oggi" (TimeEntryResource). Un turno compare solo se
+     * ha sia entrata sia uscita configurate: con un solo orario impostato
+     * non si potrebbe comunque creare una timbratura valida.
+     *
+     * @return array<int, array{shift: string, label: string, clock_in: Carbon, clock_out: Carbon}>
+     */
+    public function standardShifts(?Carbon $date = null): array
+    {
+        $date ??= now();
+
+        $shifts = [
+            'mattina' => ['label' => 'Mattina', 'in' => $this->default_morning_in, 'out' => $this->default_morning_out],
+            'pomeriggio' => ['label' => 'Pomeriggio', 'in' => $this->default_afternoon_in, 'out' => $this->default_afternoon_out],
+        ];
+
+        return collect($shifts)
+            ->filter(fn (array $shift) => $shift['in'] && $shift['out'])
+            ->map(fn (array $shift, string $key) => [
+                'shift' => $key,
+                'label' => $shift['label'],
+                'clock_in' => $date->copy()->setTime($shift['in']->hour, $shift['in']->minute),
+                'clock_out' => $date->copy()->setTime($shift['out']->hour, $shift['out']->minute),
+            ])
+            ->values()
+            ->all();
+    }
+
+    public function hasStandardSchedule(): bool
+    {
+        return $this->default_morning_in && $this->default_morning_out
+            || $this->default_afternoon_in && $this->default_afternoon_out;
     }
 }

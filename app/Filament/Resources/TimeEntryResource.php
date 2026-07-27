@@ -5,8 +5,10 @@ namespace App\Filament\Resources;
 use App\Filament\Concerns\ScopesToOwnUserUnlessResponsabile;
 use App\Filament\Resources\TimeEntryResource\Pages;
 use App\Models\TimeEntry;
+use App\Models\User;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -36,16 +38,32 @@ class TimeEntryResource extends Resource
             Forms\Components\Section::make('Turno')
                 ->columns(3)
                 ->schema([
+                    // Non persistito: serve solo a scegliere quale dei due
+                    // orari standard del dipendente (mattina/pomeriggio, es.
+                    // 8-12/13-17) pre-compilare in Entrata/Uscita qui sotto.
+                    Forms\Components\Select::make('shift_preset')
+                        ->label('Turno')
+                        ->options(['mattina' => 'Mattina', 'pomeriggio' => 'Pomeriggio'])
+                        ->default('mattina')
+                        ->dehydrated(false)
+                        ->live()
+                        ->afterStateUpdated(fn (Forms\Set $set, Forms\Get $get, ?string $state) => static::applyShiftDefaults($set, $get('user_id'), $state)),
                     Forms\Components\Select::make('user_id')
                         ->label('Dipendente')
                         ->relationship('user', 'name')
                         ->default(fn () => auth()->id())
                         ->disabled(fn () => ! static::isResponsabile(auth()->user()))
                         ->dehydrated()
+                        ->live()
+                        ->afterStateUpdated(fn (Forms\Set $set, Forms\Get $get, ?string $state) => static::applyShiftDefaults($set, $state, $get('shift_preset')))
                         ->required(),
-                    Forms\Components\DateTimePicker::make('clock_in')->label('Entrata')->required(),
+                    Forms\Components\DateTimePicker::make('clock_in')
+                        ->label('Entrata')
+                        ->default(fn (Forms\Get $get) => static::shiftDefault($get('user_id'), $get('shift_preset'), 'clock_in'))
+                        ->required(),
                     Forms\Components\DateTimePicker::make('clock_out')
                         ->label('Uscita')
+                        ->default(fn (Forms\Get $get) => static::shiftDefault($get('user_id'), $get('shift_preset'), 'clock_out'))
                         ->after('clock_in'),
                     Forms\Components\Select::make('source')
                         ->label('Origine')
@@ -125,6 +143,51 @@ class TimeEntryResource extends Resource
                     }),
             ])
             ->headerActions([
+                // Crea in un click le timbrature di oggi (mattina+pomeriggio)
+                // in base all'orario standard configurato sul profilo
+                // dell'utente loggato: prima bisognava sempre passare dal
+                // form "Nuovo", una volta per turno.
+                Tables\Actions\Action::make('quickToday')
+                    ->label('Turno standard di oggi')
+                    ->icon('heroicon-o-bolt')
+                    ->color('success')
+                    ->visible(fn () => (bool) auth()->user()?->hasStandardSchedule())
+                    ->requiresConfirmation()
+                    ->modalDescription('Crea le timbrature di oggi in base al tuo orario standard configurato nel profilo (Utenti > Orario standard).')
+                    ->action(function () {
+                        $user = auth()->user();
+                        $today = today();
+
+                        $alreadyLogged = TimeEntry::query()
+                            ->where('user_id', $user->id)
+                            ->whereDate('clock_in', $today)
+                            ->exists();
+
+                        if ($alreadyLogged) {
+                            Notification::make()
+                                ->title('Ci sono gia\' timbrature per oggi')
+                                ->body('Controlla la lista prima di aggiungerne altre, per evitare doppioni.')
+                                ->warning()
+                                ->send();
+
+                            return;
+                        }
+
+                        foreach ($user->standardShifts($today) as $shift) {
+                            TimeEntry::create([
+                                'user_id' => $user->id,
+                                'clock_in' => $shift['clock_in'],
+                                'clock_out' => $shift['clock_out'],
+                                'source' => 'manuale',
+                                'status' => 'chiusa',
+                            ]);
+                        }
+
+                        Notification::make()
+                            ->title('Turni di oggi creati')
+                            ->success()
+                            ->send();
+                    }),
                 // Export dei dati grezzi (non l'aggregato di RiepilogoOre):
                 // prima non esisteva alcun export per le timbrature stesse.
                 ExportAction::make()
@@ -165,5 +228,28 @@ class TimeEntryResource extends Resource
     public static function statusColors(): array
     {
         return ['aperta' => 'warning', 'chiusa' => 'success', 'corretta' => 'info'];
+    }
+
+    /**
+     * Orario (Entrata/Uscita) dell'orario standard di oggi per il turno
+     * scelto, per il dipendente selezionato nel form. Null se il dipendente
+     * non ha quel turno configurato: il campo resta da compilare a mano
+     * come prima.
+     */
+    protected static function shiftDefault(?string $userId, ?string $shift, string $field): ?string
+    {
+        if (! $userId || ! $shift) {
+            return null;
+        }
+
+        $match = collect(User::find($userId)?->standardShifts() ?? [])->firstWhere('shift', $shift);
+
+        return $match[$field]?->format('Y-m-d H:i:s');
+    }
+
+    protected static function applyShiftDefaults(Forms\Set $set, ?string $userId, ?string $shift): void
+    {
+        $set('clock_in', static::shiftDefault($userId, $shift, 'clock_in'));
+        $set('clock_out', static::shiftDefault($userId, $shift, 'clock_out'));
     }
 }

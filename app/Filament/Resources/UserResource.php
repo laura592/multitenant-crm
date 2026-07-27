@@ -94,6 +94,15 @@ class UserResource extends Resource
                     Forms\Components\TextInput::make('weekly_contract_hours')->label('Ore settimanali')->numeric(),
                     Forms\Components\TextInput::make('annual_leave_days')->label('Giorni ferie annui')->numeric(),
                 ]),
+            Forms\Components\Section::make('Orario standard')
+                ->description('Usato per pre-compilare gli orari in Presenze e per il pulsante "Turno standard di oggi". Lascia vuoto se l\'orario di questo dipendente varia troppo per avere un default.')
+                ->columns(4)
+                ->schema([
+                    Forms\Components\TimePicker::make('default_morning_in')->label('Mattina - entrata')->seconds(false),
+                    Forms\Components\TimePicker::make('default_morning_out')->label('Mattina - uscita')->seconds(false),
+                    Forms\Components\TimePicker::make('default_afternoon_in')->label('Pomeriggio - entrata')->seconds(false),
+                    Forms\Components\TimePicker::make('default_afternoon_out')->label('Pomeriggio - uscita')->seconds(false),
+                ]),
         ]);
     }
 
