@@ -61,7 +61,12 @@ class RolePermissions
                 ...self::expand('supplier', self::VIEW),
                 ...self::expand('price::list', self::VIEW),
                 // Vede solo le proprie ore/ferie (ScopesToOwnUserUnlessResponsabile).
-                ...self::expand('time::entry', ['view_any', 'view', 'create', 'update']),
+                // Delete incluso: deve poter correggere da solo una
+                // timbratura sbagliata (es. da "Recupera turni passati" su
+                // un weekend) senza dover ogni volta passare da un admin -
+                // resta comunque scoperto solo le proprie, mai quelle di
+                // altri colleghi.
+                ...self::expand('time::entry', ['view_any', 'view', 'create', 'update', 'delete']),
                 ...self::expand('leave::request', ['view_any', 'view', 'create', 'update']),
                 'widget_TimbraWidget',
                 'page_RiepilogoOre',

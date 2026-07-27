@@ -105,7 +105,10 @@ class RolePermissionsTest extends TestCase
         $this->assertTrue($dipendente->can('update', $order));
         $this->assertTrue($dipendente->can('delete', $order));
 
-        // Consentito: gestisce ore/ferie proprie in view/create/update, ma non delete.
+        // Consentito: gestisce ore/ferie proprie in view/create/update. Le
+        // timbrature si possono anche eliminare (deve poter correggere da
+        // solo un errore, es. da "Recupera turni passati"), le ferie no
+        // (restano solo a chi puo' approvare/rifiutare).
         $timeEntry = TimeEntry::create([
             'tenant_id' => $this->tenant->id, 'user_id' => $dipendente->id,
             'clock_in' => now()->subHours(2), 'clock_out' => now(),
@@ -116,7 +119,7 @@ class RolePermissionsTest extends TestCase
         ]);
         $this->assertTrue($dipendente->can('create', TimeEntry::class));
         $this->assertTrue($dipendente->can('create', LeaveRequest::class));
-        $this->assertFalse($dipendente->can('delete', $timeEntry));
+        $this->assertTrue($dipendente->can('delete', $timeEntry));
         $this->assertFalse($dipendente->can('delete', $leaveRequest));
 
         // Consentito: gestisce interamente i rapportini di intervento.
