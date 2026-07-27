@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"process.chdir\\('/private/tmp/claude-501/-Users-laura-Documents-multitenant-crm/e04deb89-ef17-42d0-8aa0-bd3a4493a101/scratchpad/pw'\\); console.log\\(require.resolve\\('playwright'\\)\\)\")",
+      "Bash(node signature_test.js)",
+      "Bash(node -e \"require\\('playwright'\\); console.log\\('ok'\\)\")",
+      "Bash(node -e ' *)",
+      "Bash(node signature_draw_test.js)",
+      "Bash(git commit -m ' *)",
+      "Bash(grep -rn 'getRecord\\\\|\\\\$record\\\\b' /Users/laura/Documents/multitenant-crm/vendor/filament/actions/src/Action.php)"
+    ]
+  }
+}

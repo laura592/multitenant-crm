@@ -28,6 +28,7 @@ class MachineUnit extends Model
         'tenant_id',
         'product_id',
         'current_customer_id',
+        'billing_customer_id',
         'serial_number',
         'model_name',
         'owner_name',
@@ -47,6 +48,11 @@ class MachineUnit extends Model
     public function currentCustomer(): BelongsTo
     {
         return $this->belongsTo(Customer::class, 'current_customer_id');
+    }
+
+    public function billingCustomer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class, 'billing_customer_id');
     }
 
     public function placements(): HasMany

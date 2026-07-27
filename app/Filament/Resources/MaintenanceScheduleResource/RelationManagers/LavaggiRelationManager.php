@@ -52,6 +52,7 @@ class LavaggiRelationManager extends RelationManager
             ->columns([
                 Tables\Columns\TextColumn::make('data')->label('Data')->date()->sortable(),
                 Tables\Columns\TextColumn::make('machineUnit.serial_number')->label('Macchina')->placeholder('—'),
+                Tables\Columns\TextColumn::make('machineUnit.billingCustomer.full_name')->label('Fatturare a')->placeholder('—'),
                 Tables\Columns\TextColumn::make('descrizione')->label('Descrizione')->searchable(),
                 Tables\Columns\TextColumn::make('note')->label('Note')->limit(50)->placeholder('—'),
             ])

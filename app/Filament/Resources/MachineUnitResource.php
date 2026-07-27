@@ -57,6 +57,13 @@ class MachineUnitResource extends Resource
                         ->helperText('Es. "Dersut": chi possiede legalmente la macchina, anche se diverso dal cliente presso cui si trova.')
                         ->required()
                         ->maxLength(255),
+                    Forms\Components\Select::make('billing_customer_id')
+                        ->label('Fatturare a')
+                        ->relationship('billingCustomer', 'company_name')
+                        ->getOptionLabelFromRecordUsing(fn (Customer $record) => $record->full_name)
+                        ->searchable(['company_name', 'first_name', 'last_name'])
+                        ->preload()
+                        ->helperText('Lascia vuoto se paga il cliente presso cui è installata questa macchina.'),
                     Forms\Components\Select::make('status')
                         ->label('Stato')
                         ->options([

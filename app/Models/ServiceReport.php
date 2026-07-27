@@ -22,6 +22,7 @@ class ServiceReport extends Model
         'tenant_id',
         'customer_id',
         'comodato_macchina_id',
+        'machine_unit_id',
         'quote_id',
         'machine_product_id',
         'machine_serial_number',
@@ -92,6 +93,11 @@ class ServiceReport extends Model
         return $this->belongsTo(ComodatoMacchina::class);
     }
 
+    public function machineUnit(): BelongsTo
+    {
+        return $this->belongsTo(MachineUnit::class);
+    }
+
     public function quote(): BelongsTo
     {
         return $this->belongsTo(Quote::class);
@@ -120,5 +126,15 @@ class ServiceReport extends Model
     public function isSigned(): bool
     {
         return ! is_null($this->signed_at);
+    }
+
+    /**
+     * Se l'intervento e' su una macchina con un pagatore diverso dal cliente
+     * (es. matricola in comodato pagata da un gestore terzo), fattura a
+     * quella macchina prevale sul billing_customer_id generico del cliente.
+     */
+    public function invoiceRecipient(): Customer
+    {
+        return $this->machineUnit?->billingCustomer ?? $this->customer->invoiceRecipient();
     }
 }

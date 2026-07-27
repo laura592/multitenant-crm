@@ -72,6 +72,8 @@ class ServiceReportResource extends Resource
                     TextEntry::make('comodatoMacchina.nome_macchina')->label('Comodato collegato')->placeholder('—'),
                     TextEntry::make('machineProduct.name')->label('Modello macchina')->placeholder('—'),
                     TextEntry::make('machine_serial_number')->label('Matricola')->placeholder('—'),
+                    TextEntry::make('machineUnit.serial_number')->label('Macchina (matricola tracciata)')->placeholder('—'),
+                    TextEntry::make('machineUnit.billingCustomer.full_name')->label('Fatturare a')->placeholder('—'),
                 ]),
             InfolistSection::make('Descrizione')
                 ->schema([
@@ -118,6 +120,12 @@ class ServiceReportResource extends Resource
                         ->preload()
                         ->required()
                         ->createOptionForm([
+                            Forms\Components\TextInput::make('company_name')->label('Ragione sociale'),
+                            Forms\Components\TextInput::make('first_name')->label('Nome'),
+                            Forms\Components\TextInput::make('last_name')->label('Cognome'),
+                            ...CustomerContactFields::schema(),
+                        ])
+                        ->editOptionForm([
                             Forms\Components\TextInput::make('company_name')->label('Ragione sociale'),
                             Forms\Components\TextInput::make('first_name')->label('Nome'),
                             Forms\Components\TextInput::make('last_name')->label('Cognome'),
@@ -172,6 +180,13 @@ class ServiceReportResource extends Resource
                     Forms\Components\TextInput::make('machine_serial_number')
                         ->label('Matricola')
                         ->maxLength(255),
+                    Forms\Components\Select::make('machine_unit_id')
+                        ->label('Macchina (matricola tracciata)')
+                        ->relationship('machineUnit', 'serial_number')
+                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->display_name.' — '.$record->serial_number)
+                        ->searchable()
+                        ->preload()
+                        ->helperText('Se indicata e ha un "Fatturare a" proprio, guida la fatturazione di questo intervento al posto del cliente.'),
                 ]),
             Forms\Components\Section::make('Descrizione')
                 ->schema([
@@ -270,11 +285,11 @@ class ServiceReportResource extends Resource
                                 ->label('Email destinatario')
                                 ->email()
                                 ->required()
-                                ->default(fn (ServiceReport $record) => $record->customer->invoiceRecipient()->primaryEmail()),
+                                ->default(fn (ServiceReport $record) => $record->invoiceRecipient()->primaryEmail()),
                             Forms\Components\TextInput::make('cc_email')->label('CC (opzionale)')->email(),
                         ])
                         ->action(function (array $data, ServiceReport $record) {
-                            $record->load(['customer', 'technician', 'machineProduct', 'partsUsed.product', 'tenant']);
+                            $record->load(['customer', 'technician', 'machineProduct', 'machineUnit.billingCustomer', 'partsUsed.product', 'tenant']);
                             $pdf = Pdf::loadView('pdf.service-report', ['report' => $record]);
 
                             $email = $record->emails()->create([

@@ -18,7 +18,7 @@
 Note: {{ $leaveRequest->notes }}
 
 @endif
-<x-mail::button :url="\App\Filament\Resources\LeaveRequestResource::getUrl('edit', ['record' => $leaveRequest], tenant: $leaveRequest->tenant)">
+<x-mail::button :url="\App\Filament\Resources\LeaveRequestResource::getUrl('view', ['record' => $leaveRequest], tenant: $leaveRequest->tenant)">
 Apri la richiesta
 </x-mail::button>
 

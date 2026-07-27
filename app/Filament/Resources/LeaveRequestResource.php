@@ -241,6 +241,7 @@ class LeaveRequestResource extends Resource
         return [
             'index' => Pages\ListLeaveRequests::route('/'),
             'create' => Pages\CreateLeaveRequest::route('/create'),
+            'view' => Pages\ViewLeaveRequest::route('/{record}'),
             'edit' => Pages\EditLeaveRequest::route('/{record}/edit'),
         ];
     }
@@ -251,7 +252,7 @@ class LeaveRequestResource extends Resource
      * credere che l'azione non sia andata a buon fine (vedi anche
      * CreateLeaveRequest::afterCreate() per lo stesso problema in creazione).
      */
-    protected static function sendDecisionMail(LeaveRequest $record): void
+    public static function sendDecisionMail(LeaveRequest $record): void
     {
         try {
             Mail::to($record->user->email)
@@ -265,7 +266,7 @@ class LeaveRequestResource extends Resource
         }
     }
 
-    protected static function decisionNotificationBody(LeaveRequest $record): string
+    public static function decisionNotificationBody(LeaveRequest $record): string
     {
         $period = $record->date_from->isSameDay($record->date_to)
             ? $record->date_from->format('d/m/Y')

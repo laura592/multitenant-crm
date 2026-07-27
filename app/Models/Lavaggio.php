@@ -93,4 +93,13 @@ class Lavaggio extends Model
     {
         return $this->belongsTo(MaintenanceSchedule::class);
     }
+
+    /**
+     * Vedi ServiceReport::invoiceRecipient(): la macchina (se ha un pagatore
+     * proprio) prevale sul billing_customer_id generico del cliente.
+     */
+    public function invoiceRecipient(): Customer
+    {
+        return $this->machineUnit?->billingCustomer ?? $this->customer->invoiceRecipient();
+    }
 }
