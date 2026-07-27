@@ -215,7 +215,7 @@ class TimeEntryResource extends Resource
                         Forms\Components\DatePicker::make('until')->label('Al')->required()->maxDate(today()),
                     ])
                     ->requiresConfirmation()
-                    ->modalDescription('Crea le timbrature mancanti in base al tuo orario standard per i giorni scelti. I giorni che hanno gia\' almeno una timbratura vengono saltati.')
+                    ->modalDescription('Crea le timbrature mancanti in base al tuo orario standard per i giorni scelti (sabato e domenica esclusi). I giorni che hanno gia\' almeno una timbratura vengono saltati.')
                     ->action(function (array $data) {
                         $user = auth()->user();
                         $from = Carbon::parse($data['from'])->startOfDay();
@@ -228,6 +228,10 @@ class TimeEntryResource extends Resource
                         $created = 0;
 
                         for ($date = $from->copy(); $date->lte($until); $date->addDay()) {
+                            if ($date->isWeekend()) {
+                                continue;
+                            }
+
                             $alreadyLogged = TimeEntry::query()
                                 ->where('user_id', $user->id)
                                 ->whereDate('clock_in', $date)

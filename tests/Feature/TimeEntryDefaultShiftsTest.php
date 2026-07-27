@@ -6,6 +6,7 @@ use App\Filament\Resources\TimeEntryResource\Pages\ListTimeEntries;
 use App\Models\Tenant;
 use App\Models\TimeEntry;
 use App\Models\User;
+use Carbon\Carbon;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -77,8 +78,11 @@ class TimeEntryDefaultShiftsTest extends TestCase
         $this->assertSame(2, TimeEntry::where('user_id', $employee->id)->count());
     }
 
-    public function test_quick_backfill_creates_shifts_for_missing_days_only(): void
+    public function test_quick_backfill_creates_shifts_for_missing_weekdays_and_skips_weekend_and_already_logged_days(): void
     {
+        // Giovedi' 2026-07-30 -> lunedi' 2026-08-03: copre un weekend intero.
+        Carbon::setTestNow(Carbon::parse('2026-08-03'));
+
         $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);
         $employee = User::create([
             'tenant_id' => $tenant->id, 'name' => 'Laura', 'email' => 'laura@gifar.it', 'password' => bcrypt('password'),
@@ -87,19 +91,21 @@ class TimeEntryDefaultShiftsTest extends TestCase
         ]);
         $this->giveRole($employee, $tenant, 'dipendente');
 
-        $from = today()->subDays(3);
-        $middleDay = today()->subDays(2);
-        $until = today()->subDay();
+        $from = Carbon::parse('2026-07-30'); // giovedi'
+        $alreadyLoggedDay = Carbon::parse('2026-07-31'); // venerdi', gia' timbrato a mano
+        $saturday = Carbon::parse('2026-08-01');
+        $sunday = Carbon::parse('2026-08-02');
+        $until = Carbon::parse('2026-08-03'); // lunedi'
 
         $this->actingAs($employee);
         Filament::setTenant($tenant);
 
-        // Il giorno di mezzo ha gia' una timbratura (inserita a mano): va saltato.
+        // Il venerdi' ha gia' una timbratura (inserita a mano): va saltato.
         TimeEntry::create([
             'tenant_id' => $tenant->id,
             'user_id' => $employee->id,
-            'clock_in' => $middleDay->copy()->setTime(9, 0),
-            'clock_out' => $middleDay->copy()->setTime(13, 0),
+            'clock_in' => $alreadyLoggedDay->copy()->setTime(9, 0),
+            'clock_out' => $alreadyLoggedDay->copy()->setTime(13, 0),
             'source' => 'manuale',
             'status' => 'chiusa',
         ]);
@@ -111,7 +117,9 @@ class TimeEntryDefaultShiftsTest extends TestCase
             ]);
 
         $this->assertSame(2, TimeEntry::where('user_id', $employee->id)->whereDate('clock_in', $from)->count());
-        $this->assertSame(1, TimeEntry::where('user_id', $employee->id)->whereDate('clock_in', $middleDay)->count());
+        $this->assertSame(1, TimeEntry::where('user_id', $employee->id)->whereDate('clock_in', $alreadyLoggedDay)->count());
+        $this->assertSame(0, TimeEntry::where('user_id', $employee->id)->whereDate('clock_in', $saturday)->count());
+        $this->assertSame(0, TimeEntry::where('user_id', $employee->id)->whereDate('clock_in', $sunday)->count());
         $this->assertSame(2, TimeEntry::where('user_id', $employee->id)->whereDate('clock_in', $until)->count());
         $this->assertSame(5, TimeEntry::where('user_id', $employee->id)->count());
 
@@ -123,5 +131,7 @@ class TimeEntryDefaultShiftsTest extends TestCase
             ]);
 
         $this->assertSame(5, TimeEntry::where('user_id', $employee->id)->count());
+
+        Carbon::setTestNow();
     }
 }
