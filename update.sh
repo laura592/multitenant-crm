@@ -23,6 +23,14 @@ npm run build
 echo "==> Migrazioni database"
 "$PHP_BIN" artisan migrate --force
 
+# I permessi di ogni ruolo sono dati in role_has_permissions, non solo
+# codice: senza questo passo, una modifica a App\Support\RolePermissions
+# resta senza effetto online finche' non si ri-sincronizzano manualmente
+# (successo il 2026-07-27 con "dipendente" e i preventivi).
+echo "==> Sincronizzazione ruoli/permessi"
+"$PHP_BIN" artisan db:seed --class=RolesAndPermissionsSeeder --force
+"$PHP_BIN" artisan permission:cache-reset
+
 echo "==> Pulizia cache"
 "$PHP_BIN" artisan optimize:clear
 
