@@ -115,11 +115,10 @@ class RoleResource extends Resource implements HasShieldPermissions
 
     /**
      * Rimuove dallo stato selezionato i permessi che non hanno senso senza le
-     * relative permission di visualizzazione:
-     * - nessun permesso (a parte "view_any") ha senso senza "view_any" (serve per
-     *   raggiungere l'elenco/la risorsa);
-     * - i permessi che operano su un singolo record (update, delete, restore,
-     *   force_delete, replicate, ...) non hanno senso senza "view".
+     * relative permission di visualizzazione: a parte "view_any" e "view"
+     * stessi, ogni altro permesso (create, update, delete, ...) richiede che
+     * siano attive entrambe, perche' senza "Visualizza" la risorsa non e'
+     * raggiungibile in UI.
      *
      * @param  array<int, string>  $state
      * @return array<int, string>
@@ -134,26 +133,13 @@ class RoleResource extends Resource implements HasShieldPermissions
         $hasViewAny = $selected->contains($viewAnyKey);
         $hasView = $selected->contains($viewKey);
 
-        // Azioni raggiungibili dall'elenco, senza dover aprire il singolo record.
-        $listLevelPrefixes = ['create', 'delete_any', 'restore_any', 'force_delete_any', 'reorder'];
-
         return $selected
-            ->filter(function (string $permission) use ($viewAnyKey, $viewKey, $hasViewAny, $hasView, $resource, $listLevelPrefixes) {
-                if ($permission === $viewAnyKey) {
+            ->filter(function (string $permission) use ($viewAnyKey, $viewKey, $hasViewAny, $hasView) {
+                if ($permission === $viewAnyKey || $permission === $viewKey) {
                     return true;
                 }
 
-                if (! $hasViewAny) {
-                    return false;
-                }
-
-                if ($permission === $viewKey) {
-                    return true;
-                }
-
-                $prefix = Str::beforeLast($permission, "_{$resource}");
-
-                return in_array($prefix, $listLevelPrefixes, true) || $hasView;
+                return $hasViewAny && $hasView;
             })
             ->values()
             ->toArray();
