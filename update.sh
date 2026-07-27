@@ -2,32 +2,40 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
+# Su hosting condiviso (cPanel) il `php`/`composer` di default in PATH puo'
+# non essere la versione richiesta da composer.json (vedi docs/deploy-cutover.md,
+# Fase 1). Sovrascrivi con: PHP_BIN=php8.4 ./update.sh
+PHP_BIN="${PHP_BIN:-php}"
+COMPOSER_BIN="${COMPOSER_BIN:-composer}"
+
+echo "==> PHP in uso: $($PHP_BIN -v | head -1)"
+
 echo "==> Git pull"
 git pull
 
 echo "==> Composer install"
-composer install --no-interaction --prefer-dist
+"$PHP_BIN" "$(command -v "$COMPOSER_BIN")" install --no-interaction --prefer-dist
 
 echo "==> NPM install + build"
 npm install
 npm run build
 
 echo "==> Migrazioni database"
-php artisan migrate --force
+"$PHP_BIN" artisan migrate --force
 
 echo "==> Pulizia cache"
-php artisan optimize:clear
+"$PHP_BIN" artisan optimize:clear
 
 echo "==> Rebuild cache (config, route, view, event)"
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
-php artisan event:cache
+"$PHP_BIN" artisan config:cache
+"$PHP_BIN" artisan route:cache
+"$PHP_BIN" artisan view:cache
+"$PHP_BIN" artisan event:cache
 
 echo "==> Filament optimize"
-php artisan filament:optimize
+"$PHP_BIN" artisan filament:optimize
 
 echo "==> Riavvio queue worker (se attivo)"
-php artisan queue:restart
+"$PHP_BIN" artisan queue:restart
 
 echo "Fatto."
