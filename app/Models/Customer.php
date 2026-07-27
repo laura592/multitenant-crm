@@ -7,8 +7,12 @@ use App\Models\Concerns\LogsAuditTrail;
 use App\Support\PhoneNumber;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property-read self|null $billingCustomer
+ */
 class Customer extends Model
 {
     use BelongsToTenant, HasUuids, LogsAuditTrail;
@@ -20,7 +24,9 @@ class Customer extends Model
     public const SOURCE_APP = 'app';
 
     protected $fillable = [
+        'legacy_id',
         'tenant_id',
+        'billing_customer_id',
         'first_name',
         'last_name',
         'company_name',
@@ -42,8 +48,6 @@ class Customer extends Model
         'gestionale_code',
         'approved_for_gestionale_at',
         'sent_to_gestionale_at',
-        'lavaggio_frequency_days',
-        'lavaggio_next_due_date',
     ];
 
     protected $casts = [
@@ -54,7 +58,6 @@ class Customer extends Model
         'approved_for_gestionale_at' => 'datetime',
         'sent_to_gestionale_at' => 'datetime',
         'website_checked_at' => 'datetime',
-        'lavaggio_next_due_date' => 'date',
     ];
 
     protected $attributes = [
@@ -119,34 +122,30 @@ class Customer extends Model
         return $this->hasMany(Quote::class);
     }
 
-    public function lavaggi(): HasMany
+    /**
+     * Cliente che paga al posto di questo (es. un gestore che ha messo una
+     * macchina in comodato presso questo cliente e si accolla i costi):
+     * preventivi/rapportini/lavaggi restano registrati su QUESTO cliente
+     * (dove si lavora davvero), ma vanno intestati/inviati al cliente
+     * restituito da invoiceRecipient() se impostato.
+     */
+    public function billingCustomer(): BelongsTo
     {
-        return $this->hasMany(Lavaggio::class);
+        return $this->belongsTo(self::class, 'billing_customer_id');
     }
 
     /**
-     * Ricalcola la prossima scadenza lavaggio da questo cliente: ultimo
-     * lavaggio registrato (per data, non per data di inserimento) +
-     * cadenza in giorni impostata sul cliente. Se manca l'una o l'altra
-     * cosa, la scadenza resta quella impostata a mano (o vuota) - la
-     * cadenza automatica e' un aiuto, non sostituisce un valore inserito
-     * manualmente in assenza di lavaggi registrati.
+     * Destinatario effettivo di documenti/fatture per questo cliente: se
+     * stesso, a meno che non paghi qualcun altro al posto suo.
      */
-    public function recalculateLavaggioNextDue(): void
+    public function invoiceRecipient(): self
     {
-        if (! $this->lavaggio_frequency_days) {
-            return;
-        }
+        return $this->billingCustomer ?? $this;
+    }
 
-        $lastData = $this->lavaggi()->max('data');
-
-        if (! $lastData) {
-            return;
-        }
-
-        $this->update([
-            'lavaggio_next_due_date' => \Illuminate\Support\Carbon::parse($lastData)->addDays($this->lavaggio_frequency_days),
-        ]);
+    public function lavaggi(): HasMany
+    {
+        return $this->hasMany(Lavaggio::class);
     }
 
     public function quoteGroups(): HasMany

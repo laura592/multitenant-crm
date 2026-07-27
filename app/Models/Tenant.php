@@ -150,6 +150,11 @@ class Tenant extends Model implements HasName
         return $this->hasMany(MaintenanceSchedule::class);
     }
 
+    public function lavaggi(): HasMany
+    {
+        return $this->hasMany(Lavaggio::class);
+    }
+
     public function timeEntries(): HasMany
     {
         return $this->hasMany(TimeEntry::class);

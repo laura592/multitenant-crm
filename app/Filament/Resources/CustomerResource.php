@@ -63,18 +63,16 @@ class CustomerResource extends Resource
                     Forms\Components\TextInput::make('vat_number')->label('P.IVA')->maxLength(255),
                     Forms\Components\TextInput::make('sdi')->label('Codice SDI')->maxLength(255),
                     Forms\Components\TextInput::make('pec')->label('PEC')->email()->maxLength(255),
-                ]),
-            Forms\Components\Section::make('Lavaggi')
-                ->columns(2)
-                ->schema([
-                    Forms\Components\TextInput::make('lavaggio_frequency_days')
-                        ->label('Cadenza (giorni)')
-                        ->numeric()
-                        ->minValue(1)
-                        ->helperText('Es. 20 o 30. Ogni nuovo lavaggio registrato sposta in automatico la prossima scadenza di questi giorni.'),
-                    Forms\Components\DatePicker::make('lavaggio_next_due_date')
-                        ->label('Prossima scadenza lavaggio')
-                        ->helperText('Calcolata da sola se imposti la cadenza, ma puoi correggerla a mano in qualunque momento.'),
+                    Forms\Components\Select::make('billing_customer_id')
+                        ->label('Fatturare a')
+                        ->relationship('billingCustomer', 'company_name', modifyQueryUsing: fn ($query, ?Customer $record) => $query
+                            ->when($record, fn ($q) => $q->whereKeyNot($record->id))
+                            ->orderBy('company_name'))
+                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->full_name)
+                        ->searchable(['company_name', 'first_name', 'last_name'])
+                        ->preload()
+                        ->columnSpanFull()
+                        ->helperText('Lascia vuoto se il cliente paga per se stesso. Imposta un altro cliente se qualcun altro paga al posto suo (es. un gestore che ha messo una macchina in comodato presso questo cliente): preventivi e rapportini restano su questo cliente, ma verranno intestati/inviati al cliente scelto qui.'),
                 ]),
         ]);
     }
@@ -107,24 +105,7 @@ class CustomerResource extends Resource
                     TextEntry::make('vat_number')->label('P.IVA')->placeholder('—'),
                     TextEntry::make('sdi')->label('Codice SDI')->placeholder('—'),
                     TextEntry::make('pec')->label('PEC')->placeholder('—'),
-                ]),
-            InfolistSection::make('Lavaggi')
-                ->columns(2)
-                ->schema([
-                    TextEntry::make('lavaggio_frequency_days')
-                        ->label('Cadenza')
-                        ->placeholder('—')
-                        ->formatStateUsing(fn (?int $state) => $state ? "Ogni {$state} giorni" : null),
-                    TextEntry::make('lavaggio_next_due_date')
-                        ->label('Prossima scadenza')
-                        ->date()
-                        ->placeholder('—')
-                        ->color(fn (Customer $record) => match (true) {
-                            $record->lavaggio_next_due_date === null => 'gray',
-                            $record->lavaggio_next_due_date->isPast() => 'danger',
-                            $record->lavaggio_next_due_date->diffInDays(now()) <= 5 => 'warning',
-                            default => 'success',
-                        }),
+                    TextEntry::make('billingCustomer.full_name')->label('Fatturare a')->placeholder('Se stesso'),
                 ]),
             InfolistSection::make('Gestionale')
                 ->columns(3)
@@ -245,4 +226,5 @@ class CustomerResource extends Resource
             'edit' => Pages\EditCustomer::route('/{record}/edit'),
         ];
     }
+
 }

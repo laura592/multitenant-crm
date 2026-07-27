@@ -893,20 +893,41 @@ status (enum: attiva, scaduta, rinnovata),
 notes, created_at, updated_at
 ```
 
-**`maintenance_schedules`** — piani di manutenzione ordinaria per cliente/macchina, autonomi
+**`maintenance_schedules`** — piani di manutenzione ordinaria **e di lavaggio** per cliente/macchina,
+autonomi (unificati il 2026-07-27: i lavaggi erano nati come sistema a parte con cadenza sul
+`Customer`, ma sono concettualmente un piano di manutenzione con cadenza/natura diversa, non un
+dominio separato)
 
 ```
-id, tenant_id, customer_id, comodato_macchina_id (nullable),
-frequency (enum: mensile, trimestrale, semestrale, annuale),
-last_service_report_id (FK service_reports, nullable — ultima visita effettuata),
+id, tenant_id, customer_id, type (enum: manutenzione, lavaggio; default manutenzione),
+comodato_macchina_id (nullable — solo type=manutenzione),
+frequency (enum nullable: mensile, trimestrale, semestrale, annuale — solo type=manutenzione),
+frequency_days (nullable — cadenza in giorni, solo type=lavaggio, es. 20/30),
+last_service_report_id (FK service_reports, nullable — ultima visita, solo type=manutenzione),
+last_lavaggio_id (FK lavaggi, nullable — ultimo lavaggio registrato, solo type=lavaggio),
 next_due_date,
 notes, created_at, updated_at
 ```
 
 Alla chiusura di un `ServiceReport` di tipo `manutenzione_ordinaria` collegato a un
-`maintenance_schedule`, un Observer aggiorna `last_service_report_id` e ricalcola `next_due_date`
-in base a `frequency`. `MaintenanceScheduleResource` mostra/filtra l'urgenza direttamente su questa
-colonna — nessuna `deadline` polimorfica coinvolta (vedi decisione sopra).
+`maintenance_schedule` di tipo `manutenzione`, un Observer aggiorna `last_service_report_id` e
+ricalcola `next_due_date` in base a `frequency`. `MaintenanceScheduleResource` mostra/filtra
+l'urgenza direttamente su questa colonna — nessuna `deadline` polimorfica coinvolta (vedi decisione
+sopra).
+
+**`lavaggi`** — registro dei singoli interventi di lavaggio (natura diversa da `ServiceReport`:
+pulizia, non riparazione/manutenzione), agganciato al proprio piano via `maintenance_schedule_id`
+
+```
+id, tenant_id, customer_id, machine_unit_id (nullable),
+maintenance_schedule_id (FK maintenance_schedules, nullable — il piano type=lavaggio del cliente),
+data, descrizione, note, created_at, updated_at
+```
+
+Ogni volta che un `Lavaggio` viene salvato o cancellato, `MaintenanceSchedule::recalculateLavaggioNextDue()`
+ricalcola `next_due_date` del piano collegato come `MAX(lavaggi.data) + frequency_days`, usando il
+massimo tra tutti i lavaggi collegati (non solo l'ultimo salvato) per restare corretta anche
+modificando/cancellando lavaggi storici.
 
 ### 13.2 Scadenzario amministrativo
 
