@@ -63,6 +63,9 @@
                         <div class="customer-name">{{ $quote->customer->company_name }}</div>
                     @endif
                     <table>
+                        @if($quote->customer?->billingCustomer)
+                            <tr><td class="label">Fatturato a:</td><td>{{ $quote->customer->billingCustomer->full_name }}</td></tr>
+                        @endif
                         @if($quote->customer?->first_name || $quote->customer?->last_name)
                             <tr><td class="label">Rif.to:</td><td>{{ trim("{$quote->customer->first_name} {$quote->customer->last_name}") }}</td></tr>
                         @endif

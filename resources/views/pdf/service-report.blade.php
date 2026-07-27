@@ -23,6 +23,9 @@
 
     <table>
         <tr><th>Cliente</th><td>{{ $report->customer->company_name ?: $report->customer->full_name }}</td></tr>
+        @if($report->customer->billingCustomer)
+            <tr><th>Fatturato a</th><td>{{ $report->customer->billingCustomer->full_name }}</td></tr>
+        @endif
         <tr><th>Data intervento</th><td>{{ $report->intervention_date->format('d/m/Y') }}</td></tr>
         <tr><th>Tipo intervento</th><td>{{ $report->intervention_type }}</td></tr>
         <tr><th>Tecnico</th><td>{{ $report->technician->name }}</td></tr>

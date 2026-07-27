@@ -14,6 +14,7 @@ class Category extends Model
     use BelongsToTenant, HasUuids, SharedAcrossTenants;
 
     protected $fillable = [
+        'legacy_id',
         'tenant_id',
         'parent_id',
         'name',

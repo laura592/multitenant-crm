@@ -1,7 +1,8 @@
 <x-mail::message>
 # Preventivo {{ $quote->number }}
 
-Gentile {{ $quote->customer?->company_name ?: $quote->customer?->full_name }},
+@php($recipient = $quote->customer?->invoiceRecipient())
+Gentile {{ $recipient?->company_name ?: $recipient?->full_name }},
 
 @if($customMessage)
 {{ $customMessage }}

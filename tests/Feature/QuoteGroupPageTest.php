@@ -38,7 +38,7 @@ class QuoteGroupPageTest extends TestCase
 
         $this->get(QuoteGroupResource::getUrl('edit', ['record' => $group]))
             ->assertOk()
-            ->assertSee('Panoramica offerta')
+            ->assertSee('Riepilogo offerta')
             ->assertSee('Aggiungi preventivo');
     }
 }

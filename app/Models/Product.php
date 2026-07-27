@@ -25,6 +25,7 @@ class Product extends Model
     public const SOURCE_THIRD_PARTY = 'terzo';
 
     protected $fillable = [
+        'legacy_id',
         'tenant_id',
         'category_id',
         'brand_id',

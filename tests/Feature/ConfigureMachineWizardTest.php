@@ -178,31 +178,31 @@ class ConfigureMachineWizardTest extends TestCase
         $this->assertSame(0, $this->quote->quoteProducts()->count(), 'Nessuna riga deve essere creata se un vincolo requires non è soddisfatto');
     }
 
-    public function test_creating_a_quote_redirects_to_edit_with_the_wizard_already_open(): void
+    public function test_creating_a_quote_redirects_to_a_plain_edit_page(): void
     {
         $customer = Customer::create(['tenant_id' => $this->tenant->id, 'company_name' => 'Nuovo Cliente']);
 
-        Livewire::test(CreateQuote::class)
+        $test = Livewire::test(CreateQuote::class)
             ->fillForm([
                 'customer_id' => $customer->id,
                 'date' => now()->toDateString(),
                 'status' => 'bozza',
             ])
             ->call('create')
-            ->assertHasNoFormErrors()
-            ->assertRedirectContains('openWizard=1');
+            ->assertHasNoFormErrors();
 
         $newQuote = Quote::where('customer_id', $customer->id)->firstOrFail();
 
-        $response = $this->get(route('filament.admin.resources.quotes.edit', [
-            'tenant' => $this->tenant->slug,
-            'record' => $newQuote->getRouteKey(),
-        ]).'?openWizard=1');
+        // QuoteResource usa '/{record}' come rotta edit (senza suffisso
+        // "/edit", a differenza di altre risorse) - vedi QuoteResource::getPages().
+        $test->assertRedirectContains($newQuote->getRouteKey());
 
-        $response->assertOk();
-        // Testo visibile solo se il wizard "configureMachine" è davvero montato/aperto
-        // (nessuna macchina ancora scelta a questo punto: solo Macchina + Riepilogo)
-        $response->assertSee('Riepilogo');
+        // L'apertura automatica del wizard dopo la creazione e' stata tolta
+        // su richiesta esplicita (l'utente vuole aprirlo lui quando serve,
+        // non ritrovarselo aperto) - vedi CreateQuote::getRedirectUrl().
+        // EditQuote non legge piu' alcun parametro "openWizard": la pagina si
+        // apre sempre sullo stato normale, il wizard va avviato a mano.
+        $this->assertStringNotContainsString('openWizard', $test->effects['redirect']);
     }
 
     public function test_wizard_shows_a_dedicated_step_per_known_category_with_prices_visible(): void

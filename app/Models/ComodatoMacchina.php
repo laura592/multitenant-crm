@@ -14,6 +14,7 @@ class ComodatoMacchina extends Model
     protected $table = 'comodato_macchine';
 
     protected $fillable = [
+        'legacy_id',
         'tenant_id',
         'customer_id',
         'nome_macchina',

@@ -11,6 +11,7 @@ class QuoteEmail extends Model
     use HasUuids;
 
     protected $fillable = [
+        'legacy_id',
         'quote_id',
         'user_id',
         'recipient_email',

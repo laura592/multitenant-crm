@@ -7,7 +7,8 @@
 	$footerFiscal = $tenant?->pdfFiscalLine();
 	$footerContacts = $tenant?->pdfContactLine();
 	$renderedBody = trim((string) ($emailBody ?? ''));
-	$customerName = $group->customer?->company_name ?: $group->customer?->full_name;
+	$recipient = $group->customer?->invoiceRecipient();
+	$customerName = $recipient?->company_name ?: $recipient?->full_name;
 @endphp
 
 <div style="background:#0f172a;border-radius:10px;padding:16px 18px;color:#ffffff;margin-bottom:16px;">

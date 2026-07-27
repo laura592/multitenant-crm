@@ -68,6 +68,13 @@ class ImportLegacyData extends Command
         'rejected' => 'rifiutato',
     ];
 
+    /**
+     * Idempotente tramite legacy_id: ogni updateOrCreate(['legacy_id' =>
+     * $row->id], [...]) nei metodi import* aggiorna la riga già importata
+     * invece di duplicarla, quindi rilanciare il comando (anche con --force,
+     * anche più volte) è sicuro - utile per un run di prova seguito dal run
+     * reale in finestra di manutenzione senza dover ripulire il DB a mano.
+     */
     public function handle(): int
     {
         if (! $this->option('force') && Customer::count() > 0) {
@@ -114,7 +121,7 @@ class ImportLegacyData extends Command
         $rows = $legacy->table('payment_methods')->get();
 
         foreach ($rows as $row) {
-            PaymentMethod::create([
+            PaymentMethod::updateOrCreate(['legacy_id' => $row->id], [
                 'name' => $row->name,
                 'slug' => $row->slug,
                 'is_active' => (bool) $row->is_active,
@@ -134,7 +141,7 @@ class ImportLegacyData extends Command
         foreach ($rows as $row) {
             $isSuperAdmin = $row->role === 'admin';
 
-            $user = User::create([
+            $user = User::updateOrCreate(['legacy_id' => $row->id], [
                 'tenant_id' => $isSuperAdmin ? null : $master->id,
                 'is_super_admin' => $isSuperAdmin,
                 'name' => $row->name,
@@ -156,7 +163,7 @@ class ImportLegacyData extends Command
         $rows = $legacy->table('categories')->get();
 
         foreach ($rows as $row) {
-            $category = Category::create([
+            $category = Category::updateOrCreate(['legacy_id' => $row->id], [
                 'tenant_id' => null, // condivisa (§4.2)
                 'name' => $row->name,
                 'created_at' => $row->created_at,
@@ -202,7 +209,7 @@ class ImportLegacyData extends Command
             $categoryName = $this->categoryNameMap[$row->category_id] ?? null;
             $type = $row->type === 'base' ? Product::TYPE_MACHINE : Product::TYPE_OPTION;
 
-            $product = Product::create([
+            $product = Product::updateOrCreate(['legacy_id' => $row->id], [
                 'tenant_id' => null, // catalogo condiviso (§4.2)
                 'category_id' => $this->categoryMap[$row->category_id] ?? null,
                 'product_family_id' => $type === Product::TYPE_MACHINE
@@ -235,7 +242,11 @@ class ImportLegacyData extends Command
         foreach (self::FAMILY_CODES as $code) {
             if (str_starts_with($haystack, $code)) {
                 if (! isset($this->familyMap[$code])) {
-                    $family = ProductFamily::create(['tenant_id' => null, 'name' => $code]);
+                    // firstOrCreate (non create): la cache in-memory riparte
+                    // vuota ad ogni run del comando, senza guardare il DB
+                    // ricreerebbe una famiglia duplicata ("A600" una seconda
+                    // volta) ogni volta che si rilancia l'import.
+                    $family = ProductFamily::firstOrCreate(['tenant_id' => null, 'name' => $code]);
                     $this->familyMap[$code] = $family->id;
                 }
 
@@ -256,7 +267,7 @@ class ImportLegacyData extends Command
                 continue;
             }
 
-            ProductPrice::create([
+            ProductPrice::updateOrCreate(['legacy_id' => $row->id], [
                 'product_id' => $this->productMap[$row->product_id],
                 'price' => $row->price,
                 'valid_from' => $row->valid_from,
@@ -325,12 +336,12 @@ class ImportLegacyData extends Command
         $mapKey = "{$baseProductId}|{$key}";
 
         if (! isset($this->slotMap[$mapKey])) {
-            $slot = ProductOptionSlot::create([
-                'product_id' => $baseProductId,
-                'slot_name' => $key,
-                'label' => Str::headline($key),
-                'sort_order' => $sortOrder,
-            ]);
+            // firstOrCreate, stesso motivo di resolveFamily(): la cache in-memory
+            // non sopravvive a un secondo run del comando.
+            $slot = ProductOptionSlot::firstOrCreate(
+                ['product_id' => $baseProductId, 'slot_name' => $key],
+                ['label' => Str::headline($key), 'sort_order' => $sortOrder]
+            );
             $this->slotMap[$mapKey] = $slot->id;
         }
 
@@ -342,7 +353,7 @@ class ImportLegacyData extends Command
         $rows = $legacy->table('customers')->get();
 
         foreach ($rows as $row) {
-            $customer = Customer::create([
+            $customer = Customer::updateOrCreate(['legacy_id' => $row->id], [
                 'tenant_id' => $master->id,
                 'first_name' => $row->first_name,
                 'last_name' => $row->last_name,
@@ -379,7 +390,7 @@ class ImportLegacyData extends Command
                 continue;
             }
 
-            $quote = Quote::create([
+            $quote = Quote::updateOrCreate(['legacy_id' => $row->id], [
                 'tenant_id' => $master->id,
                 'customer_id' => $this->customerMap[$row->customers_id],
                 'number' => $row->number,
@@ -412,7 +423,7 @@ class ImportLegacyData extends Command
                 continue;
             }
 
-            QuoteProduct::create([
+            QuoteProduct::updateOrCreate(['legacy_id' => $row->id], [
                 'quote_id' => $this->quoteMap[$row->quote_id],
                 'product_id' => $this->productMap[$row->product_id],
                 'parent_quote_product_id' => null, // nessuna gerarchia nello schema legacy
@@ -440,7 +451,7 @@ class ImportLegacyData extends Command
                 continue;
             }
 
-            QuoteEmail::create([
+            QuoteEmail::updateOrCreate(['legacy_id' => $row->id], [
                 'quote_id' => $this->quoteMap[$row->quote_id],
                 'user_id' => $this->userMap[$row->user_id] ?? null,
                 'recipient_email' => $row->recipient_email,
@@ -468,7 +479,7 @@ class ImportLegacyData extends Command
                 continue;
             }
 
-            $request = InformationRequest::create([
+            $request = InformationRequest::updateOrCreate(['legacy_id' => $row->id], [
                 'tenant_id' => $master->id,
                 'customer_id' => $this->customerMap[$row->customers_id],
                 'number' => $row->number,
@@ -497,13 +508,20 @@ class ImportLegacyData extends Command
                 continue;
             }
 
-            DB::table('information_request_product')->insert([
-                'id' => (string) Str::orderedUuid(),
-                'information_request_id' => $this->informationRequestMap[$row->information_request_id],
-                'product_id' => $this->productMap[$row->product_id],
-                'created_at' => $row->created_at,
-                'updated_at' => $row->updated_at,
-            ]);
+            $informationRequestId = $this->informationRequestMap[$row->information_request_id];
+            $productId = $this->productMap[$row->product_id];
+
+            // updateOrInsert keyed su (information_request_id, product_id):
+            // la pivot non ha un legacy_id proprio, ma questa coppia è già
+            // naturalmente univoca, quindi un secondo run non duplica la riga.
+            DB::table('information_request_product')->updateOrInsert(
+                ['information_request_id' => $informationRequestId, 'product_id' => $productId],
+                [
+                    'id' => (string) Str::orderedUuid(),
+                    'created_at' => $row->created_at,
+                    'updated_at' => $row->updated_at,
+                ]
+            );
             $count++;
         }
 
@@ -515,7 +533,7 @@ class ImportLegacyData extends Command
         $rows = $legacy->table('comodato_macchine')->get();
 
         foreach ($rows as $row) {
-            ComodatoMacchina::create([
+            ComodatoMacchina::updateOrCreate(['legacy_id' => $row->id], [
                 'tenant_id' => $master->id,
                 'customer_id' => null, // non presente nello schema legacy
                 'nome_macchina' => $row->nome_macchina,

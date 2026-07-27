@@ -270,7 +270,7 @@ class ServiceReportResource extends Resource
                                 ->label('Email destinatario')
                                 ->email()
                                 ->required()
-                                ->default(fn (ServiceReport $record) => $record->customer->primaryEmail()),
+                                ->default(fn (ServiceReport $record) => $record->customer->invoiceRecipient()->primaryEmail()),
                             Forms\Components\TextInput::make('cc_email')->label('CC (opzionale)')->email(),
                         ])
                         ->action(function (array $data, ServiceReport $record) {

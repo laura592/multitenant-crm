@@ -31,6 +31,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * @var list<string>
      */
     protected $fillable = [
+        'legacy_id',
         'tenant_id',
         'name',
         'email',

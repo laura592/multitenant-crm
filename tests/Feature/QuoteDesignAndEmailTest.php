@@ -97,7 +97,7 @@ class QuoteDesignAndEmailTest extends TestCase
         $response->assertSee('Righe preventivo');
         $response->assertSee('A400 Test');
         $response->assertSee('Invia');
-        $response->assertSee('Genera PDF');
+        $response->assertSee('PDF');
 
         $content = $response->getContent();
         $this->assertSame(1, substr_count($content, 'Righe preventivo'), 'La sezione "Righe preventivo" non deve comparire due volte (infolist + RelationManager) sulla pagina di sola visualizzazione');

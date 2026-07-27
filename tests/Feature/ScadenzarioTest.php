@@ -99,6 +99,6 @@ class ScadenzarioTest extends TestCase
         $response = $this->actingAs($user)->get("/admin/{$tenant->slug}/vehicles");
 
         $response->assertOk();
-        $response->assertSee($vehicle->activeDeadline(Deadline::TYPE_ASSICURAZIONE)->due_date->translatedFormat('M j, Y'));
+        $response->assertSee($vehicle->activeDeadline(Deadline::TYPE_ASSICURAZIONE)->due_date->format('d/m/Y'));
     }
 }

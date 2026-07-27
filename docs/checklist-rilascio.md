@@ -5,6 +5,10 @@ interno. Non sostituisce il buon senso: se qualcosa non torna, non spuntarlo
 e chiedi. Vive nel repo apposta per essere aggiornata quando cambia il
 progetto — se un passo non serve più o ne manca uno, modifica questo file.
 
+**Primo deploy in produzione (cutover dalla vecchia app)**: questa checklist
+resta valida come gate generico, ma per il runbook completo (server, DB
+reale, switch, rollback) vedi `docs/deploy-cutover.md`.
+
 ## 1. Comandi da lanciare sempre
 
 ```bash
@@ -15,13 +19,17 @@ Esegue `composer test` (PHPUnit, DB sqlite `:memory:`) + `composer analyse`
 (PHPStan/Larastan). È il gate minimo: se non è verde, non si rilascia (con
 l'unica eccezione dei fallimenti noti già tracciati, vedi sotto).
 
-**Stato noto al momento in cui è stata scritta questa checklist**:
-`composer analyse` pulito; `composer test` ha 4 test falliti preesistenti
-(`RolePermissionsTest` x3, `AppointmentCalendarTest` x1), non introdotti
-dalla documentazione (Epic 5) e non risolti in questo lavoro perché fuori
-perimetro. Se stai leggendo questa checklist in futuro e i 4 falliscono
-ancora identici, non è una regressione tua — ma se il numero è cambiato o i
-nomi sono diversi, **fermati e indaga**: potrebbe essere una rottura reale.
+**Stato noto (aggiornato dopo il fix di idempotenza di `import:legacy`,
+2026-07-27)**: `composer test` verde (105 test). I 4 fallimenti tracciati in
+precedenza (`RolePermissionsTest` x3, `AppointmentCalendarTest` x1) risultano
+sistemati; nel frattempo altri 4 test si erano rotti per modifiche UI
+intenzionali non ancora riportate nei test (etichetta PDF, sezione
+"Panoramica offerta" rinominata, formato data italiano) - aggiornati di
+conseguenza. `composer analyse` **non è pulito** in questo momento: una
+quota di errori preesistenti (proprietà Eloquent non tipizzate, integrazione
+Activitylog) non è stata toccata in questo lavoro perché fuori perimetro -
+se stai leggendo questa nota e il numero è sensibilmente più alto o compaiono
+errori in file che *hai* modificato tu, indaga quelli, non l'intero conteggio.
 Aggiorna questa nota quando vengono sistemati, per non lasciare un
 riferimento morto.
 

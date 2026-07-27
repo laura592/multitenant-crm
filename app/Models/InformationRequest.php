@@ -13,6 +13,7 @@ class InformationRequest extends Model
     use BelongsToTenant, HasUuids;
 
     protected $fillable = [
+        'legacy_id',
         'tenant_id',
         'customer_id',
         'number',

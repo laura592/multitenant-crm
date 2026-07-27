@@ -12,6 +12,7 @@ class ProductPrice extends Model
     use HasUuids, LogsAuditTrail;
 
     protected $fillable = [
+        'legacy_id',
         'product_id',
         'price',
         'valid_from',
