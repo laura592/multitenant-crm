@@ -114,8 +114,15 @@ class TimeEntryResource extends Resource
             ->defaultGroup('clock_in')
             ->columns([
                 Tables\Columns\TextColumn::make('user.name')->label('Dipendente')->searchable()->sortable(),
-                Tables\Columns\TextColumn::make('clock_in')->label('Entrata')->dateTime('d/m/Y H:i')->sortable(),
-                Tables\Columns\TextColumn::make('clock_out')->label('Uscita')->dateTime('d/m/Y H:i')->placeholder('In corso')->sortable(),
+                // Data in formato esteso ("lun 26 luglio 2026") in una
+                // colonna a parte: prima la data era ripetuta per intero sia
+                // in Entrata sia in Uscita, che invece mostrano solo l'ora.
+                Tables\Columns\TextColumn::make('clock_in')
+                    ->label('Giorno')
+                    ->formatStateUsing(fn (\Illuminate\Support\Carbon $state) => $state->translatedFormat('D d F Y'))
+                    ->sortable(),
+                Tables\Columns\TextColumn::make('clock_in')->label('Entrata')->dateTime('H:i')->sortable(),
+                Tables\Columns\TextColumn::make('clock_out')->label('Uscita')->dateTime('H:i')->placeholder('In corso')->sortable(),
                 Tables\Columns\TextColumn::make('worked_hours')->label('Ore')->state(fn (TimeEntry $record) => $record->worked_hours)->placeholder('—'),
                 Tables\Columns\TextColumn::make('source')
                     ->label('Origine')
