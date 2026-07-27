@@ -96,6 +96,9 @@ class RoleResource extends Resource implements HasShieldPermissions
         $permissionsArray = static::getResourcePermissionOptions($entity);
         $resource = $entity['resource'];
 
+        $viewAnyKey = "view_any_{$resource}";
+        $viewKey = "view_{$resource}";
+
         return static::getCheckboxListFormComponent(
             name: $resource,
             options: $permissionsArray,
@@ -110,7 +113,12 @@ class RoleResource extends Resource implements HasShieldPermissions
                     static::enforceViewDependencyForResourcePermissions($resource, $state ?? [])
                 )
             )
-            ->helperText('Senza "Visualizza" le altre azioni non sono raggiungibili: vengono disattivate automaticamente.');
+            ->disableOptionWhen(
+                fn (string $value, ?array $state) => $value !== $viewAnyKey
+                    && $value !== $viewKey
+                    && ! (collect($state ?? [])->contains($viewAnyKey) && collect($state ?? [])->contains($viewKey))
+            )
+            ->helperText('Senza "Visualizza" le altre azioni non sono raggiungibili: restano disattivate finche\' non la selezioni.');
     }
 
     /**
