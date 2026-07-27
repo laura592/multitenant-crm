@@ -244,6 +244,10 @@ class TimeEntryResource extends Resource
 
         $match = collect(User::find($userId)?->standardShifts() ?? [])->firstWhere('shift', $shift);
 
+        if (! $match) {
+            return null;
+        }
+
         return $match[$field]?->format('Y-m-d H:i:s');
     }
 
