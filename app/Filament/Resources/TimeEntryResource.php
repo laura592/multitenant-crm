@@ -117,10 +117,14 @@ class TimeEntryResource extends Resource
                 // Data in formato esteso ("lun 26 luglio 2026") in una
                 // colonna a parte: prima la data era ripetuta per intero sia
                 // in Entrata sia in Uscita, che invece mostrano solo l'ora.
-                Tables\Columns\TextColumn::make('clock_in')
+                // Nome diverso da 'clock_in' (non solo formattazione diversa
+                // sullo stesso campo): due colonne con lo stesso nome hanno
+                // wire:key identica lato Livewire, e il browser ne scarta
+                // silenziosamente una delle due, facendo sparire la colonna.
+                Tables\Columns\TextColumn::make('giorno')
                     ->label('Giorno')
-                    ->formatStateUsing(fn (\Illuminate\Support\Carbon $state) => $state->translatedFormat('D d F Y'))
-                    ->sortable(),
+                    ->state(fn (TimeEntry $record) => $record->clock_in->translatedFormat('D d F Y'))
+                    ->sortable(query: fn (Builder $query, string $direction) => $query->orderBy('clock_in', $direction)),
                 Tables\Columns\TextColumn::make('clock_in')->label('Entrata')->dateTime('H:i')->sortable(),
                 Tables\Columns\TextColumn::make('clock_out')->label('Uscita')->dateTime('H:i')->placeholder('In corso')->sortable(),
                 Tables\Columns\TextColumn::make('worked_hours')->label('Ore')->state(fn (TimeEntry $record) => $record->worked_hours)->placeholder('—'),
