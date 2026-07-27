@@ -42,11 +42,18 @@ class TimeEntryResource extends Resource
                     // Non persistito: serve solo a scegliere quale dei due
                     // orari standard del dipendente (mattina/pomeriggio, es.
                     // 8-12/13-17) pre-compilare in Entrata/Uscita qui sotto.
+                    // Ha senso solo in creazione: in modifica il turno reale
+                    // e' gia' nei valori salvati di Entrata/Uscita, e non
+                    // c'e' modo di dedurlo per riselezionarlo correttamente
+                    // (mostrare sempre "Mattina" di default avrebbe fatto
+                    // perdere Entrata/Uscita reali appena si toccava il
+                    // dipendente su un turno di pomeriggio).
                     Forms\Components\Select::make('shift_preset')
                         ->label('Turno')
                         ->options(['mattina' => 'Mattina', 'pomeriggio' => 'Pomeriggio'])
                         ->default('mattina')
                         ->dehydrated(false)
+                        ->visible(fn (string $operation) => $operation === 'create')
                         ->live()
                         ->afterStateUpdated(fn (Forms\Set $set, Forms\Get $get, ?string $state) => static::applyShiftDefaults($set, $get('user_id'), $state)),
                     Forms\Components\Select::make('user_id')
@@ -56,7 +63,11 @@ class TimeEntryResource extends Resource
                         ->disabled(fn () => ! static::isResponsabile(auth()->user()))
                         ->dehydrated()
                         ->live()
-                        ->afterStateUpdated(fn (Forms\Set $set, Forms\Get $get, ?string $state) => static::applyShiftDefaults($set, $state, $get('shift_preset')))
+                        ->afterStateUpdated(function (Forms\Set $set, Forms\Get $get, ?string $state, string $operation) {
+                            if ($operation === 'create') {
+                                static::applyShiftDefaults($set, $state, $get('shift_preset'));
+                            }
+                        })
                         ->required(),
                     Forms\Components\DateTimePicker::make('clock_in')
                         ->label('Entrata')
