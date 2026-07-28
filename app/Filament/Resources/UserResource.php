@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\UserResource\Pages;
+use App\Models\Role;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Forms;
@@ -71,10 +72,18 @@ class UserResource extends Resource
                         ->dehydrateStateUsing(fn (string $state) => bcrypt($state))
                         ->maxLength(255)
                         ->helperText('Lascia vuoto per non modificarla.'),
-                    Forms\Components\Select::make('roles')
+                    Forms\Components\Select::make('role_id')
                         ->label('Ruolo')
-                        ->relationship('roles', 'name')
+                        ->options(function () {
+                            $tenantId = Filament::getTenant()?->id;
+
+                            return Role::query()
+                                ->where('tenant_id', $tenantId)
+                                ->orderBy('name')
+                                ->pluck('name', 'id');
+                        })
                         ->preload()
+                        ->searchable()
                         ->required()
                         ->helperText('Ogni utente ha un solo ruolo applicativo.'),
                     Forms\Components\Hidden::make('tenant_id')

@@ -275,6 +275,7 @@ class ServiceReportResource extends Resource
                     Tables\Actions\Action::make('pdf')
                         ->label('PDF')
                         ->icon('heroicon-o-document-arrow-down')
+                        ->visible(fn (ServiceReport $record): bool => auth()->user()?->can('view', $record) ?? false)
                         ->url(fn (ServiceReport $record) => route('service-reports.pdf', $record))
                         ->openUrlInNewTab(),
                     Tables\Actions\Action::make('send')
