@@ -13,7 +13,8 @@ class ServiceReportController extends Controller
     {
         // TEMP debug ticket 403 service-reports.pdf (l.garbin, 2026-07-28):
         // da rimuovere una volta capita la causa reale del mismatch.
-        Log::info('service-reports.pdf authorize debug', [
+        // Log::info finirebbe scartato: in produzione LOG_LEVEL=error.
+        Log::error('service-reports.pdf authorize debug', [
             'auth_user_id' => auth()->id(),
             'auth_user_email' => auth()->user()?->email,
             'auth_user_tenant_id' => auth()->user()?->tenant_id,
