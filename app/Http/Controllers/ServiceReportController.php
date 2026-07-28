@@ -5,25 +5,19 @@ namespace App\Http\Controllers;
 use App\Models\ServiceReport;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Log;
+use Spatie\Permission\PermissionRegistrar;
 
 class ServiceReportController extends Controller
 {
     public function pdf(ServiceReport $serviceReport)
     {
-        // TEMP debug ticket 403 service-reports.pdf (l.garbin, 2026-07-28):
-        // da rimuovere una volta capita la causa reale del mismatch.
-        // Log::info finirebbe scartato: in produzione LOG_LEVEL=error.
-        Log::error('service-reports.pdf authorize debug', [
-            'auth_user_id' => auth()->id(),
-            'auth_user_email' => auth()->user()?->email,
-            'auth_user_tenant_id' => auth()->user()?->tenant_id,
-            'auth_user_is_super_admin' => auth()->user()?->is_super_admin,
-            'auth_user_can_view_service_report' => auth()->user()?->can('view_service::report'),
-            'report_id' => $serviceReport->id,
-            'report_tenant_id' => $serviceReport->tenant_id,
-            'tenant_match' => auth()->user()?->tenant_id === $serviceReport->tenant_id,
-        ]);
+        // Route fuori dal pannello Filament: SetPermissionsTeamId (che collega
+        // il tenant al "team" di spatie/laravel-permission) e' un tenant
+        // middleware di Filament e qui non gira, quindi senza questa riga
+        // $user->can(...) non trova il ruolo dell'utente (assegnato con un
+        // tenant_id specifico in model_has_roles) e nega SEMPRE l'accesso,
+        // anche a chi ha davvero il permesso (visto su l.garbin, 2026-07-28).
+        app(PermissionRegistrar::class)->setPermissionsTeamId(auth()->user()?->tenant_id);
 
         // Route fuori dal pannello Filament: lo scope tenant automatico di
         // BelongsToTenant non si applica (nessun tenant Filament attivo in
