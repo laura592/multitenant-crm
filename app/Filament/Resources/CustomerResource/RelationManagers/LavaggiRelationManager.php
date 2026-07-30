@@ -1,31 +1,22 @@
 <?php
 
-namespace App\Filament\Resources\MaintenanceScheduleResource\RelationManagers;
+namespace App\Filament\Resources\CustomerResource\RelationManagers;
 
 use App\Models\Lavaggio;
 use App\Models\MachineUnit;
-use App\Models\MaintenanceSchedule;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Model;
 
 class LavaggiRelationManager extends RelationManager
 {
     protected static string $relationship = 'lavaggi';
 
-    protected static ?string $title = 'Lavaggi eseguiti';
+    protected static ?string $title = 'Storico lavaggi';
 
     protected static ?string $modelLabel = 'Lavaggio';
-
-    // Ha senso solo per i piani di tipo lavaggio: per le manutenzioni gli
-    // interventi si registrano tramite ServiceReport, non qui.
-    public static function canViewForRecord(Model $ownerRecord, string $pageClass): bool
-    {
-        return $ownerRecord->type === MaintenanceSchedule::TYPE_LAVAGGIO;
-    }
 
     /**
      * Senza machine_unit_id il lavaggio non e' "di macchina sconosciuta": per
@@ -68,7 +59,7 @@ class LavaggiRelationManager extends RelationManager
             Forms\Components\Select::make('machine_unit_id')
                 ->label('Macchina')
                 ->relationship('machineUnit', 'serial_number', fn ($query) => $query
-                    ->where('current_customer_id', $this->getOwnerRecord()->customer_id))
+                    ->where('current_customer_id', $this->getOwnerRecord()->id))
                 ->getOptionLabelFromRecordUsing(fn ($record) => $record->display_name.' — '.$record->serial_number)
                 ->searchable()
                 ->preload()
@@ -78,7 +69,8 @@ class LavaggiRelationManager extends RelationManager
                 ->label('Descrizione')
                 ->helperText('Es. "5 vie + apertura", "chiusura stagionale".')
                 ->required()
-                ->maxLength(255),
+                ->maxLength(255)
+                ->default('Lavaggio impianto'),
             Forms\Components\Textarea::make('note')->label('Note')->columnSpanFull(),
         ]);
     }
@@ -94,20 +86,15 @@ class LavaggiRelationManager extends RelationManager
                     ->label('Macchina')
                     ->state(fn (Lavaggio $record) => static::macchinaLabel($record))
                     ->wrap(),
+                Tables\Columns\TextColumn::make('descrizione')->label('Descrizione')->searchable(),
+                Tables\Columns\TextColumn::make('note')->label('Note')->limit(50)->placeholder('—'),
                 Tables\Columns\TextColumn::make('fatturare_a')
                     ->label('Fatturare a')
                     ->state(fn (Lavaggio $record) => static::fatturareALabel($record))
                     ->wrap(),
-                Tables\Columns\TextColumn::make('descrizione')->label('Descrizione')->searchable(),
-                Tables\Columns\TextColumn::make('note')->label('Note')->limit(50)->placeholder('—'),
             ])
             ->headerActions([
-                Tables\Actions\CreateAction::make()
-                    ->mutateFormDataUsing(function (array $data): array {
-                        $data['customer_id'] = $this->getOwnerRecord()->customer_id;
-
-                        return $data;
-                    }),
+                Tables\Actions\CreateAction::make(),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
@@ -117,6 +104,8 @@ class LavaggiRelationManager extends RelationManager
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make(),
                 ]),
-            ]);
+            ])
+            ->emptyStateHeading('Nessun lavaggio registrato')
+            ->emptyStateDescription('Aggiungi il primo lavaggio con "Nuovo".');
     }
 }

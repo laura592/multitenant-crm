@@ -16,10 +16,15 @@ class MaintenanceSchedule extends Model
 
     public const TYPE_LAVAGGIO = 'lavaggio';
 
+    public const STATUS_ATTIVO = 'attivo';
+
+    public const STATUS_CHIUSO = 'chiuso';
+
     protected $fillable = [
         'tenant_id',
         'customer_id',
         'type',
+        'status',
         'comodato_macchina_id',
         'frequency',
         'frequency_days',
@@ -88,19 +93,18 @@ class MaintenanceSchedule extends Model
      */
     public function recalculateLavaggioNextDue(): void
     {
-        if (! $this->frequency_days) {
-            return;
-        }
-
         $last = $this->lavaggi()->orderByDesc('data')->first();
 
         if (! $last) {
             return;
         }
 
+        // "Ultimo lavaggio" va aggiornato sempre, anche sui piani "a
+        // chiamata" (senza frequency_days): solo la prossima scadenza
+        // automatica non ha senso senza una cadenza fissa.
         $this->update([
             'last_lavaggio_id' => $last->id,
-            'next_due_date' => $last->data->copy()->addDays($this->frequency_days),
+            'next_due_date' => $this->frequency_days ? $last->data->copy()->addDays($this->frequency_days) : null,
         ]);
     }
 }

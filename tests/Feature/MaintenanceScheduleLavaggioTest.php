@@ -57,6 +57,31 @@ class MaintenanceScheduleLavaggioTest extends TestCase
         $this->assertTrue($schedule->next_due_date->isSameDay($first->data->copy()->addDays(20)));
     }
 
+    public function test_a_chiamata_schedule_without_frequency_still_tracks_last_lavaggio(): void
+    {
+        $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);
+        $customer = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Bar Centrale']);
+
+        $schedule = MaintenanceSchedule::create([
+            'tenant_id' => $tenant->id,
+            'customer_id' => $customer->id,
+            'type' => MaintenanceSchedule::TYPE_LAVAGGIO,
+            'frequency_days' => null,
+        ]);
+
+        $lavaggio = Lavaggio::create([
+            'tenant_id' => $tenant->id,
+            'customer_id' => $customer->id,
+            'maintenance_schedule_id' => $schedule->id,
+            'data' => now()->subDays(5),
+            'descrizione' => 'Lavaggio su chiamata',
+        ]);
+
+        $schedule->refresh();
+        $this->assertSame($lavaggio->id, $schedule->last_lavaggio_id);
+        $this->assertNull($schedule->next_due_date);
+    }
+
     public function test_moving_a_lavaggio_to_another_schedule_recalculates_both(): void
     {
         $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);

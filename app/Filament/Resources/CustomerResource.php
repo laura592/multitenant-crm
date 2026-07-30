@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Forms\CustomerContactFields;
 use App\Filament\Forms\ItalianAddressFields;
 use App\Filament\Resources\CustomerResource\Pages;
+use App\Filament\Resources\CustomerResource\RelationManagers\LavaggiRelationManager;
 use App\Models\Customer;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -227,4 +228,10 @@ class CustomerResource extends Resource
         ];
     }
 
+    public static function getRelations(): array
+    {
+        return [
+            LavaggiRelationManager::class,
+        ];
+    }
 }
