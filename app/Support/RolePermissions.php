@@ -37,8 +37,6 @@ class RolePermissions
                 ...self::expand('quote::group', ['view_any', 'view', 'create', 'update']),
                 ...self::expand('price::list', self::VIEW),
                 ...self::expand('comodato::macchina', self::VIEW),
-                'widget_DashboardStatsWidget',
-                'widget_LatestQuotesWidget',
             ],
             'dipendente' => [
                 ...self::expand('brand', self::VIEW),
@@ -124,12 +122,11 @@ class RolePermissions
                 // admin + staff master, come da ticket 6.3.
                 ...self::expand('audit::log', self::VIEW),
                 'widget_TimbraWidget',
-                'widget_DashboardStatsWidget',
-                'widget_LatestQuotesWidget',
-                'widget_UpcomingDeadlinesWidget',
+                'widget_CreaPreventivoWidget',
                 'page_RiepilogoOre',
                 'page_ClientiVicini',
                 'page_NotificationSettings',
+                'page_GestionaleSyncReview',
             ],
             default => throw new \InvalidArgumentException("Ruolo sconosciuto: {$role}"),
         };

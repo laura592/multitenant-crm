@@ -332,9 +332,19 @@ per ogni tenant da quel seeder:
 
 I permessi/policy sono generati da Shield (`php artisan shield:generate --all`) per tutte le
 Resource; **widget e pagine NON sono gated di default** — serve applicare esplicitamente
-`HasWidgetShield`/`HasPageShield` (fatto solo su `TimbraWidget` e `RiepilogoOre`, gli unici la cui
-visibilità dipende dal ruolo; gli altri widget dashboard restano sempre visibili perché già
-tenant-scoped a monte, non c'è nulla da nascondere).
+`HasWidgetShield`/`HasPageShield` (fatto su `TimbraWidget`, `CreaPreventivoWidget` e
+`RiepilogoOre`, i cui bottoni/azioni non hanno senso senza un permesso specifico che nessuna
+Resource copre da sola).
+
+Gli altri widget dashboard (`DashboardStatsWidget`, `LatestQuotesWidget`,
+`UpcomingDeadlinesWidget`, `MagazzinoStatsWidget`, `PrioritaWidget`) riassumono dati di una
+Resource esistente (preventivi, scadenze, materiali, richieste informazioni): questi non usano
+`HasWidgetShield` (eviterebbe permessi paralleli da tenere sincronizzati coi permessi Resource) ma
+implementano `canView()` controllando direttamente il permesso `view_any_*` della Resource che
+riassumono — così un ruolo senza accesso a una Resource (es. `dipendente`/`amministrazione` sui
+preventivi) non la vede nemmeno riassunta in dashboard. `PrioritaWidget` copre due Resource
+diverse in una sola card-row: mostra solo le card per cui l'utente ha il permesso, non l'intero
+widget.
 
 ### 5.4 Nuove Resource Filament
 

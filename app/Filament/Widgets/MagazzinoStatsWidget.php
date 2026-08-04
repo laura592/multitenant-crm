@@ -5,6 +5,7 @@ namespace App\Filament\Widgets;
 use App\Models\Material;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
+use Illuminate\Support\Facades\Auth;
 
 /**
  * Area propria per l'ambito acquisti (materiali, categorie), separata dai
@@ -24,6 +25,13 @@ class MagazzinoStatsWidget extends BaseWidget
     protected function getColumns(): int
     {
         return 2;
+    }
+
+    // Partner e amministrazione non hanno accesso ai materiali (vedi
+    // RolePermissions): questi conteggi non devono comparire in dashboard.
+    public static function canView(): bool
+    {
+        return Auth::user()->can('view_any_material');
     }
 
     protected function getStats(): array

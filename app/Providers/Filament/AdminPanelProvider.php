@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Widgets\CreaPreventivoWidget;
 use App\Filament\Widgets\DashboardStatsWidget;
 use App\Filament\Widgets\LatestQuotesWidget;
 use App\Filament\Widgets\MagazzinoStatsWidget;
@@ -128,8 +129,15 @@ class AdminPanelProvider extends PanelProvider
             ->pages([
                 Pages\Dashboard::class,
             ])
-            ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
+            // Niente discoverWidgets() qui: i widget della Dashboard sono
+            // TUTTI gia' elencati esplicitamente sotto. discoverWidgets()
+            // scansiona l'intera cartella Filament/Widgets comprese le
+            // sottocartelle - agganciava anche i 4 widget in Widgets/Gestionale/
+            // (pensati solo per la pagina "Sync Eureka", vedi
+            // GestionaleSyncReview::getHeaderWidgets()) alla Dashboard
+            // generale, senza $sort: finivano in cima, sopra i KPI veri.
             ->widgets([
+                CreaPreventivoWidget::class,
                 TimbraWidget::class,
                 PrioritaWidget::class,
                 MagazzinoStatsWidget::class,

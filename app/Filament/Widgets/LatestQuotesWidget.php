@@ -7,12 +7,20 @@ use App\Models\Quote;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
+use Illuminate\Support\Facades\Auth;
 
 class LatestQuotesWidget extends BaseWidget
 {
     // Stesso sort di UpcomingDeadlinesWidget cosi le due tabelle (colSpan 1)
     // finiscono sulla stessa riga della griglia a 2 colonne, affiancate.
     protected static ?int $sort = 4;
+
+    // Chi non ha accesso ai preventivi (dipendente/amministrazione) non deve
+    // vederli nemmeno riassunti qui.
+    public static function canView(): bool
+    {
+        return Auth::user()->can('view_any_quote');
+    }
 
     protected int|string|array $columnSpan = 1;
 

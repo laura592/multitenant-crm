@@ -6,6 +6,7 @@ use App\Models\Customer;
 use App\Models\Quote;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
+use Illuminate\Support\Facades\Auth;
 
 /**
  * Solo andamento commerciale: cio' che richiede azione (richieste aperte,
@@ -14,6 +15,14 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
 class DashboardStatsWidget extends BaseWidget
 {
     protected static ?int $sort = 2;
+
+    // I numeri qui sono tutti preventivi (dipendente/amministrazione non
+    // hanno accesso ai preventivi, vedi RolePermissions): senza questo
+    // controllo li vedrebbero comunque riassunti in dashboard.
+    public static function canView(): bool
+    {
+        return Auth::user()->can('view_any_quote');
+    }
 
     protected function getStats(): array
     {

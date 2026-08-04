@@ -6,10 +6,16 @@ use App\Models\Deadline;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
+use Illuminate\Support\Facades\Auth;
 
 class UpcomingDeadlinesWidget extends BaseWidget
 {
     protected static ?int $sort = 4;
+
+    public static function canView(): bool
+    {
+        return Auth::user()->can('view_any_deadline');
+    }
 
     protected int|string|array $columnSpan = 1;
 
