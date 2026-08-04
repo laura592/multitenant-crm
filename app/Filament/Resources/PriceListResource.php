@@ -55,7 +55,7 @@ class PriceListResource extends Resource
                         ->openable()
                         ->downloadable()
                         ->deletable(false)
-                        ->helperText('Per sostituire il PDF, caricane uno nuovo: non è possibile rimuoverlo senza sostituirlo.'),
+                        ->helperText('Per sostituire il PDF, caricane uno nuovo: non è possibile rimuoverlo senza sostituirlo. Il file viene ottimizzato automaticamente dopo il salvataggio se troppo pesante.'),
                     Forms\Components\DatePicker::make('valid_from')->label('Valido dal'),
                     Forms\Components\DatePicker::make('valid_to')
                         ->label('Valido fino al')

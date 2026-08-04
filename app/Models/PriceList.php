@@ -4,13 +4,29 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\SharedAcrossTenants;
+use App\Support\PdfCompressor;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Storage;
 
 class PriceList extends Model
 {
     use BelongsToTenant, HasUuids, SharedAcrossTenants;
+
+    /**
+     * I PDF caricati dall'utente arrivano spesso a piena risoluzione di
+     * scansione: dopo ogni upload proviamo a ricomprimerli con Ghostscript
+     * (PdfCompressor), senza bloccare il salvataggio se non e' disponibile.
+     */
+    protected static function booted(): void
+    {
+        static::saved(function (PriceList $priceList) {
+            if ($priceList->wasChanged('file_path') && $priceList->file_path) {
+                PdfCompressor::compressInPlace(Storage::disk('public')->path($priceList->file_path));
+            }
+        });
+    }
 
     protected $fillable = [
         'tenant_id',
