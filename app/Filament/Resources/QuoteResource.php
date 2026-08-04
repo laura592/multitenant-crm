@@ -667,14 +667,40 @@ class QuoteResource extends Resource
                 ->email()
                 ->helperText('I destinatari fissi impostati in Impostazioni > Notifiche ricevono comunque una copia.'),
             Forms\Components\Textarea::make('custom_message')
-                ->label('Messaggio (opzionale)')
-                ->rows(3)
+                ->label('Testo email (modificabile)')
+                ->rows(10)
+                ->autosize()
+                ->helperText('Questo testo viene inviato realmente nella mail, incluso il prezzo: puoi modificarlo liberamente.')
                 // Stesso testo precompilato del vecchio gestionale
                 // (app_preventivi_vg), perso nella riscrittura di questo
                 // pannello: l'utente lo trova gia' pronto e lo personalizza
                 // solo se serve, invece di scrivere da zero ad ogni invio.
-                ->default("Siamo lieti di inviarle il preventivo richiesto.\n\nDi seguito troverà tutti i dettagli e le condizioni commerciali.\n\nIn allegato il documento in formato PDF."),
+                ->default(fn (Quote $record) => static::defaultQuoteEmailBody($record)),
         ];
+    }
+
+    protected static function defaultQuoteEmailBody(Quote $record): string
+    {
+        $recipient = $record->customer?->invoiceRecipient();
+        $customerName = $recipient?->company_name ?: ($recipient?->full_name ?? 'Cliente');
+        $total = '€ '.number_format((float) $record->subtotal, 2, ',', '.').' + IVA';
+
+        return implode("\n", [
+            "Gentile {$customerName},",
+            '',
+            'Siamo lieti di inviarle il preventivo richiesto.',
+            '',
+            'Di seguito troverà tutti i dettagli e le condizioni commerciali.',
+            '',
+            'In allegato il documento in formato PDF.',
+            '',
+            $total,
+            '',
+            'Restiamo a disposizione per qualsiasi chiarimento.',
+            '',
+            'Grazie,',
+            (string) $record->tenant?->name,
+        ]);
     }
 
     public static function sendQuoteEmail(Quote $record, array $data): void

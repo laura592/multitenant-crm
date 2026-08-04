@@ -28,7 +28,7 @@ blockquote {
 }
 
 a {
-    color: #18181b;
+    color: #316eb4;
 }
 
 a img {
@@ -140,7 +140,7 @@ img {
 .inner-body {
     -premailer-cellpadding: 0;
     -premailer-cellspacing: 0;
-    -premailer-width: 570px;
+    -premailer-width: 680px;
     background-color: #ffffff;
     border-color: #e4e4e7;
     border-radius: 4px;
@@ -148,7 +148,7 @@ img {
     box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
     margin: 0 auto;
     padding: 0;
-    width: 570px;
+    width: 680px;
 }
 
 .inner-body a {
@@ -172,11 +172,11 @@ img {
 .footer {
     -premailer-cellpadding: 0;
     -premailer-cellspacing: 0;
-    -premailer-width: 570px;
+    -premailer-width: 680px;
     margin: 0 auto;
     padding: 0;
     text-align: center;
-    width: 570px;
+    width: 680px;
 }
 
 .footer p {
@@ -243,11 +243,11 @@ img {
 
 .button-blue,
 .button-primary {
-    background-color: #18181b;
-    border-bottom: 8px solid #18181b;
-    border-left: 18px solid #18181b;
-    border-right: 18px solid #18181b;
-    border-top: 8px solid #18181b;
+    background-color: #316eb4;
+    border-bottom: 8px solid #316eb4;
+    border-left: 18px solid #316eb4;
+    border-right: 18px solid #316eb4;
+    border-top: 8px solid #316eb4;
 }
 
 .button-green,
