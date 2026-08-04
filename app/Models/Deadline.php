@@ -104,6 +104,21 @@ class Deadline extends Model
      * identico in DeadlineResource, HasDeadlinesTable e
      * UpcomingDeadlinesWidget.
      */
+    /**
+     * Stessa logica della colonna "Collegata a" in DeadlineResource, estratta
+     * qui per riuso nel digest email settimanale delle scadenze.
+     */
+    public function relatedLabel(): string
+    {
+        return match (true) {
+            $this->deadlinable instanceof Vehicle => $this->deadlinable->assigned_user_id
+                ? "{$this->deadlinable->plate} — personale ({$this->deadlinable->assignedUser->name})"
+                : "{$this->deadlinable->plate} — aziendale",
+            $this->deadlinable instanceof Tenant => "Azienda {$this->deadlinable->name}",
+            default => class_basename($this->deadlinable_type),
+        };
+    }
+
     public function dueDateColor(): string
     {
         return match (true) {
