@@ -41,6 +41,8 @@ class NotificationSettings extends Page implements HasForms
             'notify_leave_request_emails' => $tenant?->notificationRecipients('leave_request') ?? [],
             'notify_quote_emails' => $tenant?->notificationRecipients('quote') ?? [],
             'notify_quote_group_emails' => $tenant?->notificationRecipients('quote_group') ?? [],
+            'notify_deadline_emails' => $tenant?->notificationRecipients('deadline') ?? [],
+            'notify_customer_gestionale_emails' => $tenant?->notificationRecipients('customer_gestionale') ?? [],
         ]);
     }
 
@@ -81,6 +83,20 @@ class NotificationSettings extends Page implements HasForms
                     ->splitKeys([',', 'Tab'])
                     ->color('primary')
                     ->helperText('In copia all invio delle offerte con piu soluzioni.'),
+                TagsInput::make('notify_deadline_emails')
+                    ->label('Scadenze')
+                    ->placeholder('indirizzo@esempio.it')
+                    ->nestedRecursiveRules(['email'])
+                    ->splitKeys([',', 'Tab'])
+                    ->color('primary')
+                    ->helperText('Promemoria settimanale con le scadenze in avvicinamento o scadute.'),
+                TagsInput::make('notify_customer_gestionale_emails')
+                    ->label('Sincronizzazione Eureka (clienti e prodotti)')
+                    ->placeholder('indirizzo@esempio.it')
+                    ->nestedRecursiveRules(['email'])
+                    ->splitKeys([',', 'Tab'])
+                    ->color('primary')
+                    ->helperText('Preventivo accettato da un cliente nuovo, modifica su un cliente gia\' collegato a Eureka, e il digest del sync automatico giornaliero (differenze trovate, campi compilati, nuovi collegamenti proposti).'),
             ])
             ->statePath('data');
     }
@@ -94,12 +110,16 @@ class NotificationSettings extends Page implements HasForms
         $leaveRecipients = array_values(array_unique(array_filter((array) ($state['notify_leave_request_emails'] ?? []))));
         $quoteRecipients = array_values(array_unique(array_filter((array) ($state['notify_quote_emails'] ?? []))));
         $quoteGroupRecipients = array_values(array_unique(array_filter((array) ($state['notify_quote_group_emails'] ?? []))));
+        $deadlineRecipients = array_values(array_unique(array_filter((array) ($state['notify_deadline_emails'] ?? []))));
+        $customerGestionaleRecipients = array_values(array_unique(array_filter((array) ($state['notify_customer_gestionale_emails'] ?? []))));
 
         $tenant?->update([
             'notify_information_request_emails' => $informationRecipients,
             'notify_leave_request_emails' => $leaveRecipients,
             'notify_quote_emails' => $quoteRecipients,
             'notify_quote_group_emails' => $quoteGroupRecipients,
+            'notify_deadline_emails' => $deadlineRecipients,
+            'notify_customer_gestionale_emails' => $customerGestionaleRecipients,
             // Manteniamo valorizzata la lista legacy finche' esiste codice
             // esterno che potrebbe ancora leggerla direttamente.
             'notify_staff_emails' => array_values(array_unique(array_filter(array_merge(
@@ -107,6 +127,8 @@ class NotificationSettings extends Page implements HasForms
                 $leaveRecipients,
                 $quoteRecipients,
                 $quoteGroupRecipients,
+                $deadlineRecipients,
+                $customerGestionaleRecipients,
             )))),
         ]);
 

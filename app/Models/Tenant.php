@@ -25,6 +25,8 @@ class Tenant extends Model implements HasName
         'notify_leave_request_emails',
         'notify_quote_emails',
         'notify_quote_group_emails',
+        'notify_deadline_emails',
+        'notify_customer_gestionale_emails',
         'phone',
         'fax',
         'street',
@@ -50,6 +52,9 @@ class Tenant extends Model implements HasName
         'saas_billing_enabled',
         'saas_plan_fee',
         'saas_billing_cycle',
+        'gestionale_eureka_base_url',
+        'gestionale_eureka_username',
+        'gestionale_eureka_password',
     ];
 
     protected $casts = [
@@ -60,6 +65,8 @@ class Tenant extends Model implements HasName
         'notify_leave_request_emails' => 'array',
         'notify_quote_emails' => 'array',
         'notify_quote_group_emails' => 'array',
+        'notify_deadline_emails' => 'array',
+        'notify_customer_gestionale_emails' => 'array',
         'machine_discount_percent' => 'decimal:2',
         'scenario_a_commission_percent' => 'decimal:2',
         'scenario_b_installation_fee' => 'decimal:2',
@@ -71,6 +78,7 @@ class Tenant extends Model implements HasName
         'notice_period_days' => 'integer',
         'saas_billing_enabled' => 'boolean',
         'saas_plan_fee' => 'decimal:2',
+        'gestionale_eureka_password' => 'encrypted',
     ];
 
     public function users(): HasMany
@@ -191,6 +199,8 @@ class Tenant extends Model implements HasName
             'leave_request' => $this->normalizedRecipients($this->notify_leave_request_emails, $legacy),
             'quote' => $this->normalizedRecipients($this->notify_quote_emails, $legacy),
             'quote_group' => $this->normalizedRecipients($this->notify_quote_group_emails, $legacy),
+            'deadline' => $this->normalizedRecipients($this->notify_deadline_emails, $legacy),
+            'customer_gestionale' => $this->normalizedRecipients($this->notify_customer_gestionale_emails, $legacy),
             default => $legacy,
         };
     }
@@ -242,5 +252,12 @@ class Tenant extends Model implements HasName
         ])->filter()->implode(' — '));
 
         return $line ?: null;
+    }
+
+    public function hasGestionaleEurekaCredentials(): bool
+    {
+        return filled($this->gestionale_eureka_base_url)
+            && filled($this->gestionale_eureka_username)
+            && filled($this->gestionale_eureka_password);
     }
 }
