@@ -17,7 +17,6 @@ class MaterialOrder extends Model
         'supplier_id',
         'number',
         'notes',
-        'status',
     ];
 
     protected static function booted(): void
@@ -37,11 +36,6 @@ class MaterialOrder extends Model
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class);
-    }
-
-    public function emails(): HasMany
-    {
-        return $this->hasMany(MaterialOrderEmail::class);
     }
 
     /**

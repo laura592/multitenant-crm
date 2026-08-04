@@ -72,11 +72,6 @@ class MaterialOrderResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('number')->label('Numero')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('supplier.name')->label('Fornitore')->placeholder('—'),
-                Tables\Columns\TextColumn::make('status')
-                    ->label('Stato')
-                    ->badge()
-                    ->formatStateUsing(fn (string $state) => static::statusLabels()[$state] ?? ucfirst($state))
-                    ->color(fn (string $state) => static::statusColors()[$state] ?? 'gray'),
                 Tables\Columns\TextColumn::make('created_at')->label('Data')->dateTime('d/m/Y H:i')->sortable(),
                 Tables\Columns\TextColumn::make('items_count')->label('Materiali')->counts('items'),
                 Tables\Columns\TextColumn::make('notes')
@@ -94,9 +89,6 @@ class MaterialOrderResource extends Resource
                 Tables\Filters\SelectFilter::make('supplier_id')
                     ->label('Fornitore')
                     ->relationship('supplier', 'name'),
-                Tables\Filters\SelectFilter::make('status')
-                    ->label('Stato')
-                    ->options(static::statusLabels()),
             ])
             ->actions([
                 Tables\Actions\Action::make('pdf')
@@ -394,24 +386,6 @@ class MaterialOrderResource extends Resource
         return [
             'index' => Pages\ListMaterialOrders::route('/'),
             'edit' => Pages\EditMaterialOrder::route('/{record}/edit'),
-        ];
-    }
-
-    public static function statusLabels(): array
-    {
-        return [
-            'bozza' => 'Bozza',
-            'inviato' => 'Inviato',
-            'ricevuto' => 'Ricevuto',
-        ];
-    }
-
-    public static function statusColors(): array
-    {
-        return [
-            'bozza' => 'gray',
-            'inviato' => 'warning',
-            'ricevuto' => 'success',
         ];
     }
 }
