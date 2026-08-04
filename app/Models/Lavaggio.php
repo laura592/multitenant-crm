@@ -28,11 +28,13 @@ class Lavaggio extends Model
         'maintenance_schedule_id',
         'data',
         'descrizione',
+        'filtro_sostituito',
         'note',
     ];
 
     protected $casts = [
         'data' => 'date',
+        'filtro_sostituito' => 'boolean',
     ];
 
     // Proprieta' reale (non un attributo Eloquent): dichiararla esplicitamente
@@ -101,5 +103,42 @@ class Lavaggio extends Model
     public function invoiceRecipient(): Customer
     {
         return $this->machineUnit?->billingCustomer ?? $this->customer->invoiceRecipient();
+    }
+
+    /**
+     * Senza machine_unit_id il lavaggio non e' "di macchina sconosciuta": per
+     * come lavora il tecnico, una visita senza macchina specificata ha
+     * lavato TUTTI gli impianti del cliente in un colpo solo. Centralizzata
+     * qui perche' era duplicata identica fra i due LavaggiRelationManager
+     * (su MaintenanceScheduleResource e su CustomerResource).
+     */
+    public function machineLabel(): string
+    {
+        if ($this->machine_unit_id) {
+            return $this->machineUnit->serial_number;
+        }
+
+        $units = MachineUnit::where('current_customer_id', $this->customer_id)->pluck('model_name');
+
+        return $units->count() > 1 ? 'Tutti ('.$units->implode(', ').')' : ($units->first() ?? '—');
+    }
+
+    /**
+     * Se il cliente ha impianti con pagante diverso (es. Gigi Marchetto) e la
+     * visita non specifica la macchina, invoiceRecipient() da solo darebbe un
+     * pagante di default fuorviante: qui serve il dettaglio "misto".
+     */
+    public function billingLabel(): string
+    {
+        if (! $this->machine_unit_id) {
+            $units = MachineUnit::where('current_customer_id', $this->customer_id)->get();
+            $targets = $units->map(fn (MachineUnit $u) => $u->billingCustomer?->full_name ?? 'se stesso');
+
+            if ($targets->unique()->count() > 1) {
+                return 'Misto: '.$units->map(fn (MachineUnit $u) => $u->model_name.'='.($u->billingCustomer?->full_name ?? 'se stesso'))->implode(', ');
+            }
+        }
+
+        return $this->invoiceRecipient()->full_name;
     }
 }

@@ -20,16 +20,34 @@ class MaintenanceSchedule extends Model
 
     public const STATUS_CHIUSO = 'chiuso';
 
+    public const BEVERAGE_BIRRA = 'birra';
+
+    public const BEVERAGE_ACQUA = 'acqua';
+
+    public const BEVERAGE_VINO = 'vino';
+
+    /**
+     * Cadenza standard per tipo di impianto, usata come default sul form e
+     * dalla bulk action di correzione in MaintenanceScheduleResource.
+     */
+    public const STANDARD_FREQUENCY_DAYS = [
+        self::BEVERAGE_BIRRA => 30,
+        self::BEVERAGE_VINO => 90,
+    ];
+
     protected $fillable = [
         'tenant_id',
         'customer_id',
         'type',
         'status',
         'comodato_macchina_id',
+        'beverage_type',
         'frequency',
         'frequency_days',
+        'filter_validity_days',
         'last_service_report_id',
         'last_lavaggio_id',
+        'last_filter_change_id',
         'next_due_date',
         'notes',
     ];
@@ -65,6 +83,11 @@ class MaintenanceSchedule extends Model
         return $this->belongsTo(Lavaggio::class, 'last_lavaggio_id');
     }
 
+    public function lastFilterChange(): BelongsTo
+    {
+        return $this->belongsTo(Lavaggio::class, 'last_filter_change_id');
+    }
+
     public function lavaggi(): HasMany
     {
         return $this->hasMany(Lavaggio::class);
@@ -86,10 +109,10 @@ class MaintenanceSchedule extends Model
 
     /**
      * Ricalcola la scadenza di un piano di tipo lavaggio dall'ultimo lavaggio
-     * registrato (per data, non per data di inserimento) + frequency_days.
-     * Usa il MAX tra tutti i lavaggi collegati, non solo quello appena
-     * salvato, per restare corretta anche modificando/cancellando lavaggi
-     * storici (era la stessa logica prima su Customer::recalculateLavaggioNextDue()).
+     * registrato (per data, non per data di inserimento). Usa il MAX tra
+     * tutti i lavaggi collegati, non solo quello appena salvato, per restare
+     * corretta anche modificando/cancellando lavaggi storici (era la stessa
+     * logica prima su Customer::recalculateLavaggioNextDue()).
      */
     public function recalculateLavaggioNextDue(): void
     {
@@ -100,11 +123,37 @@ class MaintenanceSchedule extends Model
         }
 
         // "Ultimo lavaggio" va aggiornato sempre, anche sui piani "a
-        // chiamata" (senza frequency_days): solo la prossima scadenza
+        // chiamata" (senza frequency_days/filtro): solo la prossima scadenza
         // automatica non ha senso senza una cadenza fissa.
-        $this->update([
-            'last_lavaggio_id' => $last->id,
-            'next_due_date' => $this->frequency_days ? $last->data->copy()->addDays($this->frequency_days) : null,
-        ]);
+        $update = ['last_lavaggio_id' => $last->id];
+
+        if ($this->beverage_type === self::BEVERAGE_ACQUA) {
+            $lastFilterChange = $this->lavaggi()->where('filtro_sostituito', true)->orderByDesc('data')->first();
+
+            $update['last_filter_change_id'] = $lastFilterChange?->id;
+            $update['next_due_date'] = $lastFilterChange ? $this->nextAcquaDueDate($lastFilterChange) : null;
+        } else {
+            $update['next_due_date'] = $this->frequency_days ? $last->data->copy()->addDays($this->frequency_days) : null;
+        }
+
+        $this->update($update);
+    }
+
+    /**
+     * Scadenza di un piano acqua: la validita' del filtro se nota, con un cap
+     * annuale in ogni caso (un filtro che non si esaurisce va comunque
+     * sostituito almeno una volta all'anno per igiene).
+     */
+    private function nextAcquaDueDate(Lavaggio $lastFilterChange): \Illuminate\Support\Carbon
+    {
+        $annual = $lastFilterChange->data->copy()->addYear();
+
+        if (! $this->filter_validity_days) {
+            return $annual;
+        }
+
+        $filterExpiry = $lastFilterChange->data->copy()->addDays($this->filter_validity_days);
+
+        return $filterExpiry->lessThan($annual) ? $filterExpiry : $annual;
     }
 }
