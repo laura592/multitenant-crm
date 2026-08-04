@@ -7,6 +7,8 @@ use App\Filament\Resources\MachineUnitResource\RelationManagers\PlacementsRelati
 use App\Models\Customer;
 use App\Models\MachineUnit;
 use App\Models\Product;
+use App\Support\Gestionale\EurekaClient;
+use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Notifications\Notification;
@@ -87,6 +89,12 @@ class MachineUnitResource extends Resource
                 Tables\Columns\TextColumn::make('display_name')->label('Modello'),
                 Tables\Columns\TextColumn::make('owner_name')->label('Proprietà')->searchable(),
                 Tables\Columns\TextColumn::make('currentCustomer.company_name')->label('Presso')->placeholder('In magazzino'),
+                Tables\Columns\IconColumn::make('product.gestionale_code')
+                    ->label('Cod. Eureka')
+                    ->boolean()
+                    ->trueIcon('heroicon-o-check-circle')
+                    ->falseIcon('heroicon-o-x-circle')
+                    ->getStateUsing(fn (MachineUnit $record) => filled($record->product?->gestionale_code)),
                 Tables\Columns\TextColumn::make('status')
                     ->label('Stato')
                     ->badge()
@@ -109,33 +117,85 @@ class MachineUnitResource extends Resource
                         MachineUnit::STATUS_INSTALLATA => 'Installata',
                         MachineUnit::STATUS_RIMOSSA => 'Rimossa',
                     ]),
+                Tables\Filters\Filter::make('gestionale_suggested_code')
+                    ->label('Collegamento proposto')
+                    ->query(fn ($query) => $query->whereNotNull('gestionale_suggested_code')),
             ])
             ->actions([
-                Tables\Actions\Action::make('sposta')
-                    ->label('Sposta')
-                    ->icon('heroicon-o-arrow-right-circle')
-                    ->color('gray')
-                    ->form([
-                        Forms\Components\Select::make('customer_id')
-                            ->label('Nuovo cliente')
-                            ->helperText('Lascia vuoto per riportare la macchina in magazzino/rimuoverla.')
-                            ->options(fn () => Customer::query()->orderBy('company_name')->get()->mapWithKeys(
-                                fn (Customer $customer) => [$customer->id => $customer->full_name ?: 'Cliente senza nome']
-                            ))
-                            ->searchable(),
-                        Forms\Components\Textarea::make('notes')->label('Note sullo spostamento'),
-                    ])
-                    ->action(function (MachineUnit $record, array $data) {
-                        $customer = $data['customer_id'] ? Customer::find($data['customer_id']) : null;
-                        $record->moveTo($customer, $data['notes'] ?? null);
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\Action::make('conferma_collegamento_gestionale')
+                        ->label(fn (MachineUnit $record) => 'Conferma matricola Eureka: '.($record->gestionale_suggested_label ?? "#{$record->gestionale_suggested_code}"))
+                        ->icon('heroicon-o-link')
+                        ->color('warning')
+                        ->visible(fn (MachineUnit $record): bool => $record->gestionale_suggested_code !== null)
+                        ->requiresConfirmation()
+                        ->modalDescription('Il sync automatico ha trovato questa matricola su Eureka. Confermi?')
+                        ->action(function (MachineUnit $record) {
+                            $record->update([
+                                'gestionale_code' => $record->gestionale_suggested_code,
+                                'gestionale_suggested_code' => null,
+                                'gestionale_suggested_label' => null,
+                            ]);
+                            Notification::make()->title('Collegamento confermato')->success()->send();
+                        }),
+                    Tables\Actions\Action::make('scarta_collegamento_gestionale')
+                        ->label('Scarta proposta')
+                        ->icon('heroicon-o-x-mark')
+                        ->visible(fn (MachineUnit $record): bool => $record->gestionale_suggested_code !== null)
+                        ->requiresConfirmation()
+                        ->action(fn (MachineUnit $record) => $record->update([
+                            'gestionale_suggested_code' => null,
+                            'gestionale_suggested_label' => null,
+                        ])),
+                    Tables\Actions\Action::make('cerca_eureka')
+                        ->label('Cerca su Eureka')
+                        ->icon('heroicon-o-magnifying-glass')
+                        ->visible(fn (MachineUnit $record): bool => $record->product !== null && (Filament::getTenant()?->hasGestionaleEurekaCredentials() ?? false))
+                        ->fillForm(fn (MachineUnit $record): array => ['gestionale_code' => $record->product?->gestionale_code])
+                        ->form([
+                            Forms\Components\Select::make('gestionale_code')
+                                ->label('Articolo Eureka')
+                                ->searchable()
+                                ->getSearchResultsUsing(function (string $search): array {
+                                    $client = new EurekaClient(Filament::getTenant());
 
-                        Notification::make()
-                            ->title($customer ? "Macchina spostata presso {$customer->company_name}" : 'Macchina rientrata in magazzino')
-                            ->success()
-                            ->send();
-                    }),
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                                    return collect($client->cercaArticoli($search))
+                                        ->mapWithKeys(fn (array $item) => [$item['id_eureka'] => "{$item['codice']} — {$item['descr1']}"])
+                                        ->all();
+                                })
+                                ->getOptionLabelUsing(fn ($value) => "Codice Eureka: {$value}")
+                                ->required()
+                                ->helperText(fn (MachineUnit $record) => 'Digita il nome del modello (es. "ICON", "XT") per cercare nel catalogo Eureka. Il codice viene salvato sul prodotto collegato ("'.($record->product?->name ?? 'modello').'"), quindi vale per tutte le macchine di questo stesso modello, non solo per questa matricola.'),
+                        ])
+                        ->action(function (array $data, MachineUnit $record) {
+                            $record->product?->update(['gestionale_code' => $data['gestionale_code']]);
+                            Notification::make()->title('Codice Eureka salvato sul modello')->success()->send();
+                        }),
+                    Tables\Actions\Action::make('sposta')
+                        ->label('Sposta')
+                        ->icon('heroicon-o-arrow-right-circle')
+                        ->form([
+                            Forms\Components\Select::make('customer_id')
+                                ->label('Nuovo cliente')
+                                ->helperText('Lascia vuoto per riportare la macchina in magazzino/rimuoverla.')
+                                ->options(fn () => Customer::query()->orderBy('company_name')->get()->mapWithKeys(
+                                    fn (Customer $customer) => [$customer->id => $customer->full_name ?: 'Cliente senza nome']
+                                ))
+                                ->searchable(),
+                            Forms\Components\Textarea::make('notes')->label('Note sullo spostamento'),
+                        ])
+                        ->action(function (MachineUnit $record, array $data) {
+                            $customer = $data['customer_id'] ? Customer::find($data['customer_id']) : null;
+                            $record->moveTo($customer, $data['notes'] ?? null);
+
+                            Notification::make()
+                                ->title($customer ? "Macchina spostata presso {$customer->company_name}" : 'Macchina rientrata in magazzino')
+                                ->success()
+                                ->send();
+                        }),
+                    Tables\Actions\EditAction::make(),
+                    Tables\Actions\DeleteAction::make(),
+                ]),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([

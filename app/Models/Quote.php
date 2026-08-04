@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use App\Mail\CustomerGestionaleReviewMail;
 use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Mail;
 
 class Quote extends Model
 {
@@ -75,7 +77,21 @@ class Quote extends Model
         // Customer::readyForGestionaleSync()). L'invio vero resta manuale.
         static::updated(function (self $quote) {
             if ($quote->wasChanged('status') && $quote->status === 'accettato') {
-                $quote->customer?->markApprovedForGestionale();
+                if ($customer = $quote->customer) {
+                    $wasReady = $customer->approved_for_gestionale_at !== null;
+                    $customer->markApprovedForGestionale();
+
+                    if (! $wasReady && $customer->approved_for_gestionale_at !== null) {
+                        $recipients = $quote->tenant?->notificationRecipients('customer_gestionale') ?? [];
+
+                        if ($recipients !== []) {
+                            Mail::to($recipients)->send(new CustomerGestionaleReviewMail(
+                                $customer,
+                                'Nuovo cliente pronto per l\'invio al gestionale (preventivo accettato).',
+                            ));
+                        }
+                    }
+                }
 
                 // Lo stato "Scelto" dell'offerta globale era un campo manuale
                 // indipendente: se nessuno lo aggiornava a mano restava

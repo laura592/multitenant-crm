@@ -77,7 +77,19 @@ class TenantResource extends Resource
             Forms\Components\Section::make('Branding')
                 ->columns(2)
                 ->schema([
-                    Forms\Components\FileUpload::make('logo_path')->label('Logo')->image()->directory('tenant-logos')->maxSize(5120),
+                    Forms\Components\FileUpload::make('logo_path')
+                        ->label('Logo')
+                        ->image()
+                        ->directory('tenant-logos')
+                        ->maxSize(5120)
+                        // Nei PDF il logo è mostrato al massimo a 180x60px: senza questo
+                        // resize lato client, un logo caricato a risoluzione fotocamera
+                        // (es. 4000x3000) viene incorporato nel PDF a piena risoluzione,
+                        // gonfiandone il peso di decine di volte.
+                        ->imageResizeTargetWidth(600)
+                        ->imageResizeTargetHeight(600)
+                        ->imageResizeMode('contain')
+                        ->imageResizeUpscale(false),
                     Forms\Components\ColorPicker::make('primary_color')->label('Colore primario'),
                 ]),
             Forms\Components\Section::make('Condizioni contrattuali')
@@ -141,6 +153,23 @@ class TenantResource extends Resource
                         ->label('Periodicità')
                         ->options(['monthly' => 'Mensile', 'annual' => 'Annuale'])
                         ->visible(fn (Forms\Get $get) => $get('saas_billing_enabled')),
+                ]),
+            Forms\Components\Section::make('Integrazione Eureka')
+                ->description('Credenziali per inviare i rapportini firmati al gestionale esterno come "scheda lavoro". Lascia vuoto se questo tenant non usa Eureka.')
+                ->columns(2)
+                ->schema([
+                    Forms\Components\TextInput::make('gestionale_eureka_base_url')
+                        ->label('URL base API')
+                        ->url()
+                        ->placeholder('https://alex.api.gestionale-eureka.it')
+                        ->columnSpanFull(),
+                    Forms\Components\TextInput::make('gestionale_eureka_username')
+                        ->label('Utente'),
+                    Forms\Components\TextInput::make('gestionale_eureka_password')
+                        ->label('Password')
+                        ->password()
+                        ->revealable()
+                        ->dehydrated(fn ($state) => filled($state)),
                 ]),
         ]);
     }

@@ -36,6 +36,9 @@ class Product extends Model
         'description',
         'image',
         'source',
+        'gestionale_code',
+        'gestionale_suggested_code',
+        'gestionale_suggested_label',
     ];
 
     public function category(): BelongsTo

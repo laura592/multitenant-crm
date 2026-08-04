@@ -6,8 +6,11 @@ use App\Filament\Resources\ProductResource\Pages;
 use App\Filament\Resources\ProductResource\RelationManagers;
 use App\Models\Product;
 use App\Models\Tenant;
+use App\Support\Gestionale\EurekaClient;
+use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -79,6 +82,10 @@ class ProductResource extends Resource
                             Product::SOURCE_THIRD_PARTY => 'Terzo',
                         ])
                         ->helperText('Per la garanzia: art. 11.3 del contratto di distribuzione'),
+                    Forms\Components\TextInput::make('gestionale_code')
+                        ->label('Codice Eureka (sl_articolo)')
+                        ->numeric()
+                        ->helperText('Necessario solo per inviare a Eureka i rapportini che usano questo prodotto.'),
                     Forms\Components\Textarea::make('description')
                         ->label('Descrizione')
                         ->columnSpanFull(),
@@ -173,9 +180,62 @@ class ProductResource extends Resource
                     ->relationship('family', 'name')
                     ->searchable()
                     ->preload(),
+                Tables\Filters\Filter::make('gestionale_suggested_code')
+                    ->label('Collegamento proposto')
+                    ->query(fn ($query) => $query->whereNotNull('gestionale_suggested_code')),
             ])
             ->actions([
                 Tables\Actions\ActionGroup::make([
+                    Tables\Actions\Action::make('conferma_collegamento_gestionale')
+                        ->label(fn (Product $record) => 'Conferma collegamento: '.($record->gestionale_suggested_label ?? "#{$record->gestionale_suggested_code}"))
+                        ->icon('heroicon-o-link')
+                        ->color('warning')
+                        ->visible(fn (Product $record): bool => $record->gestionale_suggested_code !== null)
+                        ->requiresConfirmation()
+                        ->modalDescription('Il sync automatico ha trovato questo possibile collegamento su Eureka. Confermi?')
+                        ->action(function (Product $record) {
+                            $record->update([
+                                'gestionale_code' => $record->gestionale_suggested_code,
+                                'gestionale_suggested_code' => null,
+                                'gestionale_suggested_label' => null,
+                            ]);
+                            Notification::make()->title('Collegamento confermato')->success()->send();
+                        }),
+                    Tables\Actions\Action::make('scarta_collegamento_gestionale')
+                        ->label('Scarta proposta')
+                        ->icon('heroicon-o-x-mark')
+                        ->color('gray')
+                        ->visible(fn (Product $record): bool => $record->gestionale_suggested_code !== null)
+                        ->requiresConfirmation()
+                        ->action(fn (Product $record) => $record->update([
+                            'gestionale_suggested_code' => null,
+                            'gestionale_suggested_label' => null,
+                        ])),
+                    Tables\Actions\Action::make('cerca_eureka')
+                        ->label('Cerca su Eureka')
+                        ->icon('heroicon-o-magnifying-glass')
+                        ->color('gray')
+                        ->visible(fn (Product $record): bool => $record->type === Product::TYPE_MACHINE && (Filament::getTenant()?->hasGestionaleEurekaCredentials() ?? false))
+                        ->fillForm(fn (Product $record): array => ['gestionale_code' => $record->gestionale_code])
+                        ->form([
+                            Forms\Components\Select::make('gestionale_code')
+                                ->label('Articolo Eureka')
+                                ->searchable()
+                                ->getSearchResultsUsing(function (string $search): array {
+                                    $client = new EurekaClient(Filament::getTenant());
+
+                                    return collect($client->cercaArticoli($search))
+                                        ->mapWithKeys(fn (array $item) => [$item['id_eureka'] => "{$item['codice']} — {$item['descr1']}"])
+                                        ->all();
+                                })
+                                ->getOptionLabelUsing(fn ($value) => "Codice Eureka: {$value}")
+                                ->required()
+                                ->helperText('Digita il nome del modello (es. "ICON", "XT") per cercare nel catalogo Eureka. Il risultato non e\' sempre 1:1: scegli quello giusto a mano.'),
+                        ])
+                        ->action(function (array $data, Product $record) {
+                            $record->update(['gestionale_code' => $data['gestionale_code']]);
+                            Notification::make()->title('Codice Eureka salvato')->success()->send();
+                        }),
                     Tables\Actions\EditAction::make()
                         ->color('gray'),
                     Tables\Actions\DeleteAction::make(),

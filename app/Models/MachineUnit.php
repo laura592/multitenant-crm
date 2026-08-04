@@ -34,6 +34,9 @@ class MachineUnit extends Model
         'owner_name',
         'status',
         'notes',
+        'gestionale_code',
+        'gestionale_suggested_code',
+        'gestionale_suggested_label',
     ];
 
     protected $attributes = [

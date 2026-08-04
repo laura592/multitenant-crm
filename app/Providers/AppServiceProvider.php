@@ -2,6 +2,11 @@
 
 namespace App\Providers;
 
+use App\Filament\Widgets\Gestionale\GestionaleCollegamentiClientiWidget;
+use App\Filament\Widgets\Gestionale\GestionaleCollegamentiMacchinariWidget;
+use App\Filament\Widgets\Gestionale\GestionaleCollegamentiProdottiWidget;
+use App\Filament\Widgets\Gestionale\GestionaleDaRivedereWidget;
+use App\Filament\Widgets\Gestionale\GestionaleMacchineNuoveWidget;
 use App\Models\User;
 use Filament\Forms\Components\DatePicker;
 use Filament\Infolists\Infolist;
@@ -12,6 +17,7 @@ use Jeffgreco13\FilamentBreezy\Livewire\PersonalInfo;
 use Jeffgreco13\FilamentBreezy\Livewire\TwoFactorAuthentication;
 use Jeffgreco13\FilamentBreezy\Livewire\UpdatePassword;
 use Livewire\Livewire;
+use Livewire\Mechanisms\ComponentRegistry;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -71,5 +77,33 @@ class AppServiceProvider extends ServiceProvider
         Livewire::component('personal_info', PersonalInfo::class);
         Livewire::component('update_password', UpdatePassword::class);
         Livewire::component('two_factor_authentication', TwoFactorAuthentication::class);
+
+        // Stesso bug del blocco sopra, causa diversa: Filament registra con
+        // Livewire (quindi rende utilizzabili le sue azioni via
+        // /livewire/update) solo i widget elencati in Panel::widgets() o
+        // Resource::getWidgets() — MAI quelli restituiti solo da
+        // Page::getHeaderWidgets(), come i 5 di GestionaleSyncReview (vedi
+        // app/Filament/Widgets/Gestionale/). Il primo caricamento della
+        // pagina funzionava comunque (Filament istanzia l'oggetto PHP
+        // direttamente per il render iniziale, senza passare dal registro
+        // Livewire), ma ogni azione successiva (paginazione, "Conferma",
+        // "Scarta"...) falliva con un 419 "Page Expired" — in realta' un
+        // Livewire\Exceptions\LivewireReleaseTokenMismatchException perche'
+        // il componente non risultava trovato nel registro. Non li mettiamo
+        // in AdminPanelProvider::widgets() perche' Filament\Pages\Dashboard
+        // mostra di default TUTTI i widget li' elencati (motivo per cui
+        // quella lista evita apposta discoverWidgets() sulla cartella
+        // Gestionale/, vedi commento li'): li registriamo qui invece, solo
+        // per Livewire, senza farli comparire in Dashboard.
+        collect([
+            GestionaleDaRivedereWidget::class,
+            GestionaleCollegamentiClientiWidget::class,
+            GestionaleCollegamentiProdottiWidget::class,
+            GestionaleCollegamentiMacchinariWidget::class,
+            GestionaleMacchineNuoveWidget::class,
+        ])->each(fn (string $widget) => Livewire::component(
+            app(ComponentRegistry::class)->getName($widget),
+            $widget,
+        ));
     }
 }

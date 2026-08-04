@@ -7,11 +7,14 @@ use App\Filament\Forms\ItalianAddressFields;
 use App\Filament\Resources\CustomerResource\Pages;
 use App\Filament\Resources\CustomerResource\RelationManagers\LavaggiRelationManager;
 use App\Models\Customer;
+use App\Support\Gestionale\EurekaClient;
+use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -64,6 +67,11 @@ class CustomerResource extends Resource
                     Forms\Components\TextInput::make('vat_number')->label('P.IVA')->maxLength(255),
                     Forms\Components\TextInput::make('sdi')->label('Codice SDI')->maxLength(255),
                     Forms\Components\TextInput::make('pec')->label('PEC')->email()->maxLength(255),
+                    Forms\Components\TextInput::make('gestionale_code')
+                        ->label('Codice gestionale (Eureka)')
+                        ->numeric()
+                        ->unique(ignoreRecord: true)
+                        ->helperText('Usa "Cerca su Eureka" nella tabella per trovarlo automaticamente, oppure inseriscilo a mano se lo conosci gia\'.'),
                     Forms\Components\Select::make('billing_customer_id')
                         ->label('Fatturare a')
                         ->relationship('billingCustomer', 'company_name', modifyQueryUsing: fn ($query, ?Customer $record) => $query
@@ -118,6 +126,8 @@ class CustomerResource extends Resource
                     TextEntry::make('gestionale_code')->label('Codice gestionale')->placeholder('—'),
                     TextEntry::make('approved_for_gestionale_at')->label('Pronto per invio dal')->date()->placeholder('—'),
                     TextEntry::make('sent_to_gestionale_at')->label('Inviato il')->date()->placeholder('—'),
+                    TextEntry::make('gestionale_review_flagged_at')->label('Da aggiornare su Eureka dal')->date()->placeholder('—'),
+                    TextEntry::make('gestionale_review_note')->label('Cosa è cambiato')->placeholder('—')->columnSpanFull(),
                 ]),
         ]);
     }
@@ -191,16 +201,93 @@ class CustomerResource extends Resource
                         ->where('source', Customer::SOURCE_APP)
                         ->whereNotNull('approved_for_gestionale_at')
                         ->whereNull('sent_to_gestionale_at')),
+                Tables\Filters\Filter::make('da_aggiornare_gestionale')
+                    ->label('Da aggiornare su Eureka')
+                    ->query(fn ($query) => $query->whereNotNull('gestionale_review_flagged_at')),
+                Tables\Filters\Filter::make('gestionale_suggested_code')
+                    ->label('Collegamento proposto')
+                    ->query(fn ($query) => $query->whereNotNull('gestionale_suggested_code')),
             ])
             ->actions([
-                Tables\Actions\Action::make('segna_inviato_gestionale')
-                    ->label('Segna come inviato al gestionale')
-                    ->icon('heroicon-o-paper-airplane')
-                    ->color('success')
-                    ->visible(fn (Customer $record) => $record->readyForGestionaleSync())
-                    ->requiresConfirmation()
-                    ->action(fn (Customer $record) => $record->markSentToGestionale()),
                 Tables\Actions\ViewAction::make()
+                    ->color('gray'),
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\Action::make('cerca_eureka')
+                        ->label('Cerca su Eureka')
+                        ->icon('heroicon-o-magnifying-glass')
+                        ->visible(fn (): bool => Filament::getTenant()?->hasGestionaleEurekaCredentials() ?? false)
+                        ->fillForm(fn (Customer $record): array => ['gestionale_code' => $record->gestionale_code])
+                        ->form([
+                            Forms\Components\Select::make('gestionale_code')
+                                ->label('Cliente Eureka')
+                                ->searchable()
+                                ->getSearchResultsUsing(function (string $search): array {
+                                    $client = new EurekaClient(Filament::getTenant());
+
+                                    return collect($client->cercaClienti($search))
+                                        ->mapWithKeys(fn (array $item) => [
+                                            $item['id'] => trim(collect([
+                                                $item['rag_sociale_1'] ?? null,
+                                                filled($item['partita_iva'] ?? null) ? "P.IVA {$item['partita_iva']}" : null,
+                                                filled($item['citta'] ?? null) ? trim($item['citta']) : null,
+                                            ])->filter()->implode(' — ')),
+                                        ])
+                                        ->all();
+                                })
+                                ->getOptionLabelUsing(fn ($value) => "Codice gestionale: {$value}")
+                                ->required()
+                                ->helperText('Digita la ragione sociale per cercare nell\'anagrafica Eureka.'),
+                        ])
+                        ->action(function (array $data, Customer $record) {
+                            try {
+                                $record->update(['gestionale_code' => $data['gestionale_code']]);
+                                Notification::make()->title('Codice gestionale salvato')->success()->send();
+                            } catch (\Illuminate\Database\QueryException) {
+                                Notification::make()->title('Codice già usato da un altro cliente')->danger()->send();
+                            }
+                        }),
+                    Tables\Actions\Action::make('conferma_collegamento_gestionale')
+                        ->label(fn (Customer $record) => 'Conferma collegamento proposto: '.($record->gestionale_suggested_label ?? "#{$record->gestionale_suggested_code}"))
+                        ->icon('heroicon-o-link')
+                        ->color('warning')
+                        ->visible(fn (Customer $record): bool => $record->gestionale_suggested_code !== null)
+                        ->requiresConfirmation()
+                        ->modalDescription('Il sync automatico ha trovato questo possibile collegamento su Eureka. Confermi?')
+                        ->action(function (Customer $record) {
+                            $record->update([
+                                'gestionale_code' => $record->gestionale_suggested_code,
+                                'gestionale_suggested_code' => null,
+                                'gestionale_suggested_label' => null,
+                            ]);
+                            Notification::make()->title('Collegamento confermato')->success()->send();
+                        }),
+                    Tables\Actions\Action::make('scarta_collegamento_gestionale')
+                        ->label('Scarta collegamento proposto')
+                        ->icon('heroicon-o-x-mark')
+                        ->visible(fn (Customer $record): bool => $record->gestionale_suggested_code !== null)
+                        ->requiresConfirmation()
+                        ->action(fn (Customer $record) => $record->update([
+                            'gestionale_suggested_code' => null,
+                            'gestionale_suggested_label' => null,
+                        ])),
+                    Tables\Actions\Action::make('segna_inviato_gestionale')
+                        ->label('Segna come inviato al gestionale')
+                        ->icon('heroicon-o-paper-airplane')
+                        ->color('success')
+                        ->visible(fn (Customer $record) => $record->readyForGestionaleSync())
+                        ->requiresConfirmation()
+                        ->action(fn (Customer $record) => $record->markSentToGestionale()),
+                    Tables\Actions\Action::make('segna_aggiornato_gestionale')
+                        ->label('Segna come controllato (chiudi segnalazione)')
+                        ->icon('heroicon-o-check-circle')
+                        ->color('success')
+                        ->visible(fn (Customer $record) => $record->gestionale_review_flagged_at !== null)
+                        ->requiresConfirmation()
+                        ->modalDescription('Non scrive nulla su Eureka: toglie solo la segnalazione da questo cliente, per dire "ho controllato".')
+                        ->action(fn (Customer $record) => $record->dismissGestionaleReview()),
+                ])
+                    ->label('Eureka')
+                    ->icon('heroicon-o-arrow-path')
                     ->color('gray'),
                 Tables\Actions\ActionGroup::make([
                     Tables\Actions\EditAction::make()

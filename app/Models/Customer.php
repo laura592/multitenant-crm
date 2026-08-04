@@ -48,6 +48,10 @@ class Customer extends Model
         'gestionale_code',
         'approved_for_gestionale_at',
         'sent_to_gestionale_at',
+        'gestionale_review_flagged_at',
+        'gestionale_review_note',
+        'gestionale_suggested_code',
+        'gestionale_suggested_label',
     ];
 
     protected $casts = [
@@ -58,6 +62,32 @@ class Customer extends Model
         'approved_for_gestionale_at' => 'datetime',
         'sent_to_gestionale_at' => 'datetime',
         'website_checked_at' => 'datetime',
+        'gestionale_review_flagged_at' => 'datetime',
+    ];
+
+    /**
+     * Campi con un corrispettivo reale nell'anagrafica Eureka (visti nelle
+     * risposte di GET /anagrafica/cerca: rag_sociale_1, partita_iva,
+     * codice_fiscale, citta, sigla_prov, email, nr_telefono) — solo questi,
+     * se cambiano su un cliente gia' collegato (gestionale_code valorizzato),
+     * fanno scattare una segnalazione (vedi EditCustomer::afterSave()).
+     * Campi solo-CRM (note, billing_customer_id, posizione GPS...) non
+     * contano: non hanno nulla da aggiornare lato Eureka.
+     *
+     * @var array<string, string>
+     */
+    public const GESTIONALE_TRACKED_FIELDS = [
+        'company_name' => 'Ragione sociale',
+        'first_name' => 'Nome',
+        'last_name' => 'Cognome',
+        'vat_number' => 'P.IVA',
+        'tax_code' => 'Codice fiscale',
+        'street' => 'Indirizzo',
+        'postal_code' => 'CAP',
+        'city' => 'Città',
+        'province' => 'Provincia',
+        'emails' => 'Email',
+        'phones' => 'Telefono',
     ];
 
     protected $attributes = [
@@ -92,6 +122,25 @@ class Customer extends Model
     public function markSentToGestionale(): void
     {
         $this->update(['sent_to_gestionale_at' => now()]);
+    }
+
+    /**
+     * @param array<int, string> $changedLabels
+     */
+    public function flagGestionaleReview(array $changedLabels): void
+    {
+        $this->update([
+            'gestionale_review_flagged_at' => now(),
+            'gestionale_review_note' => implode(', ', $changedLabels),
+        ]);
+    }
+
+    public function dismissGestionaleReview(): void
+    {
+        $this->update([
+            'gestionale_review_flagged_at' => null,
+            'gestionale_review_note' => null,
+        ]);
     }
 
     /**
