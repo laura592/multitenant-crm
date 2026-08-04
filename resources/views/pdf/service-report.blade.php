@@ -35,6 +35,7 @@
         .signature-box img { max-width: 260px; max-height: 90px; }
         .signature-box .placeholder { color: #9ca3af; font-style: italic; }
         .signature-box .caption { margin-top: 4px; font-size: 8.5px; color: #6b7280; }
+        .signature-box .signer-name { margin-top: 4px; font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
 
         .section-gap { margin-top: 14px; }
 
@@ -159,6 +160,9 @@
                 <span class="placeholder">Non ancora firmato</span>
             @endif
         </div>
+        @if($report->customer_signature_name)
+            <div class="signer-name">{{ $report->customer_signature_name }}</div>
+        @endif
         @if($report->signed_at)
             <div class="caption">Firmato il {{ $report->signed_at->format('d/m/Y H:i') }}</div>
         @endif

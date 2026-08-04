@@ -35,9 +35,14 @@ class ServiceReport extends Model
         'work_performed',
         'status',
         'customer_signature_path',
+        'customer_signature_name',
         'technician_signature_path',
         'signed_at',
         'notes',
+        'gestionale_scheda_lavoro_id',
+        'gestionale_sync_status',
+        'gestionale_sync_error',
+        'gestionale_synced_at',
     ];
 
     protected $attributes = [
@@ -49,6 +54,7 @@ class ServiceReport extends Model
         'arrival_at' => 'datetime',
         'departure_at' => 'datetime',
         'signed_at' => 'datetime',
+        'gestionale_synced_at' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -136,5 +142,87 @@ class ServiceReport extends Model
     public function invoiceRecipient(): Customer
     {
         return $this->machineUnit?->billingCustomer ?? $this->customer->invoiceRecipient();
+    }
+
+    /**
+     * Controlli da fare PRIMA di chiamare EurekaClient::inviaSchedaLavoro(),
+     * per mostrare un errore leggibile invece di scoprirlo dalla risposta HTTP.
+     *
+     * @return array<int, string>
+     */
+    public function gestionaleValidationErrors(): array
+    {
+        $errors = [];
+
+        if (blank($this->customer->gestionale_code)) {
+            $errors[] = "Il cliente \"{$this->customer->full_name}\" non ha un codice gestionale (Eureka).";
+        }
+
+        $articleProduct = $this->machineProduct ?? $this->machineUnit?->product;
+        if (blank($articleProduct?->gestionale_code)) {
+            $errors[] = 'Il prodotto macchina di questo intervento non ha un codice Eureka collegato.';
+        }
+
+        if (blank($this->problem_description)) {
+            $errors[] = 'Manca la descrizione del problema (sl_sintomo e\' obbligatorio per Eureka).';
+        }
+
+        $recipient = $this->invoiceRecipient();
+        if ($recipient->isNot($this->customer) && blank($recipient->gestionale_code)) {
+            $errors[] = "Il cliente da fatturare (\"{$recipient->full_name}\") non ha un codice gestionale (Eureka).";
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Body per POST /schedelavoro/ di Eureka. Richiede customer, machineProduct,
+     * machineUnit.product, machineUnit.billingCustomer, customer.billingCustomer,
+     * partsUsed.product gia' caricati. Chiamare gestionaleValidationErrors()
+     * prima: qui non si ripetono quei controlli.
+     *
+     * @return array<string, mixed>
+     */
+    public function toGestionalePayload(): array
+    {
+        $articleProduct = $this->machineProduct ?? $this->machineUnit?->product;
+        $recipient = $this->invoiceRecipient();
+
+        $payload = [
+            'intestatario' => ['id_eureka' => $this->customer->gestionale_code],
+            'sl_articolo' => ['id_eureka' => $articleProduct?->gestionale_code],
+            // Da doc fornitore: usare sempre id=2 ("FISSA"). In produzione l'id 2
+            // e' pero' "MAN"/MANODOPERA STD (nessuna tariffa "FISSA" esiste
+            // davvero) — discrepanza segnalata, non ancora chiarita col fornitore.
+            'sl_tariffa' => ['id_eureka' => 2],
+            'sl_sintomo' => $this->problem_description,
+            'sl_lavorazione' => $this->work_performed,
+            'dettaglio' => $this->partsUsed->map(fn (ServiceReportProduct $part) => [
+                'id_articolo' => $part->product?->gestionale_code ?? 0,
+                'descrizione' => $part->product?->name ?? '',
+                'um' => 'NR',
+                'quantita' => (float) $part->quantity,
+            ])->all(),
+        ];
+
+        $serialNumber = $this->machineUnit?->serial_number ?? $this->machine_serial_number;
+        if ($serialNumber) {
+            $payload['sl_matricola'] = $serialNumber;
+        }
+
+        if ($recipient->isNot($this->customer)) {
+            $payload['destinazione'] = [
+                'id_eureka' => $recipient->gestionale_code,
+                'rag_sociale' => $recipient->company_name ?: $recipient->full_name,
+                'indirizzo' => $recipient->street,
+                'cap' => $recipient->postal_code,
+                'citta' => $recipient->city,
+                'sigla_prov' => $recipient->province,
+                'email' => $recipient->primaryEmail(),
+                'telefono' => $recipient->primaryPhone(),
+            ];
+        }
+
+        return $payload;
     }
 }

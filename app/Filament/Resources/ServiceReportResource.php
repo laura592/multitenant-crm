@@ -8,6 +8,7 @@ use App\Filament\Resources\ServiceReportResource\Pages;
 use App\Mail\ServiceReportMail;
 use App\Models\Product;
 use App\Models\ServiceReport;
+use App\Support\Gestionale\EurekaClient;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -39,12 +40,19 @@ class ServiceReportResource extends Resource
     public static function infolist(Infolist $infolist): Infolist
     {
         return $infolist->schema([
-            InfolistSection::make('Intervento')
-                ->columns(3)
+            // Stesso pattern di QuoteResource: riepilogo a colpo d'occhio in
+            // alto, i dettagli (incl. orari) restano nelle sezioni sotto
+            // senza ripetere qui i campi gia' mostrati nell'hero.
+            InfolistSection::make('Panoramica rapida')
+                ->columns(12)
+                ->columnSpanFull()
+                ->extraAttributes([
+                    'class' => 'rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50 shadow-sm dark:border-slate-800 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900',
+                ])
                 ->schema([
-                    TextEntry::make('number')->label('Numero'),
-                    TextEntry::make('customer.full_name')->label('Cliente'),
-                    TextEntry::make('technician.name')->label('Tecnico'),
+                    TextEntry::make('number')->label('Numero')->columnSpan(2),
+                    TextEntry::make('customer.full_name')->label('Cliente')->columnSpan(3),
+                    TextEntry::make('technician.name')->label('Tecnico')->columnSpan(3),
                     TextEntry::make('intervention_type')
                         ->label('Tipo intervento')
                         ->badge()
@@ -55,13 +63,19 @@ class ServiceReportResource extends Resource
                             ServiceReport::TYPE_RIPARAZIONE => 'Riparazione',
                             ServiceReport::TYPE_GARANZIA => 'Garanzia',
                             default => $state,
-                        }),
-                    TextEntry::make('intervention_date')->label('Data intervento')->date(),
+                        })
+                        ->columnSpan(2),
+                    TextEntry::make('intervention_date')->label('Data')->date()->columnSpan(1),
                     TextEntry::make('status')
                         ->label('Stato')
                         ->badge()
                         ->formatStateUsing(fn (string $state) => self::statusLabels()[$state] ?? ucfirst($state))
-                        ->color(fn (string $state) => self::statusColors()[$state] ?? 'gray'),
+                        ->color(fn (string $state) => self::statusColors()[$state] ?? 'gray')
+                        ->columnSpan(1),
+                ]),
+            InfolistSection::make('Orari')
+                ->columns(2)
+                ->schema([
                     TextEntry::make('arrival_at')->label('Orario arrivo')->dateTime('d/m/Y H:i')->placeholder('—'),
                     TextEntry::make('departure_at')->label('Orario uscita')->dateTime('d/m/Y H:i')->placeholder('—'),
                 ]),
@@ -93,10 +107,32 @@ class ServiceReportResource extends Resource
                 ]),
             InfolistSection::make('Firma cliente')
                 ->schema([
+                    TextEntry::make('customer_signature_name')
+                        ->label('Nome e cognome')
+                        ->placeholder('—'),
                     ImageEntry::make('customer_signature_path')
                         ->label('')
                         ->disk('public')
                         ->placeholder('Non ancora firmato'),
+                ]),
+            InfolistSection::make('Gestionale')
+                ->columns(3)
+                ->schema([
+                    TextEntry::make('gestionale_sync_status')
+                        ->label('Stato invio Eureka')
+                        ->badge()
+                        ->formatStateUsing(fn (?string $state) => match ($state) {
+                            'sent' => 'Inviato',
+                            'failed' => 'Fallito',
+                            default => 'Non inviato',
+                        })
+                        ->color(fn (?string $state) => match ($state) {
+                            'sent' => 'success',
+                            'failed' => 'danger',
+                            default => 'gray',
+                        }),
+                    TextEntry::make('gestionale_synced_at')->label('Ultimo invio riuscito')->dateTime('d/m/Y H:i')->placeholder('—'),
+                    TextEntry::make('gestionale_sync_error')->label('Errore')->placeholder('—')->columnSpanFull(),
                 ]),
         ]);
     }
@@ -104,6 +140,49 @@ class ServiceReportResource extends Resource
     public static function form(Form $form): Form
     {
         return $form->schema([
+            // Stesso pattern di QuoteResource: riepilogo di sola lettura,
+            // visibile solo in modifica (in creazione non c'e' ancora nulla
+            // da riepilogare).
+            Forms\Components\Section::make('Panoramica rapida')
+                ->columns(6)
+                ->columnSpanFull()
+                ->visible(fn (?ServiceReport $record) => $record !== null)
+                ->extraAttributes([
+                    'class' => 'rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50 shadow-sm dark:border-slate-800 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900',
+                ])
+                ->schema([
+                    Forms\Components\Placeholder::make('summary_number')
+                        ->label('Numero')
+                        ->content(fn (?ServiceReport $record) => $record?->number ?? '—'),
+                    Forms\Components\Placeholder::make('summary_customer')
+                        ->label('Cliente')
+                        ->content(fn (?ServiceReport $record) => $record?->customer?->full_name ?? '—'),
+                    Forms\Components\Placeholder::make('summary_technician')
+                        ->label('Tecnico')
+                        ->content(fn (?ServiceReport $record) => $record?->technician?->name ?? '—'),
+                    Forms\Components\Placeholder::make('summary_type')
+                        ->label('Tipo intervento')
+                        ->content(fn (?ServiceReport $record) => match ($record?->intervention_type) {
+                            ServiceReport::TYPE_INSTALLAZIONE => 'Installazione',
+                            ServiceReport::TYPE_MANUTENZIONE_ORDINARIA => 'Manutenzione ordinaria',
+                            ServiceReport::TYPE_MANUTENZIONE_STRAORDINARIA => 'Manutenzione straordinaria',
+                            ServiceReport::TYPE_RIPARAZIONE => 'Riparazione',
+                            ServiceReport::TYPE_GARANZIA => 'Garanzia',
+                            default => '—',
+                        }),
+                    Forms\Components\Placeholder::make('summary_date')
+                        ->label('Data')
+                        ->content(fn (?ServiceReport $record) => $record
+                            ? \Illuminate\Support\Carbon::parse($record->getAttribute('intervention_date'))->format('d/m/Y')
+                            : '—'),
+                    Forms\Components\Placeholder::make('summary_status')
+                        ->label('Stato')
+                        ->content(fn (?ServiceReport $record) => new \Illuminate\Support\HtmlString(
+                            '<span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">'
+                                .($record ? (self::statusLabels()[$record->status] ?? ucfirst($record->status)) : '—')
+                                .'</span>'
+                        )),
+                ]),
             Forms\Components\Section::make('Intervento')
                 ->columns(3)
                 ->schema([
@@ -175,8 +254,16 @@ class ServiceReportResource extends Resource
                         ->preload(),
                     Forms\Components\Select::make('machine_product_id')
                         ->label('Modello macchina')
-                        ->options(fn () => Product::query()->where('type', Product::TYPE_MACHINE)->pluck('name', 'id'))
-                        ->searchable(),
+                        ->options(fn () => Product::query()
+                            ->where('type', Product::TYPE_MACHINE)
+                            ->orderByRaw('gestionale_code IS NULL') // collegati a Eureka prima
+                            ->orderBy('name')
+                            ->get()
+                            ->mapWithKeys(fn (Product $product) => [
+                                $product->id => $product->name.($product->gestionale_code ? ' — ✓ Eureka' : ''),
+                            ]))
+                        ->searchable()
+                        ->helperText('I modelli con "✓ Eureka" sono gia\' collegati al gestionale: usarli garantisce che il rapportino sia sempre inviabile.'),
                     Forms\Components\TextInput::make('machine_serial_number')
                         ->label('Matricola')
                         ->maxLength(255),
@@ -215,6 +302,9 @@ class ServiceReportResource extends Resource
                 ]),
             Forms\Components\Section::make('Firma cliente')
                 ->schema([
+                    Forms\Components\TextInput::make('customer_signature_name')
+                        ->label('Nome e cognome (stampatello)')
+                        ->maxLength(255),
                     SignaturePad::make('customer_signature_path')->label(''),
                 ]),
         ]);
@@ -311,6 +401,48 @@ class ServiceReportResource extends Resource
                             } catch (\Throwable $e) {
                                 $email->update(['status' => 'failed', 'error_message' => $e->getMessage()]);
                                 Notification::make()->title('Invio fallito')->body($e->getMessage())->danger()->send();
+                            }
+                        }),
+                    Tables\Actions\Action::make('invia_gestionale')
+                        ->label(fn (ServiceReport $record) => $record->gestionale_sync_status === 'sent' ? 'Aggiorna su gestionale' : 'Invia a gestionale')
+                        ->icon('heroicon-o-arrow-up-tray')
+                        ->visible(fn (ServiceReport $record): bool => in_array($record->status, ['firmato', 'inviato'], true) && $record->tenant->hasGestionaleEurekaCredentials())
+                        ->requiresConfirmation()
+                        ->modalDescription('Invia questo rapportino a Eureka come scheda lavoro. Sono dati di produzione: non esiste un ambiente di test.')
+                        ->action(function (ServiceReport $record) {
+                            $record->load(['customer.billingCustomer', 'machineProduct', 'machineUnit.product', 'machineUnit.billingCustomer', 'partsUsed.product', 'tenant']);
+
+                            $errors = $record->gestionaleValidationErrors();
+
+                            if ($errors !== []) {
+                                Notification::make()
+                                    ->title('Impossibile inviare a gestionale')
+                                    ->body(implode("\n", $errors))
+                                    ->danger()
+                                    ->send();
+
+                                return;
+                            }
+
+                            try {
+                                $client = new EurekaClient($record->tenant);
+                                $result = $client->inviaSchedaLavoro($record->toGestionalePayload(), "CRM-{$record->id}");
+
+                                $record->update([
+                                    'gestionale_scheda_lavoro_id' => $result['id'] ?? null,
+                                    'gestionale_sync_status' => 'sent',
+                                    'gestionale_sync_error' => null,
+                                    'gestionale_synced_at' => now(),
+                                ]);
+
+                                Notification::make()->title('Inviato a gestionale')->success()->send();
+                            } catch (\Throwable $e) {
+                                $record->update([
+                                    'gestionale_sync_status' => 'failed',
+                                    'gestionale_sync_error' => $e->getMessage(),
+                                ]);
+
+                                Notification::make()->title('Invio a gestionale fallito')->body($e->getMessage())->danger()->send();
                             }
                         }),
                     Tables\Actions\EditAction::make(),
