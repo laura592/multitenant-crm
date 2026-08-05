@@ -706,14 +706,49 @@ class ImportEurekaServiceReports extends Command
         return $candidate;
     }
 
+    private function stripRtf(?string $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (!str_starts_with($value, '{\\rtf')) {
+            return $value;
+        }
+
+        // Rimuove gli ultimi caratteri di chiusura RTF
+        $value = (string) preg_replace('/\}\s*$/', '', $value);
+
+        // Sostituisce \par (paragrafi) con newlines
+        $value = (string) preg_replace('/\\\\par\b/', "\n", $value);
+
+        // Rimuove i tag RTF (es. \f0, \fs22, \ansi, ecc.)
+        $value = (string) preg_replace('/\\\\[a-z]+\d*\s?/', '', $value);
+
+        // Rimuove i gruppi di comandi (es. {\*\generator...})
+        $value = (string) preg_replace('/\{[^}]*\}/', '', $value);
+
+        // Rimuove le parentesi graffe rimanenti
+        $value = (string) preg_replace('/[{}]/', '', $value);
+
+        return $value;
+    }
+
     private function normalizeText(mixed $value): ?string
     {
         if ($value === null || $value === '') {
             return null;
         }
 
+        // Converte RTF a testo semplice se necessario
+        $text = $this->stripRtf((string) $value);
+
+        if ($text === null || $text === '') {
+            return null;
+        }
+
         // Rimuove \r (inserito da Eureka a metà stringa, cf. spec §6.1) e collassa spazi
-        $text = trim((string) preg_replace('/\s+/u', ' ', str_replace("\r", ' ', (string) $value)));
+        $text = trim((string) preg_replace('/\s+/u', ' ', str_replace("\r", ' ', $text)));
 
         return $text !== '' ? $text : null;
     }
