@@ -510,6 +510,7 @@ class ImportEurekaServiceReports extends Command
     private function syncDetailRows(Tenant $tenant, ServiceReport $report, array $detail): void
     {
         $report->materialsUsed()->delete();
+        $createdMaterialIds = [];
 
         foreach (($detail['dettaglio'] ?? []) as $row) {
             if (! is_array($row)) {
@@ -527,6 +528,8 @@ class ImportEurekaServiceReports extends Command
                 continue;
             }
 
+            $createdMaterialIds[] = $material->id;
+
             ServiceReportMaterial::create([
                 'service_report_id' => $report->id,
                 'material_id' => $material->id,
@@ -535,6 +538,73 @@ class ImportEurekaServiceReports extends Command
                 'notes' => $this->normalizeText($row['descrizione'] ?? null),
             ]);
         }
+
+        $this->syncArticleMentionsFromNotes($tenant, $report, $detail['note'] ?? null, $createdMaterialIds);
+    }
+
+    private function syncArticleMentionsFromNotes(Tenant $tenant, ServiceReport $report, mixed $note, array $createdMaterialIds): void
+    {
+        $text = $this->normalizeText($note);
+        if ($text === null || $text === '') {
+            return;
+        }
+
+        foreach ($this->extractArticleMentions($text) as $mention) {
+            $material = $this->resolveOrCreateMaterial($tenant, [
+                'id_eureka' => null,
+                'codice' => $mention['code'],
+                'descr1' => $mention['code'],
+                'descrizione' => $mention['code'],
+            ]);
+
+            if (! $material || in_array($material->id, $createdMaterialIds, true)) {
+                continue;
+            }
+
+            $createdMaterialIds[] = $material->id;
+
+            ServiceReportMaterial::create([
+                'service_report_id' => $report->id,
+                'material_id' => $material->id,
+                'quantity' => max(0.0, (float) $mention['quantity']),
+                'notes' => $mention['raw'],
+            ]);
+        }
+    }
+
+    /**
+     * @return array<int, array{code: string, quantity: float, raw: string}>
+     */
+    private function extractArticleMentions(string $text): array
+    {
+        $mentions = [];
+
+        foreach (preg_split('/\r\n|\n/', $text) as $line) {
+            $line = trim($line);
+            if ($line === '') {
+                continue;
+            }
+
+            if (! preg_match('/\b(?:aggiunto|aggiunta)\s+articolo\s*:\s*(?:(?<quantity>\d+)\s*(?:x|×)\s*)?(?<code>[A-Za-z0-9._\/-]+)\b/i', $line, $matches)) {
+                continue;
+            }
+
+            $quantity = isset($matches['quantity']) && $matches['quantity'] !== ''
+                ? (float) $matches['quantity']
+                : 1.0;
+            $code = $this->normalizeText($matches['code']);
+            if ($code === null || $code === '') {
+                continue;
+            }
+
+            $mentions[] = [
+                'code' => $code,
+                'quantity' => $quantity,
+                'raw' => $line,
+            ];
+        }
+
+        return $mentions;
     }
 
     /**
