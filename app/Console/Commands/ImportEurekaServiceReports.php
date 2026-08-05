@@ -549,35 +549,7 @@ class ImportEurekaServiceReports extends Command
             return;
         }
 
-        foreach ($this->extractArticleMentions($text) as $mention) {
-            $material = $this->resolveOrCreateMaterial($tenant, [
-                'id_eureka' => null,
-                'codice' => $mention['code'],
-                'descr1' => $mention['code'],
-                'descrizione' => $mention['code'],
-            ]);
-
-            if (! $material || in_array($material->id, $createdMaterialIds, true)) {
-                continue;
-            }
-
-            $createdMaterialIds[] = $material->id;
-
-            ServiceReportMaterial::create([
-                'service_report_id' => $report->id,
-                'material_id' => $material->id,
-                'quantity' => max(0.0, (float) $mention['quantity']),
-                'notes' => $mention['raw'],
-            ]);
-        }
-    }
-
-    /**
-     * @return array<int, array{code: string, quantity: float, raw: string}>
-     */
-    private function extractArticleMentions(string $text): array
-    {
-        $mentions = [];
+        $remainingLines = [];
 
         foreach (preg_split('/\r\n|\n/', $text) as $line) {
             $line = trim($line);
@@ -585,26 +557,70 @@ class ImportEurekaServiceReports extends Command
                 continue;
             }
 
-            if (! preg_match('/\b(?:aggiunto|aggiunta)\s+articolo\s*:\s*(?:(?<quantity>\d+)\s*(?:x|×)\s*)?(?<code>[A-Za-z0-9._\/-]+)\b/i', $line, $matches)) {
+            if ($this->isArticleMention($line)) {
+                $mention = $this->extractArticleMention($line);
+                if ($mention === null) {
+                    continue;
+                }
+
+                $material = $this->resolveOrCreateMaterial($tenant, [
+                    'id_eureka' => null,
+                    'codice' => $mention['code'],
+                    'descr1' => $mention['code'],
+                    'descrizione' => $mention['code'],
+                ]);
+
+                if (! $material || in_array($material->id, $createdMaterialIds, true)) {
+                    continue;
+                }
+
+                $createdMaterialIds[] = $material->id;
+
+                ServiceReportMaterial::create([
+                    'service_report_id' => $report->id,
+                    'material_id' => $material->id,
+                    'quantity' => max(0.0, (float) $mention['quantity']),
+                    'notes' => $line,
+                ]);
+
                 continue;
             }
 
-            $quantity = isset($matches['quantity']) && $matches['quantity'] !== ''
-                ? (float) $matches['quantity']
-                : 1.0;
-            $code = $this->normalizeText($matches['code']);
-            if ($code === null || $code === '') {
-                continue;
-            }
-
-            $mentions[] = [
-                'code' => $code,
-                'quantity' => $quantity,
-                'raw' => $line,
-            ];
+            $remainingLines[] = $line;
         }
 
-        return $mentions;
+        if ($remainingLines !== []) {
+            $report->notes = implode("\n", $remainingLines);
+            $report->save();
+        }
+    }
+
+    private function isArticleMention(string $line): bool
+    {
+        return preg_match('/\b(?:aggiunto|aggiunta)\s+articolo\s*:\s*(?:(?<quantity>\d+)\s*(?:x|×)\s*)?(?<code>[A-Za-z0-9._\/-]+)\b/i', $line) === 1;
+    }
+
+    /**
+     * @return array{code: string, quantity: float}|null
+     */
+    private function extractArticleMention(string $line): ?array
+    {
+        if (! preg_match('/\b(?:aggiunto|aggiunta)\s+articolo\s*:\s*(?:(?<quantity>\d+)\s*(?:x|×)\s*)?(?<code>[A-Za-z0-9._\/-]+)\b/i', $line, $matches)) {
+            return null;
+        }
+
+        $quantity = isset($matches['quantity']) && $matches['quantity'] !== ''
+            ? (float) $matches['quantity']
+            : 1.0;
+        $code = $this->normalizeText($matches['code']);
+        if ($code === null || $code === '') {
+            return null;
+        }
+
+        return [
+            'code' => $code,
+            'quantity' => $quantity,
+        ];
     }
 
     /**
