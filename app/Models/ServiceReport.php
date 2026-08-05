@@ -39,6 +39,7 @@ class ServiceReport extends Model
         'technician_signature_path',
         'signed_at',
         'notes',
+        'eureka_service_report_id',
         'gestionale_scheda_lavoro_id',
         'gestionale_sync_status',
         'gestionale_sync_error',

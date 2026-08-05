@@ -165,7 +165,10 @@ class ImportEurekaServiceReports extends Command
 
             // Risolve cliente: dal ciclo --customer (già nel summary) o dalla mappa,
             // creando eventualmente il cliente locale se Eureka lo identifica.
-            $localCustomerId = $this->resolveLocalCustomerId($tenant, $summary, $detail, $customerMap);
+            // $dryRun passato esplicitamente: senza, questa chiamata scriveva
+            // clienti/prodotti nuovi anche in modalita' di prova (bug reale,
+            // trovato verificando l'import su dati veri).
+            $localCustomerId = $this->resolveLocalCustomerId($tenant, $summary, $detail, $customerMap, $dryRun);
 
             if (! $localCustomerId) {
                 $skipped++;
@@ -179,7 +182,7 @@ class ImportEurekaServiceReports extends Command
                 'codice' => (($detail['sl_articolo']['codice'] ?? null) ?: ($summary['codice_articolo'] ?? null)),
                 'descr1' => (($detail['sl_articolo']['descr1'] ?? null) ?: ($summary['descr_articolo_1'] ?? null)),
                 'descrizione' => (($detail['sl_articolo']['descr1'] ?? null) ?: ($summary['descr_articolo_1'] ?? null)),
-            ]);
+            ], $dryRun);
 
             $machineSerial = $this->normalizeText(
                 ($detail ? ($detail['sl_matricola'] ?? null) : null)
@@ -235,7 +238,7 @@ class ImportEurekaServiceReports extends Command
                 $updated++;
 
                 if (! $dryRun) {
-                    DB::transaction(function () use ($existing, $detail): void {
+                    DB::transaction(function () use ($tenant, $existing, $detail): void {
                         $existing->save();
                         if ($detail) {
                             $this->syncDetailRows($tenant, $existing, $detail);
@@ -248,7 +251,7 @@ class ImportEurekaServiceReports extends Command
                 $created++;
 
                 if (! $dryRun) {
-                    DB::transaction(function () use ($payload, $detail, $number): void {
+                    DB::transaction(function () use ($tenant, $payload, $detail, $number): void {
                         $report = new ServiceReport($payload);
                         $report->number = $number;
                         $report->save();
@@ -321,7 +324,7 @@ class ImportEurekaServiceReports extends Command
      * @param array<string, mixed>|null $detail
      * @param array<int|string, string> $customerMap
      */
-    private function resolveLocalCustomerId(Tenant $tenant, array $row, ?array $detail, array &$customerMap): ?string
+    private function resolveLocalCustomerId(Tenant $tenant, array $row, ?array $detail, array &$customerMap, bool $dryRun): ?string
     {
         foreach (array_filter([
             (int) ($row['id_codice_f15'] ?? 0),
@@ -343,7 +346,7 @@ class ImportEurekaServiceReports extends Command
                 return $existing->id;
             }
 
-            $created = $this->resolveOrCreateCustomer($tenant, $code, $row, $detail);
+            $created = $this->resolveOrCreateCustomer($tenant, $code, $row, $detail, $dryRun);
             if ($created) {
                 $customerMap[$code] = $created->id;
 
@@ -354,7 +357,7 @@ class ImportEurekaServiceReports extends Command
         return null;
     }
 
-    private function resolveOrCreateCustomer(Tenant $tenant, int $code, array $row, ?array $detail): ?Customer
+    private function resolveOrCreateCustomer(Tenant $tenant, int $code, array $row, ?array $detail, bool $dryRun): ?Customer
     {
         if ($code <= 0) {
             return null;
@@ -371,6 +374,12 @@ class ImportEurekaServiceReports extends Command
 
         $companyName = $this->extractCustomerCompanyName($row, $detail)
             ?: 'Cliente Eureka '.$code;
+
+        if ($dryRun) {
+            $this->line("  <comment>[DRY RUN] Cliente NON creato: {$companyName} (codice gestionale {$code})</comment>");
+
+            return null;
+        }
 
         $address = $this->extractCustomerAddress($row, $detail);
 
@@ -447,7 +456,7 @@ class ImportEurekaServiceReports extends Command
         ])->save();
     }
 
-    private function resolveOrCreateProduct(Tenant $tenant, array $data): ?Product
+    private function resolveOrCreateProduct(Tenant $tenant, array $data, bool $dryRun = false): ?Product
     {
         if (! is_array($data)) {
             return null;
@@ -476,6 +485,12 @@ class ImportEurekaServiceReports extends Command
         $existingBySku = Product::query()->where('sku', $sku)->first();
         if ($existingBySku) {
             return $existingBySku;
+        }
+
+        if ($dryRun) {
+            $this->line("  <comment>[DRY RUN] Prodotto macchina NON creato: {$name} (sku {$sku})</comment>");
+
+            return null;
         }
 
         return Product::create([
