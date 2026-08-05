@@ -348,7 +348,7 @@ class ServiceReportResource extends Resource
                                 $product->id => $product->name.($product->gestionale_code ? ' — ✓ Eureka' : ''),
                             ]))
                         ->searchable()
-                        ->helperText('I modelli con "✓ Eureka" sono gia\' collegati al gestionale: usarli garantisce che il rapportino sia sempre inviabile.'),
+                        ->createOptionAction(fn (Forms\Components\Actions\Action $action) => $action->hidden()),
                     Forms\Components\TextInput::make('machine_serial_number')
                         ->label('Matricola')
                         ->maxLength(255),
