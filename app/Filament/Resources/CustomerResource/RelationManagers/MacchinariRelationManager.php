@@ -10,6 +10,7 @@ use Filament\Forms\Form;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 
 /**
  * Vista di sola-lettura sui macchinari installati presso questo cliente, con
@@ -27,6 +28,11 @@ class MacchinariRelationManager extends RelationManager
     protected static ?string $title = 'Macchinari installati';
 
     protected static ?string $modelLabel = 'Macchinario';
+
+    public static function canViewForRecord(Model $ownerRecord, string $pageClass): bool
+    {
+        return $ownerRecord->installedMachineUnits()->exists();
+    }
 
     public function form(Form $form): Form
     {

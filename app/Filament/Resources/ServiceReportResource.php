@@ -336,6 +336,7 @@ class ServiceReportResource extends Resource
                         ->searchable()
                         ->preload()
                         ->disabled(fn (Forms\Get $get) => blank($get('customer_id')))
+                        ->createOptionAction(null)
                         ->helperText('Seleziona prima il cliente: qui compaiono solo i suoi preventivi accettati.'),
                     Forms\Components\Select::make('machine_product_id')
                         ->label('Modello macchina')

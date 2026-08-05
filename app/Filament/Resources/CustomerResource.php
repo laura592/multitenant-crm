@@ -72,6 +72,8 @@ class CustomerResource extends Resource
                         ->label('Codice gestionale (Eureka)')
                         ->numeric()
                         ->unique(ignoreRecord: true)
+                        ->disabled()
+                        ->dehydrated(false)
                         ->helperText('Usa "Cerca su Eureka" nella tabella per trovarlo automaticamente, oppure inseriscilo a mano se lo conosci gia\'.'),
                     Forms\Components\Select::make('billing_customer_id')
                         ->label('Fatturare a')
