@@ -669,8 +669,8 @@ class ImportEurekaServiceReports extends Command
     private function mapStatus(mixed $statoDocumento): string
     {
         // stato_documento=10 → documento aperto/in corso → bozza
-        // altrimenti → completato
-        return (int) $statoDocumento === 10 ? 'bozza' : 'completato';
+        // altrimenti → inviato (il cliente ha già il documento)
+        return (int) $statoDocumento === 10 ? 'bozza' : 'inviato';
     }
 
     /**
