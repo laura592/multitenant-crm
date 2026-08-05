@@ -13,10 +13,12 @@ class CreateServiceReport extends CreateRecord
     /**
      * Precompila il cliente quando si arriva da "Clienti vicini"
      * (?customer_id=...), cosi' il tecnico non deve ricercarlo a mano.
+     * Precompila anche la machine_unit_id quando si arriva da Macchinari
+     * (?machine_unit_id=...), così il tecnico non deve ricercarla a mano.
      * form->fill($state) con uno stato esplicito rimpiazza l'intero stato del
      * form (non lo fonde): prima si lascia risolvere normalmente ogni default
-     * di campo (es. tecnico = utente loggato), poi si sovrascrive solo
-     * customer_id sullo stato gia' risolto.
+     * di campo (es. tecnico = utente loggato), poi si sovrascrivono solo i
+     * parametri query sullo stato gia' risolto.
      */
     protected function fillForm(): void
     {
@@ -24,10 +26,18 @@ class CreateServiceReport extends CreateRecord
 
         $this->form->fill();
 
+        $fillData = [];
+        
         if ($customerId = request()->query('customer_id')) {
-            $this->form->fill(array_merge($this->form->getRawState(), [
-                'customer_id' => $customerId,
-            ]));
+            $fillData['customer_id'] = $customerId;
+        }
+        
+        if ($machineUnitId = request()->query('machine_unit_id')) {
+            $fillData['machine_unit_id'] = $machineUnitId;
+        }
+        
+        if (!empty($fillData)) {
+            $this->form->fill(array_merge($this->form->getRawState(), $fillData));
         }
 
         $this->callHook('afterFill');

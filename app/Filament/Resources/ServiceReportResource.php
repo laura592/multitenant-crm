@@ -7,6 +7,7 @@ use App\Filament\Forms\CustomerContactFields;
 use App\Filament\Resources\ServiceReportResource\Pages;
 use App\Mail\ServiceReportMail;
 use App\Models\Material;
+use App\Models\MachineUnit;
 use App\Models\Product;
 use App\Models\ServiceReport;
 use App\Support\Gestionale\EurekaClient;
@@ -336,11 +337,6 @@ class ServiceReportResource extends Resource
                         ->preload()
                         ->disabled(fn (Forms\Get $get) => blank($get('customer_id')))
                         ->helperText('Seleziona prima il cliente: qui compaiono solo i suoi preventivi accettati.'),
-                    Forms\Components\Select::make('comodato_macchina_id')
-                        ->label('Comodato collegato')
-                        ->relationship('comodatoMacchina', 'nome_macchina')
-                        ->searchable()
-                        ->preload(),
                     Forms\Components\Select::make('machine_product_id')
                         ->label('Modello macchina')
                         ->options(fn () => Product::query()
@@ -362,7 +358,41 @@ class ServiceReportResource extends Resource
                         ->getOptionLabelFromRecordUsing(fn ($record) => $record->display_name.' — '.$record->serial_number)
                         ->searchable()
                         ->preload()
+                        ->live()
+                        ->afterStateUpdated(function (Forms\Set $set, Forms\Get $get) {
+                            $machineUnitId = $get('machine_unit_id');
+                            if ($machineUnitId) {
+                                $machineUnit = MachineUnit::find($machineUnitId);
+                                if ($machineUnit) {
+                                    // Auto-populate product
+                                    if ($machineUnit->product_id) {
+                                        $set('machine_product_id', $machineUnit->product_id);
+                                    }
+                                    // Auto-populate serial number
+                                    if ($machineUnit->serial_number) {
+                                        $set('machine_serial_number', $machineUnit->serial_number);
+                                    }
+                                }
+                            }
+                        })
                         ->helperText('Se indicata e ha un "Fatturare a" proprio, guida la fatturazione di questo intervento al posto del cliente.'),
+                    Forms\Components\Placeholder::make('billing_info')
+                        ->label('Fatturazione')
+                        ->content(function (Forms\Get $get) {
+                            $machineUnitId = $get('machine_unit_id');
+                            if (!$machineUnitId) {
+                                return new HtmlString('<span class="text-gray-500">Seleziona una macchina tracciata</span>');
+                            }
+                            $machineUnit = MachineUnit::find($machineUnitId);
+                            if (!$machineUnit || !$machineUnit->billingCustomer) {
+                                return new HtmlString('<span class="text-gray-500">Paga il cliente principale</span>');
+                            }
+                            return new HtmlString(
+                                '<strong>'.$machineUnit->billingCustomer->full_name.'</strong> '
+                                .'<span class="text-sm text-gray-500">('.$machineUnit->billingCustomer->company_name.')</span>'
+                            );
+                        })
+                        ->columnSpanFull(),
                 ]),
             Forms\Components\Section::make('Descrizione')
                 ->schema([

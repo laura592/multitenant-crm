@@ -165,6 +165,11 @@ class MachineUnitResource extends Resource
                             $record->product?->update(['gestionale_code' => $data['gestionale_code']]);
                             Notification::make()->title('Codice Eureka salvato sul modello')->success()->send();
                         }),
+                    Tables\Actions\Action::make('create_service_report')
+                        ->label('Crea rapportino')
+                        ->icon('heroicon-o-document-plus')
+                        ->color('success')
+                        ->url(fn (MachineUnit $record) => ServiceReportResource::getUrl('create', ['machine_unit_id' => $record->id, 'customer_id' => $record->current_customer_id])),
                     Tables\Actions\Action::make('sposta')
                         ->label('Sposta')
                         ->icon('heroicon-o-arrow-right-circle')
