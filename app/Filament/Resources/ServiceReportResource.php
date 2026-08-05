@@ -381,17 +381,6 @@ class ServiceReportResource extends Resource
                     Forms\Components\Placeholder::make('fatturare_a')
                         ->label('Fatturare a')
                         ->content(fn (Forms\Get $get) => self::resolvePayer($get)?->full_name ?? '—'),
-                    Forms\Components\Actions::make([
-                        Forms\Components\Actions\Action::make('crea_preventivo')
-                            ->label('Crea preventivo')
-                            ->icon('heroicon-o-document-plus')
-                            ->color('gray')
-                            ->visible(fn (Forms\Get $get) => filled($get('customer_id')))
-                            ->url(fn (Forms\Get $get) => QuoteResource::getUrl('create', [
-                                'customer_id' => self::resolvePayer($get)?->id,
-                            ]))
-                            ->openUrlInNewTab(),
-                    ]),
                     Forms\Components\Select::make('machine_product_id')
                         ->label('Modello macchina')
                         ->options(fn () => Product::query()
