@@ -358,7 +358,17 @@ class GestionaleSyncRunner
                 // Eureka dice che la macchina e' stata consegnata/installata (vedi
                 // doc API §5) — sono la data vera di installazione, non "oggi"
                 // (che e' solo quando questo sync l'ha vista per la prima volta).
+                // Il numero doc si salva nella nota del posizionamento (non c'e'
+                // un campo dedicato): senza, non resterebbe traccia della bolla
+                // da nessuna parte una volta creata la MachineUnit.
+                $documentNumber = (int) ($row['numero_doc_t23'] ?? 0);
                 $installedAt = $this->parseEurekaDate($row['data_documento'] ?? null);
+
+                $installNote = collect([
+                    'Importata da Eureka',
+                    filled($row['articolo'] ?? null) ? "articolo {$row['articolo']}" : null,
+                    $documentNumber > 0 ? "bolla n. {$documentNumber}" : null,
+                ])->filter()->implode(', ');
 
                 // firstOrCreate (non create): una matricola vista due volte
                 // (es. righe duplicate nella risposta Eureka) romperebbe il
@@ -379,7 +389,7 @@ class GestionaleSyncRunner
                     continue;
                 }
 
-                $machineUnit->moveTo($customer, placedAt: $installedAt);
+                $machineUnit->moveTo($customer, notes: $installNote, placedAt: $installedAt);
 
                 $imported[] = ['machineUnit' => $machineUnit, 'customer' => $customer];
             }

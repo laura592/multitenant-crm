@@ -25,7 +25,7 @@ class PlacementsRelationManager extends RelationManager
                 Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->placeholder('Magazzino'),
                 Tables\Columns\TextColumn::make('placed_at')->label('Dal')->dateTime('d/m/Y H:i'),
                 Tables\Columns\TextColumn::make('removed_at')->label('Al')->dateTime('d/m/Y H:i')->placeholder('In corso'),
-                Tables\Columns\TextColumn::make('notes')->label('Note dello spostamento')->limit(50)->tooltip(fn ($state) => $state),
+                Tables\Columns\TextColumn::make('notes')->label('Note')->limit(50)->tooltip(fn ($state) => $state),
             ])
             ->defaultSort('placed_at', 'desc');
     }
