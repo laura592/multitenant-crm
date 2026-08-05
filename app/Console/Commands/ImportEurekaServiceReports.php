@@ -291,8 +291,14 @@ class ImportEurekaServiceReports extends Command
         $option = trim((string) $this->option('technician'));
 
         if ($option !== '') {
+            // Niente filtro tenant_id qui: alcuni utenti (es. Alessandro
+            // Signorato) hanno users.tenant_id vuoto pur operando su piu'
+            // tenant (l'appartenenza vera passa dal pivot model_has_roles,
+            // che per lui e' anch'esso vuoto — verificato dal vivo). Un
+            // --technician esplicito e' un identificativo scelto a mano
+            // dall'utente umano, non va scartato per un campo che in
+            // pratica non riflette l'appartenenza reale.
             $user = User::query()
-                ->where('tenant_id', $tenant->id)
                 ->where(fn ($q) => $q->where('email', $option)->orWhere('id', $option))
                 ->first();
 
@@ -303,8 +309,12 @@ class ImportEurekaServiceReports extends Command
             }
         }
 
+        // Stesso motivo di sopra: niente filtro tenant_id sulla ricerca per
+        // nome/email, altrimenti Alessandro Signorato (il tecnico giusto per
+        // lo storico, confermato dalla proprietaria) non risulterebbe mai
+        // trovato e si cadrebbe sul fallback "primo utente creato" — che ha
+        // gia' assegnato erroneamente i rapportini a un'altra persona.
         $preferred = User::query()
-            ->where('tenant_id', $tenant->id)
             ->where(function ($query): void {
                 $query->where('email', 'like', '%signorato%')
                     ->orWhereRaw('LOWER(name) LIKE ?', ['%signorato%'])

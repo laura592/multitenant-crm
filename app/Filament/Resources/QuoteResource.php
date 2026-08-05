@@ -306,7 +306,9 @@ class QuoteResource extends Resource
                         // dell'Offerta e non deve poter essere cambiato per
                         // sbaglio: altrimenti il preventivo "alternativo"
                         // finirebbe nel gruppo ma per un cliente diverso.
-                        ->default(fn () => request()->query('group') ? QuoteGroup::find(request()->query('group'))?->customer_id : null)
+                        ->default(fn () => request()->query('group')
+                            ? QuoteGroup::find(request()->query('group'))?->customer_id
+                            : request()->query('customer_id'))
                         ->disabled(fn () => $isCreating && filled(request()->query('group')))
                         ->dehydrated()
                         ->createOptionForm([

@@ -2,12 +2,14 @@
 
 namespace App\Filament\Resources\CustomerResource\RelationManagers;
 
+use App\Models\Customer;
 use App\Models\Lavaggio;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 
 class LavaggiRelationManager extends RelationManager
 {
@@ -16,6 +18,14 @@ class LavaggiRelationManager extends RelationManager
     protected static ?string $title = 'Storico lavaggi';
 
     protected static ?string $modelLabel = 'Lavaggio';
+
+    // Senza macchinari installati non c'e' nulla da lavare: evita di mostrare
+    // una tab vuota e fuorviante sulla scheda cliente.
+    public static function canViewForRecord(Model $ownerRecord, string $pageClass): bool
+    {
+        /** @var Customer $ownerRecord */
+        return $ownerRecord->installedMachineUnits()->exists();
+    }
 
     public function form(Form $form): Form
     {

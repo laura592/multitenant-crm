@@ -83,12 +83,13 @@ class MachineUnitResource extends Resource
                 Tables\Columns\TextColumn::make('serial_number')->label('Matricola')->searchable(),
                 Tables\Columns\TextColumn::make('display_name')->label('Modello'),
                 Tables\Columns\TextColumn::make('currentCustomer.company_name')->label('Presso')->placeholder('In magazzino'),
-                Tables\Columns\IconColumn::make('product.gestionale_code')
-                    ->label('Cod. Eureka')
+                Tables\Columns\IconColumn::make('gestionale_code')
+                    ->label('Da Eureka')
                     ->boolean()
                     ->trueIcon('heroicon-o-check-circle')
                     ->falseIcon('heroicon-o-x-circle')
-                    ->getStateUsing(fn (MachineUnit $record) => filled($record->product?->gestionale_code)),
+                    ->tooltip('Se la macchina (matricola) o il suo modello sono collegati a Eureka. Indipendente dal collegamento del modello: una macchina puo essere importata da Eureka anche se il suo modello non e ancora agganciato a un articolo.')
+                    ->getStateUsing(fn (MachineUnit $record) => filled($record->gestionale_code) || $record->source === MachineUnit::SOURCE_EUREKA || filled($record->product?->gestionale_code)),
                 Tables\Columns\TextColumn::make('status')
                     ->label('Stato')
                     ->badge()
@@ -164,13 +165,14 @@ class MachineUnitResource extends Resource
                         ->action(function (array $data, MachineUnit $record) {
                             $record->product?->update(['gestionale_code' => $data['gestionale_code']]);
                             Notification::make()->title('Codice Eureka salvato sul modello')->success()->send();
-                        }),
-                    Tables\Actions\Action::make('create_service_report')
-                        ->label('Crea rapportino')
-                        ->icon('heroicon-o-document-plus')
-                        ->color('success')
-                        ->url(fn (MachineUnit $record) => ServiceReportResource::getUrl('create', ['machine_unit_id' => $record->id, 'customer_id' => $record->current_customer_id])),
-                    Tables\Actions\Action::make('sposta')
+                       }),
+   Tables\Actions\Action::make('create_service_report')
+                       ->label('Crea rapportino')
+                       ->icon('heroicon-o-document-plus')
+                       ->color('success')
+                       ->visible(fn (MachineUnit $record): bool => $record->current_customer_id !== null)
+                       ->url(fn (MachineUnit $record) => ServiceReportResource::getUrl('create', ['machine_unit_id' => $record->id, 'customer_id' => $record->current_customer_id])),
+   Tables\Actions\Action::make('sposta')
                         ->label('Sposta')
                         ->icon('heroicon-o-arrow-right-circle')
                         ->form([

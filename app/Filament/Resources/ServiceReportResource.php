@@ -6,6 +6,7 @@ use App\Filament\Forms\Components\SignaturePad;
 use App\Filament\Forms\CustomerContactFields;
 use App\Filament\Resources\ServiceReportResource\Pages;
 use App\Mail\ServiceReportMail;
+use App\Models\Customer;
 use App\Models\Material;
 use App\Models\MachineUnit;
 use App\Models\Product;
@@ -269,7 +270,17 @@ class ServiceReportResource extends Resource
                         ->preload()
                         ->required()
                         ->live()
-                        ->afterStateUpdated(fn (Forms\Set $set) => $set('quote_id', null))
+                        // Prefill arrivando dall'azione "Crea rapportino" su un
+                        // macchinario (MachineUnitResource): vedi anche
+                        // machine_unit_id sotto, stesso query param.
+                        ->default(fn () => request()->query('customer_id'))
+                        // Preventivo e macchina tracciata sono entrambi filtrati per
+                        // cliente (vedi sotto): cambiando cliente le selezioni fatte
+                        // in precedenza non hanno piu' senso.
+                        ->afterStateUpdated(function (Forms\Set $set) {
+                            $set('quote_id', null);
+                            $set('machine_unit_id', null);
+                        })
                         ->createOptionForm([
                             Forms\Components\TextInput::make('company_name')->label('Ragione sociale'),
                             Forms\Components\TextInput::make('first_name')->label('Nome'),
@@ -338,6 +349,49 @@ class ServiceReportResource extends Resource
                         ->disabled(fn (Forms\Get $get) => blank($get('customer_id')))
                         ->createOptionAction(null)
                         ->helperText('Seleziona prima il cliente: qui compaiono solo i suoi preventivi accettati.'),
+                    Forms\Components\Select::make('machine_unit_id')
+                        ->label('Macchina (matricola tracciata)')
+                        ->relationship(
+                            'machineUnit',
+                            'serial_number',
+                            modifyQueryUsing: fn (Builder $query, Forms\Get $get) => $query
+                                ->where('current_customer_id', $get('customer_id')),
+                        )
+                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->display_name.' — '.$record->serial_number)
+                        ->searchable()
+                        ->preload()
+                        ->live()
+                        // Prefill arrivando dall'azione "Crea rapportino" su un
+                        // macchinario (MachineUnitResource).
+                        ->default(fn () => request()->query('machine_unit_id'))
+                        ->disabled(fn (Forms\Get $get) => blank($get('customer_id')))
+                        // Scegliere qui la matricola tracciata compila da sola modello
+                        // e matricola sotto: prima erano tre campi indipendenti da
+                        // riempire a mano (facile sbagliare/dimenticarne uno).
+                        ->afterStateUpdated(function (Forms\Set $set, ?string $state) {
+                            if ($state === null) {
+                                return;
+                            }
+
+                            $machineUnit = MachineUnit::find($state);
+                            $set('machine_product_id', $machineUnit?->product_id);
+                            $set('machine_serial_number', $machineUnit?->serial_number);
+                        })
+                        ->helperText('Solo le macchine installate presso il cliente selezionato. Sceglierla compila da sola modello e matricola qui sotto.'),
+                    Forms\Components\Placeholder::make('fatturare_a')
+                        ->label('Fatturare a')
+                        ->content(fn (Forms\Get $get) => self::resolvePayer($get)?->full_name ?? '—'),
+                    Forms\Components\Actions::make([
+                        Forms\Components\Actions\Action::make('crea_preventivo')
+                            ->label('Crea preventivo')
+                            ->icon('heroicon-o-document-plus')
+                            ->color('gray')
+                            ->visible(fn (Forms\Get $get) => filled($get('customer_id')))
+                            ->url(fn (Forms\Get $get) => QuoteResource::getUrl('create', [
+                                'customer_id' => self::resolvePayer($get)?->id,
+                            ]))
+                            ->openUrlInNewTab(),
+                    ]),
                     Forms\Components\Select::make('machine_product_id')
                         ->label('Modello macchina')
                         ->options(fn () => Product::query()
@@ -349,51 +403,10 @@ class ServiceReportResource extends Resource
                                 $product->id => $product->name.($product->gestionale_code ? ' — ✓ Eureka' : ''),
                             ]))
                         ->searchable()
-                        ->createOptionAction(fn (Forms\Components\Actions\Action $action) => $action->hidden()),
+                        ->helperText('I modelli con "✓ Eureka" sono gia\' collegati al gestionale: usarli garantisce che il rapportino sia sempre inviabile.'),
                     Forms\Components\TextInput::make('machine_serial_number')
                         ->label('Matricola')
                         ->maxLength(255),
-                    Forms\Components\Select::make('machine_unit_id')
-                        ->label('Macchina (matricola tracciata)')
-                        ->relationship('machineUnit', 'serial_number')
-                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->display_name.' — '.$record->serial_number)
-                        ->searchable()
-                        ->preload()
-                        ->live()
-                        ->afterStateUpdated(function (Forms\Set $set, Forms\Get $get) {
-                            $machineUnitId = $get('machine_unit_id');
-                            if ($machineUnitId) {
-                                $machineUnit = MachineUnit::find($machineUnitId);
-                                if ($machineUnit) {
-                                    // Auto-populate product
-                                    if ($machineUnit->product_id) {
-                                        $set('machine_product_id', $machineUnit->product_id);
-                                    }
-                                    // Auto-populate serial number
-                                    if ($machineUnit->serial_number) {
-                                        $set('machine_serial_number', $machineUnit->serial_number);
-                                    }
-                                }
-                            }
-                        })
-                        ->helperText('Se indicata e ha un "Fatturare a" proprio, guida la fatturazione di questo intervento al posto del cliente.'),
-                    Forms\Components\Placeholder::make('billing_info')
-                        ->label('Fatturazione')
-                        ->content(function (Forms\Get $get) {
-                            $machineUnitId = $get('machine_unit_id');
-                            if (!$machineUnitId) {
-                                return new HtmlString('<span class="text-gray-500">Seleziona una macchina tracciata</span>');
-                            }
-                            $machineUnit = MachineUnit::find($machineUnitId);
-                            if (!$machineUnit || !$machineUnit->billingCustomer) {
-                                return new HtmlString('<span class="text-gray-500">Paga il cliente principale</span>');
-                            }
-                            return new HtmlString(
-                                '<strong>'.$machineUnit->billingCustomer->full_name.'</strong> '
-                                .'<span class="text-sm text-gray-500">('.$machineUnit->billingCustomer->company_name.')</span>'
-                            );
-                        })
-                        ->columnSpanFull(),
                 ]),
             Forms\Components\Section::make('Descrizione')
                 ->schema([
@@ -433,6 +446,29 @@ class ServiceReportResource extends Resource
                     SignaturePad::make('customer_signature_path')->label(''),
                 ]),
         ]);
+    }
+
+    /**
+     * Stessa risoluzione di ServiceReport::invoiceRecipient(), ma sullo stato
+     * del form prima ancora di salvare (usata dal Placeholder "Fatturare a" e
+     * dal bottone "Crea preventivo" in Macchina): la macchina tracciata, se
+     * ha un "Fatturare a" proprio, vince sul cliente dell'intervento.
+     */
+    private static function resolvePayer(Forms\Get $get): ?Customer
+    {
+        if ($machineUnitId = $get('machine_unit_id')) {
+            $billingCustomer = MachineUnit::find($machineUnitId)?->billingCustomer;
+
+            if ($billingCustomer) {
+                return $billingCustomer;
+            }
+        }
+
+        if ($customerId = $get('customer_id')) {
+            return Customer::find($customerId)?->invoiceRecipient();
+        }
+
+        return null;
     }
 
     public static function table(Table $table): Table

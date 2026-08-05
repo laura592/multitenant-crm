@@ -141,7 +141,8 @@
       "Bash(node inspect4.mjs)",
       "Bash(grep -iE \"\\\\.env|credential|secret|\\\\.key$\")",
       "Bash(grep -n 'isLazy\\\\|$isLazy' -B2 -A5 /Users/laura/Documents/multitenant-crm/vendor/filament/widgets/src/Widget.php)",
-      "Bash(awk '{print $1, $2}')"
+      "Bash(awk '{print $1, $2}')",
+      "Bash(git diff *)"
     ],
     "additionalDirectories": [
       "/private/tmp/claude-501/-Users-laura-Documents-multitenant-crm/42c2ea60-257f-4721-955c-f0223b676257/scratchpad",
