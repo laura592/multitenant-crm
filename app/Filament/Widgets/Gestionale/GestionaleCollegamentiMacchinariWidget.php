@@ -14,17 +14,14 @@ class GestionaleCollegamentiMacchinariWidget extends BaseWidget
 
     protected int|string|array $columnSpan = 1;
 
-    // Vedi GestionaleDaRivedereWidget: senza un identificatore proprio, la
-    // paginazione di questa tabella condivide ?page= con le altre 4 della
-    // stessa pagina.
-    protected function getTableQueryStringIdentifier(): ?string
-    {
-        return 'collegamentiMacchinari';
-    }
+    // Vedi GestionaleDaRivedereWidget per il perche'.
+    protected static bool $isLazy = false;
 
     public function table(Table $table): Table
     {
         return $table
+            // Vedi GestionaleDaRivedereWidget per il perche'.
+            ->queryStringIdentifier('collegamentiMacchinari')
             ->query(MachineUnit::query()->whereNotNull('gestionale_suggested_code'))
             ->columns([
                 Tables\Columns\TextColumn::make('serial_number')->label('Matricola'),

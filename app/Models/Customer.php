@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Mail\CustomerGestionaleReviewMail;
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\LogsAuditTrail;
 use App\Support\PhoneNumber;
@@ -9,6 +10,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Mail;
 
 /**
  * @property-read self|null $billingCustomer
@@ -135,6 +137,41 @@ class Customer extends Model
         ]);
     }
 
+    /**
+     * Stessa segnalazione di EditCustomer::afterSave(), riutilizzabile da
+     * qualunque altro punto dell'app che possa salvare un cliente esistente
+     * gia' collegato a Eureka — es. l'editOptionForm del campo cliente nel
+     * rapportino (vedi ServiceReportResource), che modifica il record vero
+     * ma passa dal meccanismo generico di Filament sul Select, non dalla
+     * pagina "Modifica cliente": senza questo, quelle modifiche restavano
+     * silenziose (nessuna nota, nessuna email a chi aggiorna Eureka a mano).
+     *
+     * @param array<int, string> $changedAttributes chiavi del model cambiate (da getChanges())
+     */
+    public function notifyGestionaleReviewIfLinked(array $changedAttributes): void
+    {
+        if ($this->gestionale_code === null) {
+            return;
+        }
+
+        $changed = array_intersect_key(self::GESTIONALE_TRACKED_FIELDS, array_flip($changedAttributes));
+
+        if ($changed === []) {
+            return;
+        }
+
+        $this->flagGestionaleReview(array_values($changed));
+
+        $recipients = $this->tenant?->notificationRecipients('customer_gestionale') ?? [];
+
+        if ($recipients !== []) {
+            Mail::to($recipients)->send(new CustomerGestionaleReviewMail(
+                $this,
+                'Modifica su un cliente già collegato a Eureka: '.implode(', ', $changed).'.',
+            ));
+        }
+    }
+
     public function dismissGestionaleReview(): void
     {
         $this->update([
@@ -169,6 +206,11 @@ class Customer extends Model
     public function quotes(): HasMany
     {
         return $this->hasMany(Quote::class);
+    }
+
+    public function installedMachineUnits(): HasMany
+    {
+        return $this->hasMany(MachineUnit::class, 'current_customer_id');
     }
 
     /**

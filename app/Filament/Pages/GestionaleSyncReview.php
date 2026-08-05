@@ -6,7 +6,7 @@ use App\Filament\Widgets\Gestionale\GestionaleCollegamentiClientiWidget;
 use App\Filament\Widgets\Gestionale\GestionaleCollegamentiMacchinariWidget;
 use App\Filament\Widgets\Gestionale\GestionaleCollegamentiProdottiWidget;
 use App\Filament\Widgets\Gestionale\GestionaleDaRivedereWidget;
-use App\Filament\Widgets\Gestionale\GestionaleMacchineNuoveWidget;
+use App\Filament\Widgets\Gestionale\GestionaleMacchineImportateWidget;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Facades\Filament;
 use Filament\Pages\Page;
@@ -52,6 +52,15 @@ class GestionaleSyncReview extends Page
         return 'Risultati dell\'ultimo controllo automatico con Eureka: differenze da rivedere e nuovi collegamenti proposti, mai scritti su Eureka ne\' assegnati da soli.';
     }
 
+    // Il default di Filament (2 colonne) stringe ogni tabella a meta' pagina:
+    // con le colonne di queste widget (testo lungo nelle note + due azioni
+    // Conferma/Scarta) il contenuto non ci sta e finisce tagliato fuori vista,
+    // scrollabile solo in orizzontale senza alcuna scrollbar visibile.
+    public function getHeaderWidgetsColumns(): int | string | array
+    {
+        return 1;
+    }
+
     protected function getHeaderWidgets(): array
     {
         return [
@@ -59,7 +68,7 @@ class GestionaleSyncReview extends Page
             GestionaleCollegamentiClientiWidget::class,
             GestionaleCollegamentiProdottiWidget::class,
             GestionaleCollegamentiMacchinariWidget::class,
-            GestionaleMacchineNuoveWidget::class,
+            GestionaleMacchineImportateWidget::class,
         ];
     }
 }

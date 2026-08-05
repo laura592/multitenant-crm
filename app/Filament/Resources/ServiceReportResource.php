@@ -6,12 +6,15 @@ use App\Filament\Forms\Components\SignaturePad;
 use App\Filament\Forms\CustomerContactFields;
 use App\Filament\Resources\ServiceReportResource\Pages;
 use App\Mail\ServiceReportMail;
+use App\Models\Material;
 use App\Models\Product;
 use App\Models\ServiceReport;
 use App\Support\Gestionale\EurekaClient;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Infolists\Components\Actions as InfolistActions;
+use Filament\Infolists\Components\Actions\Action as InfolistAction;
 use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section as InfolistSection;
@@ -21,7 +24,10 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\HtmlString;
 
 class ServiceReportResource extends Resource
 {
@@ -97,6 +103,21 @@ class ServiceReportResource extends Resource
                 ]),
             InfolistSection::make('Ricambi/materiali utilizzati')
                 ->schema([
+                    RepeatableEntry::make('materialsUsed')
+                        ->label('')
+                        ->placeholder('Nessun ricambio utilizzato')
+                        ->columns(2)
+                        ->schema([
+                            TextEntry::make('material.display_label')->label('Materiale'),
+                            TextEntry::make('quantity')->label('Quantità'),
+                        ]),
+                ]),
+            // Rapportini compilati prima del passaggio a Materiali avevano i
+            // ricambi salvati come Product (partsUsed) — sezione visibile
+            // solo per lo storico, non tocchiamo quei dati.
+            InfolistSection::make('Ricambi/materiali utilizzati (storico)')
+                ->visible(fn (ServiceReport $record) => $record->partsUsed->isNotEmpty())
+                ->schema([
                     RepeatableEntry::make('partsUsed')
                         ->label('')
                         ->columns(2)
@@ -113,7 +134,49 @@ class ServiceReportResource extends Resource
                     ImageEntry::make('customer_signature_path')
                         ->label('')
                         ->disk('public')
+                        // Il path puo' restare in DB anche se il file non c'e' piu'
+                        // su disco (es. storage non persistito): senza questo
+                        // controllo l'ImageEntry prova comunque a caricare
+                        // un'immagine rotta invece di mostrare il placeholder.
+                        ->getStateUsing(fn (ServiceReport $record) => ($record->customer_signature_path && Storage::disk('public')->exists($record->customer_signature_path))
+                            ? $record->customer_signature_path
+                            : null)
                         ->placeholder('Non ancora firmato'),
+                ]),
+            InfolistSection::make('Storico invii email')
+                ->visible(fn (ServiceReport $record) => $record->emails->isNotEmpty())
+                ->schema([
+                    RepeatableEntry::make('emails')
+                        ->hiddenLabel()
+                        ->contained(false)
+                        ->schema([
+                            TextEntry::make('recipient_email')->label('Destinatario'),
+                            TextEntry::make('created_at')->label('Inviato il')->dateTime('d/m/Y H:i'),
+                            TextEntry::make('status')
+                                ->label('Esito')
+                                ->badge()
+                                ->formatStateUsing(fn (string $state) => $state === 'sent' ? 'Inviato' : 'Fallito')
+                                ->color(fn (string $state) => $state === 'sent' ? 'success' : 'danger'),
+                            TextEntry::make('error_message')
+                                ->label('Errore')
+                                ->placeholder('—')
+                                ->columnSpanFull()
+                                ->visible(fn ($record) => filled($record->error_message)),
+                            InfolistActions::make([
+                                InfolistAction::make('preview')
+                                    ->label('Anteprima')
+                                    ->icon('heroicon-o-eye')
+                                    ->color('gray')
+                                    ->modalHeading(fn ($record) => "Anteprima email — {$record->recipient_email}")
+                                    ->modalContent(fn ($record) => new HtmlString(
+                                        '<iframe srcdoc="'.e((new ServiceReportMail($record->serviceReport, ''))->render()).'" style="width:100%;height:70vh;border:0;border-radius:0.5rem;background:#fff;"></iframe>'
+                                    ))
+                                    ->modalSubmitAction(false)
+                                    ->modalCancelActionLabel('Chiudi')
+                                    ->modalWidth('4xl'),
+                            ]),
+                        ])
+                        ->columns(3),
                 ]),
             InfolistSection::make('Gestionale')
                 ->columns(3)
@@ -121,6 +184,12 @@ class ServiceReportResource extends Resource
                     TextEntry::make('gestionale_sync_status')
                         ->label('Stato invio Eureka')
                         ->badge()
+                        // Senza un default, lo stato null viene considerato "blank"
+                        // da Filament PRIMA di passare per formatStateUsing: il
+                        // badge "Non inviato" non veniva mai renderizzato, la cella
+                        // restava vuota (a differenza dei campi accanto, che invece
+                        // hanno un placeholder e mostrano correttamente "—").
+                        ->default('none')
                         ->formatStateUsing(fn (?string $state) => match ($state) {
                             'sent' => 'Inviato',
                             'failed' => 'Fallito',
@@ -198,6 +267,8 @@ class ServiceReportResource extends Resource
                         ->searchable(['company_name', 'first_name', 'last_name'])
                         ->preload()
                         ->required()
+                        ->live()
+                        ->afterStateUpdated(fn (Forms\Set $set) => $set('quote_id', null))
                         ->createOptionForm([
                             Forms\Components\TextInput::make('company_name')->label('Ragione sociale'),
                             Forms\Components\TextInput::make('first_name')->label('Nome'),
@@ -209,7 +280,17 @@ class ServiceReportResource extends Resource
                             Forms\Components\TextInput::make('first_name')->label('Nome'),
                             Forms\Components\TextInput::make('last_name')->label('Cognome'),
                             ...CustomerContactFields::schema(),
-                        ]),
+                        ])
+                        // L'editOptionForm sopra salva il Customer vero passando dal
+                        // meccanismo generico di Filament sul Select, non dalla pagina
+                        // CustomerResource\Pages\EditCustomer — senza questo hook la
+                        // segnalazione "da aggiornare su Eureka" (vedi
+                        // Customer::notifyGestionaleReviewIfLinked()) non scatterebbe mai
+                        // per le modifiche fatte da qui.
+                        ->editOptionAction(fn (Forms\Components\Actions\Action $action) => $action->after(
+                            fn (Forms\Components\Select $component) => $component->getSelectedRecord()
+                                ?->notifyGestionaleReviewIfLinked(array_keys($component->getSelectedRecord()->getChanges()))
+                        )),
                     Forms\Components\Select::make('technician_id')
                         ->label('Tecnico')
                         ->relationship('technician', 'name')
@@ -244,9 +325,17 @@ class ServiceReportResource extends Resource
                 ->schema([
                     Forms\Components\Select::make('quote_id')
                         ->label('Preventivo collegato')
-                        ->relationship('quote', 'number')
+                        ->relationship(
+                            'quote',
+                            'number',
+                            modifyQueryUsing: fn (Builder $query, Forms\Get $get) => $query
+                                ->where('customer_id', $get('customer_id'))
+                                ->where('status', 'accettato'),
+                        )
                         ->searchable()
-                        ->preload(),
+                        ->preload()
+                        ->disabled(fn (Forms\Get $get) => blank($get('customer_id')))
+                        ->helperText('Seleziona prima il cliente: qui compaiono solo i suoi preventivi accettati.'),
                     Forms\Components\Select::make('comodato_macchina_id')
                         ->label('Comodato collegato')
                         ->relationship('comodatoMacchina', 'nome_macchina')
@@ -283,14 +372,19 @@ class ServiceReportResource extends Resource
                 ]),
             Forms\Components\Section::make('Ricambi/materiali utilizzati')
                 ->schema([
-                    Forms\Components\Repeater::make('partsUsed')
-                        ->relationship('partsUsed')
+                    // Materiali (App\Models\Material), non Product: quest'ultimo e'
+                    // lo stesso elenco usato per i preventivi, senza filtro —
+                    // macchine/ricambi trovati su Eureka finirebbero anche li'.
+                    Forms\Components\Repeater::make('materialsUsed')
+                        ->relationship('materialsUsed')
                         ->label('')
                         ->columns(3)
                         ->schema([
-                            Forms\Components\Select::make('product_id')
-                                ->label('Prodotto')
-                                ->options(fn () => Product::query()->pluck('name', 'id'))
+                            Forms\Components\Select::make('material_id')
+                                ->label('Materiale')
+                                ->options(fn () => Material::query()->get()->mapWithKeys(
+                                    fn (Material $material) => [$material->id => $material->display_label],
+                                ))
                                 ->searchable()
                                 ->required()
                                 ->columnSpan(2),
@@ -376,11 +470,11 @@ class ServiceReportResource extends Resource
                                 ->label('Email destinatario')
                                 ->email()
                                 ->required()
-                                ->default(fn (ServiceReport $record) => $record->invoiceRecipient()->primaryEmail()),
+                                ->default(fn (ServiceReport $record) => $record->customer->primaryEmail()),
                             Forms\Components\TextInput::make('cc_email')->label('CC (opzionale)')->email(),
                         ])
                         ->action(function (array $data, ServiceReport $record) {
-                            $record->load(['customer', 'technician', 'machineProduct', 'machineUnit.billingCustomer', 'partsUsed.product', 'tenant']);
+                            $record->load(['customer', 'technician', 'machineProduct', 'machineUnit.billingCustomer', 'partsUsed.product', 'materialsUsed.material', 'tenant']);
                             $pdf = Pdf::loadView('pdf.service-report', ['report' => $record]);
 
                             $email = $record->emails()->create([
@@ -410,7 +504,7 @@ class ServiceReportResource extends Resource
                         ->requiresConfirmation()
                         ->modalDescription('Invia questo rapportino a Eureka come scheda lavoro. Sono dati di produzione: non esiste un ambiente di test.')
                         ->action(function (ServiceReport $record) {
-                            $record->load(['customer.billingCustomer', 'machineProduct', 'machineUnit.product', 'machineUnit.billingCustomer', 'partsUsed.product', 'tenant']);
+                            $record->load(['customer.billingCustomer', 'machineProduct', 'machineUnit.product', 'machineUnit.billingCustomer', 'materialsUsed.material', 'tenant']);
 
                             $errors = $record->gestionaleValidationErrors();
 

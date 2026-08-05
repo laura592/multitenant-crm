@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Filament\Resources\ServiceReportResource\Pages\EditServiceReport;
 use App\Mail\ServiceReportMail;
 use App\Models\Customer;
+use App\Models\Material;
 use App\Models\Product;
 use App\Models\ServiceReport;
 use App\Models\ServiceReportEmail;
@@ -74,5 +75,48 @@ class ServiceReportTest extends TestCase
         Mail::assertSent(ServiceReportMail::class, fn ($mail) => $mail->hasTo('cliente@test.it'));
         $this->assertSame(1, ServiceReportEmail::where('service_report_id', $report->id)->count());
         $this->assertSame('inviato', $report->fresh()->status);
+    }
+
+    /**
+     * I ricambi/materiali del rapportino pescano da Material, non piu' da
+     * Product (quest'ultimo resta per il "Modello macchina" e per il
+     * catalogo preventivi) — vedi ServiceReportResource, sezione
+     * "Ricambi/materiali utilizzati".
+     */
+    public function test_technician_can_add_a_material_as_ricambio_via_the_form(): void
+    {
+        $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);
+        $tech = User::create([
+            'tenant_id' => $tenant->id, 'name' => 'Tecnico Due', 'email' => 'tech2@gifar.it', 'password' => bcrypt('password'),
+        ]);
+        $this->giveRole($tech, $tenant, 'dipendente');
+        $customer = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Bar Centrale']);
+        $material = Material::create(['tenant_id' => $tenant->id, 'code' => 'GUARN-01', 'category' => 'Ricambi', 'type' => 'Guarnizione gruppo']);
+
+        $report = ServiceReport::create([
+            'tenant_id' => $tenant->id,
+            'customer_id' => $customer->id,
+            'technician_id' => $tech->id,
+            'intervention_type' => ServiceReport::TYPE_MANUTENZIONE_ORDINARIA,
+            'intervention_date' => now(),
+            'work_performed' => 'Sostituzione guarnizioni',
+        ]);
+
+        $this->actingAs($tech);
+        \Filament\Facades\Filament::setTenant($tenant);
+
+        Livewire::test(EditServiceReport::class, ['record' => $report->getRouteKey()])
+            ->fillForm([
+                'materialsUsed' => [
+                    ['material_id' => $material->id, 'quantity' => 3],
+                ],
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $report->refresh();
+        $this->assertCount(1, $report->materialsUsed);
+        $this->assertSame($material->id, $report->materialsUsed->first()->material_id);
+        $this->assertSame('3.00', $report->materialsUsed->first()->quantity);
     }
 }

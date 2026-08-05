@@ -6,6 +6,7 @@ use App\Filament\Forms\CustomerContactFields;
 use App\Filament\Forms\ItalianAddressFields;
 use App\Filament\Resources\CustomerResource\Pages;
 use App\Filament\Resources\CustomerResource\RelationManagers\LavaggiRelationManager;
+use App\Filament\Resources\CustomerResource\RelationManagers\MacchinariRelationManager;
 use App\Models\Customer;
 use App\Support\Gestionale\EurekaClient;
 use Filament\Facades\Filament;
@@ -318,6 +319,7 @@ class CustomerResource extends Resource
     public static function getRelations(): array
     {
         return [
+            MacchinariRelationManager::class,
             LavaggiRelationManager::class,
         ];
     }

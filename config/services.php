@@ -42,4 +42,10 @@ return [
         'user_agent' => env('NOMINATIM_USER_AGENT', config('app.name').' CRM (lauragrb.1990@gmail.com)'),
     ],
 
+    'eureka' => [
+        'base_url' => env('EUREKA_BASE_URL', ''),
+        'username' => env('EUREKA_USERNAME', ''),
+        'password' => env('EUREKA_PASSWORD', ''),
+    ],
+
 ];

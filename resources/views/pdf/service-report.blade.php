@@ -139,6 +139,20 @@
     <div class="section-title">Lavoro svolto</div>
     <div class="text-box" style="margin-bottom: 14px;"><p>{{ $report->work_performed }}</p></div>
 
+    @if($report->materialsUsed->isNotEmpty())
+        <div class="section-title">Ricambi/materiali utilizzati</div>
+        <table class="items" style="margin-bottom: 14px;">
+            <thead><tr><th>Materiale</th><th class="numeric">Quantità</th></tr></thead>
+            <tbody>
+            @foreach($report->materialsUsed as $part)
+                <tr><td>{{ $part->material->display_label }}</td><td class="numeric">{{ $part->quantity }}</td></tr>
+            @endforeach
+            </tbody>
+        </table>
+    @endif
+
+    {{-- Rapportini compilati prima del passaggio a Materiali avevano i ricambi
+         salvati come Product (partsUsed) — sezione solo per lo storico. --}}
     @if($report->partsUsed->isNotEmpty())
         <div class="section-title">Ricambi/materiali utilizzati</div>
         <table class="items" style="margin-bottom: 14px;">

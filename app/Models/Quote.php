@@ -173,7 +173,7 @@ class Quote extends Model
 
     public function emails(): HasMany
     {
-        return $this->hasMany(QuoteEmail::class);
+        return $this->hasMany(QuoteEmail::class)->latest();
     }
 
     /**

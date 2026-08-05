@@ -60,6 +60,22 @@ class ClientiVicini extends Page
         return 'Aggiorna la posizione e usa la lista ordinata per distanza per aprire subito rapportino o Maps.';
     }
 
+    /**
+     * Quanti clienti di questo tenant non compaiono mai qui perche' senza
+     * lat/lng salvate (nearbyCustomerRows() li esclude con whereNotNull).
+     * Mostrato in pagina cosi' chi usa la funzione capisce perche' un
+     * cliente che si aspetta di vedere non esce, invece di pensare a un bug.
+     */
+    public function customersMissingLocationCount(): int
+    {
+        $tenant = Filament::getTenant();
+
+        return Customer::query()
+            ->where('tenant_id', $tenant?->id)
+            ->where(fn ($query) => $query->whereNull('latitude')->orWhereNull('longitude'))
+            ->count();
+    }
+
     public function maxResults(): int
     {
         return self::MAX_RESULTS;

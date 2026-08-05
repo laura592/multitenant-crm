@@ -13,10 +13,16 @@ class Material extends Model
 {
     use BelongsToTenant, HasUuids, LogsAuditTrail, SharedAcrossTenants;
 
+    public const SOURCE_MANUALE = 'manuale';
+
+    public const SOURCE_EUREKA = 'eureka';
+
     protected $fillable = [
         'tenant_id',
+        'source',
         'supplier_id',
         'code',
+        'gestionale_code',
         'category',
         'type',
         'variant',
@@ -31,5 +37,16 @@ class Material extends Model
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class);
+    }
+
+    /**
+     * Material non ha un campo "nome" libero (pensato per raccordi
+     * idraulici, identificati da code/type/variant) — questa label composta
+     * serve ovunque va mostrato in modo leggibile (selettore ricambi
+     * rapportino, PDF, payload Eureka).
+     */
+    public function getDisplayLabelAttribute(): string
+    {
+        return trim(implode(' — ', array_filter([$this->type, $this->variant])) ?: $this->code);
     }
 }

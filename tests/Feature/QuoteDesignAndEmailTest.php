@@ -70,6 +70,39 @@ class QuoteDesignAndEmailTest extends TestCase
         $this->assertSame('inviato', $quote->fresh()->status);
     }
 
+    public function test_quote_mail_renders_rich_text_custom_message_and_tenant_footer(): void
+    {
+        $quote = $this->makeQuote();
+        $quote->tenant->update([
+            'legal_name' => 'Alex S.r.l. società unipersonale',
+            'street' => 'Via dell\'Artigianato, 14/G',
+            'postal_code' => '30020',
+            'city' => 'Fossalta di Piave',
+            'province' => 'VE',
+            'phone' => '04211634773',
+            'fax' => '04211634783',
+            'email' => 'alexcaffe@pec.it',
+            'vat_number' => '04412140271',
+            'sdi' => 'EUVZNZV',
+        ]);
+
+        // Il RichEditor produce gia' HTML (grassetto via <strong>, non
+        // sintassi Markdown **..**): deve arrivare intatto nella mail.
+        $customMessage = '<p>Gentile cliente,</p><p><strong>€ 100,00 + IVA</strong></p>';
+
+        $html = (new QuoteMail($quote, 'fake-pdf', $customMessage))->render();
+
+        $this->assertStringContainsString('>Gentile cliente,</p>', $html);
+        $this->assertStringContainsString('>€ 100,00 + IVA</strong>', $html);
+
+        // Footer aziendale del tenant al posto del copyright generico.
+        $this->assertStringContainsString('Alex S.r.l. società unipersonale', $html);
+        $this->assertStringContainsString('Fossalta di Piave', $html);
+        $this->assertStringContainsString('04412140271', $html);
+        $this->assertStringContainsString('EUVZNZV', $html);
+        $this->assertStringNotContainsString('All rights reserved', $html);
+    }
+
     public function test_sending_twice_does_not_downgrade_an_already_accepted_quote(): void
     {
         Mail::fake();

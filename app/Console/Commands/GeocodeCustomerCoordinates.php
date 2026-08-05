@@ -54,6 +54,11 @@ class GeocodeCustomerCoordinates extends Command
 
             $coords = Geocoder::geocodeBestEffort($customer->geocodingAddressCandidates());
 
+            // Nominatim (OSM) impone max 1 richiesta/secondo per la sua policy
+            // d'uso gratuita: senza questa pausa un backfill su centinaia di
+            // clienti rischia di far bloccare l'IP/user-agent dell'app.
+            usleep(1_100_000);
+
             if (! $coords) {
                 $failed++;
                 $this->warn("Geocoding fallito per {$customer->full_name} [{$address}]");

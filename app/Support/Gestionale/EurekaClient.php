@@ -3,6 +3,8 @@
 namespace App\Support\Gestionale;
 
 use App\Models\Tenant;
+use Illuminate\Http\Client\Pool;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -135,6 +137,62 @@ class EurekaClient
         } catch (\Throwable) {
             return [];
         }
+    }
+
+    /**
+     * Come le chiamate singole sopra, ma per il sync di massa (migliaia di
+     * clienti): esegue tante GET verso lo stesso path in gruppi concorrenti
+     * invece che una alla volta, per non aspettare altrettanti round-trip di
+     * rete in sequenza (era il vero collo di bottiglia di `gestionale:sync`
+     * su ~2000 clienti). Concorrenza volutamente contenuta (15 per gruppo di
+     * default): Eureka e' un sistema vecchio (Firebird), meglio non
+     * rischiare di sovraccaricarlo o farsi bloccare. Stesso principio
+     * best-effort delle chiamate singole: una chiamata fallita nel gruppo
+     * risulta vuota, non blocca le altre ne' lancia un'eccezione.
+     *
+     * @param  array<int|string, array<string, mixed>>  $paramsByKey  parametri di query per ciascuna chiamata, indicizzati da una chiave a scelta (es. id cliente)
+     * @return array<int|string, array> stessa chiave => risposta decodificata (vuoto se fallita o non riuscita)
+     */
+    public function pooledGet(string $path, array $paramsByKey, int $concurrency = 15): array
+    {
+        $results = [];
+        $url = rtrim($this->tenant->gestionale_eureka_base_url, '/').$path;
+
+        foreach (array_chunk($paramsByKey, $concurrency, true) as $chunk) {
+            try {
+                $responses = Http::pool(function (Pool $pool) use ($chunk, $url) {
+                    foreach ($chunk as $key => $params) {
+                        // http_build_query() esplicito (non il secondo
+                        // argomento di get()): quest'ultimo codifica gli
+                        // spazi come %20 invece di + come fanno le chiamate
+                        // singole sopra, cambiando silenziosamente il
+                        // formato delle richieste verso Eureka.
+                        $pool->as($key)
+                            ->withBasicAuth(
+                                $this->tenant->gestionale_eureka_username,
+                                $this->tenant->gestionale_eureka_password,
+                            )
+                            ->timeout(10)
+                            ->get($url.'?'.http_build_query($params));
+                    }
+                });
+            } catch (\Throwable) {
+                foreach (array_keys($chunk) as $key) {
+                    $results[$key] = [];
+                }
+
+                continue;
+            }
+
+            foreach (array_keys($chunk) as $key) {
+                $response = $responses[$key] ?? null;
+                $results[$key] = ($response instanceof Response && $response->successful())
+                    ? ($response->json() ?? [])
+                    : [];
+            }
+        }
+
+        return $results;
     }
 
     /**

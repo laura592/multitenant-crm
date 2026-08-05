@@ -81,6 +81,15 @@
             </div>
         </x-filament::section>
 
+        @php
+            $missingLocationCount = $this->customersMissingLocationCount();
+        @endphp
+        @if($missingLocationCount > 0)
+            <div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+                {{ $missingLocationCount }} {{ $missingLocationCount === 1 ? 'cliente non compare' : 'clienti non compaiono' }} in questo elenco perche' senza posizione GPS salvata (dato mancante, non un errore della ricerca).
+            </div>
+        @endif
+
         @if($latitude !== null && $longitude !== null)
             <div class="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
                 <x-filament::section>

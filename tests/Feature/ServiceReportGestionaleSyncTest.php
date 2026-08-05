@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Filament\Resources\ServiceReportResource\Pages\ListServiceReports;
 use App\Models\Customer;
+use App\Models\Material;
 use App\Models\Product;
 use App\Models\ServiceReport;
 use App\Models\Tenant;
@@ -105,5 +106,45 @@ class ServiceReportGestionaleSyncTest extends TestCase
         $this->assertSame('sent', $report->gestionale_sync_status);
         $this->assertSame(999, $report->gestionale_scheda_lavoro_id);
         $this->assertNotNull($report->gestionale_synced_at);
+    }
+
+    /**
+     * Il campo "dettaglio" del payload verso Eureka si costruisce da
+     * materialsUsed (Material), non piu' da partsUsed (Product) — vedi
+     * ServiceReport::toGestionalePayload().
+     */
+    public function test_send_includes_dettaglio_built_from_materials_used(): void
+    {
+        Http::fake([
+            '*/schedelavoro/*' => Http::response(['id' => 1000, 'numero_doc' => 43], 201),
+        ]);
+
+        $tenant = $this->makeTenantWithEurekaCredentials();
+        $tech = User::create(['tenant_id' => $tenant->id, 'name' => 'Tecnico', 'email' => 't3@alex.it', 'password' => bcrypt('password')]);
+        $this->giveRole($tech, $tenant, 'dipendente');
+
+        $customer = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Bar Roma', 'gestionale_code' => 600]);
+        $product = Product::create(['sku' => 'MACCHINA-Z', 'type' => Product::TYPE_MACHINE, 'name' => 'Macchina Z', 'gestionale_code' => 800]);
+        $material = Material::create([
+            'tenant_id' => $tenant->id, 'source' => Material::SOURCE_EUREKA, 'gestionale_code' => 640,
+            'code' => 'RIC-ALIM-01', 'category' => 'Eureka', 'type' => 'Scheda alimentazione',
+        ]);
+
+        $report = $this->makeSignedReport($tenant, $tech, $customer, $product);
+        $report->materialsUsed()->create(['material_id' => $material->id, 'quantity' => 2]);
+
+        $this->actingAs($tech);
+        \Filament\Facades\Filament::setTenant($tenant);
+
+        Livewire::test(ListServiceReports::class)
+            ->callTableAction('invia_gestionale', $report);
+
+        Http::assertSent(function ($request) {
+            return str_contains($request->url(), '/schedelavoro/')
+                && count($request['dettaglio']) === 1
+                && $request['dettaglio'][0]['id_articolo'] === 640
+                && $request['dettaglio'][0]['descrizione'] === 'Scheda alimentazione'
+                && $request['dettaglio'][0]['quantita'] === 2.0;
+        });
     }
 }

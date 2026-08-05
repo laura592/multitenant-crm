@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Mail\GestionaleSyncDigestMail;
 use App\Models\Customer;
 use App\Models\MachineUnit;
-use App\Models\MachineUnitProposal;
 use App\Models\Product;
 use App\Models\Tenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -252,11 +251,11 @@ class GestionaleSyncCommandTest extends TestCase
         ]);
 
         $matched = MachineUnit::create([
-            'tenant_id' => $tenant->id, 'product_id' => $product->id, 'owner_name' => 'Alex', 'serial_number' => '00113684',
+            'tenant_id' => $tenant->id, 'product_id' => $product->id, 'serial_number' => '00113684',
         ]);
 
         $notFound = MachineUnit::create([
-            'tenant_id' => $tenant->id, 'product_id' => $product->id, 'owner_name' => 'Alex', 'serial_number' => 'INESISTENTE-001',
+            'tenant_id' => $tenant->id, 'product_id' => $product->id, 'serial_number' => 'INESISTENTE-001',
         ]);
 
         Http::fake([
@@ -285,7 +284,7 @@ class GestionaleSyncCommandTest extends TestCase
         $product = Product::create(['sku' => 'NOLINK', 'type' => Product::TYPE_MACHINE, 'name' => 'Senza collegamento']);
 
         $machineUnit = MachineUnit::create([
-            'tenant_id' => $tenant->id, 'product_id' => $product->id, 'owner_name' => 'Alex', 'serial_number' => 'SN-001',
+            'tenant_id' => $tenant->id, 'product_id' => $product->id, 'serial_number' => 'SN-001',
         ]);
 
         $this->artisan('gestionale:sync')->assertExitCode(0);
@@ -444,12 +443,14 @@ class GestionaleSyncCommandTest extends TestCase
     }
 
     /**
-     * Casi che guidano GestionaleSyncRunner::proposeInstalledMachines() —
+     * Casi che guidano GestionaleSyncRunner::importInstalledMachines() —
      * dati modellati su quelli reali trovati in
      * docs/gestionale-eureka/macchinari.md (cliente id_codice_f15=238 con
-     * addolcitore + fabbricatore ghiaccio).
+     * addolcitore + fabbricatore ghiaccio). A differenza delle altre fasi di
+     * questa classe, qui la creazione e' diretta (mai una proposta): dati a
+     * basso rischio (articoli/matricole, non fatturazione).
      */
-    public function test_proposes_new_machine_installed_on_eureka_not_yet_in_crm(): void
+    public function test_creates_machine_unit_directly_when_installed_on_eureka_not_yet_in_crm(): void
     {
         Mail::fake();
 
@@ -474,16 +475,16 @@ class GestionaleSyncCommandTest extends TestCase
 
         $this->artisan('gestionale:sync')->assertExitCode(0);
 
-        $proposal = MachineUnitProposal::first();
-        $this->assertNotNull($proposal);
-        $this->assertSame('CMD1012043', $proposal->serial_number);
-        $this->assertSame($customer->id, $proposal->customer_id);
-        $this->assertSame($product->id, $proposal->product_id, 'il prodotto va trovato per gestionale_code, gia\' esistente');
-        $this->assertSame(2662, $proposal->eureka_article_id);
-        $this->assertNull(MachineUnit::first(), 'mai creata da sola, solo proposta');
+        $machineUnit = MachineUnit::first();
+        $this->assertNotNull($machineUnit, 'la macchina va creata direttamente, non lasciata in coda');
+        $this->assertSame('CMD1012043', $machineUnit->serial_number);
+        $this->assertSame($product->id, $machineUnit->product_id, 'il prodotto va trovato per gestionale_code, gia\' esistente');
+        $this->assertSame(MachineUnit::SOURCE_EUREKA, $machineUnit->source);
+        $this->assertSame(MachineUnit::STATUS_INSTALLATA, $machineUnit->status);
+        $this->assertSame($customer->id, $machineUnit->currentCustomer->id);
     }
 
-    public function test_installed_machine_proposal_has_no_product_when_none_matches_by_gestionale_code(): void
+    public function test_installed_machine_has_no_product_when_none_matches_by_gestionale_code(): void
     {
         Mail::fake();
 
@@ -502,12 +503,12 @@ class GestionaleSyncCommandTest extends TestCase
 
         $this->artisan('gestionale:sync')->assertExitCode(0);
 
-        $proposal = MachineUnitProposal::first();
-        $this->assertNotNull($proposal);
-        $this->assertNull($proposal->product_id, 'nessun prodotto locale con questo gestionale_code: non se ne crea uno da soli in questa fase');
+        $machineUnit = MachineUnit::first();
+        $this->assertNotNull($machineUnit);
+        $this->assertNull($machineUnit->product_id, 'nessun prodotto locale con questo gestionale_code: non se ne crea uno da soli, per non inquinare il catalogo preventivi');
     }
 
-    public function test_does_not_propose_installed_machine_when_serial_already_exists_in_crm(): void
+    public function test_does_not_duplicate_installed_machine_when_serial_already_exists_in_crm(): void
     {
         Mail::fake();
 
@@ -520,7 +521,7 @@ class GestionaleSyncCommandTest extends TestCase
         $product = Product::create(['sku' => 'BAV5', 'type' => Product::TYPE_MACHINE, 'name' => 'Addolcitore BAV5']);
 
         MachineUnit::create([
-            'tenant_id' => $tenant->id, 'product_id' => $product->id, 'owner_name' => 'Alex', 'serial_number' => 'B36414',
+            'tenant_id' => $tenant->id, 'product_id' => $product->id, 'serial_number' => 'B36414',
         ]);
 
         Http::fake([
@@ -532,34 +533,29 @@ class GestionaleSyncCommandTest extends TestCase
 
         $this->artisan('gestionale:sync')->assertExitCode(0);
 
-        $this->assertSame(0, MachineUnitProposal::count(), 'matricola gia\' presente nel CRM: nessuna proposta duplicata');
+        $this->assertSame(1, MachineUnit::count(), 'matricola gia\' presente nel CRM: nessun duplicato');
     }
 
-    public function test_dismissed_installed_machine_proposal_is_not_recreated_on_next_sync(): void
+    public function test_does_not_recreate_installed_machine_on_next_sync(): void
     {
         Mail::fake();
 
         $tenant = $this->makeTenant();
 
         Customer::create([
-            'tenant_id' => $tenant->id, 'company_name' => 'Bar Scartato', 'gestionale_code' => 60,
+            'tenant_id' => $tenant->id, 'company_name' => 'Bar Ripetuto', 'gestionale_code' => 60,
         ]);
 
         Http::fake([
             '*anagrafica/cerca*' => Http::response([], 200),
             '*art_installati*' => Http::response([
-                ['id_codice_f15' => 60, 'id' => 111, 'matricola' => 'SCARTATA-01', 'articolo' => 'BAV5', 'desc_articolo_1' => 'ADDOLCITORE'],
+                ['id_codice_f15' => 60, 'id' => 111, 'matricola' => 'RIPETUTA-01', 'articolo' => 'BAV5', 'desc_articolo_1' => 'ADDOLCITORE'],
             ], 200),
         ]);
 
         $this->artisan('gestionale:sync')->assertExitCode(0);
-
-        $proposal = MachineUnitProposal::first();
-        $this->assertNotNull($proposal);
-        $proposal->update(['dismissed_at' => now()]);
-
         $this->artisan('gestionale:sync')->assertExitCode(0);
 
-        $this->assertSame(1, MachineUnitProposal::count(), 'scartata: non deve ripresentarsi al giro successivo');
+        $this->assertSame(1, MachineUnit::count(), 'stessa matricola trovata due sync di fila: nessun duplicato');
     }
 }

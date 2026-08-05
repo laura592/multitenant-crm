@@ -6,7 +6,7 @@ Riepilogo del controllo automatico tra il CRM e Eureka.
 @php
     $summaryRows = array_filter([
         ['label' => 'Da rivedere', 'count' => count($diffs)],
-        ['label' => 'Macchine nuove trovate su Eureka', 'count' => count($newMachines)],
+        ['label' => 'Macchine importate automaticamente', 'count' => count($newMachines)],
         ['label' => 'Collegamenti proposti — clienti', 'count' => count($customerLinks)],
         ['label' => 'Collegamenti proposti — prodotti', 'count' => count($productLinks)],
         ['label' => 'Collegamenti proposti — macchinari', 'count' => count($machineUnitLinks)],
@@ -42,16 +42,16 @@ Campi diversi tra CRM ed Eureka: **non sono stati toccati**, serve una scelta ma
 @endif
 
 @if(count($newMachines))
-## Macchine nuove trovate su Eureka ({{ count($newMachines) }})
-<x-mail.severity-panel color="amber">
-Macchinari risultati installati presso un cliente su Eureka ma non ancora presenti nel CRM — **non creati automaticamente**, da confermare uno per uno.
+## Macchine importate automaticamente ({{ count($newMachines) }})
+<x-mail.severity-panel color="green">
+Macchinari risultati installati presso un cliente su Eureka: creati direttamente come macchinari nel CRM (matricola e modello reali). La "Proprietà" ha un valore segnaposto da correggere con calma — Eureka non la fornisce.
 </x-mail.severity-panel>
 
 @component('mail::table')
 | Cliente | Matricola | Modello |
 | :--- | :--- | :--- |
 @foreach($newMachines as $row)
-| {{ $row['customer']->full_name }} | {{ $row['proposal']->serial_number }} | {{ $row['proposal']->model_name ?? '—' }} |
+| {{ $row['customer']->full_name }} | {{ $row['machineUnit']->serial_number }} | {{ $row['machineUnit']->model_name ?? '—' }} |
 @endforeach
 @endcomponent
 @endif
@@ -120,7 +120,7 @@ Campi che erano vuoti nel CRM e sono stati riempiti con quanto trovato su Eureka
 Apri i clienti
 </x-mail::button>
 
-Usa i filtri "Da aggiornare su Eureka" e "Collegamento proposto" per trovare rapidamente le righe segnalate qui, oppure vai direttamente alla pagina "Sync Eureka" per tutte le proposte insieme, incluse le macchine nuove.
+Usa i filtri "Da aggiornare su Eureka" e "Collegamento proposto" per trovare rapidamente le righe segnalate qui, oppure vai direttamente alla pagina "Sync Eureka" per tutto insieme, incluse le macchine importate di recente.
 
 Grazie,<br>
 {{ $tenant->name }}

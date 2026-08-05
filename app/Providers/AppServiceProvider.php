@@ -6,11 +6,14 @@ use App\Filament\Widgets\Gestionale\GestionaleCollegamentiClientiWidget;
 use App\Filament\Widgets\Gestionale\GestionaleCollegamentiMacchinariWidget;
 use App\Filament\Widgets\Gestionale\GestionaleCollegamentiProdottiWidget;
 use App\Filament\Widgets\Gestionale\GestionaleDaRivedereWidget;
-use App\Filament\Widgets\Gestionale\GestionaleMacchineNuoveWidget;
+use App\Filament\Widgets\Gestionale\GestionaleMacchineImportateWidget;
 use App\Models\User;
+use App\Support\EurekaClient;
 use Filament\Forms\Components\DatePicker;
 use Filament\Infolists\Infolist;
+use Filament\Support\Facades\FilamentView;
 use Filament\Tables\Table;
+use Filament\View\PanelsRenderHook;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Jeffgreco13\FilamentBreezy\Livewire\PersonalInfo;
@@ -26,7 +29,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(EurekaClient::class, fn () => new EurekaClient(
+            baseUrl: config('services.eureka.base_url', ''),
+            username: config('services.eureka.username', ''),
+            password: config('services.eureka.password', ''),
+        ));
     }
 
     /**
@@ -100,10 +107,38 @@ class AppServiceProvider extends ServiceProvider
             GestionaleCollegamentiClientiWidget::class,
             GestionaleCollegamentiProdottiWidget::class,
             GestionaleCollegamentiMacchinariWidget::class,
-            GestionaleMacchineNuoveWidget::class,
-        ])->each(fn (string $widget) => Livewire::component(
-            app(ComponentRegistry::class)->getName($widget),
-            $widget,
-        ));
+            GestionaleMacchineImportateWidget::class,
+        ])->filter(fn (string $widget) => class_exists($widget))
+            ->each(fn (string $widget) => Livewire::component(
+                app(ComponentRegistry::class)->getName($widget),
+                $widget,
+            ));
+
+        // Le pagine Edit di Filament, dopo il salvataggio, restano sulla
+        // stessa pagina invece di tornare alla lista (comportamento di
+        // default, comodo per modifiche successive). Su mobile pero' i
+        // breadcrumb che conterrebbero il link alla lista sono nascosti
+        // (classe "hidden sm:block" nel component header di Filament),
+        // quindi non resta alcuna via per tornare indietro. Un render hook
+        // globale, filtrato sulla naming convention "\Pages\Edit" delle
+        // pagine Edit dei Resource, aggiunge un pulsante "Torna alla
+        // lista" (visibile su ogni breakpoint, non solo mobile) senza
+        // dover intervenire pagina per pagina in ogni Resource.
+        FilamentView::registerRenderHook(
+            PanelsRenderHook::PAGE_HEADER_ACTIONS_BEFORE,
+            function (array $scopes) {
+                $pageClass = $scopes[0] ?? null;
+
+                if (! is_string($pageClass) || ! str_contains($pageClass, '\\Pages\\Edit')) {
+                    return '';
+                }
+
+                $resourceClass = $pageClass::getResource();
+
+                return view('filament.components.mobile-back-to-list-button', [
+                    'url' => $resourceClass::getUrl('index'),
+                ]);
+            },
+        );
     }
 }

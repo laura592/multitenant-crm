@@ -26,7 +26,22 @@ class CustomerContactFields
         $fields = [
             Repeater::make('emails')
                 ->label('Email')
-                ->simple(TextInput::make('email')->label('Email')->email()->required()->maxLength(255))
+                ->simple(
+                    TextInput::make('email')
+                        ->label('Email')
+                        ->email()
+                        // ->email() da solo valida solo la sintassi RFC: cose
+                        // come "nome@gmail" (senza .com) o "info@ite" passano
+                        // comunque, perche' un dominio a singola parola e'
+                        // sintatticamente valido anche se non recapitabile.
+                        // ':dns' controlla che il dominio abbia record
+                        // DNS/MX validi, cosi' questi refusi vengono
+                        // bloccati in inserimento invece di scoprirli solo
+                        // quando l'invio fallisce.
+                        ->rule('email:rfc,dns')
+                        ->required()
+                        ->maxLength(255)
+                )
                 ->defaultItems(0)
                 ->addActionLabel('Aggiungi email')
                 ->reorderable(false),
@@ -39,7 +54,7 @@ class CustomerContactFields
         ];
 
         if ($withPec) {
-            $fields[] = TextInput::make('pec')->label('PEC')->email()->maxLength(255);
+            $fields[] = TextInput::make('pec')->label('PEC')->email()->rule('email:rfc,dns')->maxLength(255);
         }
 
         return $fields;

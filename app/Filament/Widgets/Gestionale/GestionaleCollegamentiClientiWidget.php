@@ -14,17 +14,14 @@ class GestionaleCollegamentiClientiWidget extends BaseWidget
 
     protected int|string|array $columnSpan = 1;
 
-    // Vedi GestionaleDaRivedereWidget: senza un identificatore proprio, la
-    // paginazione di questa tabella condivide ?page= con le altre 4 della
-    // stessa pagina.
-    protected function getTableQueryStringIdentifier(): ?string
-    {
-        return 'collegamentiClienti';
-    }
+    // Vedi GestionaleDaRivedereWidget per il perche'.
+    protected static bool $isLazy = false;
 
     public function table(Table $table): Table
     {
         return $table
+            // Vedi GestionaleDaRivedereWidget per il perche'.
+            ->queryStringIdentifier('collegamentiClienti')
             ->query(Customer::query()->whereNotNull('gestionale_suggested_code'))
             ->columns([
                 Tables\Columns\TextColumn::make('full_name')->label('Cliente nel CRM'),
@@ -41,6 +38,30 @@ class GestionaleCollegamentiClientiWidget extends BaseWidget
                     ->requiresConfirmation()
                     ->modalDescription('Il sync automatico ha trovato questo possibile collegamento su Eureka. Confermi?')
                     ->action(function (Customer $record) {
+                        // proposeCustomerLinks() ora esclude gia' gli id Eureka gia'
+                        // assegnati altrove, ma questo resta un controllo di sicurezza
+                        // per i suggerimenti creati prima del fix (o in caso di corsa
+                        // tra due sync ravvicinati): senza, l'update sotto va a sbattere
+                        // sul vincolo unique su gestionale_code (UniqueConstraintViolationException).
+                        $conflict = Customer::where('gestionale_code', $record->gestionale_suggested_code)
+                            ->where('id', '!=', $record->id)
+                            ->first();
+
+                        if ($conflict) {
+                            $record->update([
+                                'gestionale_suggested_code' => null,
+                                'gestionale_suggested_label' => null,
+                            ]);
+
+                            Notification::make()
+                                ->title('Collegamento scartato')
+                                ->body("Il codice Eureka {$record->gestionale_suggested_code} è già assegnato a \"{$conflict->full_name}\": probabile doppione da unire a mano, non confermabile automaticamente.")
+                                ->warning()
+                                ->send();
+
+                            return;
+                        }
+
                         $record->update([
                             'gestionale_code' => $record->gestionale_suggested_code,
                             'gestionale_suggested_code' => null,

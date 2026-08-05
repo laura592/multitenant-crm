@@ -16,6 +16,8 @@ use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
+use Filament\Infolists\Components\Actions as InfolistActions;
+use Filament\Infolists\Components\Actions\Action as InfolistAction;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Tabs as InfolistTabs;
@@ -29,6 +31,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\HtmlString;
 
 class QuoteResource extends Resource
 {
@@ -175,6 +178,45 @@ class QuoteResource extends Resource
                                 ])
                                 ->visible(fn (Quote $record) => $record->quoteProducts->isNotEmpty()),
                         ]),
+                ]),
+            InfolistSection::make('Storico invii email')
+                ->columnSpanFull()
+                ->extraAttributes([
+                    'class' => 'rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950',
+                ])
+                ->visible(fn (Quote $record) => $record->emails->isNotEmpty())
+                ->schema([
+                    RepeatableEntry::make('emails')
+                        ->hiddenLabel()
+                        ->contained(false)
+                        ->schema([
+                            TextEntry::make('recipient_email')->label('Destinatario'),
+                            TextEntry::make('created_at')->label('Inviato il')->dateTime('d/m/Y H:i'),
+                            TextEntry::make('status')
+                                ->label('Esito')
+                                ->badge()
+                                ->formatStateUsing(fn (string $state) => $state === 'sent' ? 'Inviato' : 'Fallito')
+                                ->color(fn (string $state) => $state === 'sent' ? 'success' : 'danger'),
+                            TextEntry::make('error_message')
+                                ->label('Errore')
+                                ->placeholder('—')
+                                ->columnSpanFull()
+                                ->visible(fn ($record) => filled($record->error_message)),
+                            InfolistActions::make([
+                                InfolistAction::make('preview')
+                                    ->label('Anteprima')
+                                    ->icon('heroicon-o-eye')
+                                    ->color('gray')
+                                    ->modalHeading(fn ($record) => "Anteprima email — {$record->recipient_email}")
+                                    ->modalContent(fn ($record) => new HtmlString(
+                                        '<iframe srcdoc="'.e((new QuoteMail($record->quote, '', $record->message))->render()).'" style="width:100%;height:70vh;border:0;border-radius:0.5rem;background:#fff;"></iframe>'
+                                    ))
+                                    ->modalSubmitAction(false)
+                                    ->modalCancelActionLabel('Chiudi')
+                                    ->modalWidth('4xl'),
+                            ]),
+                        ])
+                        ->columns(3),
                 ]),
             // Nascosta su richiesta (poco chiara/prematura cosi' com'e'
             // gestita oggi): il calcolo (Quote::commissionAttributes,
@@ -666,10 +708,9 @@ class QuoteResource extends Resource
                 ->label('CC (opzionale)')
                 ->email()
                 ->helperText('I destinatari fissi impostati in Impostazioni > Notifiche ricevono comunque una copia.'),
-            Forms\Components\Textarea::make('custom_message')
+            Forms\Components\RichEditor::make('custom_message')
                 ->label('Testo email (modificabile)')
-                ->rows(10)
-                ->autosize()
+                ->toolbarButtons(['bold', 'italic', 'bulletList', 'orderedList', 'link', 'undo', 'redo'])
                 ->helperText('Questo testo viene inviato realmente nella mail, incluso il prezzo: puoi modificarlo liberamente.')
                 // Stesso testo precompilato del vecchio gestionale
                 // (app_preventivi_vg), perso nella riscrittura di questo
@@ -684,22 +725,16 @@ class QuoteResource extends Resource
         $recipient = $record->customer?->invoiceRecipient();
         $customerName = $recipient?->company_name ?: ($recipient?->full_name ?? 'Cliente');
         $total = '€ '.number_format((float) $record->subtotal, 2, ',', '.').' + IVA';
+        $signatureName = Auth::user()?->name ?: ($record->tenant?->name ?? config('app.name'));
 
-        return implode("\n", [
-            "Gentile {$customerName},",
-            '',
-            'Siamo lieti di inviarle il preventivo richiesto.',
-            '',
-            'Di seguito troverà tutti i dettagli e le condizioni commerciali.',
-            '',
-            'In allegato il documento in formato PDF.',
-            '',
-            $total,
-            '',
-            'Restiamo a disposizione per qualsiasi chiarimento.',
-            '',
-            'Grazie,',
-            (string) $record->tenant?->name,
+        return implode('', [
+            '<p>Gentile '.e($customerName).',</p>',
+            '<p>Siamo lieti di inviarle il preventivo richiesto.</p>',
+            '<p>Di seguito troverà tutti i dettagli e le condizioni commerciali.</p>',
+            '<p>In allegato il documento in formato PDF.</p>',
+            '<p><strong>'.e($total).'</strong></p>',
+            '<p>Restiamo a disposizione per qualsiasi chiarimento.</p>',
+            '<p>Grazie,<br>'.e($signatureName).'</p>',
         ]);
     }
 

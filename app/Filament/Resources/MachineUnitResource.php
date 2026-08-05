@@ -54,11 +54,6 @@ class MachineUnitResource extends Resource
                         ->label('Modello (testo libero)')
                         ->helperText('Solo se non e\' a catalogo (es. macchina non a listino Alex).')
                         ->maxLength(255),
-                    Forms\Components\TextInput::make('owner_name')
-                        ->label('Proprietà')
-                        ->helperText('Es. "Dersut": chi possiede legalmente la macchina, anche se diverso dal cliente presso cui si trova.')
-                        ->required()
-                        ->maxLength(255),
                     Forms\Components\Select::make('billing_customer_id')
                         ->label('Fatturare a')
                         ->relationship('billingCustomer', 'company_name')
@@ -87,7 +82,6 @@ class MachineUnitResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('serial_number')->label('Matricola')->searchable(),
                 Tables\Columns\TextColumn::make('display_name')->label('Modello'),
-                Tables\Columns\TextColumn::make('owner_name')->label('Proprietà')->searchable(),
                 Tables\Columns\TextColumn::make('currentCustomer.company_name')->label('Presso')->placeholder('In magazzino'),
                 Tables\Columns\IconColumn::make('product.gestionale_code')
                     ->label('Cod. Eureka')

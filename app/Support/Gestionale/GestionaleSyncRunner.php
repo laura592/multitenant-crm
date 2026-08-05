@@ -4,10 +4,10 @@ namespace App\Support\Gestionale;
 
 use App\Models\Customer;
 use App\Models\MachineUnit;
-use App\Models\MachineUnitProposal;
 use App\Models\Product;
 use App\Models\Tenant;
 use App\Support\PhoneNumber;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
@@ -46,7 +46,7 @@ class GestionaleSyncRunner
             'customerLinks' => $this->proposeCustomerLinks(),
             'productLinks' => $this->proposeProductLinks(),
             'machineUnitLinks' => $this->proposeMachineUnitLinks(),
-            'newMachines' => $this->proposeInstalledMachines(),
+            'newMachines' => $this->importInstalledMachines(),
         ];
     }
 
@@ -58,87 +58,101 @@ class GestionaleSyncRunner
         $autofilled = [];
         $diffs = [];
 
-        Customer::query()
+        $customers = Customer::query()
             ->where('tenant_id', $this->tenant->id)
             ->whereNotNull('gestionale_code')
-            ->each(function (Customer $customer) use (&$autofilled, &$diffs) {
-                $remote = $this->findEurekaCustomer($customer);
+            ->get();
 
-                if ($remote === null) {
-                    return;
+        // Una ricerca anagrafica per cliente, tutte in gruppi concorrenti
+        // invece che una alla volta (vedi EurekaClient::pooledGet) — con
+        // ~2000 clienti era il vero collo di bottiglia del sync.
+        $searchParams = $customers->mapWithKeys(fn (Customer $customer) => [
+            $customer->id => filled($customer->vat_number)
+                ? ['piva' => $customer->vat_number]
+                : ['nome' => $customer->company_name ?: (string) $customer->full_name, 'like' => 'true'],
+        ])->all();
+
+        $searchResults = $this->client->pooledGet('/anagrafica/cerca', $searchParams);
+
+        foreach ($customers as $customer) {
+            $remote = $this->matchEurekaCustomer($searchResults[$customer->id] ?? [], $customer);
+
+            if ($remote === null) {
+                continue;
+            }
+
+            $filledLabels = [];
+            $diffLabels = [];
+            $updates = [];
+
+            $newEmails = $this->mergeEurekaEmails($customer, $this->normalizedRemoteValue($remote['email'] ?? null));
+            if ($newEmails !== []) {
+                $filledLabels[] = 'Email aggiunte: '.implode(', ', $newEmails);
+            }
+
+            $newPhones = $this->mergeEurekaPhones($customer, $this->normalizedRemoteValue($remote['nr_telefono'] ?? null));
+            if ($newPhones !== []) {
+                $filledLabels[] = 'Telefoni aggiunti: '.implode(', ', $newPhones);
+            }
+
+            foreach ($this->customerFieldMap() as $localField => [$remoteKey, $label]) {
+                $remoteValue = $this->normalizedRemoteValue($remote[$remoteKey] ?? null);
+
+                if ($remoteValue === null) {
+                    continue;
                 }
 
-                $filledLabels = [];
-                $diffLabels = [];
-                $updates = [];
-
-                $newEmails = $this->mergeEurekaEmails($customer, $this->normalizedRemoteValue($remote['email'] ?? null));
-                if ($newEmails !== []) {
-                    $filledLabels[] = 'Email aggiunte: '.implode(', ', $newEmails);
+                if ($this->looksLikePlaceholder($localField, $remoteValue, $remote)) {
+                    continue;
                 }
 
-                $newPhones = $this->mergeEurekaPhones($customer, $this->normalizedRemoteValue($remote['nr_telefono'] ?? null));
-                if ($newPhones !== []) {
-                    $filledLabels[] = 'Telefoni aggiunti: '.implode(', ', $newPhones);
-                }
+                $localValue = $this->normalizedLocalValue($customer, $localField);
 
-                foreach ($this->customerFieldMap() as $localField => [$remoteKey, $label]) {
-                    $remoteValue = $this->normalizedRemoteValue($remote[$remoteKey] ?? null);
-
-                    if ($remoteValue === null) {
-                        continue;
-                    }
-
-                    if ($this->looksLikePlaceholder($localField, $remoteValue, $remote)) {
-                        continue;
-                    }
-
-                    $localValue = $this->normalizedLocalValue($customer, $localField);
-
-                    if ($localValue === null) {
+                if ($localValue === null) {
+                    $updates[$localField] = $remoteValue;
+                    $filledLabels[] = "{$label}: {$remoteValue}";
+                } elseif (mb_strtolower($localValue) !== mb_strtolower($remoteValue)) {
+                    if (in_array($localField, $this->fieldsAutoAdoptedFromEureka(), true)) {
                         $updates[$localField] = $remoteValue;
-                        $filledLabels[] = "{$label}: {$remoteValue}";
-                    } elseif (
-                        ! in_array($localField, $this->fieldsExcludedFromDiff(), true)
-                        && mb_strtolower($localValue) !== mb_strtolower($remoteValue)
-                    ) {
+                        $filledLabels[] = "{$label} aggiornata: \"{$localValue}\" → \"{$remoteValue}\"";
+                    } elseif (! in_array($localField, $this->fieldsExcludedFromDiff(), true)) {
                         $diffLabels[] = "{$label} (CRM: \"{$localValue}\", Eureka: \"{$remoteValue}\")";
                     }
                 }
+            }
 
-                if ($updates !== []) {
-                    $customer->update($updates);
-                }
+            if ($updates !== []) {
+                $customer->update($updates);
+            }
 
-                if ($filledLabels === [] && $diffLabels === []) {
-                    return;
-                }
+            if ($filledLabels === [] && $diffLabels === []) {
+                continue;
+            }
 
-                $note = trim(implode(' — ', array_filter([
-                    $filledLabels !== [] ? 'Compilati automaticamente: '.implode(', ', $filledLabels) : null,
-                    $diffLabels !== [] ? 'Da rivedere: '.implode(', ', $diffLabels) : null,
-                ])));
+            $note = trim(implode(' — ', array_filter([
+                $filledLabels !== [] ? 'Compilati automaticamente: '.implode(', ', $filledLabels) : null,
+                $diffLabels !== [] ? 'Da rivedere: '.implode(', ', $diffLabels) : null,
+            ])));
 
-                $customer->flagGestionaleReview([$note]);
+            $customer->flagGestionaleReview([$note]);
 
-                if ($filledLabels !== []) {
-                    $autofilled[] = ['customer' => $customer, 'fields' => $filledLabels];
-                }
+            if ($filledLabels !== []) {
+                $autofilled[] = ['customer' => $customer, 'fields' => $filledLabels];
+            }
 
-                if ($diffLabels !== []) {
-                    $diffs[] = ['customer' => $customer, 'fields' => $diffLabels];
-                }
-            });
+            if ($diffLabels !== []) {
+                $diffs[] = ['customer' => $customer, 'fields' => $diffLabels];
+            }
+        }
 
         return [$autofilled, $diffs];
     }
 
-    private function findEurekaCustomer(Customer $customer): ?array
+    /**
+     * @param  array<int, array<string, mixed>>  $candidates  risultati gia' scaricati (vedi pooledGet in reverifyLinkedCustomers/proposeCustomerLinks)
+     */
+    private function matchEurekaCustomer(array $candidates, Customer $customer): ?array
     {
-        $candidates = filled($customer->vat_number)
-            ? $this->client->cercaClientePerPiva($customer->vat_number)
-            : $this->client->cercaClienti($customer->company_name ?: (string) $customer->full_name);
-
         foreach ($candidates as $candidate) {
             if ((int) ($candidate['id'] ?? 0) === (int) $customer->gestionale_code) {
                 return $candidate;
@@ -155,11 +169,22 @@ class GestionaleSyncRunner
     {
         $proposals = [];
 
+        // Codici Eureka gia' assegnati a un cliente di questo tenant: senza
+        // questo controllo due clienti CRM diversi (spesso doppioni dello
+        // stesso cliente reale, es. sede vs referente) possono ricevere lo
+        // stesso suggerimento, e confermarlo va a sbattere sul vincolo unique
+        // su gestionale_code (UniqueConstraintViolationException).
+        $usedCodes = Customer::query()
+            ->where('tenant_id', $this->tenant->id)
+            ->whereNotNull('gestionale_code')
+            ->pluck('gestionale_code')
+            ->all();
+
         Customer::query()
             ->where('tenant_id', $this->tenant->id)
             ->whereNull('gestionale_code')
             ->whereNull('gestionale_suggested_code')
-            ->each(function (Customer $customer) use (&$proposals) {
+            ->each(function (Customer $customer) use (&$proposals, $usedCodes) {
                 if (filled($customer->vat_number)) {
                     $matches = $this->client->cercaClientePerPiva($customer->vat_number);
                 } elseif (filled($customer->company_name)) {
@@ -170,6 +195,11 @@ class GestionaleSyncRunner
                 } else {
                     return;
                 }
+
+                $matches = array_values(array_filter(
+                    $matches,
+                    fn (array $c) => ! in_array((int) ($c['id'] ?? 0), $usedCodes, true),
+                ));
 
                 if (count($matches) !== 1) {
                     return;
@@ -260,91 +290,102 @@ class GestionaleSyncRunner
     }
 
     /**
-     * Propone MachineUnit NUOVE (non ancora nel CRM) trovate su Eureka via
-     * `/show/q/art_installati` per ogni cliente collegato — a differenza di
-     * proposeMachineUnitLinks() qui il record locale non esiste affatto,
-     * quindi non c'e' un gestionale_suggested_code su cui appoggiarsi: la
-     * proposta vive in MachineUnitProposal (vedi model) finche' non viene
-     * confermata (crea davvero la MachineUnit) o scartata (dismissed_at
-     * valorizzato, non cancellata — altrimenti ricomparirebbe al giro
-     * successivo perche' non piu' tra le matricole "note").
+     * Crea direttamente MachineUnit NUOVE (non ancora nel CRM) trovate su
+     * Eureka via `/show/q/art_installati` per ogni cliente collegato — a
+     * differenza di proposeMachineUnitLinks() qui il record locale non
+     * esiste affatto. A differenza del resto di questa classe (proposte, mai
+     * scrittura automatica), qui la creazione e' diretta: articoli e
+     * matricole sono dati a basso rischio (non toccano fatturazione/clienti,
+     * quelli restano sempre da confermare), scelta esplicita per non
+     * lasciare un arretrato di conferme manuali una per una.
      *
      * Non creiamo mai un Product nuovo da soli: se non c'e' gia' un Product
-     * con quel gestionale_code, la proposta resta senza product_id — va
-     * scelto/collegato a mano in fase di conferma.
+     * con quel gestionale_code, la MachineUnit resta senza product_id — va
+     * scelto/collegato a mano in un secondo momento (non inquina comunque il
+     * catalogo preventivi, a differenza di crearne uno al volo).
      *
-     * @return array<int, array{proposal: MachineUnitProposal, customer: Customer}>
+     * @return array<int, array{machineUnit: MachineUnit, customer: Customer}>
      */
-    private function proposeInstalledMachines(): array
+    private function importInstalledMachines(): array
     {
-        $proposals = [];
+        $imported = [];
 
         $knownSerials = MachineUnit::query()->pluck('serial_number')
-            ->merge(MachineUnitProposal::query()->pluck('serial_number'))
             ->map(fn (string $serial) => mb_strtolower(trim($serial)))
             ->flip()
             ->all();
 
-        Customer::query()
+        $customers = Customer::query()
             ->where('tenant_id', $this->tenant->id)
             ->whereNotNull('gestionale_code')
-            ->each(function (Customer $customer) use (&$proposals, &$knownSerials) {
-                $installed = $this->client->articoliInstallati((int) $customer->gestionale_code);
+            ->get();
 
-                foreach ($installed as $row) {
-                    $serial = trim((string) ($row['matricola'] ?? ''));
-                    $articleId = (int) ($row['id'] ?? 0);
+        // Vedi reverifyLinkedCustomers(): stesso principio, una chiamata per
+        // cliente ma tutte in gruppi concorrenti invece che in sequenza.
+        $installedByCustomer = $this->client->pooledGet(
+            '/show/q/art_installati',
+            $customers->mapWithKeys(fn (Customer $customer) => [$customer->id => ['q' => (int) $customer->gestionale_code]])->all(),
+        );
 
-                    if ($serial === '' || $articleId <= 0) {
-                        continue;
-                    }
+        foreach ($customers as $customer) {
+            $installed = $installedByCustomer[$customer->id] ?? [];
 
-                    $key = mb_strtolower($serial);
+            foreach ($installed as $row) {
+                $serial = trim((string) ($row['matricola'] ?? ''));
+                $articleId = (int) ($row['id'] ?? 0);
 
-                    if (isset($knownSerials[$key])) {
-                        continue;
-                    }
-
-                    $knownSerials[$key] = true;
-
-                    $modelName = collect([
-                        $row['desc_articolo_1'] ?? null,
-                        $row['desc_articolo_2'] ?? null,
-                        $row['desc_articolo_3'] ?? null,
-                    ])->filter()->implode(' ') ?: ($row['articolo'] ?? null);
-
-                    $product = Product::query()->where('gestionale_code', $articleId)->first();
-
-                    // firstOrCreate (non create): $knownSerials e' un check in
-                    // memoria costruito a inizio ciclo, non riflette scritture
-                    // concorrenti fatte durante i minuti in cui questo giro e'
-                    // in esecuzione (each() ripagina con OFFSET/LIMIT, non e'
-                    // immune a un cliente visto due volte se il set di
-                    // risultati si muove nel frattempo) - senza firstOrCreate
-                    // una matricola vista due volte nello stesso giro rompe il
-                    // vincolo unique tenant_id+serial_number e manda in errore
-                    // l'intero comando gestionale:sync, che quindi non
-                    // arriverebbe mai a inviare il digest.
-                    $proposal = MachineUnitProposal::firstOrCreate(
-                        ['tenant_id' => $this->tenant->id, 'serial_number' => $serial],
-                        [
-                            'customer_id' => $customer->id,
-                            'product_id' => $product?->id,
-                            'model_name' => $modelName,
-                            'eureka_article_id' => $articleId,
-                            'eureka_article_code' => $row['articolo'] ?? null,
-                        ],
-                    );
-
-                    if (! $proposal->wasRecentlyCreated) {
-                        continue;
-                    }
-
-                    $proposals[] = ['proposal' => $proposal, 'customer' => $customer];
+                if ($serial === '' || $articleId <= 0) {
+                    continue;
                 }
-            });
 
-        return $proposals;
+                $key = mb_strtolower($serial);
+
+                if (isset($knownSerials[$key])) {
+                    continue;
+                }
+
+                $knownSerials[$key] = true;
+
+                $modelName = collect([
+                    $row['desc_articolo_1'] ?? null,
+                    $row['desc_articolo_2'] ?? null,
+                    $row['desc_articolo_3'] ?? null,
+                ])->filter()->implode(' ') ?: ($row['articolo'] ?? null);
+
+                $product = Product::query()->where('gestionale_code', $articleId)->first();
+
+                // numero_doc_t23/data_documento sono il riferimento al DDT con cui
+                // Eureka dice che la macchina e' stata consegnata/installata (vedi
+                // doc API §5) — sono la data vera di installazione, non "oggi"
+                // (che e' solo quando questo sync l'ha vista per la prima volta).
+                $installedAt = $this->parseEurekaDate($row['data_documento'] ?? null);
+
+                // firstOrCreate (non create): una matricola vista due volte
+                // (es. righe duplicate nella risposta Eureka) romperebbe il
+                // vincolo unique tenant_id+serial_number con una create()
+                // secca, mandando in errore l'intero comando gestionale:sync
+                // — che quindi non arriverebbe mai a inviare il digest.
+                $machineUnit = MachineUnit::firstOrCreate(
+                    ['tenant_id' => $this->tenant->id, 'serial_number' => $serial],
+                    [
+                        'product_id' => $product?->id,
+                        'model_name' => $modelName,
+                        'status' => MachineUnit::STATUS_INSTALLATA,
+                        'source' => MachineUnit::SOURCE_EUREKA,
+                    ],
+                );
+
+                if (! $machineUnit->wasRecentlyCreated) {
+                    continue;
+                }
+
+                $machineUnit->moveTo($customer, placedAt: $installedAt);
+
+                $imported[] = ['machineUnit' => $machineUnit, 'customer' => $customer];
+            }
+        }
+
+        return $imported;
     }
 
     /**
@@ -360,6 +401,21 @@ class GestionaleSyncRunner
     private function fieldsExcludedFromDiff(): array
     {
         return ['city'];
+    }
+
+    /**
+     * Campi dove Eureka e' la fonte di verita': una differenza non va
+     * segnalata "da rivedere", si adotta subito il valore Eureka come per un
+     * campo vuoto. La ragione sociale su Eureka e' quella fiscale/ufficiale,
+     * quella nel CRM spesso solo il nome con cui e' stato salvato in origine
+     * (maiuscole diverse, forma abbreviata, suffissi societari mancanti) —
+     * non un errore da far decidere a mano.
+     *
+     * @return array<int, string>
+     */
+    private function fieldsAutoAdoptedFromEureka(): array
+    {
+        return ['company_name'];
     }
 
     /**
@@ -498,6 +554,25 @@ class GestionaleSyncRunner
         $customer->update(['phones' => [...$customer->phones, ...$new]]);
 
         return $new->all();
+    }
+
+    /**
+     * data_documento arriva come stringa ISO ("2024-03-21T00:00:00.000+01:00")
+     * — non ci fidiamo del formato al 100% (e' un fornitore esterno), quindi
+     * un parse fallito torna null invece di far esplodere l'intero sync per
+     * una riga sola.
+     */
+    private function parseEurekaDate(mixed $value): ?Carbon
+    {
+        if (! is_string($value) || trim($value) === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($value);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

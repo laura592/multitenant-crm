@@ -124,9 +124,21 @@ class ServiceReport extends Model
         return $this->hasMany(ServiceReportProduct::class);
     }
 
+    /**
+     * Ricambi/materiali usati, da Materiali (App\Models\Material) — sostituisce
+     * partsUsed (Product) per i rapportini nuovi: quel campo pescava senza
+     * filtro dallo stesso catalogo usato per i preventivi, mescolando
+     * ricambi/macchine trovate su Eureka al listino ufficiale. partsUsed
+     * resta intatto per i rapportini gia' compilati (storico).
+     */
+    public function materialsUsed(): HasMany
+    {
+        return $this->hasMany(ServiceReportMaterial::class);
+    }
+
     public function emails(): HasMany
     {
-        return $this->hasMany(ServiceReportEmail::class);
+        return $this->hasMany(ServiceReportEmail::class)->latest();
     }
 
     public function isSigned(): bool
@@ -178,7 +190,7 @@ class ServiceReport extends Model
     /**
      * Body per POST /schedelavoro/ di Eureka. Richiede customer, machineProduct,
      * machineUnit.product, machineUnit.billingCustomer, customer.billingCustomer,
-     * partsUsed.product gia' caricati. Chiamare gestionaleValidationErrors()
+     * materialsUsed.material gia' caricati. Chiamare gestionaleValidationErrors()
      * prima: qui non si ripetono quei controlli.
      *
      * @return array<string, mixed>
@@ -197,9 +209,9 @@ class ServiceReport extends Model
             'sl_tariffa' => ['id_eureka' => 2],
             'sl_sintomo' => $this->problem_description,
             'sl_lavorazione' => $this->work_performed,
-            'dettaglio' => $this->partsUsed->map(fn (ServiceReportProduct $part) => [
-                'id_articolo' => $part->product?->gestionale_code ?? 0,
-                'descrizione' => $part->product?->name ?? '',
+            'dettaglio' => $this->materialsUsed->map(fn (ServiceReportMaterial $part) => [
+                'id_articolo' => $part->material?->gestionale_code ?? 0,
+                'descrizione' => $part->material?->display_label ?? '',
                 'um' => 'NR',
                 'quantita' => (float) $part->quantity,
             ])->all(),

@@ -16,6 +16,7 @@ use App\Models\QuoteEmail;
 use App\Models\QuoteProduct;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Support\Geocoder;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -374,10 +375,46 @@ class ImportLegacyData extends Command
                 'updated_at' => $row->updated_at,
             ]);
 
+            $this->geocodeIfMissing($customer);
+
             $this->customerMap[$row->id] = $customer->id;
         }
 
         $this->info("Clienti importati: {$rows->count()}");
+    }
+
+    /**
+     * Il DB legacy porta gia' street/postal_code/city per ogni cliente, ma
+     * non le coordinate: senza questo, i clienti importati restano invisibili
+     * a "Cliente piu' vicino" (App\Filament\Pages\ClientiVicini), che filtra
+     * su whereNotNull('latitude'/'longitude'), finche' qualcuno non passa a
+     * mano dal form o non lancia customers:geocode-coordinates.
+     * Salta i clienti gia' geocodificati (updateOrCreate e' idempotente:
+     * rilanciare l'import non deve ripetere centinaia di chiamate HTTP gia'
+     * fatte in run precedenti) e rispetta il limite di Nominatim di 1
+     * richiesta/secondo.
+     */
+    protected function geocodeIfMissing(Customer $customer): void
+    {
+        if ($customer->latitude !== null && $customer->longitude !== null) {
+            return;
+        }
+
+        if (blank($customer->city) && blank($customer->postal_code)) {
+            return;
+        }
+
+        $coords = Geocoder::geocodeBestEffort($customer->geocodingAddressCandidates());
+        usleep(1_100_000);
+
+        if (! $coords) {
+            return;
+        }
+
+        $customer->forceFill([
+            'latitude' => $coords['lat'],
+            'longitude' => $coords['lng'],
+        ])->save();
     }
 
     protected function importQuotes($legacy, Tenant $master): void

@@ -21,7 +21,11 @@
 {{-- Footer --}}
 <x-slot:footer>
 <x-mail::footer>
+@isset($footer)
+{!! $footer !!}
+@else
 © {{ date('Y') }} {{ config('app.name') }}. {{ __('All rights reserved.') }}
+@endisset
 </x-mail::footer>
 </x-slot:footer>
 </x-mail::layout>

@@ -9,9 +9,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Un macchinario fisico con matricola, tracciato indipendentemente da chi lo
- * possiede legalmente (owner_name, es. "Dersut") e da dove si trova
- * fisicamente in questo momento (current_customer_id, es. un bar diverso).
+ * Un macchinario fisico con matricola, tracciato indipendentemente da dove si
+ * trova fisicamente in questo momento (current_customer_id, es. un bar
+ * diverso) e da chi paga (billing_customer_id, se diverso da chi lo ospita).
  * Lo storico degli spostamenti vive in MachineUnitPlacement — vedi moveTo().
  */
 class MachineUnit extends Model
@@ -24,14 +24,18 @@ class MachineUnit extends Model
 
     public const STATUS_RIMOSSA = 'rimossa';
 
+    public const SOURCE_MANUALE = 'manuale';
+
+    public const SOURCE_EUREKA = 'eureka';
+
     protected $fillable = [
         'tenant_id',
+        'source',
         'product_id',
         'current_customer_id',
         'billing_customer_id',
         'serial_number',
         'model_name',
-        'owner_name',
         'status',
         'notes',
         'gestionale_code',
@@ -72,9 +76,12 @@ class MachineUnit extends Model
      * Chiude l'eventuale posizionamento aperto e ne apre uno nuovo (o
      * nessuno, se $customer e' null = rientro in magazzino/rimozione),
      * mantenendo lo storico invece di sovrascrivere current_customer_id e
-     * basta.
+     * basta. $placedAt di default e' now() (spostamento fatto ora dal
+     * tecnico), ma un import storico (es. da Eureka, dove la data vera e'
+     * quella del DDT di consegna/installazione) puo' passare la data reale
+     * invece di intestare tutto a "oggi".
      */
-    public function moveTo(?Customer $customer, ?string $notes = null): void
+    public function moveTo(?Customer $customer, ?string $notes = null, ?\DateTimeInterface $placedAt = null): void
     {
         $this->placements()->whereNull('removed_at')->update(['removed_at' => now()]);
 
@@ -82,7 +89,7 @@ class MachineUnit extends Model
             $this->placements()->create([
                 'tenant_id' => $this->tenant_id,
                 'customer_id' => $customer->id,
-                'placed_at' => now(),
+                'placed_at' => $placedAt ?? now(),
                 'notes' => $notes,
             ]);
         }
