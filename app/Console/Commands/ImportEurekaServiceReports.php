@@ -520,6 +520,7 @@ class ImportEurekaServiceReports extends Command
     private function syncDetailRows(Tenant $tenant, ServiceReport $report, array $detail): void
     {
         $report->materialsUsed()->delete();
+        $createdMaterialIds = [];
 
         foreach (($detail['dettaglio'] ?? []) as $row) {
             if (! is_array($row)) {
@@ -537,6 +538,8 @@ class ImportEurekaServiceReports extends Command
                 continue;
             }
 
+            $createdMaterialIds[] = $material->id;
+
             ServiceReportMaterial::create([
                 'service_report_id' => $report->id,
                 'material_id' => $material->id,
@@ -545,6 +548,89 @@ class ImportEurekaServiceReports extends Command
                 'notes' => $this->normalizeText($row['descrizione'] ?? null),
             ]);
         }
+
+        $this->syncArticleMentionsFromNotes($tenant, $report, $detail['note'] ?? null, $createdMaterialIds);
+    }
+
+    private function syncArticleMentionsFromNotes(Tenant $tenant, ServiceReport $report, mixed $note, array $createdMaterialIds): void
+    {
+        $text = $this->normalizeText($note);
+        if ($text === null || $text === '') {
+            return;
+        }
+
+        $remainingLines = [];
+
+        foreach (preg_split('/\r\n|\n/', $text) as $line) {
+            $line = trim($line);
+            if ($line === '') {
+                continue;
+            }
+
+            if ($this->isArticleMention($line)) {
+                $mention = $this->extractArticleMention($line);
+                if ($mention === null) {
+                    continue;
+                }
+
+                $material = $this->resolveOrCreateMaterial($tenant, [
+                    'id_eureka' => null,
+                    'codice' => $mention['code'],
+                    'descr1' => $mention['code'],
+                    'descrizione' => $mention['code'],
+                ]);
+
+                if (! $material || in_array($material->id, $createdMaterialIds, true)) {
+                    continue;
+                }
+
+                $createdMaterialIds[] = $material->id;
+
+                ServiceReportMaterial::create([
+                    'service_report_id' => $report->id,
+                    'material_id' => $material->id,
+                    'quantity' => max(0.0, (float) $mention['quantity']),
+                    'notes' => $line,
+                ]);
+
+                continue;
+            }
+
+            $remainingLines[] = $line;
+        }
+
+        if ($remainingLines !== []) {
+            $report->notes = implode("\n", $remainingLines);
+            $report->save();
+        }
+    }
+
+    private function isArticleMention(string $line): bool
+    {
+        return preg_match('/\b(?:aggiunto|aggiunta)\s+articolo\s*:\s*(?:(?<quantity>\d+)\s*(?:x|×)\s*)?(?<code>[A-Za-z0-9._\/-]+)\b/i', $line) === 1;
+    }
+
+    /**
+     * @return array{code: string, quantity: float}|null
+     */
+    private function extractArticleMention(string $line): ?array
+    {
+        if (! preg_match('/\b(?:aggiunto|aggiunta)\s+articolo\s*:\s*(?:(?<quantity>\d+)\s*(?:x|×)\s*)?(?<code>[A-Za-z0-9._\/-]+)\b/i', $line, $matches)) {
+            return null;
+        }
+
+        $quantity = isset($matches['quantity']) && $matches['quantity'] !== ''
+            ? (float) $matches['quantity']
+            : 1.0;
+        $code = $this->normalizeText($matches['code']);
+        if ($code === null || $code === '') {
+            return null;
+        }
+
+        return [
+            'code' => $code,
+            'quantity' => $quantity,
+        ];
     }
 
     /**
@@ -679,8 +765,8 @@ class ImportEurekaServiceReports extends Command
     private function mapStatus(mixed $statoDocumento): string
     {
         // stato_documento=10 → documento aperto/in corso → bozza
-        // altrimenti → completato
-        return (int) $statoDocumento === 10 ? 'bozza' : 'completato';
+        // altrimenti → inviato (il cliente ha già il documento)
+        return (int) $statoDocumento === 10 ? 'bozza' : 'inviato';
     }
 
     /**
@@ -716,14 +802,49 @@ class ImportEurekaServiceReports extends Command
         return $candidate;
     }
 
+    private function stripRtf(?string $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (!str_starts_with($value, '{\\rtf')) {
+            return $value;
+        }
+
+        // Rimuove gli ultimi caratteri di chiusura RTF
+        $value = (string) preg_replace('/\}\s*$/', '', $value);
+
+        // Sostituisce \par (paragrafi) con newlines
+        $value = (string) preg_replace('/\\\\par\b/', "\n", $value);
+
+        // Rimuove i tag RTF (es. \f0, \fs22, \ansi, ecc.)
+        $value = (string) preg_replace('/\\\\[a-z]+\d*\s?/', '', $value);
+
+        // Rimuove i gruppi di comandi (es. {\*\generator...})
+        $value = (string) preg_replace('/\{[^}]*\}/', '', $value);
+
+        // Rimuove le parentesi graffe rimanenti
+        $value = (string) preg_replace('/[{}]/', '', $value);
+
+        return $value;
+    }
+
     private function normalizeText(mixed $value): ?string
     {
         if ($value === null || $value === '') {
             return null;
         }
 
+        // Converte RTF a testo semplice se necessario
+        $text = $this->stripRtf((string) $value);
+
+        if ($text === null || $text === '') {
+            return null;
+        }
+
         // Rimuove \r (inserito da Eureka a metà stringa, cf. spec §6.1) e collassa spazi
-        $text = trim((string) preg_replace('/\s+/u', ' ', str_replace("\r", ' ', (string) $value)));
+        $text = trim((string) preg_replace('/\s+/u', ' ', str_replace("\r", ' ', $text)));
 
         return $text !== '' ? $text : null;
     }
