@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Models\Category;
-use App\Models\ComodatoMacchina;
 use App\Models\Customer;
 use App\Models\InformationRequest;
 use App\Models\PaymentMethod;
@@ -101,7 +100,6 @@ class ImportLegacyData extends Command
             $this->importQuoteEmails($legacy);
             $this->importInformationRequests($legacy, $master);
             $this->importInformationRequestProducts($legacy);
-            $this->importComodatoMacchine($legacy, $master);
         });
 
         $this->info('Import completato.');
@@ -563,33 +561,5 @@ class ImportLegacyData extends Command
         }
 
         $this->info("Prodotti su richieste informazioni importati: {$count}");
-    }
-
-    protected function importComodatoMacchine($legacy, Tenant $master): void
-    {
-        $rows = $legacy->table('comodato_macchine')->get();
-
-        foreach ($rows as $row) {
-            ComodatoMacchina::updateOrCreate(['legacy_id' => $row->id], [
-                'tenant_id' => $master->id,
-                'customer_id' => null, // non presente nello schema legacy
-                'nome_macchina' => $row->nome_macchina,
-                'costo_macchina' => $row->costo_macchina,
-                'costo_attrezzatura' => $row->costo_attrezzatura,
-                'anni_ammortamento' => $row->anni_ammortamento,
-                'prezzo_annuale_consumabili' => $row->prezzo_annuale_consumabili,
-                'costi_manutenzione_annui' => $row->costi_manutenzione_annui,
-                'costo_caffe_per_battitura' => $row->costo_caffe_per_battitura,
-                'erogazioni_annuali_minime' => $row->erogazioni_annuali_minime,
-                'erogazioni_previste_annue' => $row->erogazioni_previste_annue,
-                'canone_fisso_annuale' => $row->canone_fisso_annuale,
-                'margine_percentuale' => $row->margine_percentuale,
-                'note' => $row->note,
-                'created_at' => $row->created_at,
-                'updated_at' => $row->updated_at,
-            ]);
-        }
-
-        $this->info("Comodato macchine importati: {$rows->count()}");
     }
 }

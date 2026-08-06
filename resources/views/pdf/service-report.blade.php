@@ -58,7 +58,7 @@
         ];
         $statusLabels = ['bozza' => 'Bozza', 'completato' => 'Completato', 'firmato' => 'Firmato', 'inviato' => 'Inviato'];
         $statusColors = ['bozza' => '#9ca3af', 'completato' => '#0ea5e9', 'firmato' => '#f59e0b', 'inviato' => '#16a34a'];
-        $hasMachineInfo = $report->machineProduct || $report->machine_serial_number || $report->machineUnit || $report->comodatoMacchina || $report->quote;
+        $hasMachineInfo = $report->machineProduct || $report->machine_serial_number || $report->machineUnit || $report->quote;
     @endphp
 
     <table class="row-table">
@@ -120,9 +120,6 @@
                 @endif
                 @if($report->machine_serial_number || $report->machineUnit?->serial_number)
                     <tr><td class="label">Matricola:</td><td>{{ $report->machine_serial_number ?: $report->machineUnit?->serial_number }}</td></tr>
-                @endif
-                @if($report->comodatoMacchina)
-                    <tr><td class="label">Comodato:</td><td>{{ $report->comodatoMacchina->nome_macchina }}</td></tr>
                 @endif
                 @if($report->quote)
                     <tr><td class="label">Preventivo:</td><td>{{ $report->quote->number }}</td></tr>

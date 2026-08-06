@@ -91,7 +91,6 @@ class ServiceReportResource extends Resource
                 ->columns(3)
                 ->schema([
                     TextEntry::make('quote.number')->label('Preventivo collegato')->placeholder('—'),
-                    TextEntry::make('comodatoMacchina.nome_macchina')->label('Comodato collegato')->placeholder('—'),
                     TextEntry::make('machineProduct.name')->label('Modello macchina')->placeholder('—'),
                     TextEntry::make('machine_serial_number')->label('Matricola')->placeholder('—'),
                     TextEntry::make('machineUnit.serial_number')->label('Macchina (matricola tracciata)')->placeholder('—'),

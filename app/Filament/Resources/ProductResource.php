@@ -85,7 +85,13 @@ class ProductResource extends Resource
                     Forms\Components\TextInput::make('gestionale_code')
                         ->label('Codice Eureka (sl_articolo)')
                         ->numeric()
-                        ->helperText('Necessario solo per inviare a Eureka i rapportini che usano questo prodotto.'),
+                        // Il codice Eureka non va mai modificato a mano: si
+                        // collega solo tramite l'azione "Cerca su Eureka"
+                        // nella tabella, che garantisce che punti a un
+                        // articolo davvero esistente sul gestionale.
+                        ->disabled()
+                        ->dehydrated(false)
+                        ->helperText('Usa "Cerca su Eureka" nella tabella per collegarlo. Necessario solo per inviare a Eureka i rapportini che usano questo prodotto.'),
                     Forms\Components\Textarea::make('description')
                         ->label('Descrizione')
                         ->columnSpanFull(),

@@ -28,11 +28,11 @@ class MaintenanceSchedule extends Model
 
     /**
      * Cadenza standard per tipo di impianto, usata come default sul form e
-     * dalla bulk action di correzione in MaintenanceScheduleResource.
+     * dalla bulk action di correzione in MaintenanceScheduleResource. Il vino
+     * e' sempre "a chiamata" (nessuna cadenza fissa), quindi non compare qui.
      */
     public const STANDARD_FREQUENCY_DAYS = [
         self::BEVERAGE_BIRRA => 30,
-        self::BEVERAGE_VINO => 90,
     ];
 
     protected $fillable = [
@@ -40,7 +40,7 @@ class MaintenanceSchedule extends Model
         'customer_id',
         'type',
         'status',
-        'comodato_macchina_id',
+        'machine_unit_id',
         'beverage_type',
         'frequency',
         'frequency_days',
@@ -68,9 +68,9 @@ class MaintenanceSchedule extends Model
         return $this->belongsTo(Customer::class);
     }
 
-    public function comodatoMacchina(): BelongsTo
+    public function machineUnit(): BelongsTo
     {
-        return $this->belongsTo(ComodatoMacchina::class);
+        return $this->belongsTo(MachineUnit::class);
     }
 
     public function lastServiceReport(): BelongsTo
@@ -140,20 +140,20 @@ class MaintenanceSchedule extends Model
     }
 
     /**
-     * Scadenza di un piano acqua: la validita' del filtro se nota, con un cap
-     * annuale in ogni caso (un filtro che non si esaurisce va comunque
-     * sostituito almeno una volta all'anno per igiene).
+     * Scadenza di un piano acqua: sanificazione ogni 4 mesi in ogni caso, a
+     * meno che il filtro non si esaurisca prima (filter_validity_days piu'
+     * stringente dei 4 mesi).
      */
     private function nextAcquaDueDate(Lavaggio $lastFilterChange): \Illuminate\Support\Carbon
     {
-        $annual = $lastFilterChange->data->copy()->addYear();
+        $sanificazione = $lastFilterChange->data->copy()->addMonths(4);
 
         if (! $this->filter_validity_days) {
-            return $annual;
+            return $sanificazione;
         }
 
         $filterExpiry = $lastFilterChange->data->copy()->addDays($this->filter_validity_days);
 
-        return $filterExpiry->lessThan($annual) ? $filterExpiry : $annual;
+        return $filterExpiry->lessThan($sanificazione) ? $filterExpiry : $sanificazione;
     }
 }

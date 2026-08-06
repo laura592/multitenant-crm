@@ -21,7 +21,6 @@ class ServiceReport extends Model
     protected $fillable = [
         'tenant_id',
         'customer_id',
-        'comodato_macchina_id',
         'machine_unit_id',
         'quote_id',
         'machine_product_id',
@@ -93,11 +92,6 @@ class ServiceReport extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
-    }
-
-    public function comodatoMacchina(): BelongsTo
-    {
-        return $this->belongsTo(ComodatoMacchina::class);
     }
 
     public function machineUnit(): BelongsTo

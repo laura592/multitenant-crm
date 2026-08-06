@@ -74,7 +74,7 @@ class CustomerResource extends Resource
                         ->unique(ignoreRecord: true)
                         ->disabled()
                         ->dehydrated(false)
-                        ->helperText('Usa "Cerca su Eureka" nella tabella per trovarlo automaticamente, oppure inseriscilo a mano se lo conosci gia\'.'),
+                        ->helperText('Usa "Cerca su Eureka" nella tabella per collegarlo.'),
                     Forms\Components\Select::make('billing_customer_id')
                         ->label('Fatturare a')
                         ->relationship('billingCustomer', 'company_name', modifyQueryUsing: fn ($query, ?Customer $record) => $query

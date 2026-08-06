@@ -138,11 +138,6 @@ class Tenant extends Model implements HasName
         return $this->hasMany(InformationRequest::class);
     }
 
-    public function comodatoMacchinas(): HasMany
-    {
-        return $this->hasMany(ComodatoMacchina::class);
-    }
-
     public function serviceReports(): HasMany
     {
         return $this->hasMany(ServiceReport::class);

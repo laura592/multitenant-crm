@@ -508,24 +508,6 @@ parameters:
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 2
-			path: app/Models/ComodatoMacchina.php
-
-		-
-			message: '#^Comparison operation "\<\=" between int\<1, max\> and 0 is always false\.$#'
-			identifier: smallerOrEqual.alwaysFalse
-			count: 1
-			path: app/Models/ComodatoMacchina.php
-
-		-
-			message: '#^Parameter \#1 \$num of function round expects float\|int, string given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Models/ComodatoMacchina.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 2
 			path: app/Models/Customer.php
 
 		-

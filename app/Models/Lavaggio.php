@@ -106,9 +106,11 @@ class Lavaggio extends Model
     }
 
     /**
-     * Senza machine_unit_id il lavaggio non e' "di macchina sconosciuta": per
-     * come lavora il tecnico, una visita senza macchina specificata ha
-     * lavato TUTTI gli impianti del cliente in un colpo solo. Centralizzata
+     * Senza machine_unit_id sulla visita, la macchina e' quella collegata al
+     * piano di lavaggio (il caso normale: il piano copre una sola macchina,
+     * vedi MaintenanceSchedule::machine_unit_id). Solo se nemmeno il piano ha
+     * una macchina collegata (dato legacy non ancora sistemato) si torna al
+     * vecchio riepilogo su tutto il parco macchine del cliente. Centralizzata
      * qui perche' era duplicata identica fra i due LavaggiRelationManager
      * (su MaintenanceScheduleResource e su CustomerResource).
      */
@@ -116,6 +118,10 @@ class Lavaggio extends Model
     {
         if ($this->machine_unit_id) {
             return $this->machineUnit->serial_number;
+        }
+
+        if ($scheduleUnit = $this->maintenanceSchedule?->machineUnit) {
+            return $scheduleUnit->serial_number;
         }
 
         $units = MachineUnit::where('current_customer_id', $this->customer_id)->pluck('model_name');
@@ -126,11 +132,17 @@ class Lavaggio extends Model
     /**
      * Se il cliente ha impianti con pagante diverso (es. Gigi Marchetto) e la
      * visita non specifica la macchina, invoiceRecipient() da solo darebbe un
-     * pagante di default fuorviante: qui serve il dettaglio "misto".
+     * pagante di default fuorviante: qui serve il dettaglio "misto" - a meno
+     * che il piano di lavaggio non abbia gia' una macchina collegata, nel
+     * qual caso il suo pagante e' quello giusto senza bisogno di indovinare.
      */
     public function billingLabel(): string
     {
         if (! $this->machine_unit_id) {
+            if ($scheduleUnit = $this->maintenanceSchedule?->machineUnit) {
+                return $scheduleUnit->billingCustomer?->full_name ?? $this->invoiceRecipient()->full_name;
+            }
+
             $units = MachineUnit::where('current_customer_id', $this->customer_id)->get();
             $targets = $units->map(fn (MachineUnit $u) => $u->billingCustomer?->full_name ?? 'se stesso');
 

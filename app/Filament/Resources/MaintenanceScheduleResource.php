@@ -62,12 +62,19 @@ class MaintenanceScheduleResource extends Resource
     }
 
     /**
-     * Elenco impianti (MachineUnit) installati presso il cliente, non
-     * altrimenti visibile su questa risorsa: vive su MachineUnit, non sul
-     * piano di lavaggio stesso.
+     * Impianto/i rilevanti per questo piano. Se il piano ha una macchina
+     * collegata (machine_unit_id) mostra solo quella - e' il caso normale,
+     * altrimenti un piano lavaggio birra mostrerebbe anche il macinacaffe'
+     * dello stesso cliente. Senza macchina collegata (piani legacy non ancora
+     * sistemati) resta il vecchio riepilogo su tutto il parco macchine del
+     * cliente, cosi' il dato sparisce del tutto invece di essere sbagliato.
      */
-    private static function equipmentSummary(?string $customerId): string
+    private static function equipmentSummary(?string $customerId, ?string $machineUnitId = null): string
     {
+        if ($machineUnitId) {
+            return MachineUnit::find($machineUnitId)?->display_name ?? '—';
+        }
+
         if (! $customerId) {
             return '—';
         }
@@ -78,12 +85,24 @@ class MaintenanceScheduleResource extends Resource
     }
 
     /**
-     * Chi paga davvero: se il cliente ha piu' impianti con pagante diverso
-     * (es. Gigi Marchetto: birra a se stesso, vino a Sutto), il
-     * billing_customer_id del Customer da solo sarebbe fuorviante.
+     * Chi paga davvero. Con una macchina collegata al piano il pagante e'
+     * quello della macchina stessa (o il pagante di default del cliente se la
+     * macchina non ne ha uno proprio) - non serve piu' indovinare su tutto il
+     * parco macchine. Senza macchina collegata (piani legacy), stesso
+     * fallback "Misto: ..." di prima: se il cliente ha piu' impianti con
+     * pagante diverso (es. Gigi Marchetto: birra a se stesso, vino a Sutto),
+     * il billing_customer_id del Customer da solo sarebbe fuorviante.
      */
-    private static function billingSummary(?string $customerId): string
+    private static function billingSummary(?string $customerId, ?string $machineUnitId = null): string
     {
+        if ($machineUnitId) {
+            $unit = MachineUnit::with('billingCustomer')->find($machineUnitId);
+
+            if ($unit) {
+                return $unit->billingCustomer?->full_name ?? static::customerFor($customerId ?? '')?->invoiceRecipient()->full_name ?? '—';
+            }
+        }
+
         if (! $customerId) {
             return '—';
         }
@@ -139,16 +158,15 @@ class MaintenanceScheduleResource extends Resource
                     InfolistSection::make('Cliente e macchina')
                         ->columnSpan(6)
                         ->schema([
-                            TextEntry::make('comodatoMacchina.nome_macchina')
-                                ->label('Macchina (comodato)')
-                                ->placeholder('—')
-                                ->visible(fn (MaintenanceSchedule $record) => $record->type === MaintenanceSchedule::TYPE_MANUTENZIONE),
+                            TextEntry::make('machineUnit.display_name')
+                                ->label('Macchina')
+                                ->placeholder('—'),
                             TextEntry::make('impianti_info')
                                 ->label('Impianti installati')
-                                ->state(fn (MaintenanceSchedule $record) => static::equipmentSummary($record->customer_id)),
+                                ->state(fn (MaintenanceSchedule $record) => static::equipmentSummary($record->customer_id, $record->machine_unit_id)),
                             TextEntry::make('pagante_info')
                                 ->label('Fatturare a')
-                                ->state(fn (MaintenanceSchedule $record) => static::billingSummary($record->customer_id)),
+                                ->state(fn (MaintenanceSchedule $record) => static::billingSummary($record->customer_id, $record->machine_unit_id)),
                         ]),
                     InfolistSection::make('Pianificazione')
                         ->columnSpan(6)
@@ -173,7 +191,7 @@ class MaintenanceScheduleResource extends Resource
                                 ->visible(fn (MaintenanceSchedule $record) => $record->type === MaintenanceSchedule::TYPE_LAVAGGIO && $record->beverage_type !== MaintenanceSchedule::BEVERAGE_ACQUA),
                             TextEntry::make('filter_validity_days')
                                 ->label('Validita\' filtro')
-                                ->formatStateUsing(fn (?string $state) => $state ? "Ogni {$state} giorni (max 1 anno)" : 'Max 1 anno')
+                                ->formatStateUsing(fn (?string $state) => $state ? "Ogni {$state} giorni (max 4 mesi)" : 'Ogni 4 mesi')
                                 ->visible(fn (MaintenanceSchedule $record) => $record->type === MaintenanceSchedule::TYPE_LAVAGGIO && $record->beverage_type === MaintenanceSchedule::BEVERAGE_ACQUA),
                             TextEntry::make('lastFilterChange.data')
                                 ->label('Ultima sostituzione filtro')
@@ -200,18 +218,26 @@ class MaintenanceScheduleResource extends Resource
                         ->preload()
                         ->live()
                         ->required(),
-                    Forms\Components\Select::make('comodato_macchina_id')
-                        ->label('Macchina (comodato)')
-                        ->relationship('comodatoMacchina', 'nome_macchina')
+                    Forms\Components\Select::make('machine_unit_id')
+                        ->label('Macchina')
+                        ->relationship(
+                            'machineUnit',
+                            'serial_number',
+                            modifyQueryUsing: fn ($query, Forms\Get $get) => $query
+                                ->where('current_customer_id', $get('customer_id')),
+                        )
+                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->display_name.' — '.$record->serial_number)
                         ->searchable()
                         ->preload()
-                        ->visible(fn (Forms\Get $get) => $get('type') === MaintenanceSchedule::TYPE_MANUTENZIONE),
+                        ->live()
+                        ->disabled(fn (Forms\Get $get) => blank($get('customer_id')))
+                        ->helperText('Qui compaiono solo i macchinari attualmente installati presso il cliente selezionato, in comodato o meno.'),
                     Forms\Components\Placeholder::make('impianti_info')
                         ->label('Impianti installati')
-                        ->content(fn (Forms\Get $get) => static::equipmentSummary($get('customer_id'))),
+                        ->content(fn (Forms\Get $get) => static::equipmentSummary($get('customer_id'), $get('machine_unit_id'))),
                     Forms\Components\Placeholder::make('pagante_info')
                         ->label('Fatturare a')
-                        ->content(fn (Forms\Get $get) => static::billingSummary($get('customer_id'))),
+                        ->content(fn (Forms\Get $get) => static::billingSummary($get('customer_id'), $get('machine_unit_id'))),
                 ]),
             Forms\Components\Section::make('Pianificazione')
                 ->columns(2)
@@ -251,11 +277,10 @@ class MaintenanceScheduleResource extends Resource
                             MaintenanceSchedule::BEVERAGE_VINO => 'Vino',
                         ])
                         ->live()
-                        ->afterStateUpdated(function (?string $state, Forms\Set $set) {
-                            if (isset(MaintenanceSchedule::STANDARD_FREQUENCY_DAYS[$state])) {
-                                $set('frequency_days', MaintenanceSchedule::STANDARD_FREQUENCY_DAYS[$state]);
-                            }
-                        })
+                        // Il vino non ha mai una cadenza standard (resta "a
+                        // chiamata"): sovrascrive esplicitamente anche un
+                        // valore lasciato da un beverage_type precedente.
+                        ->afterStateUpdated(fn (?string $state, Forms\Set $set) => $set('frequency_days', MaintenanceSchedule::STANDARD_FREQUENCY_DAYS[$state] ?? null))
                         ->visible(fn (Forms\Get $get) => $get('type') === MaintenanceSchedule::TYPE_LAVAGGIO),
                     Forms\Components\TextInput::make('frequency_days')
                         ->label('Cadenza (giorni)')
@@ -268,7 +293,7 @@ class MaintenanceScheduleResource extends Resource
                         ->label('Validita\' filtro (giorni)')
                         ->numeric()
                         ->minValue(1)
-                        ->helperText('Scadenza = data ultima sostituzione filtro + questi giorni, con un tetto massimo di 1 anno anche se il filtro non si esaurisce prima. Lascia vuoto per usare solo il tetto annuale.')
+                        ->helperText('Scadenza = data ultima sostituzione filtro + questi giorni, con un tetto massimo di 4 mesi (sanificazione) anche se il filtro non si esaurisce prima. Lascia vuoto per usare solo il tetto dei 4 mesi.')
                         ->visible(fn (Forms\Get $get) => $get('type') === MaintenanceSchedule::TYPE_LAVAGGIO && $get('beverage_type') === MaintenanceSchedule::BEVERAGE_ACQUA),
                     Forms\Components\Placeholder::make('ultima_sostituzione_filtro')
                         ->label('Ultima sostituzione filtro')
@@ -319,16 +344,16 @@ class MaintenanceScheduleResource extends Resource
                         default => 'gray',
                     })
                     ->sortable(),
-                Tables\Columns\TextColumn::make('comodatoMacchina.nome_macchina')->label('Macchina')->placeholder('—')
+                Tables\Columns\TextColumn::make('machineUnit.display_name')->label('Macchina')->placeholder('—')
                     ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('impianti')
                     ->label('Impianti')
-                    ->state(fn (MaintenanceSchedule $record) => static::equipmentSummary($record->customer_id))
+                    ->state(fn (MaintenanceSchedule $record) => static::equipmentSummary($record->customer_id, $record->machine_unit_id))
                     ->wrap()
                     ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('pagante')
                     ->label('Pagante')
-                    ->state(fn (MaintenanceSchedule $record) => static::billingSummary($record->customer_id))
+                    ->state(fn (MaintenanceSchedule $record) => static::billingSummary($record->customer_id, $record->machine_unit_id))
                     ->wrap()
                     ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('status')
@@ -345,7 +370,7 @@ class MaintenanceScheduleResource extends Resource
                         }
 
                         if ($record->beverage_type === MaintenanceSchedule::BEVERAGE_ACQUA) {
-                            return $record->filter_validity_days ? "Filtro ogni {$record->filter_validity_days} giorni (max 1 anno)" : 'Filtro: max 1 anno';
+                            return $record->filter_validity_days ? "Filtro ogni {$record->filter_validity_days} giorni (max 4 mesi)" : 'Sanificazione ogni 4 mesi';
                         }
 
                         return $record->frequency_days ? "Ogni {$record->frequency_days} giorni" : 'A chiamata';

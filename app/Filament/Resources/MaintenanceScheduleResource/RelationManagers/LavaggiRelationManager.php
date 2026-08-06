@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\MaintenanceScheduleResource\RelationManagers;
 
+use App\Filament\Resources\ServiceReportResource;
 use App\Models\Lavaggio;
 use App\Models\MaintenanceSchedule;
 use Filament\Forms;
@@ -82,6 +83,20 @@ class LavaggiRelationManager extends RelationManager
                     }),
             ])
             ->actions([
+                // Stesso pattern di "Crea rapportino" in MachineUnitResource:
+                // pre-compila cliente/macchina/data/descrizione cosi' il
+                // tecnico non deve reinserire a mano quanto gia' scritto nel
+                // lavaggio appena registrato.
+                Tables\Actions\Action::make('crea_rapportino')
+                    ->label('Crea rapportino')
+                    ->icon('heroicon-o-document-plus')
+                    ->color('success')
+                    ->url(fn (Lavaggio $record) => ServiceReportResource::getUrl('create', array_filter([
+                        'customer_id' => $record->customer_id,
+                        'machine_unit_id' => $record->machine_unit_id,
+                        'intervention_date' => $record->data?->toDateString(),
+                        'work_performed' => $record->descrizione,
+                    ]))),
                 Tables\Actions\EditAction::make(),
                 Tables\Actions\DeleteAction::make(),
             ])

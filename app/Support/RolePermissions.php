@@ -36,7 +36,6 @@ class RolePermissions
                 ...self::expand('quote', ['view_any', 'view', 'create', 'update']),
                 ...self::expand('quote::group', ['view_any', 'view', 'create', 'update']),
                 ...self::expand('price::list', self::VIEW),
-                ...self::expand('comodato::macchina', self::VIEW),
             ],
             'dipendente' => [
                 ...self::expand('brand', self::VIEW),
@@ -52,7 +51,6 @@ class RolePermissions
                 ...self::expand('service::report', self::MANAGE),
                 ...self::expand('maintenance::schedule', self::MANAGE),
                 ...self::expand('machine::unit', self::MANAGE),
-                ...self::expand('comodato::macchina', self::MANAGE),
                 ...self::expand('lavaggio', self::MANAGE),
                 ...self::expand('material', self::VIEW),
                 ...self::expand('material::order', self::MANAGE),
@@ -111,7 +109,6 @@ class RolePermissions
                 ...self::expand('leave::request', self::MANAGE),
                 ...self::expand('payment::method', self::MANAGE),
                 ...self::expand('machine::unit', self::MANAGE),
-                ...self::expand('comodato::macchina', self::MANAGE),
                 ...self::expand('lavaggio', self::MANAGE),
                 // Unico ruolo (oltre allo staff master is_super_admin) che puo'
                 // creare/gestire utenti.
