@@ -2,8 +2,10 @@
 
 namespace App\Filament\Resources\MaintenanceScheduleResource\RelationManagers;
 
+use App\Filament\Resources\ServiceReportResource;
 use App\Models\Lavaggio;
 use App\Models\MaintenanceSchedule;
+use App\Models\ServiceReport;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\RelationManagers\RelationManager;
@@ -24,6 +26,21 @@ class LavaggiRelationManager extends RelationManager
     public static function canViewForRecord(Model $ownerRecord, string $pageClass): bool
     {
         return $ownerRecord->type === MaintenanceSchedule::TYPE_LAVAGGIO;
+    }
+
+    public static function serviceReportCreateUrl(Lavaggio $record): string
+    {
+        $query = array_filter([
+            'customer_id' => $record->customer_id,
+            'machine_unit_id' => $record->machine_unit_id,
+            'intervention_date' => $record->data?->toDateString(),
+            'intervention_type' => ServiceReport::TYPE_MANUTENZIONE_ORDINARIA,
+            'problem_description' => 'Lavaggio impianto',
+            'work_performed' => $record->descrizione,
+            'notes' => $record->note,
+        ], fn ($value) => filled($value));
+
+        return ServiceReportResource::getUrl('create', tenant: $record->tenant).'?'.http_build_query($query);
     }
 
     public function form(Form $form): Form
@@ -82,6 +99,11 @@ class LavaggiRelationManager extends RelationManager
                     }),
             ])
             ->actions([
+                Tables\Actions\Action::make('rapportino')
+                    ->label('Rapportino')
+                    ->icon('heroicon-o-clipboard-document-check')
+                    ->color('gray')
+                    ->url(fn (Lavaggio $record) => self::serviceReportCreateUrl($record)),
                 Tables\Actions\EditAction::make(),
                 Tables\Actions\DeleteAction::make(),
             ])

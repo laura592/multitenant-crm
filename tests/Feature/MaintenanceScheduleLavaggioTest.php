@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\MaintenanceScheduleResource\RelationManagers\LavaggiRelationManager;
 use App\Models\Customer;
 use App\Models\Lavaggio;
 use App\Models\MaintenanceSchedule;
 use App\Models\Tenant;
+use App\Models\ServiceReport;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -139,5 +141,32 @@ class MaintenanceScheduleLavaggioTest extends TestCase
         $scheduleA->refresh();
         $this->assertSame($olderOnA->id, $scheduleA->last_lavaggio_id);
         $this->assertTrue($scheduleA->next_due_date->isSameDay($olderOnA->data->copy()->addDays(20)));
+    }
+
+    public function test_lavaggio_row_can_open_a_prefilled_rapportino_creation_url(): void
+    {
+        $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);
+        $customer = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Bar Centrale']);
+
+        $lavaggio = Lavaggio::create([
+            'tenant_id' => $tenant->id,
+            'customer_id' => $customer->id,
+            'data' => '2026-08-05',
+            'descrizione' => '5 vie + apertura',
+            'note' => 'Filtro sostituito',
+        ]);
+
+        $url = LavaggiRelationManager::serviceReportCreateUrl($lavaggio);
+
+        $this->assertStringContainsString('/service-reports/create?', $url);
+
+        parse_str(parse_url($url, PHP_URL_QUERY) ?? '', $query);
+
+        $this->assertSame($customer->id, $query['customer_id']);
+        $this->assertSame('2026-08-05', $query['intervention_date']);
+        $this->assertSame(ServiceReport::TYPE_MANUTENZIONE_ORDINARIA, $query['intervention_type']);
+        $this->assertSame('Lavaggio impianto', $query['problem_description']);
+        $this->assertSame('5 vie + apertura', $query['work_performed']);
+        $this->assertSame('Filtro sostituito', $query['notes']);
     }
 }

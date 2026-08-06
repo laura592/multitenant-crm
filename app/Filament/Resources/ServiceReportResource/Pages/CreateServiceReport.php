@@ -24,10 +24,18 @@ class CreateServiceReport extends CreateRecord
 
         $this->form->fill();
 
-        if ($customerId = request()->query('customer_id')) {
-            $this->form->fill(array_merge($this->form->getRawState(), [
-                'customer_id' => $customerId,
-            ]));
+        $prefill = array_filter([
+            'customer_id' => request()->query('customer_id'),
+            'machine_unit_id' => request()->query('machine_unit_id'),
+            'intervention_date' => request()->query('intervention_date'),
+            'intervention_type' => request()->query('intervention_type'),
+            'problem_description' => request()->query('problem_description'),
+            'work_performed' => request()->query('work_performed'),
+            'notes' => request()->query('notes'),
+        ], fn ($value) => filled($value));
+
+        if ($prefill !== []) {
+            $this->form->fill(array_merge($this->form->getRawState(), $prefill));
         }
 
         $this->callHook('afterFill');
