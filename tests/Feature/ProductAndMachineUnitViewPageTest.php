@@ -3,7 +3,9 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\MachineUnitResource;
+use App\Filament\Resources\MachineUnitResource\Pages\ListMachineUnits;
 use App\Filament\Resources\ProductResource;
+use App\Filament\Resources\ProductResource\Pages\ListProducts;
 use App\Models\Customer;
 use App\Models\MachineUnit;
 use App\Models\Product;
@@ -11,6 +13,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use Tests\Concerns\AssignsPermissionRoles;
 use Tests\TestCase;
 
@@ -61,6 +64,27 @@ class ProductAndMachineUnitViewPageTest extends TestCase
             ->assertSee('ICON 2GR');
     }
 
+    /**
+     * Solo avere la pagina "view" non basta: la tabella deve registrare
+     * anche l'azione ViewAction, altrimenti Filament::recordUrl() ripiega
+     * su "edit" (guarda getAction('view') prima di getAction('edit') - vedi
+     * ListRecords::makeTable()) e cliccare una riga apre comunque il form
+     * modificabile invece della vista di sola lettura.
+     */
+    public function test_product_row_click_opens_view_not_edit(): void
+    {
+        $tenant = $this->loginAdmin();
+        $product = Product::create([
+            'tenant_id' => $tenant->id,
+            'sku' => 'GIFAR-ROW-CLICK',
+            'type' => Product::TYPE_MACHINE,
+            'name' => 'ICON 2GR',
+        ]);
+
+        Livewire::test(ListProducts::class)
+            ->assertTableActionHasUrl('view', ProductResource::getUrl('view', ['record' => $product]), $product);
+    }
+
     public function test_machine_unit_view_page_is_reachable_and_edit_stays_reachable(): void
     {
         $tenant = $this->loginAdmin();
@@ -81,5 +105,21 @@ class ProductAndMachineUnitViewPageTest extends TestCase
         $this->get(MachineUnitResource::getUrl('edit', ['record' => $machine]))
             ->assertOk()
             ->assertSee('SN-VIEW-001');
+    }
+
+    public function test_machine_unit_row_click_opens_view_not_edit(): void
+    {
+        $tenant = $this->loginAdmin();
+        $customer = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Bar Centrale']);
+        $machine = MachineUnit::create([
+            'tenant_id' => $tenant->id,
+            'current_customer_id' => $customer->id,
+            'status' => MachineUnit::STATUS_INSTALLATA,
+            'serial_number' => 'SN-ROW-CLICK',
+            'model_name' => 'ICON 2GR',
+        ]);
+
+        Livewire::test(ListMachineUnits::class)
+            ->assertTableActionHasUrl('view', MachineUnitResource::getUrl('view', ['record' => $machine]), $machine);
     }
 }

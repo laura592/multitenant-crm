@@ -117,6 +117,8 @@ class MachineUnitResource extends Resource
                     ->query(fn ($query) => $query->whereNotNull('gestionale_suggested_code')),
             ])
             ->actions([
+                Tables\Actions\ViewAction::make()
+                    ->color('gray'),
                 Tables\Actions\ActionGroup::make([
                     Tables\Actions\Action::make('conferma_collegamento_gestionale')
                         ->label(fn (MachineUnit $record) => 'Conferma matricola Eureka: '.($record->gestionale_suggested_label ?? "#{$record->gestionale_suggested_code}"))
