@@ -217,6 +217,7 @@ class MachineUnitResource extends Resource
         return [
             'index' => Pages\ListMachineUnits::route('/'),
             'create' => Pages\CreateMachineUnit::route('/create'),
+            'view' => Pages\ViewMachineUnit::route('/{record}'),
             'edit' => Pages\EditMachineUnit::route('/{record}/edit'),
         ];
     }
