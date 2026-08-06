@@ -107,6 +107,47 @@ class ProductAndMachineUnitViewPageTest extends TestCase
             ->assertSee('SN-VIEW-001');
     }
 
+    /**
+     * "Crea rapportino" era disponibile solo dal menu azioni della tabella:
+     * ora che il click riga apre la view invece dell'edit, da li' non si
+     * passa piu' dalla tabella, quindi l'azione va replicata anche
+     * nell'header della view (ViewMachineUnit::getHeaderActions()).
+     */
+    public function test_machine_unit_view_page_exposes_crea_rapportino_when_assigned_to_a_customer(): void
+    {
+        $tenant = $this->loginAdmin();
+        $customer = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Bar Centrale']);
+        $machine = MachineUnit::create([
+            'tenant_id' => $tenant->id,
+            'current_customer_id' => $customer->id,
+            'status' => MachineUnit::STATUS_INSTALLATA,
+            'serial_number' => 'SN-RAPPORTINO-001',
+            'model_name' => 'ICON 2GR',
+        ]);
+
+        $this->get(MachineUnitResource::getUrl('view', ['record' => $machine]))
+            ->assertOk()
+            ->assertSee('Crea rapportino')
+            ->assertSee("machine_unit_id={$machine->id}", escape: false)
+            ->assertSee("customer_id={$customer->id}", escape: false);
+    }
+
+    public function test_machine_unit_view_page_hides_crea_rapportino_when_not_assigned_to_a_customer(): void
+    {
+        $tenant = $this->loginAdmin();
+        $machine = MachineUnit::create([
+            'tenant_id' => $tenant->id,
+            'current_customer_id' => null,
+            'status' => MachineUnit::STATUS_IN_MAGAZZINO,
+            'serial_number' => 'SN-RAPPORTINO-002',
+            'model_name' => 'ICON 2GR',
+        ]);
+
+        $this->get(MachineUnitResource::getUrl('view', ['record' => $machine]))
+            ->assertOk()
+            ->assertDontSee('Crea rapportino');
+    }
+
     public function test_machine_unit_row_click_opens_view_not_edit(): void
     {
         $tenant = $this->loginAdmin();
