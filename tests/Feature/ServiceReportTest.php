@@ -2,15 +2,18 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\ServiceReportResource\Pages\CreateServiceReport;
 use App\Filament\Resources\ServiceReportResource\Pages\EditServiceReport;
 use App\Mail\ServiceReportMail;
 use App\Models\Customer;
 use App\Models\Material;
+use App\Models\MachineUnit;
 use App\Models\Product;
 use App\Models\ServiceReport;
 use App\Models\ServiceReportEmail;
 use App\Models\Tenant;
 use App\Models\User;
+use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
@@ -118,5 +121,47 @@ class ServiceReportTest extends TestCase
         $this->assertCount(1, $report->materialsUsed);
         $this->assertSame($material->id, $report->materialsUsed->first()->material_id);
         $this->assertSame('3.00', $report->materialsUsed->first()->quantity);
+    }
+
+    public function test_create_page_prefills_from_lavaggio_context(): void
+    {
+        $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);
+        $tech = User::create([
+            'tenant_id' => $tenant->id, 'name' => 'Tecnico Tre', 'email' => 'tech3@gifar.it', 'password' => bcrypt('password'),
+        ]);
+        $this->giveRole($tech, $tenant, 'dipendente');
+
+        $customer = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Bar Centrale']);
+        $machine = MachineUnit::create([
+            'tenant_id' => $tenant->id,
+            'current_customer_id' => $customer->id,
+            'serial_number' => 'ABC123',
+            'model_name' => 'Macchina 1',
+        ]);
+
+        $this->actingAs($tech);
+        Filament::setTenant($tenant);
+
+        Livewire::withQueryParams([
+            'customer_id' => $customer->id,
+            'machine_unit_id' => $machine->id,
+            'intervention_date' => '2026-08-05',
+            'intervention_type' => ServiceReport::TYPE_MANUTENZIONE_ORDINARIA,
+            'problem_description' => 'Lavaggio impianto',
+            'work_performed' => '5 vie + apertura',
+            'notes' => 'Filtro sostituito',
+        ])
+            ->test(CreateServiceReport::class)
+            ->assertFormSet(function (array $state) use ($customer, $machine): array {
+                return [
+                    'customer_id' => $customer->id,
+                    'machine_unit_id' => $machine->id,
+                    'intervention_date' => fn ($value) => str_starts_with((string) $value, '2026-08-05'),
+                    'intervention_type' => ServiceReport::TYPE_MANUTENZIONE_ORDINARIA,
+                    'problem_description' => 'Lavaggio impianto',
+                    'work_performed' => '5 vie + apertura',
+                    'notes' => 'Filtro sostituito',
+                ];
+            });
     }
 }
