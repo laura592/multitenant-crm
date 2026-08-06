@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Filament\Resources\MachineUnitResource;
 use App\Filament\Resources\MachineUnitResource\Pages\ListMachineUnits;
+use App\Filament\Resources\MachineUnitResource\Pages\ViewMachineUnit;
 use App\Filament\Resources\ProductResource;
 use App\Filament\Resources\ProductResource\Pages\ListProducts;
 use App\Models\Customer;
@@ -146,6 +147,34 @@ class ProductAndMachineUnitViewPageTest extends TestCase
         $this->get(MachineUnitResource::getUrl('view', ['record' => $machine]))
             ->assertOk()
             ->assertDontSee('Crea rapportino');
+    }
+
+    /**
+     * Non basta che "Sposta" sia visibile nell'header della view: verifica
+     * che l'azione condivisa (MachineUnitResource::spostaAction(), la stessa
+     * usata dal menu di riga della tabella) funzioni davvero anche montata
+     * su una pagina record invece che su un'azione di tabella.
+     */
+    public function test_sposta_action_works_from_the_view_page_header(): void
+    {
+        $tenant = $this->loginAdmin();
+        $oldCustomer = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Bar Vecchio']);
+        $newCustomer = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Bar Nuovo']);
+        $machine = MachineUnit::create([
+            'tenant_id' => $tenant->id,
+            'current_customer_id' => $oldCustomer->id,
+            'status' => MachineUnit::STATUS_INSTALLATA,
+            'serial_number' => 'SN-SPOSTA-001',
+            'model_name' => 'ICON 2GR',
+        ]);
+
+        Livewire::test(ViewMachineUnit::class, ['record' => $machine->getRouteKey()])
+            ->mountAction('sposta')
+            ->setActionData(['customer_id' => $newCustomer->id])
+            ->callMountedAction()
+            ->assertHasNoActionErrors();
+
+        $this->assertSame($newCustomer->id, $machine->fresh()->current_customer_id);
     }
 
     public function test_machine_unit_row_click_opens_view_not_edit(): void

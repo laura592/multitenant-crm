@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\MachineUnitResource\Pages;
 
 use App\Filament\Resources\MachineUnitResource;
-use App\Filament\Resources\ServiceReportResource;
 use Filament\Actions;
 use Filament\Resources\Pages\ViewRecord;
 
@@ -14,19 +13,15 @@ class ViewMachineUnit extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            // Stessa azione "Crea rapportino" gia' presente nella tabella
-            // (MachineUnitResource::table()): qui serve altrettanto, perche'
-            // il click riga ora apre la view invece dell'edit e da li' non
-            // si passa piu' dal menu azioni della tabella.
-            Actions\Action::make('create_service_report')
-                ->label('Crea rapportino')
-                ->icon('heroicon-o-document-plus')
-                ->color('success')
-                ->visible(fn () => $this->record->current_customer_id !== null)
-                ->url(fn () => ServiceReportResource::getUrl('create', [
-                    'machine_unit_id' => $this->record->id,
-                    'customer_id' => $this->record->current_customer_id,
-                ])),
+            // Stesse azioni gia' presenti nel menu di riga della tabella
+            // (MachineUnitResource::table()): da quando il click riga apre
+            // la view invece dell'edit, da qui non si passa piu' dal menu
+            // azioni della tabella per usarle.
+            MachineUnitResource::confermaCollegamentoGestionaleAction(Actions\Action::make('conferma_collegamento_gestionale')),
+            MachineUnitResource::scartaCollegamentoGestionaleAction(Actions\Action::make('scarta_collegamento_gestionale')),
+            MachineUnitResource::cercaEurekaAction(Actions\Action::make('cerca_eureka')),
+            MachineUnitResource::createServiceReportAction(Actions\Action::make('create_service_report')),
+            MachineUnitResource::spostaAction(Actions\Action::make('sposta')),
             Actions\EditAction::make(),
         ];
     }
