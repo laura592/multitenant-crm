@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\QuoteGroupResource\Pages;
 use App\Filament\Resources\QuoteGroupResource\RelationManagers\QuotesRelationManager;
 use App\Mail\QuoteGroupMail;
+use App\Models\Quote;
 use App\Models\QuoteGroup;
 use Filament\Facades\Filament;
 use Filament\Forms;
@@ -291,6 +292,12 @@ class QuoteGroupResource extends Resource
             if ($record->status === 'bozza') {
                 $record->update(['status' => 'inviato', 'sent_at' => now()]);
             }
+
+            $quotes->each(function (Quote $quote): void {
+                if ($quote->status === 'bozza') {
+                    $quote->update(['status' => 'inviato']);
+                }
+            });
 
             Notification::make()->title('Offerta globale inviata')->success()->send();
         } catch (\Throwable $e) {

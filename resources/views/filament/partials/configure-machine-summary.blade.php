@@ -8,7 +8,17 @@
         @endforeach
     </tbody>
     <tfoot>
-        <tr class="font-semibold border-t-2 border-gray-300 dark:border-white/10">
+        <tr class="border-t-2 border-gray-300 dark:border-white/10">
+            <td class="py-2 pr-4">Subtotale</td>
+            <td class="py-2 text-right whitespace-nowrap">{{ number_format($subtotal, 2, ',', '.') }} €</td>
+        </tr>
+        @if($discount > 0)
+            <tr>
+                <td class="py-1.5 pr-4">Sconto configurazione ({{ number_format($discount, 2, ',', '.') }}%)</td>
+                <td class="py-1.5 text-right whitespace-nowrap">-{{ number_format($subtotal * $discount / 100, 2, ',', '.') }} €</td>
+            </tr>
+        @endif
+        <tr class="font-semibold">
             <td class="py-2 pr-4">Totale (imponibile)</td>
             <td class="py-2 text-right whitespace-nowrap">{{ number_format($total, 2, ',', '.') }} €</td>
         </tr>

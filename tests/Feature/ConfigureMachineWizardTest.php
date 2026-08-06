@@ -419,4 +419,55 @@ class ConfigureMachineWizardTest extends TestCase
         // 6400 (macchina) + 1170 (unità obbligatoria) + 765 (S2) = 8335,00 €
         $component->assertSee('8.335,00');
     }
+
+    /**
+     * Nuova richiesta: oltre allo sconto per singola riga (gia' modificabile
+     * dal RelationManager), deve essere possibile applicare uno sconto
+     * all'intera configurazione (macchina + opzioni) direttamente dal
+     * wizard, invece di doverlo impostare riga per riga a mano dopo.
+     */
+    public function test_configuration_discount_is_applied_to_machine_and_its_options(): void
+    {
+        Livewire::test(EditQuote::class, ['record' => $this->quote->getRouteKey()])
+            ->mountAction('configureMachine')
+            ->setActionData([
+                'product_family_id' => $this->machine->product_family_id,
+                'machine_product_id' => $this->machine->id,
+                "slot_{$this->steamSlot->id}" => $this->steamOption2->id,
+                'configuration_discount' => 10,
+            ])
+            ->callMountedAction()
+            ->assertHasNoActionErrors();
+
+        $this->quote->refresh();
+
+        foreach ($this->quote->quoteProducts as $line) {
+            $this->assertSame(10, (int) $line->discount, "La riga {$line->product_id} deve avere lo sconto di configurazione applicato");
+        }
+
+        // 6400 + 1170 + 765 = 8335, -10% = 7501,50
+        $this->assertEquals(7501.50, (float) $this->quote->subtotal);
+    }
+
+    public function test_editing_a_configuration_prefills_its_current_discount(): void
+    {
+        Livewire::test(EditQuote::class, ['record' => $this->quote->getRouteKey()])
+            ->mountAction('configureMachine')
+            ->setActionData([
+                'product_family_id' => $this->machine->product_family_id,
+                'machine_product_id' => $this->machine->id,
+                'configuration_discount' => 15,
+            ])
+            ->callMountedAction()
+            ->assertHasNoActionErrors();
+
+        $baseLine = $this->quote->quoteProducts()->whereNull('parent_quote_product_id')->firstOrFail();
+
+        Livewire::test(QuoteProductsRelationManager::class, [
+            'ownerRecord' => $this->quote,
+            'pageClass' => EditQuote::class,
+        ])
+            ->mountTableAction('editMachineConfiguration', $baseLine->getKey())
+            ->assertTableActionDataSet(['configuration_discount' => 15]);
+    }
 }

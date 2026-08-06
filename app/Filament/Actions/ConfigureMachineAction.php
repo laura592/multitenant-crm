@@ -147,6 +147,15 @@ class ConfigureMachineAction
         // automaticamente, opzioni scelte) col prezzo e un totale finale.
         $steps[] = Step::make('Riepilogo')
             ->schema([
+                Forms\Components\TextInput::make('configuration_discount')
+                    ->label('Sconto configurazione (%)')
+                    ->helperText('Applicato a macchina e opzioni di questa configurazione, oltre allo sconto per riga.')
+                    ->numeric()
+                    ->minValue(0)
+                    ->maxValue(100)
+                    ->default(0)
+                    ->live()
+                    ->suffix('%'),
                 Forms\Components\Placeholder::make('summary')
                     ->hiddenLabel()
                     ->content(fn (Forms\Get $get) => static::renderSummary($get)),
@@ -190,9 +199,14 @@ class ConfigureMachineAction
                 'price' => (float) ($options->get($id)?->getCurrentPrice()?->price ?? 0),
             ]));
 
+        $subtotal = $rows->sum('price');
+        $discount = min(100, max(0, (float) ($get('configuration_discount') ?? 0)));
+
         return new \Illuminate\Support\HtmlString(view('filament.partials.configure-machine-summary', [
             'rows' => $rows,
-            'total' => $rows->sum('price'),
+            'subtotal' => $subtotal,
+            'discount' => $discount,
+            'total' => $subtotal - ($subtotal * $discount / 100),
         ])->render());
     }
 
@@ -405,21 +419,23 @@ class ConfigureMachineAction
             return;
         }
 
+        $configurationDiscount = min(100, max(0, (float) ($data['configuration_discount'] ?? 0)));
+
         $baseLine = $quote->quoteProducts()->create([
             'product_id' => $machine->id,
             'quantity' => 1,
             'price' => $machine->getCurrentPrice()?->price ?? 0,
-            'discount' => 0,
+            'discount' => $configurationDiscount,
             'tax' => 22,
         ]);
 
-        Product::whereIn('id', $selectedIds)->get()->each(function (Product $product) use ($quote, $baseLine) {
+        Product::whereIn('id', $selectedIds)->get()->each(function (Product $product) use ($quote, $baseLine, $configurationDiscount) {
             $quote->quoteProducts()->create([
                 'product_id' => $product->id,
                 'parent_quote_product_id' => $baseLine->id,
                 'quantity' => 1,
                 'price' => $product->getCurrentPrice()?->price ?? 0,
-                'discount' => 0,
+                'discount' => $configurationDiscount,
                 'tax' => 22,
             ]);
         });
@@ -455,21 +471,23 @@ class ConfigureMachineAction
         }
 
         $quote = $record->quote;
+        $configurationDiscount = min(100, max(0, (float) ($data['configuration_discount'] ?? 0)));
 
         $record->update([
             'product_id' => $machine->id,
             'price' => $machine->getCurrentPrice()?->price ?? 0,
+            'discount' => $configurationDiscount,
         ]);
 
         $record->options()->delete();
 
-        Product::whereIn('id', $selectedIds)->get()->each(function (Product $product) use ($quote, $record) {
+        Product::whereIn('id', $selectedIds)->get()->each(function (Product $product) use ($quote, $record, $configurationDiscount) {
             $quote->quoteProducts()->create([
                 'product_id' => $product->id,
                 'parent_quote_product_id' => $record->id,
                 'quantity' => 1,
                 'price' => $product->getCurrentPrice()?->price ?? 0,
-                'discount' => 0,
+                'discount' => $configurationDiscount,
                 'tax' => 22,
             ]);
         });
@@ -522,6 +540,7 @@ class ConfigureMachineAction
         $data = [
             'product_family_id' => $machine->product_family_id,
             'machine_product_id' => $machine->id,
+            'configuration_discount' => $record->discount,
         ];
 
         $selectedIds = $record->options()->pluck('product_id');
