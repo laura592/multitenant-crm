@@ -70,7 +70,9 @@ class ServiceReportGestionaleSyncTest extends TestCase
     public function test_send_succeeds_and_includes_destinazione_when_billed_to_another_customer(): void
     {
         Http::fake([
-            '*/schedelavoro/*' => Http::response(['id' => 999, 'numero_doc' => 42], 201),
+            // 'id_eureka', non 'id': la risposta reale identifica il documento
+            // cosi' (vedi la stessa nota in EurekaClient.php / GET /schedelavoro/17264).
+            '*/schedelavoro/*' => Http::response(['id_eureka' => 999, 'numero_doc' => 42], 201),
         ]);
 
         $tenant = $this->makeTenantWithEurekaCredentials();
@@ -116,7 +118,7 @@ class ServiceReportGestionaleSyncTest extends TestCase
     public function test_send_includes_dettaglio_built_from_materials_used(): void
     {
         Http::fake([
-            '*/schedelavoro/*' => Http::response(['id' => 1000, 'numero_doc' => 43], 201),
+            '*/schedelavoro/*' => Http::response(['id_eureka' => 1000, 'numero_doc' => 43], 201),
         ]);
 
         $tenant = $this->makeTenantWithEurekaCredentials();

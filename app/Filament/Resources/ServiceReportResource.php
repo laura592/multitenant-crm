@@ -5,13 +5,13 @@ namespace App\Filament\Resources;
 use App\Filament\Forms\Components\SignaturePad;
 use App\Filament\Forms\CustomerContactFields;
 use App\Filament\Resources\ServiceReportResource\Pages;
+use App\Jobs\SendServiceReportToGestionaleJob;
 use App\Mail\ServiceReportMail;
 use App\Models\Customer;
 use App\Models\Material;
 use App\Models\MachineUnit;
 use App\Models\Product;
 use App\Models\ServiceReport;
-use App\Support\Gestionale\EurekaClient;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -194,11 +194,13 @@ class ServiceReportResource extends Resource
                         ->formatStateUsing(fn (?string $state) => match ($state) {
                             'sent' => 'Inviato',
                             'failed' => 'Fallito',
+                            'queued' => 'In coda',
                             default => 'Non inviato',
                         })
                         ->color(fn (?string $state) => match ($state) {
                             'sent' => 'success',
                             'failed' => 'danger',
+                            'queued' => 'warning',
                             default => 'gray',
                         }),
                     TextEntry::make('gestionale_synced_at')->label('Ultimo invio riuscito')->dateTime('d/m/Y H:i')->placeholder('—'),
@@ -353,8 +355,12 @@ class ServiceReportResource extends Resource
                         ->relationship(
                             'machineUnit',
                             'serial_number',
-                            modifyQueryUsing: fn (Builder $query, Forms\Get $get) => $query
-                                ->where('current_customer_id', $get('customer_id')),
+                            // Se il cliente e' gia' selezionato filtriamo per lui, ma la
+                            // matricola si puo' anche scegliere per prima (vedi
+                            // afterStateUpdated sotto, che poi compila il cliente).
+                            modifyQueryUsing: fn (Builder $query, Forms\Get $get) => $get('customer_id')
+                                ? $query->where('current_customer_id', $get('customer_id'))
+                                : $query,
                         )
                         ->getOptionLabelFromRecordUsing(fn ($record) => $record->display_name.' — '.$record->serial_number)
                         ->searchable()
@@ -363,10 +369,11 @@ class ServiceReportResource extends Resource
                         // Prefill arrivando dall'azione "Crea rapportino" su un
                         // macchinario (MachineUnitResource).
                         ->default(fn () => request()->query('machine_unit_id'))
-                        ->disabled(fn (Forms\Get $get) => blank($get('customer_id')))
                         // Scegliere qui la matricola tracciata compila da sola modello
                         // e matricola sotto: prima erano tre campi indipendenti da
-                        // riempire a mano (facile sbagliare/dimenticarne uno).
+                        // riempire a mano (facile sbagliare/dimenticarne uno). Compila
+                        // anche il cliente, cosi' si puo' partire dalla matricola senza
+                        // doverlo selezionare prima a mano.
                         ->afterStateUpdated(function (Forms\Set $set, ?string $state) {
                             if ($state === null) {
                                 return;
@@ -375,8 +382,12 @@ class ServiceReportResource extends Resource
                             $machineUnit = MachineUnit::find($state);
                             $set('machine_product_id', $machineUnit?->product_id);
                             $set('machine_serial_number', $machineUnit?->serial_number);
+
+                            if ($machineUnit?->current_customer_id) {
+                                $set('customer_id', $machineUnit->current_customer_id);
+                            }
                         })
-                        ->helperText('Solo le macchine installate presso il cliente selezionato. Sceglierla compila da sola modello e matricola qui sotto.'),
+                        ->helperText('Scegliendo la matricola si compilano da soli cliente, modello e matricola qui sotto.'),
                     Forms\Components\Placeholder::make('fatturare_a')
                         ->label('Fatturare a')
                         ->content(fn (Forms\Get $get) => self::resolvePayer($get)?->full_name ?? '—'),
@@ -462,7 +473,11 @@ class ServiceReportResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->defaultSort('intervention_date', 'desc')
+            // Tiebreak su created_at: senza, righe con la stessa
+            // intervention_date (frequente, piu' rapportini nello stesso
+            // giorno) non hanno un ordine stabile tra un caricamento e
+            // l'altro della pagina.
+            ->defaultSort(fn ($query) => $query->orderByDesc('intervention_date')->orderByDesc('created_at'))
             ->columns([
                 Tables\Columns\TextColumn::make('number')->label('Numero')->searchable(),
                 Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->searchable(),
@@ -478,7 +493,7 @@ class ServiceReportResource extends Resource
                         ServiceReport::TYPE_GARANZIA => 'Garanzia',
                         default => $state,
                     }),
-                Tables\Columns\TextColumn::make('intervention_date')->label('Data')->date(),
+                Tables\Columns\TextColumn::make('intervention_date')->label('Data')->date()->sortable(),
                 Tables\Columns\TextColumn::make('status')
                     ->label('Stato')
                     ->badge()
@@ -558,14 +573,23 @@ class ServiceReportResource extends Resource
                             }
                         }),
                     Tables\Actions\Action::make('invia_gestionale')
-                        ->label(fn (ServiceReport $record) => $record->gestionale_sync_status === 'sent' ? 'Aggiorna su gestionale' : 'Invia a gestionale')
+                        ->label(fn (ServiceReport $record) => match ($record->gestionale_sync_status) {
+                            'sent' => 'Aggiorna su gestionale',
+                            'queued' => 'In coda…',
+                            default => 'Invia a gestionale',
+                        })
                         ->icon('heroicon-o-arrow-up-tray')
+                        ->disabled(fn (ServiceReport $record): bool => $record->gestionale_sync_status === 'queued')
                         ->visible(fn (ServiceReport $record): bool => in_array($record->status, ['firmato', 'inviato'], true) && $record->tenant->hasGestionaleEurekaCredentials())
                         ->requiresConfirmation()
-                        ->modalDescription('Invia questo rapportino a Eureka come scheda lavoro. Sono dati di produzione: non esiste un ambiente di test.')
+                        ->modalDescription('Invia questo rapportino a Eureka come scheda lavoro. Non è possibile cancellare un documento una volta creato, nemmeno in ambiente di test.')
                         ->action(function (ServiceReport $record) {
                             $record->load(['customer.billingCustomer', 'machineProduct', 'machineUnit.product', 'machineUnit.billingCustomer', 'materialsUsed.material', 'tenant']);
 
+                            // Validato subito per un errore istantaneo (dati
+                            // mancanti non richiedono di aspettare la coda);
+                            // il job lo ri-valida comunque prima di inviare,
+                            // nel caso qualcosa cambi nel frattempo.
                             $errors = $record->gestionaleValidationErrors();
 
                             if ($errors !== []) {
@@ -578,26 +602,19 @@ class ServiceReportResource extends Resource
                                 return;
                             }
 
-                            try {
-                                $client = new EurekaClient($record->tenant);
-                                $result = $client->inviaSchedaLavoro($record->toGestionalePayload(), "CRM-{$record->id}");
+                            // L'invio vero e proprio (chiamata HTTP a Eureka,
+                            // fino a 15s contro un'API vecchia senza ambiente
+                            // di test) va in coda invece di bloccare questa
+                            // richiesta: l'esito arriva come notifica appena
+                            // il worker l'ha processato.
+                            $record->update(['gestionale_sync_status' => 'queued']);
+                            SendServiceReportToGestionaleJob::dispatch($record, auth()->user());
 
-                                $record->update([
-                                    'gestionale_scheda_lavoro_id' => $result['id'] ?? null,
-                                    'gestionale_sync_status' => 'sent',
-                                    'gestionale_sync_error' => null,
-                                    'gestionale_synced_at' => now(),
-                                ]);
-
-                                Notification::make()->title('Inviato a gestionale')->success()->send();
-                            } catch (\Throwable $e) {
-                                $record->update([
-                                    'gestionale_sync_status' => 'failed',
-                                    'gestionale_sync_error' => $e->getMessage(),
-                                ]);
-
-                                Notification::make()->title('Invio a gestionale fallito')->body($e->getMessage())->danger()->send();
-                            }
+                            Notification::make()
+                                ->title('Invio a gestionale in coda')
+                                ->body('Ti avviseremo qui non appena Eureka avra\' risposto.')
+                                ->success()
+                                ->send();
                         }),
                     Tables\Actions\EditAction::make(),
                     Tables\Actions\DeleteAction::make(),

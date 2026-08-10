@@ -200,7 +200,8 @@ class ServiceReport extends Model
             'sl_articolo' => ['id_eureka' => $articleProduct?->gestionale_code],
             // Da doc fornitore: usare sempre id=2 ("FISSA"). In produzione l'id 2
             // e' pero' "MAN"/MANODOPERA STD (nessuna tariffa "FISSA" esiste
-            // davvero) — discrepanza segnalata, non ancora chiarita col fornitore.
+            // davvero) — confermato dal fornitore (2026-08-06) che e' solo una
+            // svista di nome nella loro doc, l'id da usare resta sempre 2.
             'sl_tariffa' => ['id_eureka' => 2],
             'sl_sintomo' => $this->problem_description,
             'sl_lavorazione' => $this->work_performed,
