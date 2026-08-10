@@ -3,6 +3,8 @@
 namespace App\Support;
 
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Pool;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
@@ -49,6 +51,71 @@ class EurekaClient
         }
 
         return $payload;
+    }
+
+    /**
+     * Come getServiceReport() ma per molti id in gruppi concorrenti invece
+     * che uno alla volta (stesso principio di
+     * Gestionale\EurekaClient::pooledGet) — era il vero collo di bottiglia
+     * di `eureka:import-service-reports --with-detail`: ~2s/chiamata x
+     * migliaia di rapportini in sequenza. Best-effort come le altre
+     * chiamate pooled: un id fallito o con risposta non valida resta
+     * semplicemente assente dal risultato invece di interrompere l'intero
+     * import.
+     *
+     * Concorrenza volutamente bassa (5, non 15 come le altre chiamate
+     * pooled) e pausa tra i gruppi: un giro su tutto lo storico (~3600
+     * rapportini, 2026-08-07) ha fatto crashare Eureka due volte facendo
+     * girare gruppi da 15 senza pause — il fornitore ha poi confermato che
+     * era proprio il volume di chiamate a farla cadere. Ogni GET dettaglio
+     * pesa di piu' lato loro delle altre chiamate pooled (ricerca semplice),
+     * quindi qui serve piu' margine anche a fronte dei limiti alzati dal
+     * fornitore lato loro.
+     *
+     * @param  array<int, int>  $ids
+     * @return array<int, array<string, mixed>> id => dettaglio (assente se fallito)
+     */
+    public function pooledGetServiceReports(array $ids, int $concurrency = 5, int $pauseMicroseconds = 300_000): array
+    {
+        $results = [];
+        $chunks = array_chunk(array_values(array_unique($ids)), $concurrency);
+
+        foreach ($chunks as $index => $chunk) {
+            if ($index > 0 && $pauseMicroseconds > 0) {
+                usleep($pauseMicroseconds);
+            }
+
+            try {
+                $responses = Http::pool(function (Pool $pool) use ($chunk) {
+                    foreach ($chunk as $id) {
+                        $pool->as((string) $id)
+                            ->baseUrl(rtrim($this->baseUrl, '/'))
+                            ->withBasicAuth($this->username, $this->password)
+                            ->acceptJson()
+                            ->timeout(10)
+                            ->get('/schedelavoro/'.rawurlencode((string) $id));
+                    }
+                });
+            } catch (\Throwable) {
+                continue;
+            }
+
+            foreach ($chunk as $id) {
+                $response = $responses[$id] ?? null;
+
+                if (! $response instanceof Response || ! $response->successful()) {
+                    continue;
+                }
+
+                $payload = $response->json();
+
+                if (is_array($payload) && isset($payload['id_eureka'])) {
+                    $results[$id] = $payload;
+                }
+            }
+        }
+
+        return $results;
     }
 
     /**

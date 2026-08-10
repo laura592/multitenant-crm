@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Jobs\GeocodeCustomerJob;
 use App\Models\Customer;
 use App\Models\MachineUnit;
 use App\Models\Material;
@@ -11,7 +12,6 @@ use App\Models\ServiceReportMaterial;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Support\EurekaClient;
-use App\Support\Geocoder;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -24,8 +24,11 @@ use Illuminate\Support\Facades\DB;
  * - Crea automaticamente clienti e prodotti mancanti quando Eureka li fornisce.
  * - Prefers il tecnico Alessandro Signorato come fallback se non viene passato
  *   un tecnico esplicito.
- * - Con --with-detail fa anche GET /schedelavoro/(id) per ogni record (lento:
- *   ~2s/chiamata) per importare sl_sintomo, sl_lavorazione e righe dettaglio.
+ * - Con --with-detail fa anche GET /schedelavoro/(id) per ogni record, per
+ *   importare sl_sintomo, sl_lavorazione e righe dettaglio — in gruppi
+ *   concorrenti (vedi EurekaClient::pooledGetServiceReports), non piu' una
+ *   chiamata alla volta (~2s/call in sequenza era il vero collo di
+ *   bottiglia su import di migliaia di rapportini).
  */
 class ImportEurekaServiceReports extends Command
 {
@@ -36,7 +39,7 @@ class ImportEurekaServiceReports extends Command
         {--to=           : Data fine periodo YYYY-MM-DD (default: oggi)}
         {--technician=   : Email o UUID del tecnico da assegnare ai rapportini importati}
         {--limit=        : Numero massimo di rapportini da importare}
-        {--with-detail   : Recupera anche sl_sintomo/sl_lavorazione/dettaglio con GET singolo (lento)}
+        {--with-detail   : Recupera anche sl_sintomo/sl_lavorazione/dettaglio (una chiamata extra per rapportino, in pool)}
         {--dry-run       : Mostra cosa verrebbe fatto senza scrivere nulla}';
 
     protected $description = 'Importa/aggiorna i rapportini storici dal gestionale Eureka';
@@ -142,6 +145,36 @@ class ImportEurekaServiceReports extends Command
             ->pluck('id', 'gestionale_code')
             ->all();
 
+        // Pre-carica i rapportini gia' importati (per eureka_service_report_id)
+        // per evitare una query di lookup per ogni riga del ciclo sotto.
+        $existingReportsMap = ServiceReport::query()
+            ->where('tenant_id', $tenant->id)
+            ->whereIn('eureka_service_report_id', $summaries->pluck('id')->map(fn ($id) => (int) $id)->all())
+            ->get()
+            ->keyBy('eureka_service_report_id');
+
+        // Recupera tutti i dettagli in gruppi concorrenti invece che uno alla
+        // volta: era il vero collo di bottiglia di --with-detail (~2s/call in
+        // sequenza su migliaia di rapportini, vedi EurekaClient::pooledGetServiceReports).
+        $detailsById = [];
+        if ($withDetail) {
+            $detailsById = $this->eureka->pooledGetServiceReports(
+                $summaries->pluck('id')->map(fn ($id) => (int) $id)->all(),
+            );
+
+            $missing = $summaries->count() - count($detailsById);
+            if ($missing > 0) {
+                $this->warn("Dettaglio non recuperato per {$missing} rapportini (errore o risposta non valida) — importati solo dai dati di riepilogo.");
+            }
+        }
+
+        // Cache in memoria per prodotti/materiali risolti in questo ciclo:
+        // resolveOrCreateProduct/resolveOrCreateMaterial altrimenti ri-
+        // interrogano il DB per ogni riga anche quando la chiave e' identica
+        // a una gia' vista poco prima (es. stessa macchina su piu' rapportini).
+        $productCache = [];
+        $materialCache = [];
+
         $created = 0;
         $updated = 0;
         $unchanged = 0;
@@ -153,15 +186,7 @@ class ImportEurekaServiceReports extends Command
                 continue;
             }
 
-            // Recupera dettaglio solo se richiesto (lento: ~2s/call)
-            $detail = null;
-            if ($withDetail) {
-                try {
-                    $detail = $this->eureka->getServiceReport($eurekaId);
-                } catch (\Throwable $e) {
-                    $this->warn("Errore lettura dettaglio #{$eurekaId}: {$e->getMessage()}");
-                }
-            }
+            $detail = $detailsById[$eurekaId] ?? null;
 
             // Risolve cliente: dal ciclo --customer (già nel summary) o dalla mappa,
             // creando eventualmente il cliente locale se Eureka lo identifica.
@@ -182,7 +207,7 @@ class ImportEurekaServiceReports extends Command
                 'codice' => (($detail['sl_articolo']['codice'] ?? null) ?: ($summary['codice_articolo'] ?? null)),
                 'descr1' => (($detail['sl_articolo']['descr1'] ?? null) ?: ($summary['descr_articolo_1'] ?? null)),
                 'descrizione' => (($detail['sl_articolo']['descr1'] ?? null) ?: ($summary['descr_articolo_1'] ?? null)),
-            ], $dryRun);
+            ], $productCache, $dryRun);
 
             $machineSerial = $this->normalizeText(
                 ($detail ? ($detail['sl_matricola'] ?? null) : null)
@@ -214,17 +239,14 @@ class ImportEurekaServiceReports extends Command
                 'problem_description' => $detail
                     ? $this->normalizeText($detail['sl_sintomo'] ?? null)
                     : null,
-                'work_performed' => ($detail
+                'work_performed' => $detail
                     ? $this->normalizeText($detail['sl_lavorazione'] ?? null)
-                    : null) ?: 'Importato da Eureka',
+                    : null,
                 'status' => $this->mapStatus($detail['stato_documento'] ?? $summary['stato_documento'] ?? null),
                 'notes' => $detail ? $this->buildNotes($detail) : null,
             ];
 
-            $existing = ServiceReport::query()
-                ->where('tenant_id', $tenant->id)
-                ->where('eureka_service_report_id', $eurekaId)
-                ->first();
+            $existing = $existingReportsMap->get($eurekaId);
 
             if ($existing) {
                 $existing->fill($payload);
@@ -238,10 +260,10 @@ class ImportEurekaServiceReports extends Command
                 $updated++;
 
                 if (! $dryRun) {
-                    DB::transaction(function () use ($tenant, $existing, $detail): void {
+                    DB::transaction(function () use ($tenant, $existing, $detail, &$materialCache): void {
                         $existing->save();
                         if ($detail) {
-                            $this->syncDetailRows($tenant, $existing, $detail);
+                            $this->syncDetailRows($tenant, $existing, $detail, $materialCache);
                         }
                     });
                 }
@@ -251,12 +273,12 @@ class ImportEurekaServiceReports extends Command
                 $created++;
 
                 if (! $dryRun) {
-                    DB::transaction(function () use ($tenant, $payload, $detail, $number): void {
+                    DB::transaction(function () use ($tenant, $payload, $detail, $number, &$materialCache): void {
                         $report = new ServiceReport($payload);
                         $report->number = $number;
                         $report->save();
                         if ($detail) {
-                            $this->syncDetailRows($tenant, $report, $detail);
+                            $this->syncDetailRows($tenant, $report, $detail, $materialCache);
                         }
                     });
                 }
@@ -345,22 +367,14 @@ class ImportEurekaServiceReports extends Command
                 return $customerMap[$code];
             }
 
-            $existing = Customer::query()
-                ->where('tenant_id', $tenant->id)
-                ->where('gestionale_code', $code)
-                ->first();
+            // resolveOrCreateCustomer() gia' controlla l'esistenza prima di
+            // creare — niente bisogno di una query di lookup separata qui
+            // solo per poi ripeterla dentro quel metodo.
+            $resolved = $this->resolveOrCreateCustomer($tenant, $code, $row, $detail, $dryRun);
+            if ($resolved) {
+                $customerMap[$code] = $resolved->id;
 
-            if ($existing) {
-                $customerMap[$code] = $existing->id;
-
-                return $existing->id;
-            }
-
-            $created = $this->resolveOrCreateCustomer($tenant, $code, $row, $detail, $dryRun);
-            if ($created) {
-                $customerMap[$code] = $created->id;
-
-                return $created->id;
+                return $resolved->id;
             }
         }
 
@@ -403,7 +417,11 @@ class ImportEurekaServiceReports extends Command
             ...$address,
         ]);
 
-        $this->geocodeIfPossible($customer);
+        // Geocodifica in coda: era una usleep(1.1s) sincrona per ogni cliente
+        // nuovo (rate-limit di Nominatim, vedi GeocodeCustomerJob), che
+        // sommata su un import che crea molti clienti aggiungeva minuti
+        // interi al comando. Il worker la processa fuori da questo ciclo.
+        GeocodeCustomerJob::dispatch($customer);
 
         return $customer;
     }
@@ -438,35 +456,7 @@ class ImportEurekaServiceReports extends Command
         ];
     }
 
-    /**
-     * Eureka non fornisce coordinate: senza questo, i clienti creati da qui
-     * (source gestionale) restano invisibili a "Cliente piu' vicino"
-     * (App\Filament\Pages\ClientiVicini, filtra su lat/lng non nulle) finche'
-     * qualcuno non passa a mano dal form o non lancia
-     * customers:geocode-coordinates. Se extractCustomerAddress() non trova
-     * nulla di utile (i nomi dei campi Eureka sono un'ipotesi, non
-     * documentati) semplicemente non succede nulla, come oggi.
-     */
-    private function geocodeIfPossible(Customer $customer): void
-    {
-        if (blank($customer->city) && blank($customer->postal_code)) {
-            return;
-        }
-
-        $coords = Geocoder::geocodeBestEffort($customer->geocodingAddressCandidates());
-        usleep(1_100_000);
-
-        if (! $coords) {
-            return;
-        }
-
-        $customer->forceFill([
-            'latitude' => $coords['lat'],
-            'longitude' => $coords['lng'],
-        ])->save();
-    }
-
-    private function resolveOrCreateProduct(Tenant $tenant, array $data, bool $dryRun = false): ?Product
+    private function resolveOrCreateProduct(Tenant $tenant, array $data, array &$productCache, bool $dryRun = false): ?Product
     {
         if (! is_array($data)) {
             return null;
@@ -481,6 +471,14 @@ class ImportEurekaServiceReports extends Command
             return null;
         }
 
+        // Stessa macchina spesso vista su piu' rapportini nello stesso
+        // import: senza cache, ogni riga ri-interroga il DB per un prodotto
+        // gia' risolto poco prima nello stesso ciclo.
+        $cacheKey = $articleId.'|'.($code ?? '');
+        if (isset($productCache[$cacheKey])) {
+            return $productCache[$cacheKey];
+        }
+
         $existing = Product::query()
             ->where('tenant_id', $tenant->id)
             ->when($articleId > 0, fn ($q) => $q->where('eureka_article_id', $articleId))
@@ -488,13 +486,13 @@ class ImportEurekaServiceReports extends Command
             ->first();
 
         if ($existing) {
-            return $existing;
+            return $productCache[$cacheKey] = $this->backfillProductEurekaCode($existing, $articleId, $name, $description, $dryRun);
         }
 
         $sku = $code ?: 'eureka-'.$articleId;
         $existingBySku = Product::query()->where('sku', $sku)->first();
         if ($existingBySku) {
-            return $existingBySku;
+            return $productCache[$cacheKey] = $this->backfillProductEurekaCode($existingBySku, $articleId, $name, $description, $dryRun);
         }
 
         if ($dryRun) {
@@ -503,21 +501,78 @@ class ImportEurekaServiceReports extends Command
             return null;
         }
 
-        return Product::create([
+        return $productCache[$cacheKey] = Product::create([
             'tenant_id' => $tenant->id,
             'sku' => $sku,
             'type' => 'service',
             'name' => $name,
             'description' => $description,
             'eureka_article_id' => $articleId > 0 ? $articleId : null,
+            'gestionale_code' => $articleId > 0 ? $articleId : null,
             'source' => 'terzo',
         ]);
     }
 
     /**
-     * @param array<string, mixed> $detail
+     * I prodotti gia' presenti a catalogo (es. dal dump di produzione, matchati
+     * per SKU) non hanno mai eureka_article_id/gestionale_code: senza questo
+     * backfill restano orfani del codice Eureka anche dopo essere stati
+     * agganciati a un rapportino importato, bloccando per sempre l'invio a
+     * gestionale di quel rapportino (vedi ServiceReport::gestionaleValidationErrors()).
+     *
+     * Aggiorna anche il nome se era rimasto al segnaposto "Prodotto Eureka":
+     * succede quando il PRIMO rapportino che ha creato questo prodotto veniva
+     * da un summary senza dettaglio (niente sl_articolo.descr1) — un run
+     * successivo con --with-detail su un altro rapportino dello stesso
+     * articolo porta il nome vero, ma senza questo aggiornamento il prodotto
+     * (gia' creato) restava genericamente etichettato per sempre, anche
+     * quando un dettaglio migliore era disponibile nel frattempo. Verificato
+     * dal vivo su articolo Eureka 190 ("IMPIANTO ALLA SPINA 2 VIE" /
+     * "SPINA 2 VIE"): presente su Eureka con nome reale, ma creato qui come
+     * "Prodotto Eureka" perche' il primo summary incontrato non aveva
+     * descr_articolo_1.
      */
-    private function syncDetailRows(Tenant $tenant, ServiceReport $report, array $detail): void
+    private function backfillProductEurekaCode(Product $product, int $articleId, ?string $name, ?string $description, bool $dryRun): Product
+    {
+        $dirty = [];
+
+        if ($articleId > 0) {
+            if (blank($product->eureka_article_id)) {
+                $dirty['eureka_article_id'] = $articleId;
+            }
+            if (blank($product->gestionale_code)) {
+                $dirty['gestionale_code'] = $articleId;
+            }
+        }
+
+        if ($product->name === 'Prodotto Eureka' && $name && $name !== 'Prodotto Eureka') {
+            $dirty['name'] = $name;
+
+            if (blank($product->description) && $description) {
+                $dirty['description'] = $description;
+            }
+        }
+
+        if (empty($dirty)) {
+            return $product;
+        }
+
+        if ($dryRun) {
+            $this->line("  <comment>[DRY RUN] Prodotto \"{$product->name}\" riceverebbe: ".implode(', ', array_keys($dirty))."</comment>");
+
+            return $product;
+        }
+
+        $product->update($dirty);
+
+        return $product;
+    }
+
+    /**
+     * @param array<string, mixed> $detail
+     * @param array<string, Material> $materialCache
+     */
+    private function syncDetailRows(Tenant $tenant, ServiceReport $report, array $detail, array &$materialCache): void
     {
         $report->materialsUsed()->delete();
         $createdMaterialIds = [];
@@ -532,7 +587,7 @@ class ImportEurekaServiceReports extends Command
                 'codice' => $row['codice'] ?? null,
                 'descr1' => $row['descrizione'] ?? null,
                 'descrizione' => $row['descrizione'] ?? null,
-            ]);
+            ], $materialCache);
 
             if (! $material) {
                 continue;
@@ -549,10 +604,13 @@ class ImportEurekaServiceReports extends Command
             ]);
         }
 
-        $this->syncArticleMentionsFromNotes($tenant, $report, $detail['note'] ?? null, $createdMaterialIds);
+        $this->syncArticleMentionsFromNotes($tenant, $report, $detail['note'] ?? null, $createdMaterialIds, $materialCache);
     }
 
-    private function syncArticleMentionsFromNotes(Tenant $tenant, ServiceReport $report, mixed $note, array $createdMaterialIds): void
+    /**
+     * @param array<string, Material> $materialCache
+     */
+    private function syncArticleMentionsFromNotes(Tenant $tenant, ServiceReport $report, mixed $note, array $createdMaterialIds, array &$materialCache): void
     {
         $text = $this->normalizeText($note);
         if ($text === null || $text === '') {
@@ -578,7 +636,7 @@ class ImportEurekaServiceReports extends Command
                     'codice' => $mention['code'],
                     'descr1' => $mention['code'],
                     'descrizione' => $mention['code'],
-                ]);
+                ], $materialCache);
 
                 if (! $material || in_array($material->id, $createdMaterialIds, true)) {
                     continue;
@@ -641,8 +699,9 @@ class ImportEurekaServiceReports extends Command
      * Product tramite resolveOrCreateProduct(), non lo tocca questo metodo.
      *
      * @param array<string, mixed> $data
+     * @param array<string, Material> $materialCache
      */
-    private function resolveOrCreateMaterial(Tenant $tenant, array $data): ?Material
+    private function resolveOrCreateMaterial(Tenant $tenant, array $data, array &$materialCache): ?Material
     {
         $articleId = (int) ($data['id_eureka'] ?? 0);
         $code = $this->normalizeText($data['codice'] ?? null);
@@ -652,6 +711,13 @@ class ImportEurekaServiceReports extends Command
             return null;
         }
 
+        // Stesso ricambio spesso ripetuto su piu' rapportini/righe nello
+        // stesso import: vedi la stessa cache su resolveOrCreateProduct().
+        $cacheKey = $articleId.'|'.($code ?? '');
+        if (isset($materialCache[$cacheKey])) {
+            return $materialCache[$cacheKey];
+        }
+
         $existing = Material::query()
             ->where('tenant_id', $tenant->id)
             ->when($articleId > 0, fn ($q) => $q->where('gestionale_code', $articleId))
@@ -659,16 +725,16 @@ class ImportEurekaServiceReports extends Command
             ->first();
 
         if ($existing) {
-            return $existing;
+            return $materialCache[$cacheKey] = $existing;
         }
 
         $materialCode = $code ?: 'eureka-'.$articleId;
         $existingByCode = Material::query()->where('code', $materialCode)->first();
         if ($existingByCode) {
-            return $existingByCode;
+            return $materialCache[$cacheKey] = $existingByCode;
         }
 
-        return Material::create([
+        return $materialCache[$cacheKey] = Material::create([
             'tenant_id' => $tenant->id,
             'source' => Material::SOURCE_EUREKA,
             'code' => $materialCode,
@@ -764,9 +830,11 @@ class ImportEurekaServiceReports extends Command
 
     private function mapStatus(mixed $statoDocumento): string
     {
-        // stato_documento=10 → documento aperto/in corso → bozza
-        // altrimenti → inviato (il cliente ha già il documento)
-        return (int) $statoDocumento === 10 ? 'bozza' : 'inviato';
+        // stato_documento=10 → stato_documento_descr "Archiviato" (verificato
+        // dal vivo su tutto lo storico importato, es. GET /schedelavoro/16976)
+        // → documento chiuso/definitivo → inviato (il cliente ha già il documento).
+        // Qualsiasi altro valore (es. 3="Ricevuto") → non ancora archiviato → bozza.
+        return (int) $statoDocumento === 10 ? 'inviato' : 'bozza';
     }
 
     /**

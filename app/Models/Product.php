@@ -36,6 +36,7 @@ class Product extends Model
         'description',
         'image',
         'source',
+        'eureka_article_id',
         'gestionale_code',
         'gestionale_suggested_code',
         'gestionale_suggested_label',
