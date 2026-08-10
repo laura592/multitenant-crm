@@ -126,7 +126,7 @@ class CustomerGestionaleReviewNotificationTest extends TestCase
         Filament::setTenant($tenant);
 
         Livewire::test(EditCustomer::class, ['record' => $customer->getRouteKey()])
-            ->fillForm(['emails' => ['item-1' => ['email' => 'nuova@barsenzacodice.it']]])
+            ->fillForm(['emails' => ['item-1' => ['email' => 'nuova@gmail.com']]])
             ->call('save')
             ->assertHasNoFormErrors();
 

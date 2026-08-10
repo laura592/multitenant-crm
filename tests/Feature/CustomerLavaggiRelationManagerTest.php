@@ -6,6 +6,7 @@ use App\Filament\Resources\CustomerResource\Pages\ViewCustomer;
 use App\Filament\Resources\CustomerResource\RelationManagers\LavaggiRelationManager;
 use App\Models\Customer;
 use App\Models\Lavaggio;
+use App\Models\MachineUnit;
 use App\Models\Tenant;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -25,14 +26,20 @@ class CustomerLavaggiRelationManagerTest extends TestCase
         $this->giveRole($user, $tenant, 'admin');
 
         $customer = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Bar Test Lavaggi']);
+        MachineUnit::create([
+            'tenant_id' => $tenant->id,
+            'current_customer_id' => $customer->id,
+            'serial_number' => 'LAV-001',
+            'model_name' => 'Impianto acqua',
+        ]);
 
         $response = $this->actingAs($user)->get("/admin/{$tenant->slug}/customers/{$customer->id}");
 
         $response->assertOk();
         // I relation manager sono lazy-loaded via x-intersect: il markup della
-        // tabella non e' nell'HTML iniziale (arriva via AJAX), ma il nome del
-        // componente Livewire e' gia' presente nel wire:snapshot della pagina.
-        $response->assertSee('lavaggi-relation-manager');
+        // tabella non e' nell'HTML iniziale (arriva via AJAX), ma la tab e'
+        // gia' registrata e visibile (solo il contenuto arriva dopo).
+        $response->assertSee('Storico lavaggi');
     }
 
     public function test_relation_manager_lists_lavaggi_with_billing_target(): void
