@@ -5,6 +5,7 @@
         'green' => ['border' => '#16a34a', 'bg' => '#f0fdf4', 'text' => '#166534'],
         'amber' => ['border' => '#d97706', 'bg' => '#fffbeb', 'text' => '#92400e'],
         'blue' => ['border' => '#316eb4', 'bg' => '#eff6ff', 'text' => '#1e40af'],
+        'red' => ['border' => '#dc2626', 'bg' => '#fef2f2', 'text' => '#991b1b'],
         'gray' => ['border' => '#71717a', 'bg' => '#fafafa', 'text' => '#3f3f46'],
     ];
     $c = $palette[$color] ?? $palette['gray'];

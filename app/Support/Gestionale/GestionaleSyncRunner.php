@@ -34,7 +34,7 @@ class GestionaleSyncRunner
     }
 
     /**
-     * @return array{autofilled: array, diffs: array, customerLinks: array, productLinks: array, machineUnitLinks: array, newMachines: array}
+     * @return array{autofilled: array, diffs: array, customerLinks: array, productLinks: array, machineUnitLinks: array, newMachines: array, eurekaUnreachable: bool}
      */
     public function run(): array
     {
@@ -47,6 +47,11 @@ class GestionaleSyncRunner
             'productLinks' => $this->proposeProductLinks(),
             'machineUnitLinks' => $this->proposeMachineUnitLinks(),
             'newMachines' => $this->importInstalledMachines(),
+            // Un'interruzione di Eureka per tutta la durata della sync
+            // produce comunque array vuoti da ogni metodo sopra (best-effort
+            // by design) — indistinguibile da "niente da segnalare" senza
+            // questo controllo separato. Vedi EurekaClient::hadCompleteFailure().
+            'eurekaUnreachable' => $this->client->hadCompleteFailure(),
         ];
     }
 
@@ -180,36 +185,53 @@ class GestionaleSyncRunner
             ->pluck('gestionale_code')
             ->all();
 
-        Customer::query()
+        $candidates = Customer::query()
             ->where('tenant_id', $this->tenant->id)
             ->whereNull('gestionale_code')
             ->whereNull('gestionale_suggested_code')
-            ->each(function (Customer $customer) use (&$proposals, $usedCodes) {
-                if (filled($customer->vat_number)) {
-                    $matches = $this->client->cercaClientePerPiva($customer->vat_number);
-                } elseif (filled($customer->company_name)) {
-                    $matches = array_values(array_filter(
-                        $this->client->cercaClienti($customer->company_name),
-                        fn (array $c) => mb_strtolower(trim($c['rag_sociale_1'] ?? '')) === mb_strtolower(trim($customer->company_name)),
-                    ));
-                } else {
-                    return;
-                }
+            ->get()
+            ->filter(fn (Customer $customer) => filled($customer->vat_number) || filled($customer->company_name));
 
-                $matches = array_values(array_filter(
-                    $matches,
-                    fn (array $c) => ! in_array((int) ($c['id'] ?? 0), $usedCodes, true),
+        // Una ricerca anagrafica per cliente, tutte in gruppi concorrenti
+        // invece che una alla volta — stesso principio di
+        // reverifyLinkedCustomers()/importInstalledMachines(): su liste
+        // lunghe di clienti senza collegamento era altrettanto il vero
+        // collo di bottiglia.
+        $searchParams = $candidates->mapWithKeys(fn (Customer $customer) => [
+            $customer->id => filled($customer->vat_number)
+                ? ['piva' => $customer->vat_number]
+                : ['nome' => $customer->company_name, 'like' => 'true'],
+        ])->all();
+
+        $searchResults = $this->client->pooledGet('/anagrafica/cerca', $searchParams);
+
+        foreach ($candidates as $customer) {
+            $results = $searchResults[$customer->id] ?? [];
+
+            // La ricerca per P.IVA e' gia' un match preciso lato Eureka; la
+            // ricerca per nome e' un "contains" (cercaClienti()), va filtrata
+            // per corrispondenza esatta come faceva la chiamata singola.
+            $matches = filled($customer->vat_number)
+                ? $results
+                : array_values(array_filter(
+                    $results,
+                    fn (array $c) => mb_strtolower(trim($c['rag_sociale_1'] ?? '')) === mb_strtolower(trim($customer->company_name)),
                 ));
 
-                if (count($matches) !== 1) {
-                    return;
-                }
+            $matches = array_values(array_filter(
+                $matches,
+                fn (array $c) => ! in_array((int) ($c['id'] ?? 0), $usedCodes, true),
+            ));
 
-                $match = $matches[0];
-                $label = $match['rag_sociale_1'] ?? '?';
-                $customer->update(['gestionale_suggested_code' => $match['id'], 'gestionale_suggested_label' => $label]);
-                $proposals[] = ['customer' => $customer, 'label' => $label, 'id' => $match['id']];
-            });
+            if (count($matches) !== 1) {
+                continue;
+            }
+
+            $match = $matches[0];
+            $label = $match['rag_sociale_1'] ?? '?';
+            $customer->update(['gestionale_suggested_code' => $match['id'], 'gestionale_suggested_label' => $label]);
+            $proposals[] = ['customer' => $customer, 'label' => $label, 'id' => $match['id']];
+        }
 
         return $proposals;
     }
@@ -221,29 +243,36 @@ class GestionaleSyncRunner
     {
         $proposals = [];
 
-        Product::query()
+        $candidates = Product::query()
             ->where('type', Product::TYPE_MACHINE)
             ->where(fn ($q) => $q->whereNull('tenant_id')->orWhere('tenant_id', $this->tenant->id))
             ->whereNull('gestionale_code')
             ->whereNull('gestionale_suggested_code')
-            ->each(function (Product $product) use (&$proposals) {
-                $keyword = Str::of((string) $product->name)->explode(' ')->first();
+            ->get()
+            ->filter(fn (Product $product) => filled(Str::of((string) $product->name)->explode(' ')->first()));
 
-                if (blank($keyword)) {
-                    return;
-                }
+        // Stesso principio di proposeCustomerLinks(): una ricerca articolo
+        // per prodotto, tutte in gruppi concorrenti. cercaArticoli() ha il
+        // termine di ricerca nel path (non in query string), quindi
+        // pooledGetByPath() invece di pooledGet().
+        $paths = $candidates->mapWithKeys(fn (Product $product) => [
+            $product->id => '/articoli/lista/'.rawurlencode((string) Str::of((string) $product->name)->explode(' ')->first()),
+        ])->all();
 
-                $results = $this->client->cercaArticoli($keyword);
+        $searchResults = $this->client->pooledGetByPath($paths);
 
-                if (count($results) !== 1) {
-                    return;
-                }
+        foreach ($candidates as $product) {
+            $matches = $searchResults[$product->id] ?? [];
 
-                $match = $results[0];
-                $label = "{$match['codice']} — {$match['descr1']}";
-                $product->update(['gestionale_suggested_code' => $match['id_eureka'], 'gestionale_suggested_label' => $label]);
-                $proposals[] = ['product' => $product, 'label' => $label, 'id' => $match['id_eureka']];
-            });
+            if (count($matches) !== 1) {
+                continue;
+            }
+
+            $match = $matches[0];
+            $label = "{$match['codice']} — {$match['descr1']}";
+            $product->update(['gestionale_suggested_code' => $match['id_eureka'], 'gestionale_suggested_label' => $label]);
+            $proposals[] = ['product' => $product, 'label' => $label, 'id' => $match['id_eureka']];
+        }
 
         return $proposals;
     }
@@ -260,7 +289,7 @@ class GestionaleSyncRunner
     {
         $proposals = [];
 
-        MachineUnit::query()
+        $candidates = MachineUnit::query()
             ->where('tenant_id', $this->tenant->id)
             ->whereNotNull('serial_number')
             ->whereNotNull('product_id')
@@ -268,23 +297,40 @@ class GestionaleSyncRunner
             ->whereNull('gestionale_suggested_code')
             ->whereHas('product', fn ($q) => $q->whereNotNull('gestionale_code'))
             ->with('product')
-            ->each(function (MachineUnit $machineUnit) use (&$proposals) {
-                $results = $this->client->cercaMatricole($machineUnit->product->gestionale_code, $machineUnit->serial_number);
+            ->get();
 
-                $matches = array_values(array_filter(
-                    $results,
-                    fn (array $item) => mb_strtolower(trim($item['matricola'] ?? '')) === mb_strtolower(trim($machineUnit->serial_number)),
-                ));
+        // Stesso principio delle altre proposeXLinks(): una ricerca
+        // matricola per macchina, tutte in gruppi concorrenti. cercaMatricole()
+        // usa /crm_api/m14/search (query string), quindi pooledGet(); a
+        // differenza delle altre chiamate pooled pero' la risposta e'
+        // paginata ({"items": [...], "total": N}), va estratto "items".
+        $searchParams = $candidates->mapWithKeys(fn (MachineUnit $machineUnit) => [
+            $machineUnit->id => array_filter([
+                'id_articolo_m10' => $machineUnit->product->gestionale_code,
+                'q' => $machineUnit->serial_number,
+                'per_page' => 25,
+            ]),
+        ])->all();
 
-                if (count($matches) !== 1) {
-                    return;
-                }
+        $searchResults = $this->client->pooledGet('/crm_api/m14/search', $searchParams);
 
-                $match = $matches[0];
-                $label = $match['matricola'];
-                $machineUnit->update(['gestionale_suggested_code' => $match['id'], 'gestionale_suggested_label' => $label]);
-                $proposals[] = ['machineUnit' => $machineUnit, 'label' => $label, 'id' => $match['id']];
-            });
+        foreach ($candidates as $machineUnit) {
+            $results = $searchResults[$machineUnit->id]['items'] ?? [];
+
+            $matches = array_values(array_filter(
+                $results,
+                fn (array $item) => mb_strtolower(trim($item['matricola'] ?? '')) === mb_strtolower(trim($machineUnit->serial_number)),
+            ));
+
+            if (count($matches) !== 1) {
+                continue;
+            }
+
+            $match = $matches[0];
+            $label = $match['matricola'];
+            $machineUnit->update(['gestionale_suggested_code' => $match['id'], 'gestionale_suggested_label' => $label]);
+            $proposals[] = ['machineUnit' => $machineUnit, 'label' => $label, 'id' => $match['id']];
+        }
 
         return $proposals;
     }

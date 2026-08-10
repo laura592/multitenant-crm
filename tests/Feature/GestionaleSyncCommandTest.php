@@ -379,6 +379,34 @@ class GestionaleSyncCommandTest extends TestCase
         Mail::assertNothingSent();
     }
 
+    public function test_sends_failure_alert_instead_of_digest_when_eureka_is_unreachable(): void
+    {
+        Mail::fake();
+
+        $tenant = $this->makeTenant();
+
+        Customer::create([
+            'tenant_id' => $tenant->id,
+            'company_name' => 'Gdp Italia SRL',
+            'gestionale_code' => 1,
+            'vat_number' => '00554810242',
+        ]);
+
+        // Ogni chiamata a Eureka risponde 502: nessun risultato da nessun
+        // metodo di GestionaleSyncRunner (tutti best-effort, tornano array
+        // vuoti), esattamente come "niente da segnalare" — deve pero'
+        // scatenare l'alert di irraggiungibilita', non il silenzio del test
+        // sopra.
+        Http::fake([
+            '*' => Http::response('Bad Gateway', 502),
+        ]);
+
+        $this->artisan('gestionale:sync')->assertExitCode(0);
+
+        Mail::assertSent(\App\Mail\GestionaleSyncFailedMail::class, fn ($mail) => $mail->hasTo('ufficio@alexcaffe.it'));
+        Mail::assertNotSent(GestionaleSyncDigestMail::class);
+    }
+
     /**
      * Casi reali che hanno guidato il parsing dei telefoni in
      * GestionaleSyncRunner::mergeEurekaPhones() — vedi il commento sul

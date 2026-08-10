@@ -16,11 +16,32 @@ use Illuminate\Support\Facades\Http;
  */
 class EurekaClient
 {
+    // Conta i tentativi/fallimenti delle chiamate pooled (vedi
+    // pooledRequests()) per distinguere "Eureka irraggiungibile per tutta
+    // la sync" da "nessun risultato trovato" — senza questo, un'interruzione
+    // di Eureka durante `gestionale:sync` produce silenziosamente lo stesso
+    // esito di una notte senza nulla da segnalare (vedi hadCompleteFailure()
+    // usato da GestionaleSyncRunner).
+    private int $poolAttempts = 0;
+
+    private int $poolFailures = 0;
+
     public function __construct(private readonly Tenant $tenant)
     {
         if (! $tenant->hasGestionaleEurekaCredentials()) {
             throw new GestionaleEurekaException("Il tenant \"{$tenant->name}\" non ha credenziali Eureka configurate.");
         }
+    }
+
+    /**
+     * True se questa istanza ha fatto almeno una chiamata pooled e TUTTE
+     * sono fallite — segnale forte di un'interruzione lato Eureka (host giu',
+     * credenziali rifiutate, rete) piuttosto che "nessun match trovato"
+     * (che torna comunque un array vuoto per chiamata, ma successful()).
+     */
+    public function hadCompleteFailure(): bool
+    {
+        return $this->poolAttempts > 0 && $this->poolFailures === $this->poolAttempts;
     }
 
     /**
@@ -155,28 +176,67 @@ class EurekaClient
      */
     public function pooledGet(string $path, array $paramsByKey, int $concurrency = 15): array
     {
-        $results = [];
         $url = rtrim($this->tenant->gestionale_eureka_base_url, '/').$path;
 
-        foreach (array_chunk($paramsByKey, $concurrency, true) as $chunk) {
+        // http_build_query() esplicito (non il secondo argomento di get()):
+        // quest'ultimo codifica gli spazi come %20 invece di + come fanno le
+        // chiamate singole sopra, cambiando silenziosamente il formato delle
+        // richieste verso Eureka.
+        $urlsByKey = [];
+        foreach ($paramsByKey as $key => $params) {
+            $urlsByKey[$key] = $url.'?'.http_build_query($params);
+        }
+
+        return $this->pooledRequests($urlsByKey, $concurrency);
+    }
+
+    /**
+     * Come pooledGet(), ma per endpoint dove il parametro di ricerca fa
+     * parte del path invece che della query string (es.
+     * /articoli/lista/{query}, vedi cercaArticoli()) — ogni chiamata ha un
+     * path gia' completo, non una base comune con parametri diversi.
+     *
+     * @param  array<int|string, string>  $pathsByKey  path relativo gia' completo (incluso il parametro embedded) per ciascuna chiamata
+     * @return array<int|string, array> stessa chiave => risposta decodificata (vuoto se fallita o non riuscita)
+     */
+    public function pooledGetByPath(array $pathsByKey, int $concurrency = 15): array
+    {
+        $base = rtrim($this->tenant->gestionale_eureka_base_url, '/');
+
+        $urlsByKey = [];
+        foreach ($pathsByKey as $key => $path) {
+            $urlsByKey[$key] = $base.$path;
+        }
+
+        return $this->pooledRequests($urlsByKey, $concurrency);
+    }
+
+    /**
+     * @param  array<int|string, string>  $urlsByKey  URL assoluta gia' completa per ciascuna chiamata
+     * @return array<int|string, array>
+     */
+    private function pooledRequests(array $urlsByKey, int $concurrency): array
+    {
+        $results = [];
+
+        foreach (array_chunk($urlsByKey, $concurrency, true) as $chunk) {
+            $this->poolAttempts += count($chunk);
+
             try {
-                $responses = Http::pool(function (Pool $pool) use ($chunk, $url) {
-                    foreach ($chunk as $key => $params) {
-                        // http_build_query() esplicito (non il secondo
-                        // argomento di get()): quest'ultimo codifica gli
-                        // spazi come %20 invece di + come fanno le chiamate
-                        // singole sopra, cambiando silenziosamente il
-                        // formato delle richieste verso Eureka.
+                $responses = Http::pool(function (Pool $pool) use ($chunk) {
+                    foreach ($chunk as $key => $url) {
                         $pool->as($key)
                             ->withBasicAuth(
                                 $this->tenant->gestionale_eureka_username,
                                 $this->tenant->gestionale_eureka_password,
                             )
                             ->timeout(10)
-                            ->get($url.'?'.http_build_query($params));
+                            ->get($url);
                     }
                 });
             } catch (\Throwable) {
+                $this->poolFailures += count($chunk);
+
                 foreach (array_keys($chunk) as $key) {
                     $results[$key] = [];
                 }
@@ -186,9 +246,13 @@ class EurekaClient
 
             foreach (array_keys($chunk) as $key) {
                 $response = $responses[$key] ?? null;
-                $results[$key] = ($response instanceof Response && $response->successful())
-                    ? ($response->json() ?? [])
-                    : [];
+                $ok = $response instanceof Response && $response->successful();
+
+                if (! $ok) {
+                    $this->poolFailures++;
+                }
+
+                $results[$key] = $ok ? ($response->json() ?? []) : [];
             }
         }
 
