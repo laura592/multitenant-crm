@@ -10,8 +10,11 @@ Artisan::command('inspire', function () {
 
 Schedule::command('deadlines:send-reminders')->weeklyOn(1, '08:00');
 
-// Verificare con chi gestisce il server che un cron reale esegua
-// `php artisan schedule:run` ogni minuto in produzione — non c'e' traccia
-// nel repo di crontab/supervisor che lo attivi (vedi anche la nota identica
-// gia' presente su deadlines:send-reminders sopra).
 Schedule::command('gestionale:sync')->dailyAt('03:00');
+
+// QUEUE_CONNECTION=database in produzione: senza questo, i job accodati
+// (invio a gestionale, geocodifica cliente) restano nella tabella `jobs`
+// e non partono mai, perche' l'hosting condiviso non permette un worker
+// persistente. Richiede comunque il cron `php artisan schedule:run` ogni
+// minuto lato server (cPanel non lo attiva da solo).
+Schedule::command('queue:work --stop-when-empty --max-time=50')->everyMinute()->withoutOverlapping();
