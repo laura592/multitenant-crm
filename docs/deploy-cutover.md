@@ -94,12 +94,16 @@ mysql -u nbalexca_crm -p nbalexca_app_preventivi_fresh < dump_fresco.sql
 
 cd ~/multitenant-crm
 php artisan migrate --force
-php artisan import:legacy --force
 ```
 
-`import:legacy` è idempotente (legacy_id): se qualcosa va storto a metà o
-serve rilanciarlo per catturare un'ultima modifica fatta sulla vecchia app,
-si può ripetere senza duplicare nulla.
+> ⚠️ **`import:legacy` è stato rimosso dal repo il 2026-08-10** (comando
+> considerato esaurito, dati già migrati in locale). Questo passo di Fase 3
+> non è più eseguibile così com'è: prima del prossimo deploy reale va deciso
+> come portare i dati della vecchia app in produzione — ripristinare il
+> comando da `git log` (`app/Console/Commands/ImportLegacyData.php`,
+> rimosso in `f01ea6b`), oppure usare l'approccio di confronto/import
+> selettivo da dump già rodato in questa sessione (vedi memoria di
+> conversazione "Local dev DB seeded from production dump").
 
 **Verifica manuale prima di andare avanti** — checklist minima di cutover
 (in aggiunta a `docs/checklist-rilascio.md` §3, che resta valida):
