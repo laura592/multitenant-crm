@@ -138,13 +138,43 @@ class MaintenanceScheduleResource extends Resource
                     'class' => 'rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50 shadow-sm dark:border-slate-800 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900',
                 ])
                 ->schema([
-                    TextEntry::make('customer.full_name')->label('Cliente')->columnSpan(5),
-                    TextEntry::make('type')
-                        ->label('Tipo')
+                    TextEntry::make('customer.full_name')->label('Cliente')->columnSpan(4),
+                    // Al colpo d'occhio conta di piu' "cosa" (birra/vino/... e
+                    // quante vie) che il semplice "lavaggio vs manutenzione":
+                    // sostituisce il vecchio badge "Tipo", che per un piano
+                    // lavaggio non diceva nulla di utile.
+                    TextEntry::make('impianto_hero')
+                        ->label('Impianto')
+                        ->state(function (MaintenanceSchedule $record) {
+                            if ($record->type !== MaintenanceSchedule::TYPE_LAVAGGIO) {
+                                return 'Manutenzione';
+                            }
+
+                            $label = match ($record->beverage_type) {
+                                MaintenanceSchedule::BEVERAGE_BIRRA => 'Birra',
+                                MaintenanceSchedule::BEVERAGE_ACQUA => 'Acqua',
+                                MaintenanceSchedule::BEVERAGE_VINO => 'Vino',
+                                MaintenanceSchedule::BEVERAGE_BIBITE => 'Bibite',
+                                MaintenanceSchedule::BEVERAGE_SELZ => 'Selz',
+                                default => 'Lavaggio',
+                            };
+
+                            if (! $record->lines_count || $record->beverage_type === MaintenanceSchedule::BEVERAGE_ACQUA) {
+                                return $label;
+                            }
+
+                            return $label.' · '.$record->lines_count.($record->lines_count === 1 ? ' via' : ' vie');
+                        })
                         ->badge()
-                        ->formatStateUsing(fn (string $state) => $state === MaintenanceSchedule::TYPE_LAVAGGIO ? 'Lavaggio' : 'Manutenzione')
-                        ->color(fn (string $state) => $state === MaintenanceSchedule::TYPE_LAVAGGIO ? 'info' : 'gray')
-                        ->columnSpan(2),
+                        ->color(fn (MaintenanceSchedule $record) => match ($record->beverage_type) {
+                            MaintenanceSchedule::BEVERAGE_BIRRA => 'warning',
+                            MaintenanceSchedule::BEVERAGE_ACQUA => 'info',
+                            MaintenanceSchedule::BEVERAGE_VINO => 'danger',
+                            MaintenanceSchedule::BEVERAGE_BIBITE => 'success',
+                            MaintenanceSchedule::BEVERAGE_SELZ => 'gray',
+                            default => 'gray',
+                        })
+                        ->columnSpan(3),
                     TextEntry::make('status')
                         ->label('Stato')
                         ->badge()
@@ -163,7 +193,16 @@ class MaintenanceScheduleResource extends Resource
                                 ->placeholder('—'),
                             TextEntry::make('impianti_info')
                                 ->label('Impianti installati')
-                                ->state(fn (MaintenanceSchedule $record) => static::equipmentSummary($record->customer_id, $record->machine_unit_id)),
+                                ->state(fn (MaintenanceSchedule $record) => static::equipmentSummary($record->customer_id, $record->machine_unit_id))
+                                // Senza machine_unit_id un piano lavaggio ha
+                                // gia' l'impianto (birra/vino/...) e le vie
+                                // nell'hero: il fallback su tutto il parco
+                                // macchine del cliente qui sarebbe solo
+                                // rumore ("Impianto Acqua, Impianto Vino,
+                                // Impianto Birra" ripetuti su ogni piano).
+                                // Resta utile solo con una macchina specifica
+                                // collegata, o sui piani di manutenzione.
+                                ->visible(fn (MaintenanceSchedule $record) => $record->machine_unit_id || $record->type !== MaintenanceSchedule::TYPE_LAVAGGIO),
                             TextEntry::make('pagante_info')
                                 ->label('Fatturare a')
                                 ->state(fn (MaintenanceSchedule $record) => static::billingSummary($record->customer_id, $record->machine_unit_id)),
@@ -175,16 +214,6 @@ class MaintenanceScheduleResource extends Resource
                                 ->label('Frequenza')
                                 ->formatStateUsing(fn (?string $state) => $state ? ucfirst($state) : '—')
                                 ->visible(fn (MaintenanceSchedule $record) => $record->type === MaintenanceSchedule::TYPE_MANUTENZIONE),
-                            TextEntry::make('beverage_type')
-                                ->label('Tipo impianto')
-                                ->badge()
-                                ->formatStateUsing(fn (?string $state) => match ($state) {
-                                    MaintenanceSchedule::BEVERAGE_BIRRA => 'Birra',
-                                    MaintenanceSchedule::BEVERAGE_ACQUA => 'Acqua',
-                                    MaintenanceSchedule::BEVERAGE_VINO => 'Vino',
-                                    default => '—',
-                                })
-                                ->visible(fn (MaintenanceSchedule $record) => $record->type === MaintenanceSchedule::TYPE_LAVAGGIO),
                             TextEntry::make('frequency_days')
                                 ->label('Cadenza')
                                 ->formatStateUsing(fn (?string $state) => $state ? "Ogni {$state} giorni" : 'A chiamata')
@@ -275,6 +304,8 @@ class MaintenanceScheduleResource extends Resource
                             MaintenanceSchedule::BEVERAGE_BIRRA => 'Birra',
                             MaintenanceSchedule::BEVERAGE_ACQUA => 'Acqua',
                             MaintenanceSchedule::BEVERAGE_VINO => 'Vino',
+                            MaintenanceSchedule::BEVERAGE_BIBITE => 'Bibite',
+                            MaintenanceSchedule::BEVERAGE_SELZ => 'Selz',
                         ])
                         ->live()
                         // Il vino non ha mai una cadenza standard (resta "a
@@ -282,6 +313,12 @@ class MaintenanceScheduleResource extends Resource
                         // valore lasciato da un beverage_type precedente.
                         ->afterStateUpdated(fn (?string $state, Forms\Set $set) => $set('frequency_days', MaintenanceSchedule::STANDARD_FREQUENCY_DAYS[$state] ?? null))
                         ->visible(fn (Forms\Get $get) => $get('type') === MaintenanceSchedule::TYPE_LAVAGGIO),
+                    Forms\Components\TextInput::make('lines_count')
+                        ->label('Numero vie')
+                        ->numeric()
+                        ->minValue(1)
+                        ->helperText('Numero di rubinetti/linee collegati a questo impianto (es. 8 vie vino).')
+                        ->visible(fn (Forms\Get $get) => $get('type') === MaintenanceSchedule::TYPE_LAVAGGIO && $get('beverage_type') !== MaintenanceSchedule::BEVERAGE_ACQUA),
                     Forms\Components\TextInput::make('frequency_days')
                         ->label('Cadenza (giorni)')
                         ->numeric()
@@ -335,15 +372,24 @@ class MaintenanceScheduleResource extends Resource
                         MaintenanceSchedule::BEVERAGE_BIRRA => 'Birra',
                         MaintenanceSchedule::BEVERAGE_ACQUA => 'Acqua',
                         MaintenanceSchedule::BEVERAGE_VINO => 'Vino',
+                        MaintenanceSchedule::BEVERAGE_BIBITE => 'Bibite',
+                        MaintenanceSchedule::BEVERAGE_SELZ => 'Selz',
                         default => '—',
                     })
                     ->color(fn (?string $state) => match ($state) {
                         MaintenanceSchedule::BEVERAGE_BIRRA => 'warning',
                         MaintenanceSchedule::BEVERAGE_ACQUA => 'info',
                         MaintenanceSchedule::BEVERAGE_VINO => 'danger',
+                        MaintenanceSchedule::BEVERAGE_BIBITE => 'success',
+                        MaintenanceSchedule::BEVERAGE_SELZ => 'gray',
                         default => 'gray',
                     })
                     ->sortable(),
+                Tables\Columns\TextColumn::make('lines_count')
+                    ->label('Vie')
+                    ->placeholder('—')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('machineUnit.display_name')->label('Macchina')->placeholder('—')
                     ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('impianti')
@@ -416,6 +462,8 @@ class MaintenanceScheduleResource extends Resource
                         MaintenanceSchedule::BEVERAGE_BIRRA => 'Birra',
                         MaintenanceSchedule::BEVERAGE_ACQUA => 'Acqua',
                         MaintenanceSchedule::BEVERAGE_VINO => 'Vino',
+                        MaintenanceSchedule::BEVERAGE_BIBITE => 'Bibite',
+                        MaintenanceSchedule::BEVERAGE_SELZ => 'Selz',
                     ]),
                 Tables\Filters\Filter::make('due_soon')
                     ->label('In scadenza entro 30 giorni')

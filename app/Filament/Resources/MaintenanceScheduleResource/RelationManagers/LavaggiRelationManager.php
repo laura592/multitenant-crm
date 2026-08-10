@@ -81,7 +81,16 @@ class LavaggiRelationManager extends RelationManager
                     ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('macchina')
                     ->label('Macchina')
-                    ->state(fn (Lavaggio $record) => $record->machineLabel())
+                    // Qui siamo gia' nel contesto di un piano preciso (la
+                    // sua birra/vino/... e le vie sono nell'hero sopra): a
+                    // differenza di machineLabel() non torniamo al riepilogo
+                    // generico su tutto il parco macchine del cliente quando
+                    // la visita non specifica una macchina (era fuorviante,
+                    // es. mostrava "Impianto Vino" anche su un piano birra).
+                    // Un valore qui ha senso solo per segnalare l'eccezione:
+                    // "questa volta ho lavato solo questa macchina".
+                    ->state(fn (Lavaggio $record) => $record->machine_unit_id ? $record->machineUnit->display_name.' — '.$record->machineUnit->serial_number : null)
+                    ->placeholder('—')
                     ->wrap(),
                 Tables\Columns\TextColumn::make('fatturare_a')
                     ->label('Fatturare a')

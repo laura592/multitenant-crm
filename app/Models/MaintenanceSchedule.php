@@ -26,10 +26,15 @@ class MaintenanceSchedule extends Model
 
     public const BEVERAGE_VINO = 'vino';
 
+    public const BEVERAGE_BIBITE = 'bibite';
+
+    public const BEVERAGE_SELZ = 'selz';
+
     /**
      * Cadenza standard per tipo di impianto, usata come default sul form e
-     * dalla bulk action di correzione in MaintenanceScheduleResource. Il vino
-     * e' sempre "a chiamata" (nessuna cadenza fissa), quindi non compare qui.
+     * dalla bulk action di correzione in MaintenanceScheduleResource. Vino,
+     * bibite e selz sono di norma "a chiamata" (nessuna cadenza fissa),
+     * quindi non compaiono qui.
      */
     public const STANDARD_FREQUENCY_DAYS = [
         self::BEVERAGE_BIRRA => 30,
@@ -42,6 +47,7 @@ class MaintenanceSchedule extends Model
         'status',
         'machine_unit_id',
         'beverage_type',
+        'lines_count',
         'frequency',
         'frequency_days',
         'filter_validity_days',
