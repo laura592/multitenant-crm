@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * Un macchinario fisico con matricola, tracciato indipendentemente da dove si
@@ -16,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class MachineUnit extends Model
 {
-    use BelongsToTenant, HasUuids;
+    use BelongsToTenant, HasUuids, SoftDeletes;
 
     public const STATUS_IN_MAGAZZINO = 'in_magazzino';
 
@@ -46,6 +47,16 @@ class MachineUnit extends Model
     protected $attributes = [
         'status' => self::STATUS_IN_MAGAZZINO,
     ];
+
+    protected static function booted(): void
+    {
+        // La FK cascadeOnDelete() del DB non scatta piu' su un soft delete
+        // (e' un UPDATE, non una DELETE): replichiamo la cascata a mano sullo
+        // storico posizionamenti.
+        static::deleting(function (self $unit) {
+            $unit->placements->each->delete();
+        });
+    }
 
     public function product(): BelongsTo
     {

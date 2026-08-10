@@ -7,10 +7,11 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class QuoteGroup extends Model
 {
-    use BelongsToTenant, HasUuids;
+    use BelongsToTenant, HasUuids, SoftDeletes;
 
     protected $fillable = [
         'tenant_id',
@@ -31,6 +32,14 @@ class QuoteGroup extends Model
             if (! $group->number) {
                 $group->number = static::nextNumberForTenant($group->tenant_id);
             }
+        });
+
+        // Solo le email seguono il gruppo nel soft delete: i preventivi
+        // restano indipendenti, come gia' oggi con quote_group_id
+        // nullOnDelete() (il gruppo puo' sparire senza portarsi via le
+        // offerte gia' fatte al cliente).
+        static::deleting(function (self $group) {
+            $group->emails->each->delete();
         });
     }
 

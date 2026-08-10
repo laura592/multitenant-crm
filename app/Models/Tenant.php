@@ -8,10 +8,11 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Tenant extends Model implements HasName
 {
-    use HasUuids, LogsAuditTrail;
+    use HasUuids, LogsAuditTrail, SoftDeletes;
 
     protected $fillable = [
         'name',
@@ -88,6 +89,43 @@ class Tenant extends Model implements HasName
         'saas_plan_fee' => 'decimal:2',
         'gestionale_eureka_password' => 'encrypted',
     ];
+
+    protected static function booted(): void
+    {
+        // Nessuna cascata implementata per Tenant: quasi ogni tabella
+        // dell'app ha una FK tenant_id, e su soft delete le cascadeOnDelete()
+        // del DB non scattano piu' (e' un UPDATE, non una DELETE). Invece di
+        // lasciare un tenant "nascosto" con tutti i suoi dati ancora vivi e
+        // orfani, blocchiamo la cancellazione finche' non e' vuoto.
+        static::deleting(function (self $tenant) {
+            if ($tenant->hasBlockingRelatedRecords()) {
+                return false;
+            }
+        });
+    }
+
+    /**
+     * Vedi Tenant::booted(): usato per bloccare la cancellazione (soft
+     * delete incluso) finche' il tenant ha ancora dati collegati.
+     */
+    public function hasBlockingRelatedRecords(): bool
+    {
+        return $this->users()->exists()
+            || $this->customers()->exists()
+            || $this->quotes()->exists()
+            || $this->quoteGroups()->exists()
+            || $this->informationRequests()->exists()
+            || $this->serviceReports()->exists()
+            || $this->vehicles()->exists()
+            || $this->maintenanceSchedules()->exists()
+            || $this->lavaggi()->exists()
+            || $this->timeEntries()->exists()
+            || $this->leaveRequests()->exists()
+            || $this->materialOrders()->exists()
+            || $this->products()->exists()
+            || $this->categories()->exists()
+            || $this->productFamilies()->exists();
+    }
 
     public function users(): HasMany
     {

@@ -102,6 +102,10 @@ class Lavaggio extends Model
      */
     public function invoiceRecipient(): Customer
     {
+        if (! $this->customer) {
+            throw new \RuntimeException('Cliente collegato a questo lavaggio non trovato (probabilmente eliminato).');
+        }
+
         return $this->machineUnit?->billingCustomer ?? $this->customer->invoiceRecipient();
     }
 
@@ -116,7 +120,7 @@ class Lavaggio extends Model
      */
     public function machineLabel(): string
     {
-        if ($this->machine_unit_id) {
+        if ($this->machine_unit_id && $this->machineUnit) {
             return $this->machineUnit->serial_number;
         }
 

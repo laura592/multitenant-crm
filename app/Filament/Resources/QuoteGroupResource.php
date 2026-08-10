@@ -108,6 +108,7 @@ class QuoteGroupResource extends Resource
                 Tables\Filters\SelectFilter::make('status')
                     ->label('Stato')
                     ->options(static::statusLabels()),
+                Tables\Filters\TrashedFilter::make(),
             ])
             ->actions([
                 static::previewPdfsTableAction(),
@@ -116,11 +117,15 @@ class QuoteGroupResource extends Resource
                     Tables\Actions\EditAction::make()
                         ->color('gray'),
                     Tables\Actions\DeleteAction::make(),
+                    Tables\Actions\RestoreAction::make(),
+                    Tables\Actions\ForceDeleteAction::make(),
                 ]),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\RestoreBulkAction::make(),
+                    Tables\Actions\ForceDeleteBulkAction::make(),
                 ]),
             ]);
     }

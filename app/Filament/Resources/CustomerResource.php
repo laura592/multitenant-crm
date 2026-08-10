@@ -210,6 +210,7 @@ class CustomerResource extends Resource
                 Tables\Filters\Filter::make('gestionale_suggested_code')
                     ->label('Collegamento proposto')
                     ->query(fn ($query) => $query->whereNotNull('gestionale_suggested_code')),
+                Tables\Filters\TrashedFilter::make(),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make()
@@ -295,12 +296,40 @@ class CustomerResource extends Resource
                 Tables\Actions\ActionGroup::make([
                     Tables\Actions\EditAction::make()
                         ->color('gray'),
-                    Tables\Actions\DeleteAction::make(),
+                    Tables\Actions\DeleteAction::make()
+                        ->before(function (Customer $record, Tables\Actions\DeleteAction $action) {
+                            if ($record->hasBlockingRelatedRecords()) {
+                                Notification::make()
+                                    ->title('Impossibile eliminare')
+                                    ->body('Questo cliente ha ancora preventivi, offerte, rapportini o macchine installate collegate.')
+                                    ->danger()
+                                    ->send();
+
+                                $action->halt();
+                            }
+                        }),
+                    Tables\Actions\RestoreAction::make(),
+                    Tables\Actions\ForceDeleteAction::make(),
                 ]),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->before(function (\Illuminate\Database\Eloquent\Collection $records, Tables\Actions\DeleteBulkAction $action) {
+                            $blocked = $records->filter(fn (Customer $record) => $record->hasBlockingRelatedRecords());
+
+                            if ($blocked->isNotEmpty()) {
+                                Notification::make()
+                                    ->title('Alcuni clienti non sono stati eliminati')
+                                    ->body('Hanno ancora preventivi, offerte, rapportini o macchine installate collegate: '.$blocked->pluck('full_name')->implode(', ').'.')
+                                    ->danger()
+                                    ->send();
+
+                                $action->halt();
+                            }
+                        }),
+                    Tables\Actions\RestoreBulkAction::make(),
+                    Tables\Actions\ForceDeleteBulkAction::make(),
                 ]),
             ])
             ->emptyStateHeading('Nessun cliente ancora')

@@ -562,6 +562,7 @@ class QuoteResource extends Resource
                             ->when($data['from'] ?? null, fn (Builder $q, $date) => $q->whereDate('date', '>=', $date))
                             ->when($data['until'] ?? null, fn (Builder $q, $date) => $q->whereDate('date', '<=', $date));
                     }),
+                Tables\Filters\TrashedFilter::make(),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make()
@@ -588,11 +589,15 @@ class QuoteResource extends Resource
                     Tables\Actions\EditAction::make()
                         ->color('gray'),
                     Tables\Actions\DeleteAction::make(),
+                    Tables\Actions\RestoreAction::make(),
+                    Tables\Actions\ForceDeleteAction::make(),
                 ]),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\RestoreBulkAction::make(),
+                    Tables\Actions\ForceDeleteBulkAction::make(),
                 ]),
             ])
             ->emptyStateHeading('Nessun preventivo ancora')

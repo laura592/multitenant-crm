@@ -22,7 +22,14 @@ class RolePermissions
 {
     private const VIEW = ['view_any', 'view'];
 
-    private const MANAGE = ['view_any', 'view', 'create', 'update', 'delete', 'delete_any'];
+    private const MANAGE = ['view_any', 'view', 'create', 'update', 'delete', 'delete_any', 'restore', 'restore_any'];
+
+    // Solo per le risorse con soft delete dove "admin" deve poter anche
+    // eliminare definitivamente (customer, quote, quote::group,
+    // service::report, machine::unit) - la cancellazione permanente resta
+    // riservata a questo ruolo e allo staff master, mai a dipendente/
+    // amministrazione/partner.
+    private const FULL_MANAGE = [...self::MANAGE, 'force_delete', 'force_delete_any'];
 
     public static function for(string $role): array
     {
@@ -93,11 +100,11 @@ class RolePermissions
                 ...self::expand('category', self::MANAGE),
                 ...self::expand('product', self::MANAGE),
                 ...self::expand('product::family', self::MANAGE),
-                ...self::expand('customer', self::MANAGE),
-                ...self::expand('quote', self::MANAGE),
-                ...self::expand('quote::group', self::MANAGE),
+                ...self::expand('customer', self::FULL_MANAGE),
+                ...self::expand('quote', self::FULL_MANAGE),
+                ...self::expand('quote::group', self::FULL_MANAGE),
                 ...self::expand('information::request', self::MANAGE),
-                ...self::expand('service::report', self::MANAGE),
+                ...self::expand('service::report', self::FULL_MANAGE),
                 ...self::expand('maintenance::schedule', self::MANAGE),
                 ...self::expand('deadline', self::MANAGE),
                 ...self::expand('vehicle', self::MANAGE),
@@ -108,7 +115,7 @@ class RolePermissions
                 ...self::expand('time::entry', self::MANAGE),
                 ...self::expand('leave::request', self::MANAGE),
                 ...self::expand('payment::method', self::MANAGE),
-                ...self::expand('machine::unit', self::MANAGE),
+                ...self::expand('machine::unit', self::FULL_MANAGE),
                 ...self::expand('lavaggio', self::MANAGE),
                 // Unico ruolo (oltre allo staff master is_super_admin) che puo'
                 // creare/gestire utenti.

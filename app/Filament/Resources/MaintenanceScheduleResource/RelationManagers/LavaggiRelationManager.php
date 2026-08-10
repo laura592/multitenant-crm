@@ -89,7 +89,7 @@ class LavaggiRelationManager extends RelationManager
                     // es. mostrava "Impianto Vino" anche su un piano birra).
                     // Un valore qui ha senso solo per segnalare l'eccezione:
                     // "questa volta ho lavato solo questa macchina".
-                    ->state(fn (Lavaggio $record) => $record->machine_unit_id ? $record->machineUnit->display_name.' — '.$record->machineUnit->serial_number : null)
+                    ->state(fn (Lavaggio $record) => $record->machineUnit ? $record->machineUnit->display_name.' — '.$record->machineUnit->serial_number : null)
                     ->placeholder('—')
                     ->wrap(),
                 Tables\Columns\TextColumn::make('fatturare_a')

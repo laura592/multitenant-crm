@@ -187,12 +187,27 @@ class TenantResource extends Resource
             ])
             ->filters([
                 Tables\Filters\TernaryFilter::make('is_active')->label('Attivo'),
+                Tables\Filters\TrashedFilter::make(),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
                 // Il tenant master (Alex) e' quello dello staff che gestisce tutti gli
                 // altri partner: eliminarlo per errore blocca l'accesso di tutto lo staff.
                 Tables\Actions\DeleteAction::make()
+                    ->hidden(fn (Tenant $record) => $record->is_master)
+                    ->before(function (Tenant $record, Tables\Actions\DeleteAction $action) {
+                        if ($record->hasBlockingRelatedRecords()) {
+                            \Filament\Notifications\Notification::make()
+                                ->title('Impossibile eliminare')
+                                ->body('Questo tenant ha ancora dati collegati (utenti, clienti, preventivi, rapportini...): va svuotato prima di poterlo eliminare.')
+                                ->danger()
+                                ->send();
+
+                            $action->halt();
+                        }
+                    }),
+                Tables\Actions\RestoreAction::make(),
+                Tables\Actions\ForceDeleteAction::make()
                     ->hidden(fn (Tenant $record) => $record->is_master),
             ])
             ->bulkActions([
@@ -201,7 +216,10 @@ class TenantResource extends Resource
                         /** @param \Illuminate\Database\Eloquent\Collection<int, Tenant> $records */
                         ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
                             $hadMaster = $records->contains('is_master', true);
-                            $records->reject(fn (Tenant $record) => $record->is_master)
+                            $deletable = $records->reject(fn (Tenant $record) => $record->is_master);
+                            $blocked = $deletable->filter(fn (Tenant $record) => $record->hasBlockingRelatedRecords());
+
+                            $deletable->reject(fn (Tenant $record) => $record->hasBlockingRelatedRecords())
                                 ->each->delete();
 
                             if ($hadMaster) {
@@ -211,7 +229,17 @@ class TenantResource extends Resource
                                     ->warning()
                                     ->send();
                             }
+
+                            if ($blocked->isNotEmpty()) {
+                                \Filament\Notifications\Notification::make()
+                                    ->title('Alcuni tenant non sono stati eliminati')
+                                    ->body('Hanno ancora dati collegati: '.$blocked->pluck('name')->implode(', ').'.')
+                                    ->danger()
+                                    ->send();
+                            }
                         }),
+                    Tables\Actions\RestoreBulkAction::make(),
+                    Tables\Actions\ForceDeleteBulkAction::make(),
                 ]),
             ]);
     }

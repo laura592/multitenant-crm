@@ -178,8 +178,10 @@ class GestionaleSyncRunner
         // questo controllo due clienti CRM diversi (spesso doppioni dello
         // stesso cliente reale, es. sede vs referente) possono ricevere lo
         // stesso suggerimento, e confermarlo va a sbattere sul vincolo unique
-        // su gestionale_code (UniqueConstraintViolationException).
-        $usedCodes = Customer::query()
+        // su gestionale_code (UniqueConstraintViolationException). withTrashed()
+        // perche' il vincolo unique e' fisico sul DB e resta occupato anche
+        // da un cliente soft-eliminato.
+        $usedCodes = Customer::withTrashed()
             ->where('tenant_id', $this->tenant->id)
             ->whereNotNull('gestionale_code')
             ->pluck('gestionale_code')
@@ -356,6 +358,10 @@ class GestionaleSyncRunner
     {
         $imported = [];
 
+        // Volutamente senza withTrashed(): una matricola soft-eliminata deve
+        // restare "sconosciuta" qui, cosi' il ciclo sotto la incontra di
+        // nuovo e la ripristina (invece di saltarla per sempre) se Eureka la
+        // segnala ancora installata presso un cliente.
         $knownSerials = MachineUnit::query()->pluck('serial_number')
             ->map(fn (string $serial) => mb_strtolower(trim($serial)))
             ->flip()
@@ -416,23 +422,36 @@ class GestionaleSyncRunner
                     $documentNumber > 0 ? "bolla n. {$documentNumber}" : null,
                 ])->filter()->implode(', ');
 
-                // firstOrCreate (non create): una matricola vista due volte
-                // (es. righe duplicate nella risposta Eureka) romperebbe il
-                // vincolo unique tenant_id+serial_number con una create()
-                // secca, mandando in errore l'intero comando gestionale:sync
-                // — che quindi non arriverebbe mai a inviare il digest.
-                $machineUnit = MachineUnit::firstOrCreate(
-                    ['tenant_id' => $this->tenant->id, 'serial_number' => $serial],
-                    [
+                // firstOrNew con withTrashed() (non firstOrCreate): una
+                // matricola vista due volte (es. righe duplicate nella
+                // risposta Eureka) romperebbe il vincolo unique
+                // tenant_id+serial_number con una create() secca, mandando in
+                // errore l'intero comando gestionale:sync — che quindi non
+                // arriverebbe mai a inviare il digest. withTrashed() serve
+                // anche a ritrovare (e ripristinare) una MachineUnit
+                // soft-eliminata che Eureka segnala di nuovo installata,
+                // invece di tentare un INSERT che sbatterebbe sullo stesso
+                // vincolo unique.
+                $machineUnit = MachineUnit::withTrashed()
+                    ->firstOrNew(['tenant_id' => $this->tenant->id, 'serial_number' => $serial]);
+
+                $isNew = ! $machineUnit->exists;
+                $wasTrashed = $machineUnit->exists && $machineUnit->trashed();
+
+                if (! $isNew && ! $wasTrashed) {
+                    continue;
+                }
+
+                if ($isNew) {
+                    $machineUnit->fill([
                         'product_id' => $product?->id,
                         'model_name' => $modelName,
                         'status' => MachineUnit::STATUS_INSTALLATA,
                         'source' => MachineUnit::SOURCE_EUREKA,
-                    ],
-                );
-
-                if (! $machineUnit->wasRecentlyCreated) {
-                    continue;
+                    ]);
+                    $machineUnit->save();
+                } else {
+                    $machineUnit->restore();
                 }
 
                 $machineUnit->moveTo($customer, notes: $installNote, placedAt: $installedAt);

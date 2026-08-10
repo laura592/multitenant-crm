@@ -191,18 +191,8 @@ class ServiceReportResource extends Resource
                         // restava vuota (a differenza dei campi accanto, che invece
                         // hanno un placeholder e mostrano correttamente "—").
                         ->default('none')
-                        ->formatStateUsing(fn (?string $state) => match ($state) {
-                            'sent' => 'Inviato',
-                            'failed' => 'Fallito',
-                            'queued' => 'In coda',
-                            default => 'Non inviato',
-                        })
-                        ->color(fn (?string $state) => match ($state) {
-                            'sent' => 'success',
-                            'failed' => 'danger',
-                            'queued' => 'warning',
-                            default => 'gray',
-                        }),
+                        ->formatStateUsing(fn (?string $state) => self::gestionaleSyncStatusLabels()[$state] ?? self::gestionaleSyncStatusLabels()['none'])
+                        ->color(fn (?string $state) => self::gestionaleSyncStatusColors()[$state] ?? self::gestionaleSyncStatusColors()['none']),
                     TextEntry::make('gestionale_synced_at')->label('Ultimo invio riuscito')->dateTime('d/m/Y H:i')->placeholder('—'),
                     TextEntry::make('gestionale_sync_error')->label('Errore')->placeholder('—')->columnSpanFull(),
                 ]),
@@ -499,6 +489,12 @@ class ServiceReportResource extends Resource
                     ->badge()
                     ->formatStateUsing(fn (string $state) => self::statusLabels()[$state] ?? ucfirst($state))
                     ->color(fn (string $state) => self::statusColors()[$state] ?? 'gray'),
+                Tables\Columns\TextColumn::make('gestionale_sync_status')
+                    ->label('Eureka')
+                    ->badge()
+                    ->default('none')
+                    ->formatStateUsing(fn (?string $state) => self::gestionaleSyncStatusLabels()[$state] ?? self::gestionaleSyncStatusLabels()['none'])
+                    ->color(fn (?string $state) => self::gestionaleSyncStatusColors()[$state] ?? self::gestionaleSyncStatusColors()['none']),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('intervention_type')
@@ -513,6 +509,21 @@ class ServiceReportResource extends Resource
                 Tables\Filters\SelectFilter::make('status')
                     ->label('Stato')
                     ->options(fn () => self::statusLabels()),
+                Tables\Filters\SelectFilter::make('gestionale_sync_status')
+                    ->label('Eureka')
+                    ->options(fn () => self::gestionaleSyncStatusLabels())
+                    // 'none' non e' un valore reale in colonna (solo il
+                    // default lato UI per il badge quando e' null) — va
+                    // tradotto in whereNull, non in un where('=', 'none').
+                    ->query(function ($query, array $data) {
+                        if (blank($data['value'] ?? null)) {
+                            return $query;
+                        }
+
+                        return $data['value'] === 'none'
+                            ? $query->whereNull('gestionale_sync_status')
+                            : $query->where('gestionale_sync_status', $data['value']);
+                    }),
                 Tables\Filters\SelectFilter::make('customer_id')
                     ->label('Cliente')
                     ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
@@ -522,6 +533,7 @@ class ServiceReportResource extends Resource
                 Tables\Filters\SelectFilter::make('technician_id')
                     ->label('Tecnico')
                     ->relationship('technician', 'name'),
+                Tables\Filters\TrashedFilter::make(),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),
@@ -540,7 +552,7 @@ class ServiceReportResource extends Resource
                                 ->label('Email destinatario')
                                 ->email()
                                 ->required()
-                                ->default(fn (ServiceReport $record) => $record->customer->primaryEmail()),
+                                ->default(fn (ServiceReport $record) => $record->customer?->primaryEmail()),
                             Forms\Components\TextInput::make('cc_email')->label('CC (opzionale)')->email(),
                         ])
                         ->action(function (array $data, ServiceReport $record) {
@@ -580,7 +592,7 @@ class ServiceReportResource extends Resource
                         })
                         ->icon('heroicon-o-arrow-up-tray')
                         ->disabled(fn (ServiceReport $record): bool => $record->gestionale_sync_status === 'queued')
-                        ->visible(fn (ServiceReport $record): bool => in_array($record->status, ['firmato', 'inviato'], true) && $record->tenant->hasGestionaleEurekaCredentials())
+                        ->visible(fn (ServiceReport $record): bool => in_array($record->status, ['firmato', 'inviato'], true) && ($record->tenant?->hasGestionaleEurekaCredentials() ?? false))
                         ->requiresConfirmation()
                         ->modalDescription('Invia questo rapportino a Eureka come scheda lavoro. Non è possibile cancellare un documento una volta creato, nemmeno in ambiente di test.')
                         ->action(function (ServiceReport $record) {
@@ -618,11 +630,15 @@ class ServiceReportResource extends Resource
                         }),
                     Tables\Actions\EditAction::make(),
                     Tables\Actions\DeleteAction::make(),
+                    Tables\Actions\RestoreAction::make(),
+                    Tables\Actions\ForceDeleteAction::make(),
                 ]),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\RestoreBulkAction::make(),
+                    Tables\Actions\ForceDeleteBulkAction::make(),
                 ]),
             ])
             ->emptyStateHeading('Nessun rapportino ancora')
@@ -662,6 +678,26 @@ class ServiceReportResource extends Resource
             'completato' => 'info',
             'firmato' => 'warning',
             'inviato' => 'success',
+        ];
+    }
+
+    public static function gestionaleSyncStatusLabels(): array
+    {
+        return [
+            'none' => 'Non inviato',
+            'queued' => 'In coda',
+            'sent' => 'Inviato',
+            'failed' => 'Fallito',
+        ];
+    }
+
+    public static function gestionaleSyncStatusColors(): array
+    {
+        return [
+            'none' => 'gray',
+            'queued' => 'warning',
+            'sent' => 'success',
+            'failed' => 'danger',
         ];
     }
 }

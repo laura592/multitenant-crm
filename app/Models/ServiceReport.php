@@ -7,10 +7,11 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ServiceReport extends Model
 {
-    use BelongsToTenant, HasUuids;
+    use BelongsToTenant, HasUuids, SoftDeletes;
 
     public const TYPE_INSTALLAZIONE = 'installazione';
     public const TYPE_MANUTENZIONE_ORDINARIA = 'manutenzione_ordinaria';
@@ -63,6 +64,15 @@ class ServiceReport extends Model
             if (! $report->number) {
                 $report->number = static::nextNumberForTenant($report->tenant_id);
             }
+        });
+
+        // Le FK cascadeOnDelete() del DB non scattano piu' su un soft delete
+        // (e' un UPDATE, non una DELETE): replichiamo la cascata a mano su
+        // ricambi/materiali usati ed email.
+        static::deleting(function (self $report) {
+            $report->partsUsed->each->delete();
+            $report->materialsUsed->each->delete();
+            $report->emails->each->delete();
         });
     }
 
@@ -148,6 +158,10 @@ class ServiceReport extends Model
      */
     public function invoiceRecipient(): Customer
     {
+        if (! $this->customer) {
+            throw new \RuntimeException('Cliente collegato a questo rapportino non trovato (probabilmente eliminato).');
+        }
+
         return $this->machineUnit?->billingCustomer ?? $this->customer->invoiceRecipient();
     }
 
@@ -160,6 +174,12 @@ class ServiceReport extends Model
     public function gestionaleValidationErrors(): array
     {
         $errors = [];
+
+        if (! $this->customer) {
+            $errors[] = 'Il cliente collegato a questo rapportino risulta eliminato.';
+
+            return $errors;
+        }
 
         if (blank($this->customer->gestionale_code)) {
             $errors[] = "Il cliente \"{$this->customer->full_name}\" non ha un codice gestionale (Eureka).";

@@ -9,11 +9,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Mail;
 
 class Quote extends Model
 {
-    use BelongsToTenant, HasUuids;
+    use BelongsToTenant, HasUuids, SoftDeletes;
 
     protected $casts = [
         'date' => 'date',
@@ -102,6 +103,15 @@ class Quote extends Model
                     $quote->quoteGroup->update(['status' => 'scelto']);
                 }
             }
+        });
+
+        // Le FK cascadeOnDelete() del DB non scattano piu' su un soft delete
+        // (e' un UPDATE, non una DELETE): replichiamo la cascata a mano sui
+        // figli diretti (righe preventivo ed email), cosi' spariscono e
+        // tornano insieme al preventivo.
+        static::deleting(function (self $quote) {
+            $quote->quoteProducts->each->delete();
+            $quote->emails->each->delete();
         });
     }
 

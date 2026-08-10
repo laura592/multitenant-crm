@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Mail;
 
 /**
@@ -17,7 +18,7 @@ use Illuminate\Support\Facades\Mail;
  */
 class Customer extends Model
 {
-    use BelongsToTenant, HasUuids, LogsAuditTrail;
+    use BelongsToTenant, HasUuids, LogsAuditTrail, SoftDeletes;
 
     /** Anagrafica gia' presente nel gestionale (importata da li'): non va rimandata. */
     public const SOURCE_GESTIONALE = 'gestionale';
@@ -97,6 +98,32 @@ class Customer extends Model
         'emails' => '[]',
         'phones' => '[]',
     ];
+
+    protected static function booted(): void
+    {
+        // Niente cascata: un cliente con preventivi/rapportini/macchine
+        // ancora collegati non va ne' eliminato ne' lasciato orfano di quei
+        // dati, va bloccato finche' chi lo elimina non sistema prima quei
+        // collegamenti (vedi anche il controllo gemello lato Filament in
+        // CustomerResource, che mostra un messaggio invece di fallire muto).
+        static::deleting(function (self $customer) {
+            if ($customer->hasBlockingRelatedRecords()) {
+                return false;
+            }
+        });
+    }
+
+    /**
+     * Vedi Customer::booted(): usato per bloccare la cancellazione (soft
+     * delete incluso) finche' il cliente ha ancora dati collegati.
+     */
+    public function hasBlockingRelatedRecords(): bool
+    {
+        return $this->quotes()->exists()
+            || $this->quoteGroups()->exists()
+            || $this->installedMachineUnits()->exists()
+            || ServiceReport::where('customer_id', $this->id)->exists();
+    }
 
     /**
      * L'anagrafica e' pronta per essere inviata al gestionale: nata
