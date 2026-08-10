@@ -540,9 +540,14 @@ class ServiceReportResource extends Resource
                                 'status' => 'sent',
                             ]);
 
+                            $ccRecipients = array_values(array_unique(array_filter(array_merge(
+                                $data['cc_email'] ? [$data['cc_email']] : [],
+                                $record->tenant?->notificationRecipients('service_report') ?? [],
+                            ))));
+
                             try {
                                 Mail::to($data['recipient_email'])
-                                    ->cc($data['cc_email'] ?? [])
+                                    ->cc($ccRecipients)
                                     ->send(new ServiceReportMail($record, $pdf->output()));
 
                                 $record->update(['status' => 'inviato']);

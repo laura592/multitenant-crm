@@ -82,7 +82,7 @@ class Quote extends Model
                     $customer->markApprovedForGestionale();
 
                     if (! $wasReady && $customer->approved_for_gestionale_at !== null) {
-                        $recipients = $quote->tenant?->notificationRecipients('customer_gestionale') ?? [];
+                        $recipients = $quote->tenant?->notificationRecipients('customer_gestionale_review') ?? [];
 
                         if ($recipients !== []) {
                             Mail::to($recipients)->send(new CustomerGestionaleReviewMail(

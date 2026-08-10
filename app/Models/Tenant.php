@@ -27,6 +27,10 @@ class Tenant extends Model implements HasName
         'notify_quote_group_emails',
         'notify_deadline_emails',
         'notify_customer_gestionale_emails',
+        'notify_customer_gestionale_review_emails',
+        'notify_gestionale_sync_digest_emails',
+        'notify_gestionale_sync_failed_emails',
+        'notify_service_report_emails',
         'phone',
         'fax',
         'street',
@@ -67,6 +71,10 @@ class Tenant extends Model implements HasName
         'notify_quote_group_emails' => 'array',
         'notify_deadline_emails' => 'array',
         'notify_customer_gestionale_emails' => 'array',
+        'notify_customer_gestionale_review_emails' => 'array',
+        'notify_gestionale_sync_digest_emails' => 'array',
+        'notify_gestionale_sync_failed_emails' => 'array',
+        'notify_service_report_emails' => 'array',
         'machine_discount_percent' => 'decimal:2',
         'scenario_a_commission_percent' => 'decimal:2',
         'scenario_b_installation_fee' => 'decimal:2',
@@ -189,13 +197,25 @@ class Tenant extends Model implements HasName
     {
         $legacy = $this->normalizedRecipients($this->notify_staff_emails);
 
+        // notify_customer_gestionale_emails era l'unica lista condivisa dai
+        // tre eventi Eureka prima che venissero separati: resta come
+        // fallback intermedio cosi' i tenant gia' configurati non perdono i
+        // destinatari finche' non compilano le nuove liste dedicate.
+        $gestionaleFallback = $this->normalizedRecipients($this->notify_customer_gestionale_emails, $legacy);
+
         return match ($event) {
             'information_request' => $this->normalizedRecipients($this->notify_information_request_emails, $legacy),
             'leave_request' => $this->normalizedRecipients($this->notify_leave_request_emails, $legacy),
             'quote' => $this->normalizedRecipients($this->notify_quote_emails, $legacy),
             'quote_group' => $this->normalizedRecipients($this->notify_quote_group_emails, $legacy),
             'deadline' => $this->normalizedRecipients($this->notify_deadline_emails, $legacy),
-            'customer_gestionale' => $this->normalizedRecipients($this->notify_customer_gestionale_emails, $legacy),
+            'customer_gestionale_review' => $this->normalizedRecipients($this->notify_customer_gestionale_review_emails, $gestionaleFallback),
+            'gestionale_sync_digest' => $this->normalizedRecipients($this->notify_gestionale_sync_digest_emails, $gestionaleFallback),
+            'gestionale_sync_failed' => $this->normalizedRecipients($this->notify_gestionale_sync_failed_emails, $gestionaleFallback),
+            // Nessun fallback ai destinatari globali: prima di questo campo il
+            // rapportino non aveva alcuna lista fissa, solo un CC manuale a
+            // ogni invio, quindi il default resta "nessuno".
+            'service_report' => $this->normalizedRecipients($this->notify_service_report_emails),
             default => $legacy,
         };
     }

@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Mail\GestionaleSyncDigestMail;
+use App\Mail\GestionaleSyncFailedMail;
 use App\Models\Tenant;
 use App\Support\Gestionale\GestionaleSyncRunner;
 use Illuminate\Console\Command;
@@ -34,23 +35,37 @@ class SyncGestionaleData extends Command
         foreach ($tenants as $tenant) {
             $results = (new GestionaleSyncRunner($tenant))->run();
 
+            // Ogni chiamata a Eureka fallita durante tutta la sync (host giu',
+            // credenziali rifiutate, ecc.) produce comunque risultati vuoti da
+            // GestionaleSyncRunner (best-effort by design) — indistinguibile
+            // da "niente da segnalare" senza questo controllo, quindi
+            // un'interruzione di Eureka passerebbe silenziosamente inosservata.
+            if ($results['eurekaUnreachable']) {
+                $this->warn("{$tenant->name}: Eureka irraggiungibile, sync saltato.");
+
+                $failedRecipients = $tenant->notificationRecipients('gestionale_sync_failed');
+
+                if (! empty($failedRecipients)) {
+                    Mail::to($failedRecipients)->send(new GestionaleSyncFailedMail($tenant));
+                    $sent++;
+                }
+
+                continue;
+            }
+
             $total = count($results['autofilled']) + count($results['diffs'])
                 + count($results['customerLinks']) + count($results['productLinks'])
                 + count($results['machineUnitLinks']) + count($results['newMachines']);
 
             $this->info("{$tenant->name}: {$total} righe da controllare.");
 
-            if ($total === 0) {
+            $digestRecipients = $tenant->notificationRecipients('gestionale_sync_digest');
+
+            if ($total === 0 || empty($digestRecipients)) {
                 continue;
             }
 
-            $recipients = $tenant->notificationRecipients('customer_gestionale');
-
-            if (empty($recipients)) {
-                continue;
-            }
-
-            Mail::to($recipients)->send(new GestionaleSyncDigestMail($tenant, $results));
+            Mail::to($digestRecipients)->send(new GestionaleSyncDigestMail($tenant, $results));
             $sent++;
         }
 

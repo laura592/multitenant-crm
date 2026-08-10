@@ -42,7 +42,10 @@ class NotificationSettings extends Page implements HasForms
             'notify_quote_emails' => $tenant?->notificationRecipients('quote') ?? [],
             'notify_quote_group_emails' => $tenant?->notificationRecipients('quote_group') ?? [],
             'notify_deadline_emails' => $tenant?->notificationRecipients('deadline') ?? [],
-            'notify_customer_gestionale_emails' => $tenant?->notificationRecipients('customer_gestionale') ?? [],
+            'notify_customer_gestionale_review_emails' => $tenant?->notificationRecipients('customer_gestionale_review') ?? [],
+            'notify_gestionale_sync_digest_emails' => $tenant?->notificationRecipients('gestionale_sync_digest') ?? [],
+            'notify_gestionale_sync_failed_emails' => $tenant?->notificationRecipients('gestionale_sync_failed') ?? [],
+            'notify_service_report_emails' => $tenant?->notificationRecipients('service_report') ?? [],
         ]);
     }
 
@@ -90,13 +93,34 @@ class NotificationSettings extends Page implements HasForms
                     ->splitKeys([',', 'Tab'])
                     ->color('primary')
                     ->helperText('Promemoria settimanale con le scadenze in avvicinamento o scadute.'),
-                TagsInput::make('notify_customer_gestionale_emails')
-                    ->label('Sincronizzazione Eureka (clienti e prodotti)')
+                TagsInput::make('notify_customer_gestionale_review_emails')
+                    ->label('Clienti da rivedere su Eureka')
                     ->placeholder('indirizzo@esempio.it')
                     ->nestedRecursiveRules(['email'])
                     ->splitKeys([',', 'Tab'])
                     ->color('primary')
-                    ->helperText('Preventivo accettato da un cliente nuovo, modifica su un cliente gia\' collegato a Eureka, e il digest del sync automatico giornaliero (differenze trovate, campi compilati, nuovi collegamenti proposti).'),
+                    ->helperText('Preventivo accettato da un cliente nuovo, o modifica su un cliente gia\' collegato a Eureka.'),
+                TagsInput::make('notify_gestionale_sync_digest_emails')
+                    ->label('Digest sync Eureka')
+                    ->placeholder('indirizzo@esempio.it')
+                    ->nestedRecursiveRules(['email'])
+                    ->splitKeys([',', 'Tab'])
+                    ->color('primary')
+                    ->helperText('Riepilogo giornaliero del sync automatico: differenze trovate, campi compilati, nuovi collegamenti proposti.'),
+                TagsInput::make('notify_gestionale_sync_failed_emails')
+                    ->label('Sync Eureka fallito')
+                    ->placeholder('indirizzo@esempio.it')
+                    ->nestedRecursiveRules(['email'])
+                    ->splitKeys([',', 'Tab'])
+                    ->color('danger')
+                    ->helperText('Avviso quando il sync automatico giornaliero non riesce a raggiungere Eureka.'),
+                TagsInput::make('notify_service_report_emails')
+                    ->label('Rapportini')
+                    ->placeholder('indirizzo@esempio.it')
+                    ->nestedRecursiveRules(['email'])
+                    ->splitKeys([',', 'Tab'])
+                    ->color('primary')
+                    ->helperText('In copia fissa ad ogni invio di rapportino al cliente, oltre al CC inserito manualmente.'),
             ])
             ->statePath('data');
     }
@@ -111,7 +135,10 @@ class NotificationSettings extends Page implements HasForms
         $quoteRecipients = array_values(array_unique(array_filter((array) ($state['notify_quote_emails'] ?? []))));
         $quoteGroupRecipients = array_values(array_unique(array_filter((array) ($state['notify_quote_group_emails'] ?? []))));
         $deadlineRecipients = array_values(array_unique(array_filter((array) ($state['notify_deadline_emails'] ?? []))));
-        $customerGestionaleRecipients = array_values(array_unique(array_filter((array) ($state['notify_customer_gestionale_emails'] ?? []))));
+        $gestionaleReviewRecipients = array_values(array_unique(array_filter((array) ($state['notify_customer_gestionale_review_emails'] ?? []))));
+        $gestionaleSyncDigestRecipients = array_values(array_unique(array_filter((array) ($state['notify_gestionale_sync_digest_emails'] ?? []))));
+        $gestionaleSyncFailedRecipients = array_values(array_unique(array_filter((array) ($state['notify_gestionale_sync_failed_emails'] ?? []))));
+        $serviceReportRecipients = array_values(array_unique(array_filter((array) ($state['notify_service_report_emails'] ?? []))));
 
         $tenant?->update([
             'notify_information_request_emails' => $informationRecipients,
@@ -119,7 +146,10 @@ class NotificationSettings extends Page implements HasForms
             'notify_quote_emails' => $quoteRecipients,
             'notify_quote_group_emails' => $quoteGroupRecipients,
             'notify_deadline_emails' => $deadlineRecipients,
-            'notify_customer_gestionale_emails' => $customerGestionaleRecipients,
+            'notify_customer_gestionale_review_emails' => $gestionaleReviewRecipients,
+            'notify_gestionale_sync_digest_emails' => $gestionaleSyncDigestRecipients,
+            'notify_gestionale_sync_failed_emails' => $gestionaleSyncFailedRecipients,
+            'notify_service_report_emails' => $serviceReportRecipients,
             // Manteniamo valorizzata la lista legacy finche' esiste codice
             // esterno che potrebbe ancora leggerla direttamente.
             'notify_staff_emails' => array_values(array_unique(array_filter(array_merge(
@@ -128,7 +158,10 @@ class NotificationSettings extends Page implements HasForms
                 $quoteRecipients,
                 $quoteGroupRecipients,
                 $deadlineRecipients,
-                $customerGestionaleRecipients,
+                $gestionaleReviewRecipients,
+                $gestionaleSyncDigestRecipients,
+                $gestionaleSyncFailedRecipients,
+                $serviceReportRecipients,
             )))),
         ]);
 

@@ -162,7 +162,7 @@ class Customer extends Model
 
         $this->flagGestionaleReview(array_values($changed));
 
-        $recipients = $this->tenant?->notificationRecipients('customer_gestionale') ?? [];
+        $recipients = $this->tenant?->notificationRecipients('customer_gestionale_review') ?? [];
 
         if ($recipients !== []) {
             Mail::to($recipients)->send(new CustomerGestionaleReviewMail(
