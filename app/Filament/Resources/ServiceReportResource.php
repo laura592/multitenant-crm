@@ -185,12 +185,11 @@ class ServiceReportResource extends Resource
                     TextEntry::make('gestionale_sync_status')
                         ->label('Stato invio Eureka')
                         ->badge()
-                        // Senza un default, lo stato null viene considerato "blank"
-                        // da Filament PRIMA di passare per formatStateUsing: il
-                        // badge "Non inviato" non veniva mai renderizzato, la cella
-                        // restava vuota (a differenza dei campi accanto, che invece
-                        // hanno un placeholder e mostrano correttamente "—").
-                        ->default('none')
+                        // Vedi la stessa nota sulla colonna Eureka nella tabella:
+                        // un rapportino ripescato da un import (eureka_service_report_id
+                        // valorizzato) e' gia' su Eureka anche se non e' mai
+                        // passato da un invio CRM->Eureka.
+                        ->state(fn (ServiceReport $record) => self::gestionaleDisplayState($record))
                         ->formatStateUsing(fn (?string $state) => self::gestionaleSyncStatusLabels()[$state] ?? self::gestionaleSyncStatusLabels()['none'])
                         ->color(fn (?string $state) => self::gestionaleSyncStatusColors()[$state] ?? self::gestionaleSyncStatusColors()['none']),
                     TextEntry::make('gestionale_synced_at')->label('Ultimo invio riuscito')->dateTime('d/m/Y H:i')->placeholder('—'),
@@ -492,7 +491,13 @@ class ServiceReportResource extends Resource
                 Tables\Columns\TextColumn::make('gestionale_sync_status')
                     ->label('Eureka')
                     ->badge()
-                    ->default('none')
+                    // "Non inviato" era fuorviante per uno storico ripescato
+                    // da un import (eureka_service_report_id valorizzato,
+                    // gestionale_sync_status pero' mai toccato perche' quel
+                    // campo segue solo gli invii CRM->Eureka): sembrava un
+                    // rapportino da inviare quando in realta' e' gia' su
+                    // Eureka, solo arrivato nel verso opposto.
+                    ->state(fn (ServiceReport $record) => self::gestionaleDisplayState($record))
                     ->formatStateUsing(fn (?string $state) => self::gestionaleSyncStatusLabels()[$state] ?? self::gestionaleSyncStatusLabels()['none'])
                     ->color(fn (?string $state) => self::gestionaleSyncStatusColors()[$state] ?? self::gestionaleSyncStatusColors()['none']),
             ])
@@ -512,17 +517,18 @@ class ServiceReportResource extends Resource
                 Tables\Filters\SelectFilter::make('gestionale_sync_status')
                     ->label('Eureka')
                     ->options(fn () => self::gestionaleSyncStatusLabels())
-                    // 'none' non e' un valore reale in colonna (solo il
-                    // default lato UI per il badge quando e' null) — va
-                    // tradotto in whereNull, non in un where('=', 'none').
+                    // 'none'/'imported' non sono valori reali in colonna —
+                    // sono lo stato derivato calcolato da
+                    // gestionaleDisplayState() a partire da
+                    // gestionale_sync_status + eureka_service_report_id,
+                    // vedi la stessa distinzione li'.
                     ->query(function ($query, array $data) {
-                        if (blank($data['value'] ?? null)) {
-                            return $query;
-                        }
-
-                        return $data['value'] === 'none'
-                            ? $query->whereNull('gestionale_sync_status')
-                            : $query->where('gestionale_sync_status', $data['value']);
+                        return match ($data['value'] ?? null) {
+                            null, '' => $query,
+                            'none' => $query->whereNull('gestionale_sync_status')->whereNull('eureka_service_report_id'),
+                            'imported' => $query->whereNull('gestionale_sync_status')->whereNotNull('eureka_service_report_id'),
+                            default => $query->where('gestionale_sync_status', $data['value']),
+                        };
                     }),
                 Tables\Filters\SelectFilter::make('customer_id')
                     ->label('Cliente')
@@ -688,6 +694,7 @@ class ServiceReportResource extends Resource
             'queued' => 'In coda',
             'sent' => 'Inviato',
             'failed' => 'Fallito',
+            'imported' => 'Importato da Eureka',
         ];
     }
 
@@ -698,6 +705,23 @@ class ServiceReportResource extends Resource
             'queued' => 'warning',
             'sent' => 'success',
             'failed' => 'danger',
+            'imported' => 'info',
         ];
+    }
+
+    /**
+     * gestionale_sync_status segue solo gli invii CRM->Eureka: un
+     * rapportino ripescato da eureka:import-service-reports ha
+     * eureka_service_report_id valorizzato ma quel campo a NULL, e senza
+     * questa distinzione sembrava "da inviare" pur essendo gia' su Eureka
+     * (arrivato nel verso opposto).
+     */
+    private static function gestionaleDisplayState(ServiceReport $record): string
+    {
+        if ($record->gestionale_sync_status) {
+            return $record->gestionale_sync_status;
+        }
+
+        return $record->eureka_service_report_id ? 'imported' : 'none';
     }
 }

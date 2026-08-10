@@ -69,6 +69,20 @@ class SendServiceReportToGestionaleJob implements ShouldQueue
                 // La risposta reale identifica il documento con "id_eureka",
                 // non "id" — vedi la stessa nota in EurekaClient.php.
                 'gestionale_scheda_lavoro_id' => $result['id_eureka'] ?? null,
+                // Stesso valore anche qui: senza, un futuro
+                // eureka:import-service-reports non riconosce questo
+                // rapportino come gia' esistente (la sua idempotenza e'
+                // chiavata su eureka_service_report_id, non su
+                // gestionale_scheda_lavoro_id) e ne crea un duplicato
+                // locale — successo davvero, vedi RT-2026-0002/SL-592.
+                'eureka_service_report_id' => $result['id_eureka'] ?? null,
+                // Rinominato con lo stesso schema "SL-{numero}" usato da
+                // ImportEurekaServiceReports: un rapportino nato in CRM
+                // (numerazione RT-2026-xxxx) e uno stesso documento ripescato
+                // da un giro storico successivo si distinguevano solo per
+                // numero, sembrando due cose diverse anche dopo il fix di
+                // eureka_service_report_id sopra — vedi RT-2026-0002/SL-591.
+                'number' => $this->resolveGestionaleNumber($report, $result),
                 'gestionale_sync_status' => 'sent',
                 'gestionale_sync_error' => null,
                 'gestionale_synced_at' => now(),
@@ -90,5 +104,34 @@ class SendServiceReportToGestionaleJob implements ShouldQueue
                 ->danger()
                 ->sendToDatabase($this->notifyUser);
         }
+    }
+
+    /**
+     * Stesso schema "SL-{numero}" usato da
+     * ImportEurekaServiceReports::resolveUniqueNumber() (compreso il
+     * fallback su id_eureka e la disambiguazione con suffisso) — cosi' un
+     * rapportino nato qui e uno stesso documento ripescato da un giro
+     * storico finiscono sempre con lo stesso numero, non due diversi.
+     *
+     * @param  array<string, mixed>  $result
+     */
+    private function resolveGestionaleNumber(ServiceReport $report, array $result): string
+    {
+        $numero = (int) ($result['numero'] ?? 0);
+        $base = $numero > 0 ? "SL-{$numero}" : 'SL-EK-'.(int) ($result['id_eureka'] ?? 0);
+
+        $candidate = $base;
+        $i = 2;
+        while (
+            ServiceReport::withTrashed()
+                ->where('tenant_id', $report->tenant_id)
+                ->where('number', $candidate)
+                ->where('id', '!=', $report->id)
+                ->exists()
+        ) {
+            $candidate = "{$base}-".$i++;
+        }
+
+        return $candidate;
     }
 }

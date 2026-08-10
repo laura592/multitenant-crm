@@ -22,6 +22,7 @@ class ServiceReport extends Model
     protected $fillable = [
         'tenant_id',
         'customer_id',
+        'number',
         'machine_unit_id',
         'quote_id',
         'machine_product_id',
@@ -233,9 +234,18 @@ class ServiceReport extends Model
             ])->all(),
         ];
 
-        $serialNumber = $this->machineUnit?->serial_number ?? $this->machine_serial_number;
-        if ($serialNumber) {
-            $payload['sl_matricola'] = $serialNumber;
+        // sl_matricola e' opzionale, ma se presente Eureka la valida contro
+        // le matricole gia' registrate per quell'articolo (422 se non
+        // trovata) — vedi doc fornitore §6.1. Va quindi inviata solo per una
+        // MachineUnit con source=eureka (matricola vista dal vivo sul loro
+        // sistema, es. da un import storico o da art_installati): una
+        // creata a mano nel CRM (nuova installazione appena documentata,
+        // impianto segnaposto) non e' detto sia gia' registrata li', e
+        // mandarla comunque fa fallire l'intero invio — successo davvero,
+        // vedi RT-2026-0003/0005/0006/0007 (matricola inventata o non
+        // ancora nota, tutti falliti con 422 finche' non tolta).
+        if ($this->machineUnit?->source === MachineUnit::SOURCE_EUREKA) {
+            $payload['sl_matricola'] = $this->machineUnit->serial_number;
         }
 
         if ($recipient->isNot($this->customer)) {
