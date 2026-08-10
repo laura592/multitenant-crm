@@ -20,6 +20,18 @@ match esatto. Risposta tipo:
 un prodotto del nostro catalogo all'articolo Eureka (serve per `sl_articolo`
 nelle schede lavoro).
 
+**Bug reale trovato e corretto il 2026-08-06**: quando
+`ImportEurekaServiceReports::resolveOrCreateProduct()` trovava un prodotto
+già esistente a catalogo (il caso comune, es. matchato per SKU dal dump di
+produzione), riusava il record **senza mai scrivergli `gestionale_code`**
+— solo i prodotti creati ex-novo lo ricevevano. Risultato: su 407 prodotti a
+catalogo, **zero** avevano `gestionale_code`, quindi nessun rapportino con
+una macchina collegata poteva mai passare
+`ServiceReport::gestionaleValidationErrors()` e venire inviato a gestionale.
+Corretto con un backfill (`backfillProductEurekaCode()`) che scrive il
+codice anche sui prodotti già esistenti trovati durante l'import; rilanciare
+`eureka:import-service-reports` per applicarlo ai record già importati.
+
 **Aggiornamento — verificato con codici reali del catalogo Alex**: cercare
 per **SKU esatto del nostro catalogo non funziona quasi mai** (es.
 `DC-XT-2G-BARISTA`, `A600-FM-EC-MU-1G-H1` → zero risultati: i formati dei
@@ -59,7 +71,7 @@ Nessun parametro, ritorna tutte le tariffe attive. **Dato reale completo**
 }
 ```
 
-### ⚠️ Discrepanza da chiarire col fornitore
+### Tariffa "FISSA"/MAN — chiarito col fornitore (2026-08-06)
 
 La documentazione fornita da Eureka dice testualmente: *"Ad oggi ALEX srl non
 utilizza le tariffe: nella scheda lavoro indicare **sempre** la tariffa con
@@ -68,13 +80,34 @@ utilizza le tariffe: nella scheda lavoro indicare **sempre** la tariffa con
 Ma i dati reali sopra mostrano che l'id 2 è **"MAN" / "MANODOPERA STD"** — non
 esiste nessuna tariffa chiamata "FISSA" tra quelle attive. Il codice
 (`ServiceReport::toGestionalePayload()`) usa comunque l'id 2 come da
-istruzioni del fornitore, con un commento che segnala la cosa.
+istruzioni del fornitore.
 
-**Aggiornamento — corroborato da dati reali**: leggendo lo storico vero delle
-schede lavoro (`GET /schedelavoro/?data_da=...&data_a=...`, centinaia di
-documenti reali fino al 2026-07-23) **ogni singolo documento aveva
-`"id_tariffa_t61": 2`**, nessuna eccezione. Quindi l'id 2 è davvero quello
-sempre usato in pratica — la questione "FISSA" vs "MAN" resta solo
-un'incongruenza di nome nella documentazione del fornitore, non un rischio
-concreto per l'id da usare. Resta comunque buona norma chiederlo a Eureka se
-mai si aggiungono altre tariffe in futuro.
+Corroborato prima dai dati reali (leggendo lo storico vero delle schede
+lavoro, `GET /schedelavoro/?data_da=...&data_a=...`, centinaia di documenti
+reali fino al 2026-07-23: **ogni singolo documento aveva
+`"id_tariffa_t61": 2`**, nessuna eccezione) e poi **confermato per iscritto
+dal fornitore**: "FISSA"/MAN resta solo un'incongruenza di nome nella loro
+documentazione, non un rischio concreto — l'id da usare è sempre `2`. Da
+richiedere di nuovo a Eureka solo se in futuro ALEX inizia a usare tariffe
+multiple.
+
+## Distinguere macchine da ricambi nel catalogo articoli
+
+Confermato dal fornitore (2026-08-06): `/articoli/lista/` e
+`/articoli/articolo/` restituiscono **l'intero catalogo indistintamente**
+(macchine, ricambi, materiali) — non esiste un filtro per categoria/famiglia
+su questi endpoint, e comunque la classificazione per famiglia/sottofamiglia
+non è mantenuta bene lato Eureka (confermato anche da noi: i campi
+`famiglia`/`sottofamiglia`/`sottosottofamiglia` tornano quasi sempre vuoti
+con `id_eureka: 0`).
+
+Per selezionare **solo le macchine** installate presso un cliente (il caso
+giusto quando si compila `sl_articolo` in una scheda lavoro, vedi
+[schede-lavoro.md](schede-lavoro.md)), usare invece
+`GET /show/q/art_installati?q=<id_codice_f15>` — vedi
+[macchinari.md](macchinari.md).
+
+Esiste anche `GET /articoli/ricerca?rql=...` con filtri sui campi anagrafici
+dell'articolo (inclusa la famiglia), ma è utilizzabile solo se si concorda
+con Eureka una classificazione per famiglie che separi davvero ricambi e
+materiali — non ancora fatto.
