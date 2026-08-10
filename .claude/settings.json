@@ -142,13 +142,33 @@
       "Bash(grep -iE \"\\\\.env|credential|secret|\\\\.key$\")",
       "Bash(grep -n 'isLazy\\\\|$isLazy' -B2 -A5 /Users/laura/Documents/multitenant-crm/vendor/filament/widgets/src/Widget.php)",
       "Bash(awk '{print $1, $2}')",
-      "Bash(git diff *)"
+      "Bash(git diff *)",
+      "Bash(timeout 90 npx --yes playwright@1.48 --version)",
+      "Bash(npx --yes playwright@1.48 --version)",
+      "Bash(npx --yes playwright@1.48 install chromium --with-deps)",
+      "Bash(node screenshot.mjs)",
+      "Bash(node page2.mjs)",
+      "Bash(vendor/bin/phpstan analyse *)",
+      "Bash(grep -n 'record\\($this\\\\|function configureAction\\\\|->record\\(' /Users/laura/Documents/multitenant-crm/vendor/filament/actions/src/Concerns/InteractsWithRecord.php)",
+      "Bash(xargs -I{} wc -l {})",
+      "Bash(timeout 20 npm view playwright version)",
+      "Bash(npm view *)",
+      "Bash(mkdir -p screenshots)",
+      "Bash(node verify.js)",
+      "Bash(grep -n 'protected $fillable\\\\|type\\\\b\\\\|const TYPE' /Users/laura/Documents/multitenant-crm/app/Models/ServiceReport.php)",
+      "Bash(tee /tmp/eureka_full_import.log)",
+      "Bash(node verify3.js)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(grep -n 'protected $fillable' -A 40 /Users/laura/Documents/multitenant-crm/app/Models/Customer.php)",
+      "Bash(tee /tmp/eureka_full_import2.log)",
+      "Bash(tee /tmp/eureka_full_import3.log)"
     ],
     "additionalDirectories": [
       "/private/tmp/claude-501/-Users-laura-Documents-multitenant-crm/42c2ea60-257f-4721-955c-f0223b676257/scratchpad",
       "/Users/laura/Documents/multitenant-crm/storage/app/tmp",
       "/Users/laura/Documents/multitenant-crm/storage/app",
-      "/private/tmp/claude-501/-Users-laura-Documents-multitenant-crm/8d24756c-f8ab-4e00-ba10-1fd4df5335b9/scratchpad"
+      "/private/tmp/claude-501/-Users-laura-Documents-multitenant-crm/8d24756c-f8ab-4e00-ba10-1fd4df5335b9/scratchpad",
+      "/private/tmp/claude-501/-Users-laura-Documents-multitenant-crm/ed7216ae-8843-4563-a00f-56736103d7e8/scratchpad"
     ]
   }
 }
