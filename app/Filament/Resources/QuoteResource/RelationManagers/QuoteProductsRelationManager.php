@@ -4,6 +4,8 @@ namespace App\Filament\Resources\QuoteResource\RelationManagers;
 
 use App\Filament\Actions\ConfigureMachineAction;
 use App\Filament\Resources\QuoteResource\Pages\ViewQuote;
+use App\Models\Brand;
+use App\Models\Category;
 use App\Models\Product;
 use App\Models\QuoteProduct;
 use Filament\Forms;
@@ -39,9 +41,34 @@ class QuoteProductsRelationManager extends RelationManager
     public function form(Form $form): Form
     {
         return $form->schema([
+            // Filtri solo per restringere l'elenco sotto (dehydrated(false):
+            // non sono un campo della riga preventivo, si azzerano al
+            // riaprire il form) — cercare per nome su 600+ prodotti era il
+            // problema segnalato, stesso pattern di filtro a cascata gia'
+            // usato in MaterialOrderResource per i materiali.
+            Forms\Components\Grid::make(2)
+                ->schema([
+                    Forms\Components\Select::make('brand_filter')
+                        ->label('Brand')
+                        ->options(fn () => Brand::query()->orderBy('name')->pluck('name', 'id'))
+                        ->searchable()
+                        ->live()
+                        ->afterStateUpdated(fn (Forms\Set $set) => $set('product_id', null))
+                        ->dehydrated(false),
+                    Forms\Components\Select::make('category_filter')
+                        ->label('Categoria')
+                        ->options(fn () => self::categoryFilterOptions())
+                        ->searchable()
+                        ->live()
+                        ->afterStateUpdated(fn (Forms\Set $set) => $set('product_id', null))
+                        ->dehydrated(false),
+                ]),
             Forms\Components\Select::make('product_id')
                 ->label('Prodotto')
-                ->options(fn () => Product::query()->pluck('name', 'id'))
+                ->options(fn (Forms\Get $get) => Product::query()
+                    ->when($get('brand_filter'), fn ($q, $brandId) => $q->where('brand_id', $brandId))
+                    ->when($get('category_filter'), fn ($q, $categoryId) => $q->whereIn('category_id', self::categoryAndDescendantIds($categoryId)))
+                    ->pluck('name', 'id'))
                 ->searchable()
                 ->live()
                 // A differenza del wizard macchina (ConfigureMachineAction),
@@ -111,5 +138,53 @@ class QuoteProductsRelationManager extends RelationManager
         // righe scrivendo direttamente sul modello (fuori dal ciclo form di
         // questo RelationManager) - senza questo, le nuove righe restano
         // invisibili finche' non si interagisce di nuovo con la tabella.
+    }
+
+    /**
+     * Elenco per la tendina "Categoria": le figlie compaiono raggruppate
+     * sotto il nome del genitore (Filament mostra un array annidato come
+     * optgroup), le categorie senza figli restano piatte. Un genitore con
+     * figlie ottiene anche una voce propria "(tutte)" per poterlo scegliere
+     * come filtro complessivo, non solo le sue figlie una per una.
+     *
+     * @return array<int|string, mixed>
+     */
+    private static function categoryFilterOptions(): array
+    {
+        $categories = Category::query()->orderBy('name')->get(['id', 'name', 'parent_id']);
+        $childrenByParent = $categories->whereNotNull('parent_id')->groupBy('parent_id');
+
+        $options = [];
+
+        foreach ($categories->whereNull('parent_id') as $parent) {
+            $children = $childrenByParent->get($parent->id, collect());
+
+            if ($children->isEmpty()) {
+                $options[$parent->id] = $parent->name;
+
+                continue;
+            }
+
+            $options[$parent->name] = [$parent->id => "{$parent->name} (tutte)"]
+                + $children->pluck('name', 'id')->all();
+        }
+
+        return $options;
+    }
+
+    /**
+     * Un genitore selezionato come filtro deve includere anche i prodotti
+     * delle sue categorie figlie, non solo quelli con quella categoria
+     * esatta — altrimenti scegliere il genitore darebbe risultati vuoti o
+     * incompleti (vedi categoryFilterOptions(), che propone il genitore
+     * proprio per coprire "tutte" le figlie insieme).
+     *
+     * @return array<int, string>
+     */
+    private static function categoryAndDescendantIds(string $categoryId): array
+    {
+        $childIds = Category::query()->where('parent_id', $categoryId)->pluck('id')->all();
+
+        return [$categoryId, ...$childIds];
     }
 }
