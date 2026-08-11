@@ -300,15 +300,19 @@ class ImportEurekaServiceReports extends Command
                 $created++;
 
                 if (! $dryRun) {
-                    DB::transaction(function () use ($tenant, $payload, $detail, $gestionaleNumber, &$materialCache): void {
+                    DB::transaction(function () use ($tenant, $payload, $detail, $gestionaleNumber, $interventionDate, &$materialCache): void {
                         $report = new ServiceReport($payload);
-                        // "number" NON viene impostato qui: lo assegna da solo
-                        // ServiceReport::booted() (nextNumberForTenant) con lo
-                        // stesso schema RT-... usato per i rapportini nati in
-                        // CRM — anche uno storico ripescato da Eureka ha ormai
-                        // un numero interno CRM, il numero Eureka finisce in
-                        // gestionale_number (vedi la stessa scelta in
+                        // Anche uno storico ripescato da Eureka ha ormai un
+                        // numero interno CRM (RT-...): assegnato qui esplicitamente
+                        // sull'anno dell'intervento (non quello odierno, che
+                        // userebbe di default ServiceReport::booted() lasciando
+                        // "number" vuoto) — created_at riflette solo quando la
+                        // riga e' stata importata, non l'anno del documento
+                        // originale, che per uno storico puo' essere anni fa.
+                        // Il numero Eureka finisce in gestionale_number (vedi la
+                        // stessa scelta in
                         // SendServiceReportToGestionaleJob::resolveGestionaleNumber()).
+                        $report->number = ServiceReport::nextNumberForTenant($tenant->id, (int) substr($interventionDate, 0, 4));
                         $report->gestionale_number = $gestionaleNumber;
                         $report->save();
                         if ($detail) {

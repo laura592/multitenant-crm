@@ -256,15 +256,20 @@ class ServiceReport extends Model
 
     /**
      * Numerazione scoped per tenant fin dall'inizio (vedi docs/architecture.md §10.5).
+     * Anno di default quello odierno (rapportino creato ora in CRM); un anno
+     * esplicito serve per assegnare un numero coerente con la data reale a
+     * uno storico ripescato da Eureka (vedi ImportEurekaServiceReports e
+     * BackfillServiceReportCrmNumbers), dove created_at riflette quando la
+     * riga e' stata importata, non l'anno dell'intervento — per questo il
+     * filtro e' solo sul prefisso di "number", mai su created_at.
      */
-    public static function nextNumberForTenant(?string $tenantId): string
+    public static function nextNumberForTenant(?string $tenantId, ?int $year = null): string
     {
-        $year = date('Y');
+        $year ??= (int) date('Y');
         $prefix = "RT-{$year}-";
 
         $last = static::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
-            ->whereYear('created_at', $year)
             ->where('number', 'like', "{$prefix}%")
             ->orderByRaw('CAST(SUBSTRING(number, -4) AS UNSIGNED) DESC')
             ->first();
