@@ -1,5 +1,46 @@
 import './bootstrap';
 
+// Uniforma il feedback di tutti i pulsanti "Salva"/"Crea" delle pagine
+// risorsa Filament (Clienti, Preventivi, Rapportini, ecc.): di suo Filament
+// mostra solo una piccola icona che ruota al posto dell'icona del pulsante,
+// facile da non notare su tablet/cellulare. Il markup del bottone (vendor/
+// filament/support/.../button/index.blade.php) supporta gia' uno scambio di
+// etichetta con "processingMessage" + un effetto "cursor-wait", ma lo attiva
+// solo per l'upload file (form-processing-started/finished dispatchati da
+// file-upload.js) — qui li dispatchiamo anche per il salvataggio vero e
+// proprio, intercettando il "commit" Livewire delle chiamate a save()/create().
+function setupSaveButtonProcessingIndicator() {
+	if (!window.Livewire?.hook) {
+		return;
+	}
+
+	const savingMethods = new Set(['save', 'create']);
+
+	window.Livewire.hook('commit', ({ component, commit, succeed, fail }) => {
+		const calls = commit?.calls ?? [];
+		if (!calls.some((call) => savingMethods.has(call.method))) {
+			return;
+		}
+
+		const forms = component?.el?.querySelectorAll('form.fi-form') ?? [];
+		if (!forms.length) {
+			return;
+		}
+
+		const dispatchOnForms = (eventName, detail) => {
+			forms.forEach((form) => form.dispatchEvent(new CustomEvent(eventName, { detail })));
+		};
+
+		dispatchOnForms('form-processing-started', { message: 'Salvataggio…' });
+
+		const finish = () => dispatchOnForms('form-processing-finished');
+		succeed(finish);
+		fail(finish);
+	});
+}
+
+document.addEventListener('livewire:init', setupSaveButtonProcessingIndicator);
+
 const nearbyMapInstances = new WeakMap();
 
 const ensureLeafletLoaded = (() => {

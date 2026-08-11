@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Support\EurekaClient;
 use Filament\Forms\Components\DatePicker;
 use Filament\Infolists\Infolist;
+use Filament\Notifications\Notification;
 use Filament\Support\Facades\FilamentView;
 use Filament\Tables\Table;
 use Filament\View\PanelsRenderHook;
@@ -70,6 +71,17 @@ class AppServiceProvider extends ServiceProvider
         // proprio (es. ->dateTime('d/m/Y H:i')).
         Table::$defaultDateDisplayFormat = 'd/m/Y';
         Infolist::$defaultDateDisplayFormat = 'd/m/Y';
+
+        // Segnalato: i toast di conferma erano poco evidenti (sfondo
+        // bianco, solo l'icona colorata) - facile non accorgersene su
+        // tablet/cellulare. Devono pero' comparire e sparire da soli (non
+        // persistenti): solo qualche secondo in piu' del default Filament
+        // (6s) per avere il tempo di notarli. Il colore pieno + icone
+        // bianche per stato e' in resources/css/app.css
+        // (".fi-no-notification.fi-status-*").
+        Notification::configureUsing(function (Notification $notification) {
+            $notification->duration(9000);
+        });
 
         // Bug: cliccare "Abilita" sulla 2FA (o salvare nome/password) in
         // /my-profile falliva sempre con 419. filament-breezy registra questi

@@ -43,3 +43,72 @@
 .dark .fi-wi-stats-overview-stat:has(.fi-color-primary) .fi-wi-stats-overview-stat-icon {
     color: rgb(var(--primary-400));
 }
+
+/*
+ * Segnalato: i toast di notifica (successo/errore/avviso) di default sono
+ * una card bianca con solo l'icona colorata - poco evidenti su tablet/
+ * cellulare o per chi vede poco. ->success()/->danger()/->warning() valorizza
+ * solo lo "status" (classe fi-status-*), non il colore della card (resta
+ * fi-color-gray, vedi vendor/filament/notifications/.../notification.blade.php)
+ * - qui si forza uno sfondo pieno per stato con testo/icona bianchi, stesso
+ * identico stile sia chiaro che scuro (il colore pieno gia' garantisce
+ * contrasto sufficiente in entrambi).
+ */
+.fi-no-notification.fi-status-success,
+.fi-no-notification.fi-status-danger,
+.fi-no-notification.fi-status-warning {
+    background-color: transparent;
+}
+.fi-no-notification.fi-status-success > div:first-child {
+    background-color: rgb(var(--success-600));
+}
+.fi-no-notification.fi-status-danger > div:first-child {
+    background-color: rgb(var(--danger-600));
+}
+.fi-no-notification.fi-status-warning > div:first-child {
+    background-color: rgb(var(--warning-600));
+}
+.fi-no-notification.fi-status-success .fi-no-notification-icon,
+.fi-no-notification.fi-status-success .fi-no-notification-title,
+.fi-no-notification.fi-status-success .fi-no-notification-body,
+.fi-no-notification.fi-status-danger .fi-no-notification-icon,
+.fi-no-notification.fi-status-danger .fi-no-notification-title,
+.fi-no-notification.fi-status-danger .fi-no-notification-body,
+.fi-no-notification.fi-status-warning .fi-no-notification-icon,
+.fi-no-notification.fi-status-warning .fi-no-notification-title,
+.fi-no-notification.fi-status-warning .fi-no-notification-body {
+    color: #fff;
+}
+/* Il pulsante di chiusura colora la sua icona (svg) direttamente con una
+ * classe text-gray-*: bisogna sovrascrivere quella, non il bottone che la
+ * contiene (color non si "eredita sopra" una dichiarazione esplicita). */
+.fi-no-notification.fi-status-success .fi-no-notification-close-btn svg,
+.fi-no-notification.fi-status-danger .fi-no-notification-close-btn svg,
+.fi-no-notification.fi-status-warning .fi-no-notification-close-btn svg {
+    color: rgb(255 255 255 / 0.75);
+}
+.fi-no-notification.fi-status-success .fi-no-notification-close-btn:hover svg,
+.fi-no-notification.fi-status-danger .fi-no-notification-close-btn:hover svg,
+.fi-no-notification.fi-status-warning .fi-no-notification-close-btn:hover svg {
+    color: #fff;
+}
+
+/*
+ * Segnalato: 2 spinner nel pulsante "Salva"/"Crea" durante il salvataggio.
+ * Causa: setupSaveButtonProcessingIndicator() in app.js dispatcha
+ * form-processing-started/finished anche per save()/create() (prima erano
+ * solo per l'upload file) per attivare lo scambio di etichetta con
+ * "Salvataggio…" gia' supportato dal bottone (vendor/filament/support/.../
+ * button/index.blade.php). Ma quei bottoni (type=submit + form, azioni
+ * canSubmitForm()) hanno anche il loro spinner nativo via wire:target, reso
+ * a prescindere: con l'evento custom attivo durante la stessa richiesta
+ * Livewire, i due spinner (stessa icona, due <x-filament::loading-indicator>
+ * distinti) restano visibili insieme. Si nasconde solo quello nativo
+ * (riconoscibile perche' ha wire:target ma non x-show, a differenza di
+ * quello custom) e solo dentro i bottoni che hanno anche l'indicatore
+ * custom, per non toccare gli altri bottoni (es. azioni "elimina" in
+ * tabella) che usano solo lo spinner nativo.
+ */
+.fi-btn:has([x-show="isProcessing"]) svg[wire\:target] {
+    display: none !important;
+}
