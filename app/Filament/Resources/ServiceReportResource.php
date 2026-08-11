@@ -635,18 +635,16 @@ class ServiceReportResource extends Resource
             // l'altro della pagina.
             ->defaultSort(fn ($query) => $query->orderByDesc('intervention_date')->orderByDesc('created_at'))
             ->columns([
-                Tables\Columns\TextColumn::make('number')
-                    ->label('Numero')
-                    ->searchable(['number', 'gestionale_number'])
-                    // Entrambi i numeri in una sola colonna (invece di
-                    // aggiungerne una seconda, che avrebbe vanificato lo
-                    // spazio appena recuperato sulla colonna Eureka accanto):
-                    // il numero CRM resta il riferimento principale, quello
-                    // gestionale (quando c'e') si vede subito accanto senza
-                    // dover incrociare la scheda di dettaglio.
-                    ->formatStateUsing(fn (string $state, ServiceReport $record) => $record->gestionale_number
-                        ? "{$state} · {$record->gestionale_number}"
-                        : $state),
+                Tables\Columns\TextColumn::make('number')->label('Numero')->searchable(),
+                Tables\Columns\TextColumn::make('gestionale_number')
+                    ->label('Numero gestionale')
+                    ->placeholder('—')
+                    ->searchable()
+                    // Colonna separata (non in coda al numero CRM: erano
+                    // "tutto misto" nella stessa cella) e nascosta di
+                    // default per non riportare via lo spazio recuperato
+                    // sulla colonna Eureka — visibile via toggle colonne.
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->searchable(),
                 Tables\Columns\TextColumn::make('technician.name')->label('Tecnico'),
                 Tables\Columns\TextColumn::make('intervention_type')

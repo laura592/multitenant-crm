@@ -107,7 +107,7 @@ class SendServiceReportToGestionaleJob implements ShouldQueue
 
     /**
      * Stesso schema "SL-{numero}/{anno}" usato da
-     * ImportEurekaServiceReports::resolveUniqueNumber() (compreso il
+     * ImportEurekaServiceReports::resolveGestionaleNumber() (compreso il
      * fallback su id_eureka e la disambiguazione con suffisso) — cosi' un
      * rapportino nato qui e uno stesso documento ripescato da un giro
      * storico finiscono sempre con lo stesso numero gestionale, non due

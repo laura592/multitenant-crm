@@ -30,12 +30,14 @@ class ServiceReport extends Model
      * per un rapportino nato qui e poi inviato). SOURCE_EUREKA e' impostato
      * solo da ImportEurekaServiceReports al momento della creazione, e resta
      * l'unico modo affidabile per sapere se il CRM o Eureka e' la fonte
-     * autorevole per tecnico/data/descrizioni di questo rapportino — il
-     * prefisso del "number" non basta perche' un rapportino SOURCE_EUREKA
-     * nasce gia' con "number" in formato SL-... (non ha mai avuto un numero
-     * CRM). "number" pero' resta stabile per tutta la vita del rapportino:
-     * il numero assegnato da Eureka in un invio va in "gestionale_number",
-     * vedi SendServiceReportToGestionaleJob::resolveGestionaleNumber().
+     * autorevole per tecnico/data/descrizioni di questo rapportino. Ogni
+     * rapportino ha un "number" interno CRM (RT-...), nato qui o assegnato
+     * da ImportEurekaServiceReports per lo storico ripescato da Eureka —
+     * stabile per tutta la vita del rapportino. Il numero lato Eureka (sia
+     * quello di un documento importato, sia quello ottenuto da un invio) va
+     * invece in "gestionale_number", vedi
+     * SendServiceReportToGestionaleJob::resolveGestionaleNumber() e
+     * ImportEurekaServiceReports::resolveGestionaleNumber().
      */
     public const SOURCE_MANUALE = 'manuale';
 

@@ -295,14 +295,21 @@ class ImportEurekaServiceReports extends Command
                     });
                 }
             } else {
-                $number = $this->resolveUniqueNumber($tenant, $detail ?? $summary, $interventionDate);
-                $this->line("  <info>CREATE</info> rapportino #{$eurekaId} → {$number}");
+                $gestionaleNumber = $this->resolveGestionaleNumber($tenant, $detail ?? $summary, $interventionDate);
+                $this->line("  <info>CREATE</info> rapportino #{$eurekaId} → {$gestionaleNumber}");
                 $created++;
 
                 if (! $dryRun) {
-                    DB::transaction(function () use ($tenant, $payload, $detail, $number, &$materialCache): void {
+                    DB::transaction(function () use ($tenant, $payload, $detail, $gestionaleNumber, &$materialCache): void {
                         $report = new ServiceReport($payload);
-                        $report->number = $number;
+                        // "number" NON viene impostato qui: lo assegna da solo
+                        // ServiceReport::booted() (nextNumberForTenant) con lo
+                        // stesso schema RT-... usato per i rapportini nati in
+                        // CRM — anche uno storico ripescato da Eureka ha ormai
+                        // un numero interno CRM, il numero Eureka finisce in
+                        // gestionale_number (vedi la stessa scelta in
+                        // SendServiceReportToGestionaleJob::resolveGestionaleNumber()).
+                        $report->gestionale_number = $gestionaleNumber;
                         $report->save();
                         if ($detail) {
                             $this->syncDetailRows($tenant, $report, $detail, $materialCache);
@@ -886,11 +893,14 @@ class ImportEurekaServiceReports extends Command
      * di importazione sarebbe arbitrario e fuorviante (sembra una revisione, non
      * lo e'). "numero/anno" replica invece la convenzione italiana standard
      * numero/anno (come una fattura) ed e' verificato univoco su tutto lo
-     * storico importato finora (0 collisioni su 3606 rapportini).
+     * storico importato finora (0 collisioni su 3606 rapportini). Il controllo
+     * di unicita' e' su gestionale_number (non piu' "number", che per un
+     * rapportino ripescato da Eureka e' ormai il numero interno CRM
+     * RT-..., assegnato da ServiceReport::booted()).
      *
      * @param  array<string, mixed>  $detail
      */
-    private function resolveUniqueNumber(Tenant $tenant, array $detail, string $interventionDate): string
+    private function resolveGestionaleNumber(Tenant $tenant, array $detail, string $interventionDate): string
     {
         // Il detail usa 'numero', il summary usa 'numero_doc_t23'
         $numero = (int) ($detail['numero'] ?? $detail['numero_doc_t23'] ?? 0);
@@ -899,7 +909,7 @@ class ImportEurekaServiceReports extends Command
 
         $candidate = $base;
         $i = 2;
-        while (ServiceReport::query()->where('tenant_id', $tenant->id)->where('number', $candidate)->exists()) {
+        while (ServiceReport::query()->where('tenant_id', $tenant->id)->where('gestionale_number', $candidate)->exists()) {
             $candidate = $base.'-'.$i++;
         }
 

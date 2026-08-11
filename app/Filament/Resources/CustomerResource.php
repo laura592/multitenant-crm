@@ -156,24 +156,17 @@ class CustomerResource extends Resource
                     ->limit(30)
                     ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('city')->label('Città')->sortable(),
-                Tables\Columns\TextColumn::make('source')
-                    ->label('Origine')
-                    ->badge()
-                    ->formatStateUsing(fn (string $state) => match ($state) {
-                        Customer::SOURCE_GESTIONALE => 'Gestionale',
-                        default => 'App',
-                    })
-                    ->color(fn (string $state) => match ($state) {
-                        Customer::SOURCE_GESTIONALE => 'gray',
-                        default => 'info',
-                    })
+                Tables\Columns\IconColumn::make('source')
+                    ->label('Eureka')
+                    // Uniformato con la colonna "Da Eureka" di MachineUnitResource
+                    // e "Eureka" di ServiceReportResource: icona invece del badge
+                    // testuale "Gestionale"/"App", stesso sì/no a colpo d'occhio.
                     ->icon(fn (Customer $record) => match (true) {
-                        $record->source === Customer::SOURCE_GESTIONALE => null,
-                        $record->sent_to_gestionale_at !== null => 'heroicon-o-check-circle',
+                        $record->source === Customer::SOURCE_GESTIONALE, $record->sent_to_gestionale_at !== null => 'heroicon-o-check-circle',
                         default => 'heroicon-o-x-circle',
                     })
-                    ->iconPosition(\Filament\Support\Enums\IconPosition::After)
-                    ->iconColor(fn (Customer $record) => match (true) {
+                    ->color(fn (Customer $record) => match (true) {
+                        $record->source === Customer::SOURCE_GESTIONALE => 'gray',
                         $record->sent_to_gestionale_at !== null => 'success',
                         $record->approved_for_gestionale_at !== null => 'warning',
                         default => 'danger',
