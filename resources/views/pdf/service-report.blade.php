@@ -8,10 +8,49 @@
 
         @include('pdf.partials.letterhead-styles')
 
-        .row-table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+        .row-table { width: 100%; border-collapse: collapse; margin-bottom: 14px; table-layout: fixed; }
         .row-table td { border: none; padding: 0; vertical-align: top; }
-        .col-60 { width: 56%; padding-right: 20px; }
-        .col-40 { width: 44%; }
+        .col-50 { width: 48%; }
+        .col-gap { width: 4%; }
+
+        {{-- Dati cliente/Dati di fatturazione sono due celle della stessa
+             riga: quando una ha piu' righe dell'altra (dati fiscali completi
+             da un lato, solo l'indirizzo dall'altro) il .info-box piu' corto
+             si fermava prima, bordo inferiore sfalsato — height:100% sul
+             child non e' un'opzione, dompdf lo risolve male dentro una
+             cella (contenuto troncato su piu' pagine). Il bordo/sfondo di
+             una <td> invece copre SEMPRE l'intera riga "stirata" alla cella
+             piu' alta, quindi qui il box vive sulla cella stessa
+             (.header-cell) invece che su un div dentro: niente percentuali,
+             stesso risultato in modo affidabile. .col-gap e' una cella
+             vuota di distacco (non si puo' usare padding sulla stessa <td>
+             che porta gia' il bordo: lo spingerebbe dentro invece di
+             separare i due box). --}}
+        .header-cell { border: 1px solid #e5e7eb; background: #f9fafb; padding: 0; }
+        .header-cell .section-title { margin-bottom: 0; }
+        .header-cell .info-box { border: none; background: transparent; padding: 8px 10px; }
+
+        {{-- Stessa idea della card "Panoramica rapida" nella vista rapportino
+             (sfondo chiaro, valori in evidenza, niente riquadro scuro): qui
+             a differenza del resto del documento (sezioni con .section-title
+             scura) perche' e' il primo blocco che si legge, deve restare
+             leggero invece di aprire subito su un modulo d'ufficio. --}}
+        .hero-strip { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 16px; margin-bottom: 14px; }
+        {{-- table-layout:fixed con larghezze esplicite: senza, le 4 colonne
+             si stringevano al proprio contenuto e lo spazio in eccesso
+             finiva tutto in coda all'ultima (bordo destro della card molto
+             lontano dal contenuto, mai proporzionato). Larghezze tarate sul
+             contenuto piu' lungo plausibile in ciascuna (nome tecnico,
+             "Manutenzione straordinaria" per tipo). --}}
+        .hero-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        .hero-table td { padding: 0 14px 0 0; border-right: 1px solid #e2e8f0; vertical-align: top; }
+        .hero-table td:last-child { border-right: none; padding-right: 0; }
+        .hero-table .hero-col-numero { width: 18%; }
+        .hero-table .hero-col-data { width: 14%; }
+        .hero-table .hero-col-tecnico { width: 34%; }
+        .hero-table .hero-col-tipo { width: 34%; }
+        .hero-label { font-size: 7.5px; text-transform: uppercase; letter-spacing: .05em; color: #64748b; font-weight: 600; margin-bottom: 3px; }
+        .hero-value { font-size: 11px; font-weight: 700; color: #020F30; }
 
         .section-title { background: #020F30; color: #fff; padding: 5px 10px; font-size: 9.5px; font-weight: bold; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
         .info-box { background: #f9fafb; border: 1px solid #e5e7eb; padding: 8px 10px; }
@@ -19,8 +58,6 @@
         .info-box table { width: 100%; border-collapse: collapse; font-size: 9.5px; }
         .info-box td { padding: 2px 0; }
         .info-box td.label { font-weight: 600; color: #4b5563; padding-right: 6px; white-space: nowrap; }
-
-        .status-badge { display: inline-block; padding: 1px 8px; border-radius: 3px; font-size: 8.5px; font-weight: bold; text-transform: uppercase; letter-spacing: .03em; color: #fff; }
 
         .text-box { margin-top: 0; }
         .text-box p { margin: 0; padding: 8px 10px; background: #f9fafb; border: 1px solid #e5e7eb; white-space: pre-line; }
@@ -56,21 +93,42 @@
             \App\Models\ServiceReport::TYPE_RIPARAZIONE => 'Riparazione',
             \App\Models\ServiceReport::TYPE_GARANZIA => 'Garanzia',
         ];
-        $statusLabels = ['bozza' => 'Bozza', 'completato' => 'Completato', 'firmato' => 'Firmato', 'inviato' => 'Inviato'];
-        $statusColors = ['bozza' => '#9ca3af', 'completato' => '#0ea5e9', 'firmato' => '#f59e0b', 'inviato' => '#16a34a'];
         $hasMachineInfo = $report->machineProduct || $report->machine_serial_number || $report->machineUnit || $report->quote;
     @endphp
 
+    {{-- Prima cosa che si legge: riepilogo intervento in stile "hero" leggero
+         (stessa logica della card "Panoramica rapida" nella vista rapportino),
+         non un altro riquadro scuro come le sezioni sotto. --}}
+    <div class="hero-strip">
+        <table class="hero-table">
+            <tr>
+                <td class="hero-col-numero">
+                    <div class="hero-label">Numero</div>
+                    <div class="hero-value">{{ $report->number }}</div>
+                </td>
+                <td class="hero-col-data">
+                    <div class="hero-label">Data</div>
+                    <div class="hero-value">{{ $report->intervention_date->format('d/m/Y') }}</div>
+                </td>
+                <td class="hero-col-tecnico">
+                    <div class="hero-label">Tecnico</div>
+                    <div class="hero-value">{{ $report->technician->name }}</div>
+                </td>
+                <td class="hero-col-tipo">
+                    <div class="hero-label">Tipo</div>
+                    <div class="hero-value">{{ $interventionTypeLabels[$report->intervention_type] ?? $report->intervention_type }}</div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
     <table class="row-table">
         <tr>
-            <td class="col-60">
+            <td class="col-50 header-cell">
                 <div class="section-title">Dati cliente</div>
                 <div class="info-box">
                     <div class="customer-name">{{ $report->customer->company_name ?: $report->customer->full_name }}</div>
                     <table>
-                        @if($recipient->isNot($report->customer))
-                            <tr><td class="label">Fatturato a:</td><td>{{ $recipient->company_name ?: $recipient->full_name }}</td></tr>
-                        @endif
                         @if($report->customer->street || $report->customer->postal_code || $report->customer->city)
                             <tr><td class="label">Sede:</td><td>{{ trim("{$report->customer->street}, {$report->customer->postal_code} {$report->customer->city}".($report->customer->province ? " ({$report->customer->province})" : ''), ' ,') }}</td></tr>
                         @endif
@@ -83,28 +141,27 @@
                     </table>
                 </div>
             </td>
-            <td class="col-40">
-                <div class="section-title">Dati intervento</div>
+            <td class="col-gap"></td>
+            <td class="col-50 header-cell">
+                <div class="section-title">Dati di fatturazione</div>
                 <div class="info-box">
+                    <div class="customer-name">{{ $recipient->company_name ?: $recipient->full_name }}</div>
                     <table>
-                        <tr><td class="label">Numero:</td><td><strong>{{ $report->number }}</strong></td></tr>
-                        <tr><td class="label">Data:</td><td>{{ $report->intervention_date->format('d/m/Y') }}</td></tr>
-                        <tr><td class="label">Tecnico:</td><td>{{ $report->technician->name }}</td></tr>
-                        <tr><td class="label">Tipo:</td><td>{{ $interventionTypeLabels[$report->intervention_type] ?? $report->intervention_type }}</td></tr>
-                        @if($report->arrival_at)
-                            <tr><td class="label">Arrivo:</td><td>{{ $report->arrival_at->format('H:i') }}</td></tr>
+                        @if($recipient->street || $recipient->postal_code || $recipient->city)
+                            <tr><td class="label">Sede:</td><td>{{ trim("{$recipient->street}, {$recipient->postal_code} {$recipient->city}".($recipient->province ? " ({$recipient->province})" : ''), ' ,') }}</td></tr>
                         @endif
-                        @if($report->departure_at)
-                            <tr><td class="label">Uscita:</td><td>{{ $report->departure_at->format('H:i') }}</td></tr>
+                        @if($recipient->pec)
+                            <tr><td class="label">PEC:</td><td>{{ $recipient->pec }}</td></tr>
                         @endif
-                        <tr>
-                            <td class="label">Stato:</td>
-                            <td>
-                                <span class="status-badge" style="background: {{ $statusColors[$report->status] ?? '#9ca3af' }};">
-                                    {{ $statusLabels[$report->status] ?? ucfirst($report->status) }}
-                                </span>
-                            </td>
-                        </tr>
+                        @if($recipient->vat_number)
+                            <tr><td class="label">P.IVA:</td><td>{{ $recipient->vat_number }}</td></tr>
+                        @endif
+                        @if($recipient->tax_code)
+                            <tr><td class="label">C.F.:</td><td>{{ $recipient->tax_code }}</td></tr>
+                        @endif
+                        @if($recipient->sdi)
+                            <tr><td class="label">SDI:</td><td>{{ $recipient->sdi }}</td></tr>
+                        @endif
                     </table>
                 </div>
             </td>
@@ -136,13 +193,18 @@
     <div class="section-title">Lavoro svolto</div>
     <div class="text-box" style="margin-bottom: 14px;"><p>{{ $report->work_performed }}</p></div>
 
+    @if($report->notes)
+        <div class="section-title">Note</div>
+        <div class="text-box" style="margin-bottom: 14px;"><p>{{ $report->notes }}</p></div>
+    @endif
+
     @if($report->materialsUsed->isNotEmpty())
         <div class="section-title">Ricambi/materiali utilizzati</div>
         <table class="items" style="margin-bottom: 14px;">
-            <thead><tr><th>Materiale</th><th class="numeric">Quantità</th></tr></thead>
+            <thead><tr><th>Materiale</th><th>Codice prezzo</th><th class="numeric">Quantità</th></tr></thead>
             <tbody>
             @foreach($report->materialsUsed as $part)
-                <tr><td>{{ $part->material->display_label }}</td><td class="numeric">{{ $part->quantity }}</td></tr>
+                <tr><td>{{ $part->material->display_label }}</td><td>&nbsp;</td><td class="numeric">{{ $part->quantity }}</td></tr>
             @endforeach
             </tbody>
         </table>
@@ -153,10 +215,10 @@
     @if($report->partsUsed->isNotEmpty())
         <div class="section-title">Ricambi/materiali utilizzati</div>
         <table class="items" style="margin-bottom: 14px;">
-            <thead><tr><th>Prodotto</th><th class="numeric">Quantità</th></tr></thead>
+            <thead><tr><th>Prodotto</th><th>Codice prezzo</th><th class="numeric">Quantità</th></tr></thead>
             <tbody>
             @foreach($report->partsUsed as $part)
-                <tr><td>{{ $part->product->name }}</td><td class="numeric">{{ $part->quantity }}</td></tr>
+                <tr><td>{{ $part->product->name }}</td><td>&nbsp;</td><td class="numeric">{{ $part->quantity }}</td></tr>
             @endforeach
             </tbody>
         </table>

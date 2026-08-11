@@ -98,6 +98,7 @@ class ImportEurekaServiceReports extends Command
                     ]);
                 } catch (\Throwable $e) {
                     $this->warn("Errore ricerca rapportini cliente {$customer->company_name}: {$e->getMessage()}");
+
                     continue;
                 }
 
@@ -197,6 +198,7 @@ class ImportEurekaServiceReports extends Command
 
             if (! $localCustomerId) {
                 $skipped++;
+
                 continue;
             }
 
@@ -225,6 +227,7 @@ class ImportEurekaServiceReports extends Command
 
             $payload = [
                 'tenant_id' => $tenant->id,
+                'source' => ServiceReport::SOURCE_EUREKA,
                 'eureka_service_report_id' => $eurekaId,
                 'customer_id' => $localCustomerId,
                 'machine_product_id' => $machineProduct?->id,
@@ -249,10 +252,34 @@ class ImportEurekaServiceReports extends Command
             $existing = $existingReportsMap->get($eurekaId);
 
             if ($existing) {
+                if ($existing->source !== ServiceReport::SOURCE_EUREKA) {
+                    // Rapportino nato nel CRM (source=manuale) e poi
+                    // agganciato a Eureka da un invio
+                    // (SendServiceReportToGestionaleJob) — il match qui e'
+                    // per eureka_service_report_id, non per "number" (che
+                    // resta il numero RT-... stabile del CRM, mai riscritto
+                    // da un invio: il numero gestionale finisce in
+                    // gestionale_number).
+                    // toGestionalePayload() non manda ne' intervention_date
+                    // ne' il tecnico a Eureka: il "suo" record riflette solo
+                    // la data di creazione lato loro e nessun tecnico, quindi
+                    // un sync qui sovrascriverebbe dati corretti del CRM con
+                    // i fallback dell'import. Successo davvero da un invio di
+                    // test: ha riportato tecnico, data, stato e descrizioni
+                    // di RT-2026-0002..0014 ai valori di fallback invece di
+                    // lasciare quelli reali del CRM.
+                    // Il CRM resta la fonte autorevole per questi rapportini,
+                    // Eureka e' solo la destinazione dell'invio.
+                    $unchanged++;
+
+                    continue;
+                }
+
                 $existing->fill($payload);
 
                 if (! $existing->isDirty()) {
                     $unchanged++;
+
                     continue;
                 }
 
@@ -268,7 +295,7 @@ class ImportEurekaServiceReports extends Command
                     });
                 }
             } else {
-                $number = $this->resolveUniqueNumber($tenant, $detail ?? $summary);
+                $number = $this->resolveUniqueNumber($tenant, $detail ?? $summary, $interventionDate);
                 $this->line("  <info>CREATE</info> rapportino #{$eurekaId} → {$number}");
                 $created++;
 
@@ -352,9 +379,9 @@ class ImportEurekaServiceReports extends Command
     }
 
     /**
-     * @param array<string, mixed> $row
-     * @param array<string, mixed>|null $detail
-     * @param array<int|string, string> $customerMap
+     * @param  array<string, mixed>  $row
+     * @param  array<string, mixed>|null  $detail
+     * @param  array<int|string, string>  $customerMap
      */
     private function resolveLocalCustomerId(Tenant $tenant, array $row, ?array $detail, array &$customerMap, bool $dryRun): ?string
     {
@@ -427,8 +454,8 @@ class ImportEurekaServiceReports extends Command
     }
 
     /**
-     * @param array<string, mixed> $row
-     * @param array<string, mixed>|null $detail
+     * @param  array<string, mixed>  $row
+     * @param  array<string, mixed>|null  $detail
      * @return array{street: ?string, postal_code: ?string, city: ?string, province: ?string}
      */
     private function extractCustomerAddress(array $row, ?array $detail): array
@@ -558,7 +585,7 @@ class ImportEurekaServiceReports extends Command
         }
 
         if ($dryRun) {
-            $this->line("  <comment>[DRY RUN] Prodotto \"{$product->name}\" riceverebbe: ".implode(', ', array_keys($dirty))."</comment>");
+            $this->line("  <comment>[DRY RUN] Prodotto \"{$product->name}\" riceverebbe: ".implode(', ', array_keys($dirty)).'</comment>');
 
             return $product;
         }
@@ -569,8 +596,8 @@ class ImportEurekaServiceReports extends Command
     }
 
     /**
-     * @param array<string, mixed> $detail
-     * @param array<string, Material> $materialCache
+     * @param  array<string, mixed>  $detail
+     * @param  array<string, Material>  $materialCache
      */
     private function syncDetailRows(Tenant $tenant, ServiceReport $report, array $detail, array &$materialCache): void
     {
@@ -608,7 +635,7 @@ class ImportEurekaServiceReports extends Command
     }
 
     /**
-     * @param array<string, Material> $materialCache
+     * @param  array<string, Material>  $materialCache
      */
     private function syncArticleMentionsFromNotes(Tenant $tenant, ServiceReport $report, mixed $note, array $createdMaterialIds, array &$materialCache): void
     {
@@ -698,8 +725,8 @@ class ImportEurekaServiceReports extends Command
      * ufficiale. sl_articolo (bene/macchina principale) resta invece su
      * Product tramite resolveOrCreateProduct(), non lo tocca questo metodo.
      *
-     * @param array<string, mixed> $data
-     * @param array<string, Material> $materialCache
+     * @param  array<string, mixed>  $data
+     * @param  array<string, Material>  $materialCache
      */
     private function resolveOrCreateMaterial(Tenant $tenant, array $data, array &$materialCache): ?Material
     {
@@ -745,8 +772,8 @@ class ImportEurekaServiceReports extends Command
     }
 
     /**
-     * @param array<string, mixed> $row
-     * @param array<string, mixed>|null $detail
+     * @param  array<string, mixed>  $row
+     * @param  array<string, mixed>|null  $detail
      */
     private function extractCustomerCompanyName(array $row, ?array $detail): ?string
     {
@@ -770,8 +797,8 @@ class ImportEurekaServiceReports extends Command
     }
 
     /**
-     * @param array<string, mixed> $row
-     * @param array<string, mixed>|null $detail
+     * @param  array<string, mixed>  $row
+     * @param  array<string, mixed>|null  $detail
      * @return array<int, string>
      */
     private function extractCustomerEmails(array $row, ?array $detail): array
@@ -790,8 +817,8 @@ class ImportEurekaServiceReports extends Command
     }
 
     /**
-     * @param array<string, mixed> $row
-     * @param array<string, mixed>|null $detail
+     * @param  array<string, mixed>  $row
+     * @param  array<string, mixed>|null  $detail
      * @return array<int, string>
      */
     private function extractCustomerPhones(array $row, ?array $detail): array
@@ -811,7 +838,7 @@ class ImportEurekaServiceReports extends Command
     }
 
     /**
-     * @param array<string, mixed> $detail
+     * @param  array<string, mixed>  $detail
      */
     private function mapInterventionType(array $detail): string
     {
@@ -838,7 +865,7 @@ class ImportEurekaServiceReports extends Command
     }
 
     /**
-     * @param array<string, mixed> $detail
+     * @param  array<string, mixed>  $detail
      */
     private function buildNotes(array $detail): ?string
     {
@@ -853,13 +880,22 @@ class ImportEurekaServiceReports extends Command
     }
 
     /**
-     * @param array<string, mixed> $detail
+     * Il "numero" di Eureka NON e' univoco nel tempo (si ripete su anni diversi,
+     * es. il documento 601 esiste sia nel 2023 che nel 2024/2025/2026 per clienti
+     * diversi — verificato dal vivo): un contatore -2/-3/-4 appiccicato in ordine
+     * di importazione sarebbe arbitrario e fuorviante (sembra una revisione, non
+     * lo e'). "numero/anno" replica invece la convenzione italiana standard
+     * numero/anno (come una fattura) ed e' verificato univoco su tutto lo
+     * storico importato finora (0 collisioni su 3606 rapportini).
+     *
+     * @param  array<string, mixed>  $detail
      */
-    private function resolveUniqueNumber(Tenant $tenant, array $detail): string
+    private function resolveUniqueNumber(Tenant $tenant, array $detail, string $interventionDate): string
     {
         // Il detail usa 'numero', il summary usa 'numero_doc_t23'
         $numero = (int) ($detail['numero'] ?? $detail['numero_doc_t23'] ?? 0);
-        $base = $numero > 0 ? 'SL-'.$numero : 'SL-EK-'.(int) ($detail['id_eureka'] ?? 0);
+        $year = substr($interventionDate, 0, 4);
+        $base = $numero > 0 ? "SL-{$numero}/{$year}" : 'SL-EK-'.(int) ($detail['id_eureka'] ?? 0);
 
         $candidate = $base;
         $i = 2;
@@ -876,7 +912,7 @@ class ImportEurekaServiceReports extends Command
             return null;
         }
 
-        if (!str_starts_with($value, '{\\rtf')) {
+        if (! str_starts_with($value, '{\\rtf')) {
             return $value;
         }
 

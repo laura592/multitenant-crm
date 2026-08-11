@@ -8,15 +8,15 @@ use App\Filament\Resources\ServiceReportResource\Pages;
 use App\Jobs\SendServiceReportToGestionaleJob;
 use App\Mail\ServiceReportMail;
 use App\Models\Customer;
-use App\Models\Material;
 use App\Models\MachineUnit;
+use App\Models\Material;
 use App\Models\Product;
 use App\Models\ServiceReport;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Forms;
 use Filament\Forms\Form;
-use Filament\Infolists\Components\Actions as InfolistActions;
 use Filament\Infolists\Components\Actions\Action as InfolistAction;
+use Filament\Infolists\Components\Actions as InfolistActions;
 use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section as InfolistSection;
@@ -27,9 +27,11 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\HtmlString;
+use Illuminate\Support\Str;
 
 class ServiceReportResource extends Resource
 {
@@ -44,6 +46,14 @@ class ServiceReportResource extends Resource
     protected static ?string $modelLabel = 'Rapportino';
 
     protected static ?string $pluralModelLabel = 'Rapportini tecnici';
+
+    /**
+     * Materiale usato come riga "manodopera" aggiunta da sola sul form
+     * quando il tipo intervento non e' manutenzione ordinaria (vedi
+     * syncManodoperaMaterial()), al posto dei vecchi campi orario
+     * arrivo/uscita.
+     */
+    private const MANODOPERA_MATERIAL_CODE = 'ORE';
 
     public static function infolist(Infolist $infolist): Infolist
     {
@@ -81,19 +91,13 @@ class ServiceReportResource extends Resource
                         ->color(fn (string $state) => self::statusColors()[$state] ?? 'gray')
                         ->columnSpan(1),
                 ]),
-            InfolistSection::make('Orari')
-                ->columns(2)
-                ->schema([
-                    TextEntry::make('arrival_at')->label('Orario arrivo')->dateTime('d/m/Y H:i')->placeholder('—'),
-                    TextEntry::make('departure_at')->label('Orario uscita')->dateTime('d/m/Y H:i')->placeholder('—'),
-                ]),
             InfolistSection::make('Macchina')
                 ->columns(3)
                 ->schema([
                     TextEntry::make('quote.number')->label('Preventivo collegato')->placeholder('—'),
                     TextEntry::make('machineProduct.name')->label('Modello macchina')->placeholder('—'),
                     TextEntry::make('machine_serial_number')->label('Matricola')->placeholder('—'),
-                    TextEntry::make('machineUnit.serial_number')->label('Macchina (matricola tracciata)')->placeholder('—'),
+                    TextEntry::make('machine_unit_display_name')->label('Macchina (matricola tracciata)')->placeholder('—'),
                     TextEntry::make('machineUnit.billingCustomer.full_name')->label('Fatturare a')->placeholder('—'),
                 ]),
             InfolistSection::make('Descrizione')
@@ -192,6 +196,7 @@ class ServiceReportResource extends Resource
                         ->state(fn (ServiceReport $record) => self::gestionaleDisplayState($record))
                         ->formatStateUsing(fn (?string $state) => self::gestionaleSyncStatusLabels()[$state] ?? self::gestionaleSyncStatusLabels()['none'])
                         ->color(fn (?string $state) => self::gestionaleSyncStatusColors()[$state] ?? self::gestionaleSyncStatusColors()['none']),
+                    TextEntry::make('gestionale_number')->label('Numero gestionale')->placeholder('—'),
                     TextEntry::make('gestionale_synced_at')->label('Ultimo invio riuscito')->dateTime('d/m/Y H:i')->placeholder('—'),
                     TextEntry::make('gestionale_sync_error')->label('Errore')->placeholder('—')->columnSpanFull(),
                 ]),
@@ -234,11 +239,11 @@ class ServiceReportResource extends Resource
                     Forms\Components\Placeholder::make('summary_date')
                         ->label('Data')
                         ->content(fn (?ServiceReport $record) => $record
-                            ? \Illuminate\Support\Carbon::parse($record->getAttribute('intervention_date'))->format('d/m/Y')
+                            ? Carbon::parse($record->getAttribute('intervention_date'))->format('d/m/Y')
                             : '—'),
                     Forms\Components\Placeholder::make('summary_status')
                         ->label('Stato')
-                        ->content(fn (?ServiceReport $record) => new \Illuminate\Support\HtmlString(
+                        ->content(fn (?ServiceReport $record) => new HtmlString(
                             '<span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">'
                                 .($record ? (self::statusLabels()[$record->status] ?? ucfirst($record->status)) : '—')
                                 .'</span>'
@@ -309,7 +314,18 @@ class ServiceReportResource extends Resource
                             ServiceReport::TYPE_RIPARAZIONE => 'Riparazione',
                             ServiceReport::TYPE_GARANZIA => 'Garanzia',
                         ])
-                        ->required(),
+                        ->required()
+                        ->live()
+                        // Manutenzione ordinaria si addebita col codice specifico
+                        // della macchina (es. F2, DC3, C2 — un ricambio Material
+                        // diverso per ogni modello), da scegliere a mano qui sotto
+                        // in "Ricambi/materiali utilizzati": niente da precompilare.
+                        // Su tutti gli altri tipi (chiamata/riparazione/
+                        // installazione/garanzia) si addebitano invece le ore di
+                        // manodopera, oltre all'eventuale "Chiamata" (vedi
+                        // add_chiamata_material sotto) — qui la riga si aggiunge
+                        // da sola.
+                        ->afterStateUpdated(fn (?string $state, Forms\Set $set, Forms\Get $get) => self::syncManodoperaMaterial($state, $set, $get)),
                     Forms\Components\DatePicker::make('intervention_date')
                         ->label('Data intervento')
                         ->default(now())
@@ -319,8 +335,6 @@ class ServiceReportResource extends Resource
                         ->options(fn () => self::statusLabels())
                         ->default('bozza')
                         ->required(),
-                    Forms\Components\DateTimePicker::make('arrival_at')->label('Orario arrivo'),
-                    Forms\Components\DateTimePicker::make('departure_at')->label('Orario uscita'),
                 ]),
             Forms\Components\Section::make('Macchina')
                 ->columns(3)
@@ -351,7 +365,8 @@ class ServiceReportResource extends Resource
                                 ? $query->where('current_customer_id', $get('customer_id'))
                                 : $query,
                         )
-                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->display_name.' — '.$record->serial_number)
+                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->display_name.' — '.$record->serial_number
+                            .(self::isMachineUnitLinkedToEureka($record) ? ' — ✓ Eureka' : ''))
                         ->searchable()
                         ->preload()
                         ->live()
@@ -377,6 +392,22 @@ class ServiceReportResource extends Resource
                             }
                         })
                         ->helperText('Scegliendo la matricola si compilano da soli cliente, modello e matricola qui sotto.'),
+                    // Il collegamento Eureka manca spesso solo per il rapportino
+                    // (vedi ServiceReport::gestionaleValidationErrors()), ma finora
+                    // si scopriva solo al momento dell'invio, a rapportino gia'
+                    // compilato/firmato. Non blocca la compilazione (il tecnico deve
+                    // poter comunque lavorare sul posto): segnala solo, cosi' il
+                    // problema si vede subito invece che a fine giornata.
+                    Forms\Components\Placeholder::make('machine_unit_eureka_warning')
+                        ->label('')
+                        ->columnSpanFull()
+                        ->hidden(fn (Forms\Get $get) => blank($get('machine_unit_id'))
+                            || self::isMachineUnitLinkedToEureka(MachineUnit::find($get('machine_unit_id'))))
+                        ->content(new HtmlString(
+                            '<div class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">'
+                                .'⚠️ Questo modello non è ancora collegato a Eureka: il rapportino non potrà essere inviato al gestionale finché il back-office non lo collega da Macchinari.'
+                                .'</div>'
+                        )),
                     Forms\Components\Placeholder::make('fatturare_a')
                         ->label('Fatturare a')
                         ->content(fn (Forms\Get $get) => self::resolvePayer($get)?->full_name ?? '—'),
@@ -390,6 +421,11 @@ class ServiceReportResource extends Resource
                             ->mapWithKeys(fn (Product $product) => [
                                 $product->id => $product->name.($product->gestionale_code ? ' — ✓ Eureka' : ''),
                             ]))
+                        // Su rapportini vecchi il valore salvato puo' puntare a un
+                        // Product che non e' (piu') type=machine (dato legacy):
+                        // resta fuori dalla lista options() sopra, e senza questo
+                        // Filament non trova un'etichetta e mostra l'uuid grezzo.
+                        ->getOptionLabelUsing(fn ($value) => Product::find($value)?->name)
                         ->searchable()
                         ->helperText('I modelli con "✓ Eureka" sono gia\' collegati al gestionale: usarli garantisce che il rapportino sia sempre inviabile.'),
                     Forms\Components\TextInput::make('machine_serial_number')
@@ -404,6 +440,62 @@ class ServiceReportResource extends Resource
                 ]),
             Forms\Components\Section::make('Ricambi/materiali utilizzati')
                 ->schema([
+                    // Scorciatoia per il ricambio "chiamata" (tariffa base
+                    // dell'intervento su Eureka): CHIVE per Venezia centro
+                    // storico (raggiungibile solo via acqua), CHIORD altrove.
+                    // Lido e Burano hanno gia' un codice piu' specifico
+                    // (CHILI/CHIBU) da aggiungere a mano, quindi qui il match
+                    // sulla citta' resta volutamente stretto ("Venezia" esatto).
+                    Forms\Components\Checkbox::make('add_chiamata_material')
+                        ->label('Chiamata')
+                        ->live()
+                        ->dehydrated(false)
+                        ->disabled(fn (Forms\Get $get) => blank($get('customer_id')))
+                        ->helperText('Aggiunge da sola il ricambio "CHIVE" (Venezia) o "CHIORD" (altrove) in base alla città del cliente. Togliendo la spunta si rimuove la riga aggiunta. Seleziona prima il cliente.')
+                        ->afterStateUpdated(function (bool $state, Forms\Set $set, Forms\Get $get) {
+                            $materialsUsed = $get('materialsUsed') ?? [];
+                            $addedKey = $get('_chiamata_material_key');
+
+                            if (! $state) {
+                                // Rimuove solo la riga aggiunta da questo flag (per key),
+                                // non un'eventuale riga uguale inserita a mano.
+                                if ($addedKey && array_key_exists($addedKey, $materialsUsed)) {
+                                    unset($materialsUsed[$addedKey]);
+                                    $set('materialsUsed', $materialsUsed);
+                                }
+
+                                $set('_chiamata_material_key', null);
+
+                                return;
+                            }
+
+                            $customer = Customer::find($get('customer_id'));
+                            $code = $customer?->city === 'Venezia' ? 'CHIVE' : 'CHIORD';
+                            $material = Material::where('code', $code)->first();
+
+                            if (! $material) {
+                                return;
+                            }
+
+                            $alreadyAdded = collect($materialsUsed)->contains(
+                                fn (array $item) => ($item['material_id'] ?? null) === $material->id
+                            );
+
+                            if ($alreadyAdded) {
+                                return;
+                            }
+
+                            $newKey = (string) Str::uuid();
+                            $materialsUsed[$newKey] = [
+                                'material_id' => $material->id,
+                                'quantity' => 1,
+                            ];
+
+                            $set('materialsUsed', $materialsUsed);
+                            $set('_chiamata_material_key', $newKey);
+                        }),
+                    Forms\Components\Hidden::make('_chiamata_material_key')->dehydrated(false),
+                    Forms\Components\Hidden::make('_manodopera_material_key')->dehydrated(false),
                     // Materiali (App\Models\Material), non Product: quest'ultimo e'
                     // lo stesso elenco usato per i preventivi, senza filtro —
                     // macchine/ricambi trovati su Eureka finirebbero anche li'.
@@ -420,8 +512,15 @@ class ServiceReportResource extends Resource
                                 ->searchable()
                                 ->required()
                                 ->columnSpan(2),
-                            Forms\Components\TextInput::make('quantity')->label('Quantità')->numeric()->default(1)->required(),
+                            Forms\Components\TextInput::make('quantity')->label('Quantità / ore')->numeric()->default(1)->required(),
                         ])
+                        // La riga manodopera (materiale ORE) non e' un default
+                        // statico: dipende dal tipo intervento, scelto subito
+                        // sopra — vedi syncManodoperaMaterial(), agganciato
+                        // all'afterStateUpdated di intervention_type. Sostituisce
+                        // gli ex campi "Orario arrivo"/"Orario uscita" (rimossi
+                        // da questo form): invece di orari, si segnano le ore
+                        // lavorate come quantita' su quella riga.
                         ->defaultItems(0)
                         ->addActionLabel('Aggiungi ricambio')
                         ->reorderable(false),
@@ -434,6 +533,24 @@ class ServiceReportResource extends Resource
                     SignaturePad::make('customer_signature_path')->label(''),
                 ]),
         ]);
+    }
+
+    /**
+     * Stessa logica dell'icona "Da Eureka" in MachineUnitResource::table():
+     * l'invio a gestionale usa il gestionale_code del Product (vedi
+     * ServiceReport::toGestionalePayload(), sl_articolo), non quello della
+     * matricola — ma una matricola con source=eureka o gestionale_code
+     * proprio e' comunque segno che il collegamento c'e' gia'.
+     */
+    private static function isMachineUnitLinkedToEureka(?MachineUnit $machineUnit): bool
+    {
+        if (! $machineUnit) {
+            return true;
+        }
+
+        return filled($machineUnit->gestionale_code)
+            || $machineUnit->source === MachineUnit::SOURCE_EUREKA
+            || filled($machineUnit->product?->gestionale_code);
     }
 
     /**
@@ -459,6 +576,56 @@ class ServiceReportResource extends Resource
         return null;
     }
 
+    /**
+     * Stesso meccanismo (per key, dehydrated(false)) di add_chiamata_material
+     * sopra, ma agganciato al tipo intervento invece che a una checkbox
+     * manuale: la manutenzione ordinaria si addebita col codice specifico
+     * della macchina (F2/DC3/C2/...), da scegliere a mano — nessuna riga
+     * automatica. Tutti gli altri tipi sono di fatto una "chiamata": la
+     * manodopera (materiale ORE) si aggiunge da sola, il tecnico segna solo
+     * le ore lavorate in quantita'.
+     */
+    private static function syncManodoperaMaterial(?string $interventionType, Forms\Set $set, Forms\Get $get): void
+    {
+        $materialsUsed = $get('materialsUsed') ?? [];
+        $addedKey = $get('_manodopera_material_key');
+
+        if ($interventionType === null || $interventionType === ServiceReport::TYPE_MANUTENZIONE_ORDINARIA) {
+            if ($addedKey && array_key_exists($addedKey, $materialsUsed)) {
+                unset($materialsUsed[$addedKey]);
+                $set('materialsUsed', $materialsUsed);
+            }
+
+            $set('_manodopera_material_key', null);
+
+            return;
+        }
+
+        if ($addedKey && array_key_exists($addedKey, $materialsUsed)) {
+            return;
+        }
+
+        $manodoperaId = Material::query()->where('code', self::MANODOPERA_MATERIAL_CODE)->value('id');
+
+        if (! $manodoperaId) {
+            return;
+        }
+
+        $alreadyAdded = collect($materialsUsed)->contains(
+            fn (array $item) => ($item['material_id'] ?? null) === $manodoperaId
+        );
+
+        if ($alreadyAdded) {
+            return;
+        }
+
+        $newKey = (string) Str::uuid();
+        $materialsUsed[$newKey] = ['material_id' => $manodoperaId, 'quantity' => null];
+
+        $set('materialsUsed', $materialsUsed);
+        $set('_manodopera_material_key', $newKey);
+    }
+
     public static function table(Table $table): Table
     {
         return $table
@@ -468,7 +635,18 @@ class ServiceReportResource extends Resource
             // l'altro della pagina.
             ->defaultSort(fn ($query) => $query->orderByDesc('intervention_date')->orderByDesc('created_at'))
             ->columns([
-                Tables\Columns\TextColumn::make('number')->label('Numero')->searchable(),
+                Tables\Columns\TextColumn::make('number')
+                    ->label('Numero')
+                    ->searchable(['number', 'gestionale_number'])
+                    // Entrambi i numeri in una sola colonna (invece di
+                    // aggiungerne una seconda, che avrebbe vanificato lo
+                    // spazio appena recuperato sulla colonna Eureka accanto):
+                    // il numero CRM resta il riferimento principale, quello
+                    // gestionale (quando c'e') si vede subito accanto senza
+                    // dover incrociare la scheda di dettaglio.
+                    ->formatStateUsing(fn (string $state, ServiceReport $record) => $record->gestionale_number
+                        ? "{$state} · {$record->gestionale_number}"
+                        : $state),
                 Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->searchable(),
                 Tables\Columns\TextColumn::make('technician.name')->label('Tecnico'),
                 Tables\Columns\TextColumn::make('intervention_type')
@@ -488,9 +666,11 @@ class ServiceReportResource extends Resource
                     ->badge()
                     ->formatStateUsing(fn (string $state) => self::statusLabels()[$state] ?? ucfirst($state))
                     ->color(fn (string $state) => self::statusColors()[$state] ?? 'gray'),
-                Tables\Columns\TextColumn::make('gestionale_sync_status')
+                Tables\Columns\IconColumn::make('gestionale_sync_status')
                     ->label('Eureka')
-                    ->badge()
+                    // Icona invece del badge testuale per risparmiare
+                    // spazio in tabella (stesso pattern di
+                    // MachineUnitResource::table() colonna "Da Eureka").
                     // "Non inviato" era fuorviante per uno storico ripescato
                     // da un import (eureka_service_report_id valorizzato,
                     // gestionale_sync_status pero' mai toccato perche' quel
@@ -498,8 +678,14 @@ class ServiceReportResource extends Resource
                     // rapportino da inviare quando in realta' e' gia' su
                     // Eureka, solo arrivato nel verso opposto.
                     ->state(fn (ServiceReport $record) => self::gestionaleDisplayState($record))
-                    ->formatStateUsing(fn (?string $state) => self::gestionaleSyncStatusLabels()[$state] ?? self::gestionaleSyncStatusLabels()['none'])
-                    ->color(fn (?string $state) => self::gestionaleSyncStatusColors()[$state] ?? self::gestionaleSyncStatusColors()['none']),
+                    ->icon(fn (?string $state) => match ($state) {
+                        'sent', 'imported' => 'heroicon-o-check-circle',
+                        'queued' => 'heroicon-o-clock',
+                        'failed' => 'heroicon-o-x-circle',
+                        default => 'heroicon-o-minus-circle',
+                    })
+                    ->color(fn (?string $state) => self::gestionaleSyncStatusColors()[$state] ?? self::gestionaleSyncStatusColors()['none'])
+                    ->tooltip(fn (ServiceReport $record) => self::gestionaleSyncStatusLabels()[self::gestionaleDisplayState($record)] ?? self::gestionaleSyncStatusLabels()['none']),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('intervention_type')

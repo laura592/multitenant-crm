@@ -3,12 +3,23 @@
 namespace App\Filament\Resources\ServiceReportResource\Pages;
 
 use App\Filament\Resources\ServiceReportResource;
-use Filament\Actions;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
 
 class CreateServiceReport extends CreateRecord
 {
     protected static string $resource = ServiceReportResource::class;
+
+    /**
+     * Vedi lo stesso override su EditServiceReport.
+     */
+    protected function getCreatedNotification(): ?Notification
+    {
+        return Notification::make()
+            ->success()
+            ->title('Rapportino creato')
+            ->body('Il rapportino è stato salvato.');
+    }
 
     /**
      * Precompila il cliente quando si arriva da "Clienti vicini"

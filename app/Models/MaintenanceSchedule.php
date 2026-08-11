@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
 class MaintenanceSchedule extends Model
 {
@@ -114,6 +115,35 @@ class MaintenanceSchedule extends Model
     }
 
     /**
+     * ServiceReport non ha un maintenance_schedule_id esplicito (a differenza di
+     * Lavaggio): il collegamento e' inferito da customer_id+machine_unit_id, per
+     * non richiedere al tecnico una selezione manuale extra su ogni rapportino di
+     * manutenzione. Va richiamata ad ogni salvataggio/cancellazione di un
+     * ServiceReport per quella macchina (vedi ServiceReport::syncMaintenanceSchedule()),
+     * usando il MAX per data intervento tra tutti i rapportini collegati — stessa
+     * logica di recalculateLavaggioNextDue(), per restare corretta anche
+     * modificando/cancellando rapportini storici.
+     */
+    public function recalculateFromServiceReports(): void
+    {
+        if ($this->type !== self::TYPE_MANUTENZIONE || ! $this->machine_unit_id) {
+            return;
+        }
+
+        $last = ServiceReport::query()
+            ->where('customer_id', $this->customer_id)
+            ->where('machine_unit_id', $this->machine_unit_id)
+            ->where('intervention_type', ServiceReport::TYPE_MANUTENZIONE_ORDINARIA)
+            ->whereIn('status', ServiceReport::CLOSED_STATUSES)
+            ->orderByDesc('intervention_date')
+            ->first();
+
+        if ($last) {
+            $this->markServiced($last);
+        }
+    }
+
+    /**
      * Ricalcola la scadenza di un piano di tipo lavaggio dall'ultimo lavaggio
      * registrato (per data, non per data di inserimento). Usa il MAX tra
      * tutti i lavaggi collegati, non solo quello appena salvato, per restare
@@ -150,7 +180,7 @@ class MaintenanceSchedule extends Model
      * meno che il filtro non si esaurisca prima (filter_validity_days piu'
      * stringente dei 4 mesi).
      */
-    private function nextAcquaDueDate(Lavaggio $lastFilterChange): \Illuminate\Support\Carbon
+    private function nextAcquaDueDate(Lavaggio $lastFilterChange): Carbon
     {
         $sanificazione = $lastFilterChange->data->copy()->addMonths(4);
 

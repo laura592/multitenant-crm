@@ -76,13 +76,12 @@ class SendServiceReportToGestionaleJob implements ShouldQueue
                 // gestionale_scheda_lavoro_id) e ne crea un duplicato
                 // locale — successo davvero, vedi RT-2026-0002/SL-592.
                 'eureka_service_report_id' => $result['id_eureka'] ?? null,
-                // Rinominato con lo stesso schema "SL-{numero}" usato da
-                // ImportEurekaServiceReports: un rapportino nato in CRM
-                // (numerazione RT-2026-xxxx) e uno stesso documento ripescato
-                // da un giro storico successivo si distinguevano solo per
-                // numero, sembrando due cose diverse anche dopo il fix di
-                // eureka_service_report_id sopra — vedi RT-2026-0002/SL-591.
-                'number' => $this->resolveGestionaleNumber($report, $result),
+                // Numero assegnato da Eureka, con lo stesso schema
+                // "SL-{numero}/{anno}" usato da ImportEurekaServiceReports —
+                // tenuto separato da "number" (che resta il numero RT-...
+                // gia' consegnato al cliente in PDF/email) proprio per non
+                // fargli perdere corrispondenza col documento inviato.
+                'gestionale_number' => $this->resolveGestionaleNumber($report, $result),
                 'gestionale_sync_status' => 'sent',
                 'gestionale_sync_error' => null,
                 'gestionale_synced_at' => now(),
@@ -107,25 +106,31 @@ class SendServiceReportToGestionaleJob implements ShouldQueue
     }
 
     /**
-     * Stesso schema "SL-{numero}" usato da
+     * Stesso schema "SL-{numero}/{anno}" usato da
      * ImportEurekaServiceReports::resolveUniqueNumber() (compreso il
      * fallback su id_eureka e la disambiguazione con suffisso) — cosi' un
      * rapportino nato qui e uno stesso documento ripescato da un giro
-     * storico finiscono sempre con lo stesso numero, non due diversi.
+     * storico finiscono sempre con lo stesso numero gestionale, non due
+     * diversi. L'anno serve perche' il "numero" di Eureka da solo non e'
+     * univoco nel tempo (si ripete su anni diversi, vedi il commento
+     * gemello sull'altro metodo). Il controllo di unicita' e' sulla
+     * colonna gestionale_number (non piu' su "number", che ora resta il
+     * numero CRM stabile e non viene mai riscritto qui).
      *
      * @param  array<string, mixed>  $result
      */
     private function resolveGestionaleNumber(ServiceReport $report, array $result): string
     {
         $numero = (int) ($result['numero'] ?? 0);
-        $base = $numero > 0 ? "SL-{$numero}" : 'SL-EK-'.(int) ($result['id_eureka'] ?? 0);
+        $year = $report->intervention_date->year;
+        $base = $numero > 0 ? "SL-{$numero}/{$year}" : 'SL-EK-'.(int) ($result['id_eureka'] ?? 0);
 
         $candidate = $base;
         $i = 2;
         while (
             ServiceReport::withTrashed()
                 ->where('tenant_id', $report->tenant_id)
-                ->where('number', $candidate)
+                ->where('gestionale_number', $candidate)
                 ->where('id', '!=', $report->id)
                 ->exists()
         ) {

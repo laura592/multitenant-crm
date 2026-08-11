@@ -98,6 +98,17 @@ class LavaggiRelationManager extends RelationManager
                     ->wrap(),
                 Tables\Columns\TextColumn::make('descrizione')->label('Descrizione')->searchable(),
                 Tables\Columns\TextColumn::make('note')->label('Note')->limit(50)->placeholder('—'),
+                // Un lavaggio generato automaticamente da ServiceReport::syncMaintenanceSchedule()
+                // (rapportino di manutenzione ordinaria chiuso, o testo libero "lavagg/puliz/sanific"
+                // sullo storico importato) ha service_report_id valorizzato: qui si vede quale, con
+                // link diretto — altrimenti e' un lavaggio inserito a mano in questo registro.
+                Tables\Columns\TextColumn::make('serviceReport.number')
+                    ->label('Rapportino')
+                    ->placeholder('— (inserito a mano)')
+                    ->url(fn (Lavaggio $record) => $record->service_report_id
+                        ? ServiceReportResource::getUrl('view', ['record' => $record->service_report_id], tenant: $record->tenant)
+                        : null)
+                    ->color(fn (Lavaggio $record) => $record->service_report_id ? 'primary' : 'gray'),
             ])
             ->headerActions([
                 Tables\Actions\CreateAction::make()
@@ -109,12 +120,20 @@ class LavaggiRelationManager extends RelationManager
             ])
             ->actions([
                 Tables\Actions\Action::make('rapportino')
-                    ->label('Rapportino')
+                    ->label(fn (Lavaggio $record) => $record->service_report_id ? 'Vedi rapportino' : 'Crea rapportino')
                     ->icon('heroicon-o-clipboard-document-check')
                     ->color('gray')
-                    ->url(fn (Lavaggio $record) => self::serviceReportCreateUrl($record)),
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                    ->url(fn (Lavaggio $record) => $record->service_report_id
+                        ? ServiceReportResource::getUrl('view', ['record' => $record->service_report_id], tenant: $record->tenant)
+                        : self::serviceReportCreateUrl($record)),
+                Tables\Actions\EditAction::make()
+                    // Un lavaggio generato da un rapportino va modificato li' (il
+                    // rapportino), non qui: editarlo direttamente verrebbe
+                    // silenziosamente sovrascritto al prossimo salvataggio del
+                    // rapportino collegato (syncMaintenanceSchedule() lo rigenera).
+                    ->visible(fn (Lavaggio $record) => ! $record->service_report_id),
+                Tables\Actions\DeleteAction::make()
+                    ->visible(fn (Lavaggio $record) => ! $record->service_report_id),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([

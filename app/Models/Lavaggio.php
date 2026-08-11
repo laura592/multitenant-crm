@@ -26,6 +26,7 @@ class Lavaggio extends Model
         'customer_id',
         'machine_unit_id',
         'maintenance_schedule_id',
+        'service_report_id',
         'data',
         'descrizione',
         'filtro_sostituito',
@@ -94,6 +95,16 @@ class Lavaggio extends Model
     public function maintenanceSchedule(): BelongsTo
     {
         return $this->belongsTo(MaintenanceSchedule::class);
+    }
+
+    /**
+     * Valorizzata solo per i lavaggi generati automaticamente da
+     * ServiceReport::syncMaintenanceSchedule() — vedi commento sulla colonna
+     * nella migration.
+     */
+    public function serviceReport(): BelongsTo
+    {
+        return $this->belongsTo(ServiceReport::class);
     }
 
     /**
