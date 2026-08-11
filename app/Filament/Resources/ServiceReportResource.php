@@ -782,7 +782,7 @@ class ServiceReportResource extends Resource
                         })
                         ->icon('heroicon-o-arrow-up-tray')
                         ->disabled(fn (ServiceReport $record): bool => $record->gestionale_sync_status === 'queued')
-                        ->visible(fn (ServiceReport $record): bool => in_array($record->status, ['firmato', 'inviato'], true) && ($record->tenant?->hasGestionaleEurekaCredentials() ?? false))
+                        ->visible(fn (ServiceReport $record): bool => in_array($record->status, ServiceReport::CLOSED_STATUSES, true) && ($record->tenant?->hasGestionaleEurekaCredentials() ?? false))
                         ->requiresConfirmation()
                         ->modalDescription('Invia questo rapportino a Eureka come scheda lavoro. Non è possibile cancellare un documento una volta creato, nemmeno in ambiente di test.')
                         ->action(function (ServiceReport $record) {
@@ -849,13 +849,17 @@ class ServiceReportResource extends Resource
     /**
      * Il modello non ha costanti per lo stato (campo stringa libero storico):
      * le etichette/colori restano centralizzati qui per non duplicarli tra
-     * tabella, infolist e form.
+     * tabella, infolist e form. "completato" e' stato rimosso: nessun flusso
+     * lo assegna mai, l'unico rapportino che lo aveva era un'anomalia
+     * corretta a mano in "inviato". "firmato" invece resta — e' lo stato
+     * intermedio dopo la firma cliente (SignaturePad) e prima dell'invio a
+     * gestionale, controllato da CLOSED_STATUSES e dai test di
+     * ServiceReportGestionaleSyncTest.
      */
     public static function statusLabels(): array
     {
         return [
             'bozza' => 'Bozza',
-            'completato' => 'Completato',
             'firmato' => 'Firmato',
             'inviato' => 'Inviato',
         ];
@@ -865,7 +869,6 @@ class ServiceReportResource extends Resource
     {
         return [
             'bozza' => 'gray',
-            'completato' => 'info',
             'firmato' => 'warning',
             'inviato' => 'success',
         ];

@@ -46,7 +46,8 @@ class ServiceReport extends Model
     /**
      * Stati che contano come "rapportino chiuso" per gli scopi di
      * syncMaintenanceSchedule() (stesso set usato dall'azione "Invia a
-     * gestionale" in ServiceReportResource).
+     * gestionale" in ServiceReportResource) — "firmato" e' lo stato dopo la
+     * firma cliente, prima dell'invio a gestionale.
      */
     public const CLOSED_STATUSES = ['firmato', 'inviato'];
 
