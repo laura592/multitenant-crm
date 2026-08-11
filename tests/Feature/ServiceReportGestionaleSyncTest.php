@@ -41,7 +41,7 @@ class ServiceReportGestionaleSyncTest extends TestCase
             'intervention_date' => now(),
             'problem_description' => 'Non eroga caffè',
             'work_performed' => 'Sostituita pompa',
-            'status' => 'firmato',
+            'status' => 'inviato',
         ]);
     }
 

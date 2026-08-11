@@ -46,10 +46,11 @@ class ServiceReport extends Model
     /**
      * Stati che contano come "rapportino chiuso" per gli scopi di
      * syncMaintenanceSchedule() (stesso set usato dall'azione "Invia a
-     * gestionale" in ServiceReportResource) — "firmato" e' lo stato dopo la
-     * firma cliente, prima dell'invio a gestionale.
+     * gestionale" in ServiceReportResource). Un solo stato per ora, ma resta
+     * un array: "chiuso" e' un concetto distinto da "e' 'inviato'", anche se
+     * al momento coincidono.
      */
-    public const CLOSED_STATUSES = ['firmato', 'inviato'];
+    public const CLOSED_STATUSES = ['inviato'];
 
     /**
      * Parole chiave usate da countsAsLavaggio() sullo storico importato da Eureka,

@@ -849,18 +849,16 @@ class ServiceReportResource extends Resource
     /**
      * Il modello non ha costanti per lo stato (campo stringa libero storico):
      * le etichette/colori restano centralizzati qui per non duplicarli tra
-     * tabella, infolist e form. "completato" e' stato rimosso: nessun flusso
-     * lo assegna mai, l'unico rapportino che lo aveva era un'anomalia
-     * corretta a mano in "inviato". "firmato" invece resta — e' lo stato
-     * intermedio dopo la firma cliente (SignaturePad) e prima dell'invio a
-     * gestionale, controllato da CLOSED_STATUSES e dai test di
-     * ServiceReportGestionaleSyncTest.
+     * tabella, infolist e form. "completato" e "firmato" sono stati rimossi:
+     * nessun flusso li assegna mai (la firma cliente in "Firma cliente" e' un
+     * concetto indipendente dallo stato, catturata anche su rapportini gia'
+     * "Inviato" — vedi il campo customer_signature_path). L'unico rapportino
+     * con "completato" era un'anomalia, corretta a mano in "inviato".
      */
     public static function statusLabels(): array
     {
         return [
             'bozza' => 'Bozza',
-            'firmato' => 'Firmato',
             'inviato' => 'Inviato',
         ];
     }
@@ -869,7 +867,6 @@ class ServiceReportResource extends Resource
     {
         return [
             'bozza' => 'gray',
-            'firmato' => 'warning',
             'inviato' => 'success',
         ];
     }
