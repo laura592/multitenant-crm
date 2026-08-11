@@ -256,7 +256,8 @@
       "Bash(cp /Users/laura/Documents/multitenant-crm/storage/app/rt0014.pdf /private/tmp/claude-501/-Users-laura-Documents-multitenant-crm/1e22a48c-3f98-4d0c-8aaf-625e690ca879/scratchpad/shots/rt0014b.pdf)",
       "Bash(pdfinfo rt0014b.pdf)",
       "Bash(pdftoppm -png -r 200 -f 1 -l 1 -x 0 -y 0 -W 2400 -H 700 rt0014b.pdf rt0014bcrop)",
-      "Bash(rm -f \"/Users/laura/Documents/Alex/Listini/Lavaggi - Storico e Scadenze \\(con rapportini\\).docx\" *)"
+      "Bash(rm -f \"/Users/laura/Documents/Alex/Listini/Lavaggi - Storico e Scadenze \\(con rapportini\\).docx\" *)",
+      "Bash(xargs -I{} sh -c 'echo \"=== {} ===\"; cat \"{}\"')"
     ],
     "additionalDirectories": [
       "/private/tmp/claude-501/-Users-laura-Documents-multitenant-crm/42c2ea60-257f-4721-955c-f0223b676257/scratchpad",
