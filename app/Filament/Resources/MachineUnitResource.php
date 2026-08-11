@@ -82,8 +82,14 @@ class MachineUnitResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('serial_number')->label('Matricola')->searchable(),
-                Tables\Columns\TextColumn::make('display_name')->label('Modello'),
-                Tables\Columns\TextColumn::make('currentCustomer.company_name')->label('Presso')->placeholder('In magazzino'),
+                Tables\Columns\TextColumn::make('display_name')
+                    ->label('Modello')
+                    ->searchable(
+                        query: fn ($query, string $search) => $query
+                            ->where('model_name', 'like', "%{$search}%")
+                            ->orWhereHas('product', fn ($q) => $q->where('name', 'like', "%{$search}%")),
+                    ),
+                Tables\Columns\TextColumn::make('currentCustomer.company_name')->label('Presso')->placeholder('In magazzino')->searchable(),
                 Tables\Columns\IconColumn::make('gestionale_code')
                     ->label('Da Eureka')
                     ->boolean()

@@ -53,7 +53,13 @@ class MacchinariRelationManager extends RelationManager
             ->recordTitleAttribute('serial_number')
             ->columns([
                 Tables\Columns\TextColumn::make('serial_number')->label('Matricola')->searchable(),
-                Tables\Columns\TextColumn::make('display_name')->label('Modello'),
+                Tables\Columns\TextColumn::make('display_name')
+                    ->label('Modello')
+                    ->searchable(
+                        query: fn ($query, string $search) => $query
+                            ->where('model_name', 'like', "%{$search}%")
+                            ->orWhereHas('product', fn ($q) => $q->where('name', 'like', "%{$search}%")),
+                    ),
                 Tables\Columns\TextColumn::make('status')
                     ->label('Stato')
                     ->badge()

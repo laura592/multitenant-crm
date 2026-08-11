@@ -51,8 +51,22 @@ class CategoryResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            // Elenco piatto ordinato per nome non rendeva leggibile la
+            // gerarchia (genitore e figlie sparsi in ordine alfabetico
+            // indipendente) — qui si raggruppano sotto lo stesso "nome di
+            // famiglia" (quello del genitore, o il proprio se non ne ha),
+            // col genitore sempre subito prima delle sue figlie.
+            ->modifyQueryUsing(fn ($query) => $query
+                ->leftJoin('categories as parent_categories', 'parent_categories.id', '=', 'categories.parent_id')
+                ->orderByRaw('COALESCE(parent_categories.name, categories.name) asc')
+                ->orderByRaw('categories.parent_id is null desc')
+                ->orderBy('categories.name')
+                ->select('categories.*'))
             ->columns([
-                Tables\Columns\TextColumn::make('name')->label('Nome')->searchable()->sortable(),
+                Tables\Columns\TextColumn::make('name')
+                    ->label('Nome')
+                    ->searchable()
+                    ->formatStateUsing(fn (Category $record, string $state) => $record->parent_id ? "↳ {$state}" : $state),
                 Tables\Columns\TextColumn::make('parent.name')->label('Categoria padre')->placeholder('—'),
                 Tables\Columns\TextColumn::make('tenant.name')->label('Tenant')->placeholder('Condivisa')
                     ->toggleable(isToggledHiddenByDefault: true),
