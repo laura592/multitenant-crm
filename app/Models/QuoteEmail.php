@@ -12,7 +12,6 @@ class QuoteEmail extends Model
     use HasUuids, SoftDeletes;
 
     protected $fillable = [
-        'legacy_id',
         'quote_id',
         'user_id',
         'recipient_email',

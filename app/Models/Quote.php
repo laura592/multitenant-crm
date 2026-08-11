@@ -31,7 +31,6 @@ class Quote extends Model
     ];
 
     protected $fillable = [
-        'legacy_id',
         'tenant_id',
         'quote_group_id',
         'customer_id',

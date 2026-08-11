@@ -11,7 +11,6 @@ class PaymentMethod extends Model
     use HasUuids;
 
     protected $fillable = [
-        'legacy_id',
         'name',
         'slug',
         'is_active',

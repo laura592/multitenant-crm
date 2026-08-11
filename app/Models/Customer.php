@@ -27,7 +27,6 @@ class Customer extends Model
     public const SOURCE_APP = 'app';
 
     protected $fillable = [
-        'legacy_id',
         'tenant_id',
         'billing_customer_id',
         'first_name',

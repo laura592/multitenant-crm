@@ -159,11 +159,6 @@ class Tenant extends Model implements HasName
         return $this->hasMany(ProductFamily::class);
     }
 
-    public function productOptionGroups(): HasMany
-    {
-        return $this->hasMany(ProductOptionGroup::class);
-    }
-
     public function customers(): HasMany
     {
         return $this->hasMany(Customer::class);

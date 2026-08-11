@@ -13,7 +13,6 @@ class QuoteProduct extends Model
     use HasUuids, SoftDeletes;
 
     protected $fillable = [
-        'legacy_id',
         'quote_id',
         'product_id',
         'parent_quote_product_id',
