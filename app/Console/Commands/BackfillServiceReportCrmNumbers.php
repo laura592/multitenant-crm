@@ -93,6 +93,7 @@ class BackfillServiceReportCrmNumbers extends Command
                 $changes[] = [
                     'id' => $report->id,
                     'number' => $newNumber,
+                    'old_number' => $report->number,
                     // Se non era mai stato migrato (number ancora in
                     // formato SL-...), e' quello il numero Eureka da
                     // salvare; altrimenti gestionale_number e' gia'
@@ -100,6 +101,23 @@ class BackfillServiceReportCrmNumbers extends Command
                     'gestionale_number' => $report->gestionale_number ?? $report->number,
                 ];
             }
+        }
+
+        // Un numero mai assegnato prima (era ancora "SL-...", non un vero
+        // numero CRM) e' una novita' senza rischi. Un numero RT-... che
+        // CAMBIA invece era gia' un identificativo interno in uso — se
+        // questo comando viene rilanciato dopo nuovi import Eureka per un
+        // anno gia' numerato, e' proprio questo il caso da far notare
+        // esplicitamente prima di scrivere, non una sorpresa nei log dopo.
+        $reassigned = array_filter($changes, fn (array $change) => ! str_starts_with((string) $change['old_number'], 'SL-'));
+
+        if (! $dryRun && $reassigned !== [] && ! $this->confirm(sprintf(
+            "%d rapportini hanno GIA' un numero CRM (RT-...) che cambierebbe con questa esecuzione (non sono nuove assegnazioni). Procedere?",
+            count($reassigned),
+        ))) {
+            $this->warn('Annullato: nessuna scrittura effettuata.');
+
+            return self::SUCCESS;
         }
 
         if (! $dryRun) {
@@ -115,9 +133,10 @@ class BackfillServiceReportCrmNumbers extends Command
         }
 
         $this->info(sprintf(
-            '%sRinumerati: %d. Già corretti: %d.',
+            '%sRinumerati: %d (di cui %d gia\' numerati in precedenza). Già corretti: %d.',
             $dryRun ? '[DRY RUN] ' : '',
             count($changes),
+            count($reassigned),
             $unchanged,
         ));
 
