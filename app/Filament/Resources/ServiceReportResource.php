@@ -55,6 +55,15 @@ class ServiceReportResource extends Resource
      */
     private const MANODOPERA_MATERIAL_CODE = 'ORE';
 
+    /**
+     * "LAVAGGIO 2 VIE" e' la tariffa minima gia' agevolata per i tecnici,
+     * dovuta anche lavando una sola via; "ULTERIORE VIA LAVATA" copre solo le
+     * vie oltre la seconda. Vedi syncLavaggioViaMaterials() sotto.
+     */
+    private const LAVAGGIO_VIE_BASE_MATERIAL_CODE = 'LAV2';
+
+    private const LAVAGGIO_VIE_ULTERIORE_MATERIAL_CODE = 'ULTVIA';
+
     public static function infolist(Infolist $infolist): Infolist
     {
         return $infolist->schema([
@@ -65,7 +74,7 @@ class ServiceReportResource extends Resource
                 ->columns(12)
                 ->columnSpanFull()
                 ->extraAttributes([
-                    'class' => 'rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50 shadow-sm dark:border-slate-800 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900',
+                    'class' => 'fi-quick-overview rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50 shadow-sm',
                 ])
                 ->schema([
                     TextEntry::make('number')->label('Numero')->columnSpan(2),
@@ -111,11 +120,22 @@ class ServiceReportResource extends Resource
                     RepeatableEntry::make('materialsUsed')
                         ->label('')
                         ->placeholder('Nessun ricambio utilizzato')
-                        ->columns(2)
+                        ->columns(4)
                         ->schema([
                             TextEntry::make('material.display_label')->label('Materiale'),
                             TextEntry::make('quantity')->label('Quantità'),
+                            TextEntry::make('unit_cost_snapshot')->label('Prezzo unit.')->money('EUR')->placeholder('—'),
+                            TextEntry::make('line_total_snapshot')->label('Importo')->money('EUR')->placeholder('—'),
                         ]),
+                    // Somma degli importi riga: solo dove valorizzato (da
+                    // Eureka), i rapportini compilati a mano oggi non hanno
+                    // ancora un importo per materiale.
+                    TextEntry::make('materials_total')
+                        ->label('Totale')
+                        ->state(fn (ServiceReport $record) => $record->materialsUsed->sum('line_total_snapshot'))
+                        ->money('EUR')
+                        ->weight('bold')
+                        ->visible(fn (ServiceReport $record) => $record->materialsUsed->sum('line_total_snapshot') > 0),
                 ]),
             // Rapportini compilati prima del passaggio a Materiali avevano i
             // ricambi salvati come Product (partsUsed) — sezione visibile
@@ -184,7 +204,7 @@ class ServiceReportResource extends Resource
                         ->columns(3),
                 ]),
             InfolistSection::make('Gestionale')
-                ->columns(3)
+                ->columns(4)
                 ->schema([
                     TextEntry::make('gestionale_sync_status')
                         ->label('Stato invio Eureka')
@@ -197,6 +217,11 @@ class ServiceReportResource extends Resource
                         ->formatStateUsing(fn (?string $state) => self::gestionaleSyncStatusLabels()[$state] ?? self::gestionaleSyncStatusLabels()['none'])
                         ->color(fn (?string $state) => self::gestionaleSyncStatusColors()[$state] ?? self::gestionaleSyncStatusColors()['none']),
                     TextEntry::make('gestionale_number')->label('Numero gestionale')->placeholder('—'),
+                    // Data del documento Eureka, distinta da "Data" (in alto,
+                    // intervention_date): sulla scheda lavoro Eureka le due
+                    // possono differire di giorni, il rapportino viene
+                    // spesso archiviato in ufficio dopo l'intervento vero.
+                    TextEntry::make('gestionale_document_date')->label('Data documento Eureka')->date()->placeholder('—'),
                     TextEntry::make('gestionale_synced_at')->label('Ultimo invio riuscito')->dateTime('d/m/Y H:i')->placeholder('—'),
                     TextEntry::make('gestionale_sync_error')->label('Errore')->placeholder('—')->columnSpanFull(),
                 ]),
@@ -214,7 +239,7 @@ class ServiceReportResource extends Resource
                 ->columnSpanFull()
                 ->visible(fn (?ServiceReport $record) => $record !== null)
                 ->extraAttributes([
-                    'class' => 'rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50 shadow-sm dark:border-slate-800 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900',
+                    'class' => 'fi-quick-overview rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50 shadow-sm',
                 ])
                 ->schema([
                     Forms\Components\Placeholder::make('summary_number')
@@ -440,62 +465,103 @@ class ServiceReportResource extends Resource
                 ]),
             Forms\Components\Section::make('Ricambi/materiali utilizzati')
                 ->schema([
-                    // Scorciatoia per il ricambio "chiamata" (tariffa base
-                    // dell'intervento su Eureka): CHIVE per Venezia centro
-                    // storico (raggiungibile solo via acqua), CHIORD altrove.
-                    // Lido e Burano hanno gia' un codice piu' specifico
-                    // (CHILI/CHIBU) da aggiungere a mano, quindi qui il match
-                    // sulla citta' resta volutamente stretto ("Venezia" esatto).
-                    Forms\Components\Checkbox::make('add_chiamata_material')
-                        ->label('Chiamata')
-                        ->live()
+                    // Le 3 Hidden e i 2 Toggle sotto sono tutti "di comodo"
+                    // (dehydrated(false), nessuna colonna reale): su un rapportino
+                    // gia' salvato devono pero' rispecchiare le righe materiale
+                    // gia' presenti (es. arrivando da Eureka, o da un salvataggio
+                    // precedente di questi stessi widget), altrimenti riaprendo un
+                    // rapportino con CHIORD/LAV2 gia' in elenco i toggle
+                    // risulterebbero spenti/vuoti pur essendo la riga li' —
+                    // vedi resolveLavaggioShortcutDefaults().
+                    Forms\Components\Hidden::make('_chiamata_material_key')
                         ->dehydrated(false)
-                        ->disabled(fn (Forms\Get $get) => blank($get('customer_id')))
-                        ->helperText('Aggiunge da sola il ricambio "CHIVE" (Venezia) o "CHIORD" (altrove) in base alla città del cliente. Togliendo la spunta si rimuove la riga aggiunta. Seleziona prima il cliente.')
-                        ->afterStateUpdated(function (bool $state, Forms\Set $set, Forms\Get $get) {
-                            $materialsUsed = $get('materialsUsed') ?? [];
-                            $addedKey = $get('_chiamata_material_key');
-
-                            if (! $state) {
-                                // Rimuove solo la riga aggiunta da questo flag (per key),
-                                // non un'eventuale riga uguale inserita a mano.
-                                if ($addedKey && array_key_exists($addedKey, $materialsUsed)) {
-                                    unset($materialsUsed[$addedKey]);
-                                    $set('materialsUsed', $materialsUsed);
-                                }
-
-                                $set('_chiamata_material_key', null);
-
-                                return;
-                            }
-
-                            $customer = Customer::find($get('customer_id'));
-                            $code = $customer?->city === 'Venezia' ? 'CHIVE' : 'CHIORD';
-                            $material = Material::where('code', $code)->first();
-
-                            if (! $material) {
-                                return;
-                            }
-
-                            $alreadyAdded = collect($materialsUsed)->contains(
-                                fn (array $item) => ($item['material_id'] ?? null) === $material->id
-                            );
-
-                            if ($alreadyAdded) {
-                                return;
-                            }
-
-                            $newKey = (string) Str::uuid();
-                            $materialsUsed[$newKey] = [
-                                'material_id' => $material->id,
-                                'quantity' => 1,
-                            ];
-
-                            $set('materialsUsed', $materialsUsed);
-                            $set('_chiamata_material_key', $newKey);
-                        }),
-                    Forms\Components\Hidden::make('_chiamata_material_key')->dehydrated(false),
+                        ->default(fn (?ServiceReport $record) => self::resolveLavaggioShortcutDefaults($record)['chiamata_key']),
                     Forms\Components\Hidden::make('_manodopera_material_key')->dehydrated(false),
+                    Forms\Components\Hidden::make('_lavaggio_base_material_key')
+                        ->dehydrated(false)
+                        ->default(fn (?ServiceReport $record) => self::resolveLavaggioShortcutDefaults($record)['lavaggio_base_key']),
+                    Forms\Components\Hidden::make('_lavaggio_ult_material_key')
+                        ->dehydrated(false)
+                        ->default(fn (?ServiceReport $record) => self::resolveLavaggioShortcutDefaults($record)['lavaggio_ult_key']),
+                    // Scorciatoie che aggiungono/rimuovono righe materiale da sole
+                    // (stesso meccanismo per key, dehydrated(false), per entrambe):
+                    // "Chiamata" per il ricambio CHIVE/CHIORD (tariffa base
+                    // dell'intervento su Eureka: CHIVE per Venezia centro storico
+                    // — raggiungibile solo via acqua —, CHIORD altrove; Lido e
+                    // Burano hanno gia' un codice piu' specifico CHILI/CHIBU da
+                    // aggiungere a mano, quindi qui il match resta volutamente
+                    // stretto su "Venezia" esatto), "Lavaggio eseguito" per
+                    // LAVAGGIO 2 VIE (tariffa minima agevolata, dovuta anche
+                    // lavando una sola via) + ULTERIORE VIA LAVATA per le vie
+                    // oltre la seconda.
+                    Forms\Components\Grid::make(3)
+                        ->schema([
+                            Forms\Components\Toggle::make('add_chiamata_material')
+                                ->label('Chiamata')
+                                ->live()
+                                ->dehydrated(false)
+                                ->default(fn (?ServiceReport $record) => self::resolveLavaggioShortcutDefaults($record)['chiamata_key'] !== null)
+                                ->disabled(fn (Forms\Get $get) => blank($get('customer_id')))
+                                ->helperText('Aggiunge da sola CHIVE (Venezia) o CHIORD (altrove). Seleziona prima il cliente.')
+                                ->afterStateUpdated(function (bool $state, Forms\Set $set, Forms\Get $get) {
+                                    $materialsUsed = $get('materialsUsed') ?? [];
+                                    $addedKey = $get('_chiamata_material_key');
+
+                                    if (! $state) {
+                                        // Rimuove solo la riga aggiunta da questo flag (per key),
+                                        // non un'eventuale riga uguale inserita a mano.
+                                        if ($addedKey && array_key_exists($addedKey, $materialsUsed)) {
+                                            unset($materialsUsed[$addedKey]);
+                                            $set('materialsUsed', $materialsUsed);
+                                        }
+
+                                        $set('_chiamata_material_key', null);
+
+                                        return;
+                                    }
+
+                                    $customer = Customer::find($get('customer_id'));
+                                    $code = $customer?->city === 'Venezia' ? 'CHIVE' : 'CHIORD';
+                                    $material = Material::where('code', $code)->first();
+
+                                    if (! $material) {
+                                        return;
+                                    }
+
+                                    $alreadyAdded = collect($materialsUsed)->contains(
+                                        fn (array $item) => ($item['material_id'] ?? null) === $material->id
+                                    );
+
+                                    if ($alreadyAdded) {
+                                        return;
+                                    }
+
+                                    $newKey = (string) Str::uuid();
+                                    $materialsUsed[$newKey] = [
+                                        'material_id' => $material->id,
+                                        'quantity' => 1,
+                                    ];
+
+                                    $set('materialsUsed', $materialsUsed);
+                                    $set('_chiamata_material_key', $newKey);
+                                }),
+                            Forms\Components\Toggle::make('_lavaggio_vie_eseguito')
+                                ->label('Lavaggio eseguito')
+                                ->live()
+                                ->dehydrated(false)
+                                ->default(fn (?ServiceReport $record) => self::resolveLavaggioShortcutDefaults($record)['lavaggio_base_key'] !== null)
+                                ->helperText('Aggiunge da sola LAVAGGIO 2 VIE (sempre) + ULTERIORE VIA LAVATA per le vie oltre la seconda.')
+                                ->afterStateUpdated(fn (Forms\Set $set, Forms\Get $get) => self::syncLavaggioViaMaterials($set, $get)),
+                            Forms\Components\TextInput::make('_lavaggio_vie_count')
+                                ->label('Numero vie lavate')
+                                ->numeric()
+                                ->minValue(1)
+                                ->live()
+                                ->dehydrated(false)
+                                ->default(fn (?ServiceReport $record) => self::resolveLavaggioShortcutDefaults($record)['vie_count'])
+                                ->visible(fn (Forms\Get $get) => (bool) $get('_lavaggio_vie_eseguito'))
+                                ->afterStateUpdated(fn (Forms\Set $set, Forms\Get $get) => self::syncLavaggioViaMaterials($set, $get)),
+                        ]),
                     // Materiali (App\Models\Material), non Product: quest'ultimo e'
                     // lo stesso elenco usato per i preventivi, senza filtro —
                     // macchine/ricambi trovati su Eureka finirebbero anche li'.
@@ -624,6 +690,119 @@ class ServiceReportResource extends Resource
 
         $set('materialsUsed', $materialsUsed);
         $set('_manodopera_material_key', $newKey);
+    }
+
+    /**
+     * Stato "reale" (da DB, non dal form) delle righe CHIVE/CHIORD e
+     * LAV2/ULTVIA gia' presenti su un rapportino esistente: serve a far
+     * partire i toggle/hidden di cui sopra gia' allineati a quello che c'e'
+     * davvero in "Ricambi/materiali utilizzati" (es. un rapportino importato
+     * da Eureka con CHIORD+LAV2 gia' in elenco), invece che sempre spenti.
+     * Le key restituite sono gli id delle righe ServiceReportMaterial, cosi'
+     * da poter essere riusate cosi' come sono come chiavi del repeater
+     * ->relationship() (che su un edit e' keyed per id di riga, non per uuid
+     * generato al volo).
+     *
+     * Pubblico perche' su EditServiceReport i ->default() qui sotto NON
+     * bastano: Filament valuta getDefaultState() solo quando fill() e'
+     * chiamato senza dati (create), non quando gli si passa l'array del
+     * record da modificare (edit) — in quel caso i campi senza chiave in
+     * quell'array vengono azzerati da fillStateWithNull(), ->default()
+     * incluso. Serve quindi iniettare questi valori PRIMA, in
+     * EditServiceReport::mutateFormDataBeforeFill().
+     */
+    public static function resolveLavaggioShortcutDefaults(?ServiceReport $record): array
+    {
+        $empty = [
+            'chiamata_key' => null,
+            'lavaggio_base_key' => null,
+            'lavaggio_ult_key' => null,
+            'vie_count' => null,
+        ];
+
+        if (! $record) {
+            return $empty;
+        }
+
+        $rows = $record->materialsUsed()->with('material')->get();
+
+        $chiamataRow = $rows->first(fn ($row) => in_array($row->material?->code, ['CHIVE', 'CHIORD'], true));
+        $baseRow = $rows->first(fn ($row) => $row->material?->code === self::LAVAGGIO_VIE_BASE_MATERIAL_CODE);
+        $ultRow = $rows->first(fn ($row) => $row->material?->code === self::LAVAGGIO_VIE_ULTERIORE_MATERIAL_CODE);
+
+        return [
+            'chiamata_key' => $chiamataRow?->id,
+            'lavaggio_base_key' => $baseRow?->id,
+            'lavaggio_ult_key' => $ultRow?->id,
+            // Inverso esatto di syncLavaggioViaMaterials() (ULTVIA qty =
+            // vieCount - 2): LAV2 da solo, senza ULTVIA, non permette di
+            // distinguere "1 via lavata con la tariffa minima agevolata" da
+            // "2 vie lavate" (stessa riga in entrambi i casi) — si assume 2,
+            // il valore nominale della tariffa stessa, non 1.
+            'vie_count' => $baseRow ? 2 + (int) ($ultRow?->quantity ?? 0) : null,
+        ];
+    }
+
+    /**
+     * Stesso meccanismo per key di add_chiamata_material/syncManodoperaMaterial
+     * sopra: ricalcola da zero le righe generate da questo widget a ogni
+     * cambio di toggle/numero vie, senza toccare righe uguali aggiunte a
+     * mano (dedupe via $alreadyAdded, come altrove in questo file).
+     */
+    private static function syncLavaggioViaMaterials(Forms\Set $set, Forms\Get $get): void
+    {
+        $materialsUsed = $get('materialsUsed') ?? [];
+
+        foreach (['_lavaggio_base_material_key', '_lavaggio_ult_material_key'] as $keyField) {
+            $key = $get($keyField);
+
+            if ($key && array_key_exists($key, $materialsUsed)) {
+                unset($materialsUsed[$key]);
+            }
+        }
+
+        $eseguito = (bool) $get('_lavaggio_vie_eseguito');
+        $vieCount = (int) $get('_lavaggio_vie_count');
+
+        if (! $eseguito || $vieCount < 1) {
+            $set('materialsUsed', $materialsUsed);
+            $set('_lavaggio_base_material_key', null);
+            $set('_lavaggio_ult_material_key', null);
+
+            return;
+        }
+
+        $baseMaterial = Material::where('code', self::LAVAGGIO_VIE_BASE_MATERIAL_CODE)->first();
+        $ultMaterial = Material::where('code', self::LAVAGGIO_VIE_ULTERIORE_MATERIAL_CODE)->first();
+
+        $newBaseKey = null;
+        $newUltKey = null;
+
+        if ($baseMaterial) {
+            $baseAlreadyPresent = collect($materialsUsed)->contains(
+                fn (array $item) => ($item['material_id'] ?? null) === $baseMaterial->id
+            );
+
+            if (! $baseAlreadyPresent) {
+                $newBaseKey = (string) Str::uuid();
+                $materialsUsed[$newBaseKey] = ['material_id' => $baseMaterial->id, 'quantity' => 1];
+            }
+        }
+
+        if ($ultMaterial && $vieCount > 2) {
+            $ultAlreadyPresent = collect($materialsUsed)->contains(
+                fn (array $item) => ($item['material_id'] ?? null) === $ultMaterial->id
+            );
+
+            if (! $ultAlreadyPresent) {
+                $newUltKey = (string) Str::uuid();
+                $materialsUsed[$newUltKey] = ['material_id' => $ultMaterial->id, 'quantity' => $vieCount - 2];
+            }
+        }
+
+        $set('materialsUsed', $materialsUsed);
+        $set('_lavaggio_base_material_key', $newBaseKey);
+        $set('_lavaggio_ult_material_key', $newUltKey);
     }
 
     public static function table(Table $table): Table

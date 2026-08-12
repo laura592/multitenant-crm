@@ -164,4 +164,131 @@ class ServiceReportTest extends TestCase
                 ];
             });
     }
+
+    /**
+     * "LAVAGGIO 2 VIE" e' la tariffa minima gia' agevolata per i tecnici,
+     * dovuta anche lavando una sola via: il widget "Lavaggio vie" del form
+     * deve aggiungere sempre quella riga con quantita' 1, piu' "ULTERIORE VIA
+     * LAVATA" solo per le vie oltre la seconda (qui 4 vie => qty 2). Vedi
+     * ServiceReportResource::syncLavaggioViaMaterials().
+     */
+    public function test_lavaggio_vie_widget_generates_base_and_ulteriore_via_rows(): void
+    {
+        $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);
+        $tech = User::create([
+            'tenant_id' => $tenant->id, 'name' => 'Tecnico Quattro', 'email' => 'tech4@gifar.it', 'password' => bcrypt('password'),
+        ]);
+        $this->giveRole($tech, $tenant, 'dipendente');
+        $customer = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Bar Centrale']);
+        $lav2 = Material::create(['tenant_id' => $tenant->id, 'code' => 'LAV2', 'category' => 'Eureka', 'type' => 'LAVAGGIO 2 VIE']);
+        $ultVia = Material::create(['tenant_id' => $tenant->id, 'code' => 'ULTVIA', 'category' => 'Eureka', 'type' => 'ULTERIORE VIA LAVATA']);
+
+        $this->actingAs($tech);
+        Filament::setTenant($tenant);
+
+        $livewire = Livewire::test(CreateServiceReport::class)
+            ->fillForm([
+                'customer_id' => $customer->id,
+                'technician_id' => $tech->id,
+                'intervention_type' => ServiceReport::TYPE_MANUTENZIONE_ORDINARIA,
+                'intervention_date' => now(),
+                'work_performed' => 'Lavaggio impianto 4 vie',
+            ])
+            ->set('data._lavaggio_vie_eseguito', true)
+            ->set('data._lavaggio_vie_count', 4);
+
+        $materialsUsed = collect($livewire->get('data.materialsUsed'));
+
+        $this->assertCount(2, $materialsUsed);
+        $this->assertSame(1, (int) $materialsUsed->firstWhere('material_id', $lav2->id)['quantity']);
+        $this->assertSame(2, (int) $materialsUsed->firstWhere('material_id', $ultVia->id)['quantity']);
+
+        // Riducendo a 2 vie, la riga "ulteriore via" deve sparire da sola.
+        $livewire->set('data._lavaggio_vie_count', 2);
+        $materialsUsed = collect($livewire->get('data.materialsUsed'));
+        $this->assertCount(1, $materialsUsed);
+        $this->assertSame(1, (int) $materialsUsed->firstWhere('material_id', $lav2->id)['quantity']);
+    }
+
+    /**
+     * Riaprendo in modifica un rapportino che ha gia' CHIORD (chiamata) e
+     * LAV2 (lavaggio, senza ULTVIA) in elenco — es. importato da Eureka — i
+     * due toggle "Chiamata"/"Lavaggio eseguito" devono partire gia' accesi,
+     * non spenti: altrimenti sembrano "rotti" pur essendo le righe li'.
+     * "Numero vie lavate" deve leggere 2 (il valore nominale della tariffa
+     * LAV2), non 1: da LAV2 da solo non si puo' distinguere "1 via con
+     * tariffa minima agevolata" da "2 vie", e 2 e' quello che il codice
+     * materiale dichiara letteralmente. Vedi
+     * ServiceReportResource::resolveLavaggioShortcutDefaults().
+     */
+    public function test_edit_page_prefills_lavaggio_and_chiamata_toggles_from_existing_materials(): void
+    {
+        $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);
+        $tech = User::create([
+            'tenant_id' => $tenant->id, 'name' => 'Tecnico Cinque', 'email' => 'tech5@gifar.it', 'password' => bcrypt('password'),
+        ]);
+        $this->giveRole($tech, $tenant, 'dipendente');
+        $customer = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Bar Centrale', 'city' => 'Mestre']);
+        $chiord = Material::create(['tenant_id' => $tenant->id, 'code' => 'CHIORD', 'category' => 'Eureka', 'type' => 'CHIAMATA']);
+        $lav2 = Material::create(['tenant_id' => $tenant->id, 'code' => 'LAV2', 'category' => 'Eureka', 'type' => 'LAVAGGIO 2 VIE']);
+
+        $report = ServiceReport::create([
+            'tenant_id' => $tenant->id,
+            'customer_id' => $customer->id,
+            'technician_id' => $tech->id,
+            'intervention_type' => ServiceReport::TYPE_MANUTENZIONE_ORDINARIA,
+            'intervention_date' => now(),
+            'work_performed' => 'Lavaggio impianto',
+        ]);
+        $report->materialsUsed()->create(['material_id' => $chiord->id, 'quantity' => 1]);
+        $report->materialsUsed()->create(['material_id' => $lav2->id, 'quantity' => 1]);
+
+        $this->actingAs($tech);
+        Filament::setTenant($tenant);
+
+        Livewire::test(EditServiceReport::class, ['record' => $report->getRouteKey()])
+            ->assertFormSet([
+                'add_chiamata_material' => true,
+                '_lavaggio_vie_eseguito' => true,
+                '_lavaggio_vie_count' => 2,
+            ]);
+    }
+
+    /**
+     * Stesso test di sopra ma con ULTVIA gia' presente (qty 2, es. 4 vie
+     * lavate): "Numero vie lavate" deve leggere 4, non 3 — la formula
+     * inversa e' vie = 2 (LAV2) + qty ULTVIA, l'esatto contrario di
+     * syncLavaggioViaMaterials() che scrive qty ULTVIA = vie - 2.
+     */
+    public function test_edit_page_prefills_vie_count_from_existing_ulteriore_via_quantity(): void
+    {
+        $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);
+        $tech = User::create([
+            'tenant_id' => $tenant->id, 'name' => 'Tecnico Sei', 'email' => 'tech6@gifar.it', 'password' => bcrypt('password'),
+        ]);
+        $this->giveRole($tech, $tenant, 'dipendente');
+        $customer = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Bar Centrale']);
+        $lav2 = Material::create(['tenant_id' => $tenant->id, 'code' => 'LAV2', 'category' => 'Eureka', 'type' => 'LAVAGGIO 2 VIE']);
+        $ultVia = Material::create(['tenant_id' => $tenant->id, 'code' => 'ULTVIA', 'category' => 'Eureka', 'type' => 'ULTERIORE VIA LAVATA']);
+
+        $report = ServiceReport::create([
+            'tenant_id' => $tenant->id,
+            'customer_id' => $customer->id,
+            'technician_id' => $tech->id,
+            'intervention_type' => ServiceReport::TYPE_MANUTENZIONE_ORDINARIA,
+            'intervention_date' => now(),
+            'work_performed' => 'Lavaggio impianto 4 vie',
+        ]);
+        $report->materialsUsed()->create(['material_id' => $lav2->id, 'quantity' => 1]);
+        $report->materialsUsed()->create(['material_id' => $ultVia->id, 'quantity' => 2]);
+
+        $this->actingAs($tech);
+        Filament::setTenant($tenant);
+
+        Livewire::test(EditServiceReport::class, ['record' => $report->getRouteKey()])
+            ->assertFormSet([
+                '_lavaggio_vie_eseguito' => true,
+                '_lavaggio_vie_count' => 4,
+            ]);
+    }
 }
