@@ -13,6 +13,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Support\EurekaClient;
 use Illuminate\Console\Command;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -222,8 +223,34 @@ class ImportEurekaServiceReports extends Command
                     ->first()
                 : null;
 
-            $dateRaw = $detail['data'] ?? $summary['data_documento'] ?? null;
-            $interventionDate = $dateRaw ? substr((string) $dateRaw, 0, 10) : now()->toDateString();
+            // Eureka distingue "data" (data del documento, spesso quando la
+            // scheda e' stata archiviata in ufficio) da
+            // "sl_dataora_appuntamento" (quando il tecnico e' stato davvero
+            // dal cliente, a volte giorni prima) — quest'ultima esiste solo
+            // nel detail (--with-detail), non nel summary della lista.
+            // intervention_date deve riflettere la data vera
+            // dell'intervento, non quella del documento: la data documento
+            // resta comunque tracciata a parte in gestionale_document_date.
+            $documentDateRaw = $detail['data'] ?? $summary['data_documento'] ?? null;
+            $documentDate = $documentDateRaw ? substr((string) $documentDateRaw, 0, 10) : now()->toDateString();
+
+            // sl_dataora_appuntamento non e' sempre affidabile: su un piccolo
+            // numero di schede storiche contiene anni palesemente corrotti
+            // lato Eureka (es. "0245-09-11", "1024-10-22", "2027-06-03" per
+            // un documento del 2024) — trovato confrontando 3596 rapportini
+            // gia' importati: il 99.5% ha un gap <= 180 giorni dalla data
+            // documento, i pochi corrotti sono a migliaia di giorni o
+            // addirittura secoli di distanza. 400 giorni tiene tutti i gap
+            // plausibili (max osservato tra quelli sani: 371) scartando solo
+            // i valori chiaramente spazzatura.
+            $appointmentRaw = $detail['sl_dataora_appuntamento'] ?? null;
+            $appointmentDate = $appointmentRaw ? substr((string) $appointmentRaw, 0, 10) : null;
+
+            if ($appointmentDate && abs(Carbon::parse($documentDate)->diffInDays(Carbon::parse($appointmentDate), false)) > 400) {
+                $appointmentDate = null;
+            }
+
+            $interventionDate = $appointmentDate ?? $documentDate;
 
             $payload = [
                 'tenant_id' => $tenant->id,
@@ -238,7 +265,7 @@ class ImportEurekaServiceReports extends Command
                     ? $this->mapInterventionType($detail)
                     : ServiceReport::TYPE_RIPARAZIONE,
                 'intervention_date' => $interventionDate,
-                'arrival_at' => $detail['sl_dataora_appuntamento'] ?? null,
+                'gestionale_document_date' => $documentDate,
                 'problem_description' => $detail
                     ? $this->normalizeText($detail['sl_sintomo'] ?? null)
                     : null,
@@ -638,27 +665,46 @@ class ImportEurekaServiceReports extends Command
                 'material_id' => $material->id,
                 'quantity' => max(0.0, (float) ($row['quantita'] ?? 1)),
                 'unit_cost_snapshot' => (float) ($row['prezzo'] ?? 0) ?: null,
+                // "importo" = prezzo_netto * quantita' (sconti di riga gia'
+                // applicati, IVA esclusa): il valore economico reale della
+                // riga, che unit_cost_snapshot da solo non da' (e' il prezzo
+                // unitario lordo).
+                'line_total_snapshot' => (float) ($row['importo'] ?? 0) ?: null,
                 'notes' => $this->normalizeText($row['descrizione'] ?? null),
             ]);
         }
 
-        $this->syncArticleMentionsFromNotes($tenant, $report, $detail['note'] ?? null, $createdMaterialIds, $materialCache);
+        $this->syncArticleMentionsFromNotes($tenant, $report, $detail, $createdMaterialIds, $materialCache);
     }
 
     /**
+     * @param  array<string, mixed>  $detail
      * @param  array<string, Material>  $materialCache
      */
-    private function syncArticleMentionsFromNotes(Tenant $tenant, ServiceReport $report, mixed $note, array $createdMaterialIds, array &$materialCache): void
+    private function syncArticleMentionsFromNotes(Tenant $tenant, ServiceReport $report, array $detail, array $createdMaterialIds, array &$materialCache): void
     {
-        $text = $this->normalizeText($note);
+        $note = $detail['note'] ?? null;
+
+        // Non si puo' passare da normalizeText() qui: collassa TUTTI gli
+        // spazi bianchi (incluse le newline, vedi normalizeText()) in un
+        // singolo spazio, il che fonde tutte le righe "Aggiunto articolo: ..."
+        // (una per articolo, separate da \r/\n nel testo grezzo di Eureka) in
+        // un unico blob. Quel blob combacia comunque con isArticleMention()
+        // (il match non e' ancorato all'inizio riga), quindi l'INTERO blob —
+        // mention multiple e qualsiasi testo libero frammisto — veniva
+        // classificato come "riga di mention" e scartato in blocco, invece di
+        // isolare solo le singole mention. Qui si preservano le newline reali
+        // (comprese quelle sole \r usate da Eureka a meta' stringa) e si
+        // collassano solo gli spazi orizzontali dentro ciascuna riga.
+        $text = $this->stripRtf($note !== null ? (string) $note : null);
         if ($text === null || $text === '') {
             return;
         }
 
         $remainingLines = [];
 
-        foreach (preg_split('/\r\n|\n/', $text) as $line) {
-            $line = trim($line);
+        foreach (preg_split('/\r\n|\r|\n/', $text) as $line) {
+            $line = trim((string) preg_replace('/[ \t]+/u', ' ', $line));
             if ($line === '') {
                 continue;
             }
@@ -695,8 +741,24 @@ class ImportEurekaServiceReports extends Command
             $remainingLines[] = $line;
         }
 
-        if ($remainingLines !== []) {
-            $report->notes = implode("\n", $remainingLines);
+        // Ricostruisce le note come buildNotes() (testo pulito + eventuale
+        // "Numero documento Eureka: X"), non solo $remainingLines: prima
+        // sovrascriveva $report->notes con le sole righe residue, perdendo
+        // la riga del numero documento (aggiunta da buildNotes() ma non
+        // nota qui). E salva sempre quando il risultato cambia, non solo
+        // quando restano righe: con il bug sopra $remainingLines finiva
+        // quasi sempre vuoto (l'intera nota era un unico blob di mention),
+        // la condizione "!== []" restava falsa e il salvataggio non
+        // scattava mai, lasciando le note sporche originali in DB.
+        $numero = (int) ($detail['numero'] ?? 0);
+        $parts = array_filter([
+            $remainingLines !== [] ? implode("\n", $remainingLines) : null,
+            $numero > 0 ? "Numero documento Eureka: {$numero}" : null,
+        ]);
+        $newNotes = $parts ? implode("\n\n", $parts) : null;
+
+        if ($newNotes !== $report->notes) {
+            $report->notes = $newNotes;
             $report->save();
         }
     }

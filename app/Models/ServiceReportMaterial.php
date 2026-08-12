@@ -16,12 +16,14 @@ class ServiceReportMaterial extends Model
         'material_id',
         'quantity',
         'unit_cost_snapshot',
+        'line_total_snapshot',
         'notes',
     ];
 
     protected $casts = [
         'quantity' => 'decimal:2',
         'unit_cost_snapshot' => 'decimal:2',
+        'line_total_snapshot' => 'decimal:2',
     ];
 
     public function serviceReport(): BelongsTo

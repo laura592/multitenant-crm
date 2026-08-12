@@ -80,6 +80,7 @@ class ServiceReport extends Model
         'customer_id',
         'number',
         'gestionale_number',
+        'gestionale_document_date',
         'machine_unit_id',
         'quote_id',
         'machine_product_id',
@@ -110,6 +111,7 @@ class ServiceReport extends Model
 
     protected $casts = [
         'intervention_date' => 'date',
+        'gestionale_document_date' => 'date',
         'arrival_at' => 'datetime',
         'departure_at' => 'datetime',
         'signed_at' => 'datetime',
