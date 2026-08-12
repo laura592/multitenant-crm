@@ -350,7 +350,7 @@ class MaintenanceScheduleLavaggioTest extends TestCase
         $this->assertSame('2026-08-05', $query['intervention_date']);
         $this->assertSame(ServiceReport::TYPE_MANUTENZIONE_ORDINARIA, $query['intervention_type']);
         $this->assertSame('Lavaggio impianto', $query['problem_description']);
-        $this->assertSame('5 vie + apertura', $query['work_performed']);
+        $this->assertSame('5 Vie + Apertura', $query['work_performed']);
         $this->assertSame('Filtro sostituito', $query['notes']);
     }
 }

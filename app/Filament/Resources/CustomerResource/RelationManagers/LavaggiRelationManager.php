@@ -44,7 +44,7 @@ class LavaggiRelationManager extends RelationManager
                 ->helperText('Es. "5 vie + apertura", "chiusura stagionale".')
                 ->required()
                 ->maxLength(255)
-                ->default('Lavaggio impianto'),
+                ->default('Lavaggio Impianto'),
             Forms\Components\Toggle::make('filtro_sostituito')
                 ->label('Filtro sostituito in questa visita')
                 ->helperText('Solo per impianti acqua: segna quando il filtro viene cambiato, serve a calcolare la prossima scadenza del piano.'),

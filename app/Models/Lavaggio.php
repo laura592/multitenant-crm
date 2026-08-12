@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Support\LavaggioDescrizione;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -80,6 +81,18 @@ class Lavaggio extends Model
                 MaintenanceSchedule::find($lavaggio->maintenance_schedule_id)?->recalculateLavaggioNextDue();
             }
         });
+    }
+
+    /**
+     * Il campo e' testo libero digitato a mano (vedi migration): senza
+     * normalizzazione qui, ogni RelationManager che lo edita dovrebbe
+     * ripetere la stessa pulizia, e i vecchi import da foglio elettronico
+     * l'avrebbero comunque scritto grezzo. Le stringhe "Generato da
+     * rapportino ..." restano intatte (vedi LavaggioDescrizione::normalize).
+     */
+    public function setDescrizioneAttribute(?string $value): void
+    {
+        $this->attributes['descrizione'] = LavaggioDescrizione::normalize($value);
     }
 
     public function customer(): BelongsTo
