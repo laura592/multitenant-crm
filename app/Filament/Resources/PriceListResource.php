@@ -79,18 +79,8 @@ class PriceListResource extends Resource
                     ->label('Stato')
                     ->state(fn (PriceList $record) => $record->status())
                     ->badge()
-                    ->formatStateUsing(fn (string $state) => match ($state) {
-                        'in_corso' => 'In corso',
-                        'scaduto' => 'Scaduto',
-                        'futuro' => 'Futuro',
-                        default => $state,
-                    })
-                    ->color(fn (string $state) => match ($state) {
-                        'in_corso' => 'success',
-                        'scaduto' => 'danger',
-                        'futuro' => 'gray',
-                        default => 'gray',
-                    }),
+                    ->formatStateUsing(fn (string $state) => static::statusLabels()[$state] ?? $state)
+                    ->color(fn (string $state) => static::statusColors()[$state] ?? 'gray'),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('supplier_id')
@@ -113,6 +103,24 @@ class PriceListResource extends Resource
                     Tables\Actions\DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    public static function statusLabels(): array
+    {
+        return [
+            'in_corso' => 'In corso',
+            'scaduto' => 'Scaduto',
+            'futuro' => 'Futuro',
+        ];
+    }
+
+    public static function statusColors(): array
+    {
+        return [
+            'in_corso' => 'success',
+            'scaduto' => 'danger',
+            'futuro' => 'gray',
+        ];
     }
 
     public static function getPages(): array

@@ -146,22 +146,8 @@ class ProductResource extends Resource
                 Tables\Columns\TextColumn::make('type')
                     ->label('Tipo')
                     ->badge()
-                    ->formatStateUsing(fn (string $state) => match ($state) {
-                        Product::TYPE_MACHINE => 'Macchina',
-                        Product::TYPE_AUXILIARY_UNIT => 'Unità ausiliaria',
-                        Product::TYPE_OPTION => 'Opzione',
-                        Product::TYPE_ACCESSORY => 'Accessorio',
-                        Product::TYPE_SERVICE => 'Servizio',
-                        default => $state,
-                    })
-                    ->color(fn (string $state) => match ($state) {
-                        Product::TYPE_MACHINE => 'primary',
-                        Product::TYPE_AUXILIARY_UNIT => 'info',
-                        Product::TYPE_OPTION => 'warning',
-                        Product::TYPE_ACCESSORY => 'gray',
-                        Product::TYPE_SERVICE => 'success',
-                        default => 'gray',
-                    }),
+                    ->formatStateUsing(fn (string $state) => static::typeLabels()[$state] ?? $state)
+                    ->color(fn (string $state) => static::typeColors()[$state] ?? 'gray'),
                 Tables\Columns\TextColumn::make('family.name')->label('Famiglia')->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('tenant.name')->label('Visibilità')->placeholder('Condiviso')->badge()
@@ -175,13 +161,7 @@ class ProductResource extends Resource
             ->filters([
                 Tables\Filters\SelectFilter::make('type')
                     ->label('Tipo')
-                    ->options([
-                        Product::TYPE_MACHINE => 'Macchina',
-                        Product::TYPE_AUXILIARY_UNIT => 'Unità ausiliaria',
-                        Product::TYPE_OPTION => 'Opzione',
-                        Product::TYPE_ACCESSORY => 'Accessorio',
-                        Product::TYPE_SERVICE => 'Servizio',
-                    ]),
+                    ->options(static::typeLabels()),
                 Tables\Filters\SelectFilter::make('product_family_id')
                     ->label('Famiglia')
                     ->relationship('family', 'name')
@@ -282,6 +262,28 @@ class ProductResource extends Resource
     {
         return [
             RelationManagers\SlotsRelationManager::class,
+        ];
+    }
+
+    public static function typeLabels(): array
+    {
+        return [
+            Product::TYPE_MACHINE => 'Macchina',
+            Product::TYPE_AUXILIARY_UNIT => 'Unità ausiliaria',
+            Product::TYPE_OPTION => 'Opzione',
+            Product::TYPE_ACCESSORY => 'Accessorio',
+            Product::TYPE_SERVICE => 'Servizio',
+        ];
+    }
+
+    public static function typeColors(): array
+    {
+        return [
+            Product::TYPE_MACHINE => 'primary',
+            Product::TYPE_AUXILIARY_UNIT => 'info',
+            Product::TYPE_OPTION => 'warning',
+            Product::TYPE_ACCESSORY => 'gray',
+            Product::TYPE_SERVICE => 'success',
         ];
     }
 

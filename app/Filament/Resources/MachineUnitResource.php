@@ -100,25 +100,13 @@ class MachineUnitResource extends Resource
                 Tables\Columns\TextColumn::make('status')
                     ->label('Stato')
                     ->badge()
-                    ->formatStateUsing(fn (string $state) => match ($state) {
-                        MachineUnit::STATUS_INSTALLATA => 'Installata',
-                        MachineUnit::STATUS_RIMOSSA => 'Rimossa',
-                        default => 'In magazzino',
-                    })
-                    ->color(fn (string $state) => match ($state) {
-                        MachineUnit::STATUS_INSTALLATA => 'success',
-                        MachineUnit::STATUS_RIMOSSA => 'danger',
-                        default => 'gray',
-                    }),
+                    ->formatStateUsing(fn (string $state) => static::statusLabels()[$state] ?? 'In magazzino')
+                    ->color(fn (string $state) => static::statusColors()[$state] ?? 'gray'),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('status')
                     ->label('Stato')
-                    ->options([
-                        MachineUnit::STATUS_IN_MAGAZZINO => 'In magazzino',
-                        MachineUnit::STATUS_INSTALLATA => 'Installata',
-                        MachineUnit::STATUS_RIMOSSA => 'Rimossa',
-                    ]),
+                    ->options(static::statusLabels()),
                 Tables\Filters\Filter::make('gestionale_suggested_code')
                     ->label('Collegamento proposto')
                     ->query(fn ($query) => $query->whereNotNull('gestionale_suggested_code')),
@@ -257,6 +245,24 @@ class MachineUnitResource extends Resource
     {
         return [
             PlacementsRelationManager::class,
+        ];
+    }
+
+    public static function statusLabels(): array
+    {
+        return [
+            MachineUnit::STATUS_IN_MAGAZZINO => 'In magazzino',
+            MachineUnit::STATUS_INSTALLATA => 'Installata',
+            MachineUnit::STATUS_RIMOSSA => 'Rimossa',
+        ];
+    }
+
+    public static function statusColors(): array
+    {
+        return [
+            MachineUnit::STATUS_IN_MAGAZZINO => 'gray',
+            MachineUnit::STATUS_INSTALLATA => 'success',
+            MachineUnit::STATUS_RIMOSSA => 'danger',
         ];
     }
 

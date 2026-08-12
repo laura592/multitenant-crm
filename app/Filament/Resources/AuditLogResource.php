@@ -73,12 +73,8 @@ class AuditLogResource extends Resource
                 ->schema([
                     TextEntry::make('created_at')->label('Quando')->dateTime('d/m/Y H:i:s'),
                     TextEntry::make('event')->label('Evento')->badge()
-                        ->formatStateUsing(fn (?string $state) => match ($state) {
-                            'created' => 'Creazione',
-                            'updated' => 'Modifica',
-                            'deleted' => 'Cancellazione',
-                            default => $state ?? '—',
-                        }),
+                        ->formatStateUsing(fn (?string $state) => static::eventLabels()[$state] ?? $state ?? '—')
+                        ->color(fn (?string $state) => static::eventColors()[$state] ?? 'gray'),
                     TextEntry::make('subject_label')->label('Modello')
                         ->state(fn (AuditLog $record) => $record->subjectLabel()),
                     TextEntry::make('subject_id')->label('ID record')->placeholder('—'),
@@ -114,18 +110,8 @@ class AuditLogResource extends Resource
                 Tables\Columns\TextColumn::make('event')
                     ->label('Evento')
                     ->badge()
-                    ->color(fn (?string $state) => match ($state) {
-                        'created' => 'success',
-                        'deleted' => 'danger',
-                        'updated' => 'warning',
-                        default => 'gray',
-                    })
-                    ->formatStateUsing(fn (?string $state) => match ($state) {
-                        'created' => 'Creazione',
-                        'updated' => 'Modifica',
-                        'deleted' => 'Cancellazione',
-                        default => $state ?? '—',
-                    }),
+                    ->color(fn (?string $state) => static::eventColors()[$state] ?? 'gray')
+                    ->formatStateUsing(fn (?string $state) => static::eventLabels()[$state] ?? $state ?? '—'),
                 Tables\Columns\TextColumn::make('causer.name')
                     ->label('Utente')
                     ->placeholder('Sistema')
@@ -199,6 +185,24 @@ class AuditLogResource extends Resource
         return [
             'index' => Pages\ListAuditLogs::route('/'),
             'view' => Pages\ViewAuditLog::route('/{record}'),
+        ];
+    }
+
+    public static function eventLabels(): array
+    {
+        return [
+            'created' => 'Creazione',
+            'updated' => 'Modifica',
+            'deleted' => 'Cancellazione',
+        ];
+    }
+
+    public static function eventColors(): array
+    {
+        return [
+            'created' => 'success',
+            'updated' => 'warning',
+            'deleted' => 'danger',
         ];
     }
 
