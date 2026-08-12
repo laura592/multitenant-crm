@@ -44,20 +44,6 @@ class Tenant extends Model implements HasName
         'is_active',
         'logo_path',
         'primary_color',
-        'machine_discount_percent',
-        'default_commission_scenario',
-        'scenario_a_commission_percent',
-        'scenario_b_installation_fee',
-        'scenario_c_preinstallation_fee',
-        'exclusive_supply_required',
-        'territory_exclusive',
-        'territory_notes',
-        'contract_start_date',
-        'contract_duration_months',
-        'notice_period_days',
-        'saas_billing_enabled',
-        'saas_plan_fee',
-        'saas_billing_cycle',
     ];
 
     protected $casts = [
@@ -74,17 +60,6 @@ class Tenant extends Model implements HasName
         'notify_gestionale_sync_digest_emails' => 'array',
         'notify_gestionale_sync_failed_emails' => 'array',
         'notify_service_report_emails' => 'array',
-        'machine_discount_percent' => 'decimal:2',
-        'scenario_a_commission_percent' => 'decimal:2',
-        'scenario_b_installation_fee' => 'decimal:2',
-        'scenario_c_preinstallation_fee' => 'decimal:2',
-        'exclusive_supply_required' => 'boolean',
-        'territory_exclusive' => 'boolean',
-        'contract_start_date' => 'date',
-        'contract_duration_months' => 'integer',
-        'notice_period_days' => 'integer',
-        'saas_billing_enabled' => 'boolean',
-        'saas_plan_fee' => 'decimal:2',
     ];
 
     protected static function booted(): void

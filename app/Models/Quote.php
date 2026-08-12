@@ -23,11 +23,6 @@ class Quote extends Model
         'tax_total' => 'decimal:2',
         'total' => 'decimal:2',
         'rental_monthly_fee' => 'decimal:2',
-        'commission_rate_snapshot' => 'decimal:2',
-        'commission_amount' => 'decimal:2',
-        'commission_invoiced_at' => 'date',
-        'commission_due_at' => 'date',
-        'commission_paid_at' => 'date',
     ];
 
     protected $fillable = [
@@ -45,15 +40,6 @@ class Quote extends Model
         'subtotal',
         'tax_total',
         'total',
-        'commission_scenario',
-        'commission_rate_snapshot',
-        'commission_amount',
-        'commission_direction',
-        'commission_status',
-        'commission_invoice_number',
-        'commission_invoiced_at',
-        'commission_due_at',
-        'commission_paid_at',
     ];
 
     protected $attributes = [
@@ -218,50 +204,10 @@ class Quote extends Model
 
         $subtotal = round($grandSubtotal - $discountOnSubtotal, 2);
 
-        $this->update(array_merge([
+        $this->update([
             'subtotal' => $subtotal,
             'tax_total' => round($grandTaxTotal - $discountOnTax, 2),
             'total' => round(($grandSubtotal - $discountOnSubtotal) + ($grandTaxTotal - $discountOnTax), 2),
-        ], $this->commissionAttributes($subtotal)));
-    }
-
-    /**
-     * Provvigioni partner secondo gli scenari contrattuali A/B/C
-     * (docs/architecture.md §4.3). Nessuna provvigione per il tenant master.
-     */
-    protected function commissionAttributes(float $subtotal): array
-    {
-        $tenant = $this->relationLoaded('tenant') ? $this->tenant : Tenant::find($this->tenant_id);
-
-        if (! $tenant || $tenant->is_master || ! $this->commission_scenario) {
-            return [
-                'commission_rate_snapshot' => null,
-                'commission_amount' => null,
-                'commission_direction' => null,
-            ];
-        }
-
-        return match ($this->commission_scenario) {
-            'A' => [
-                'commission_rate_snapshot' => $tenant->scenario_a_commission_percent,
-                'commission_amount' => round($subtotal * $tenant->scenario_a_commission_percent / 100, 2),
-                'commission_direction' => 'master_to_partner',
-            ],
-            'B' => [
-                'commission_rate_snapshot' => null,
-                'commission_amount' => $tenant->scenario_b_installation_fee,
-                'commission_direction' => 'partner_to_master',
-            ],
-            'C' => [
-                'commission_rate_snapshot' => null,
-                'commission_amount' => $tenant->scenario_c_preinstallation_fee,
-                'commission_direction' => 'partner_to_master',
-            ],
-            default => [
-                'commission_rate_snapshot' => null,
-                'commission_amount' => null,
-                'commission_direction' => null,
-            ],
-        };
+        ]);
     }
 }

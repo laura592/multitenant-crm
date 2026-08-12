@@ -19,7 +19,7 @@ class QuotePanelSmokeTest extends TestCase
     public function test_partner_user_can_see_own_tenant_quote_in_panel(): void
     {
         $master = Tenant::create(['name' => 'Alex', 'slug' => 'alex', 'is_master' => true]);
-        $gifar = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar', 'default_commission_scenario' => 'A']);
+        $gifar = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);
 
         $user = User::create([
             'tenant_id' => $gifar->id,
@@ -45,7 +45,6 @@ class QuotePanelSmokeTest extends TestCase
             'tenant_id' => $gifar->id,
             'customer_id' => $customer->id,
             'date' => now(),
-            'commission_scenario' => 'A',
         ]);
         $quote->quoteProducts()->create([
             'product_id' => $machine->id, 'quantity' => 1, 'price' => 4815, 'discount' => 0, 'tax' => 22,

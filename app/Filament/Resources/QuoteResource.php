@@ -215,25 +215,12 @@ class QuoteResource extends Resource
                         ])
                         ->columns(3),
                 ]),
-            // Nascosta su richiesta (poco chiara/prematura cosi' com'e'
-            // gestita oggi): il calcolo (Quote::commissionAttributes,
-            // eseguito da updateTotal) resta attivo, i dati non si perdono -
-            // per farla ricomparire basta togliere ->hidden().
-            InfolistSection::make('Provvigione partner')
-                ->columns(3)
-                ->hidden()
-                ->schema([
-                    TextEntry::make('commission_scenario')->label('Scenario')->placeholder('—'),
-                    TextEntry::make('commission_status')->label('Stato fatturazione')->placeholder('—'),
-                    TextEntry::make('commission_amount')->label('Importo')->money('EUR')->placeholder('—'),
-                ]),
         ]);
     }
 
     public static function form(Form $form): Form
     {
         $isCreating = $form->getOperation() === 'create';
-        $canEditCommission = fn () => Auth::user()?->is_super_admin ?? false;
 
         $schema = [
             Forms\Components\Section::make('Panoramica rapida')
@@ -461,55 +448,6 @@ class QuoteResource extends Resource
         // segnalato: "manca tutta la parte di totali, fatta male").
         // "Ricalcola totali" nell'header rinfresca questi valori senza
         // uscire dalla pagina.
-        $schema[] = Forms\Components\Section::make('Provvigione partner')
-            ->columns(3)
-            // Collassata di default: dato di back-office secondario,
-            // non deve competere visivamente coi dati principali del
-            // preventivo appena si apre la pagina di modifica.
-            ->collapsible()
-            ->collapsed()
-            // Nascosta su richiesta (poco chiara/prematura cosi' com'e'
-            // gestita oggi): il calcolo resta attivo, i dati non si
-            // perdono - per farla ricomparire, ripristinare la
-            // condizione originale: ! $isCreating && ! tenant master.
-            ->hidden()
-            ->schema([
-                Forms\Components\Select::make('commission_scenario')
-                    ->label('Scenario')
-                    ->options([
-                        'A' => 'A - Segnalazione cliente',
-                        'B' => 'B - Partner procura cliente, installazione Alex',
-                        'C' => 'C - Partner installa in autonomia',
-                    ])
-                    ->default(fn () => Filament::getTenant()?->default_commission_scenario)
-                    ->disabled(fn () => ! $canEditCommission()),
-                Forms\Components\Select::make('commission_status')
-                    ->label('Stato fatturazione')
-                    ->options([
-                        'da_fatturare' => 'Da fatturare',
-                        'fatturata' => 'Fatturata',
-                        'pagata' => 'Pagata',
-                    ])
-                    // Solo lo staff Alex (is_super_admin) puo' segnare una
-                    // provvigione come fatturata/pagata: il partner la vede
-                    // ma non può auto-certificarsi il pagamento.
-                    ->disabled(fn () => ! $canEditCommission()),
-                Forms\Components\TextInput::make('commission_invoice_number')
-                    ->label('N. fattura')
-                    ->disabled(fn () => ! $canEditCommission()),
-                Forms\Components\Placeholder::make('commission_amount_display')
-                    ->label('Importo provvigione (calcolato)')
-                    ->content(fn (?Quote $record) => $record?->commission_amount !== null
-                        ? number_format((float) $record->commission_amount, 2, ',', '.').' €'
-                        : '—'),
-                Forms\Components\DatePicker::make('commission_invoiced_at')
-                    ->label('Data fattura')
-                    ->disabled(fn () => ! $canEditCommission()),
-                Forms\Components\DatePicker::make('commission_paid_at')
-                    ->label('Data pagamento')
-                    ->disabled(fn () => ! $canEditCommission()),
-            ]);
-
         return $form->schema($schema);
     }
 
@@ -534,9 +472,6 @@ class QuoteResource extends Resource
                     ->formatStateUsing(fn (string $state) => static::statusLabels()[$state] ?? ucfirst($state))
                     ->color(fn (string $state) => static::statusColors()[$state] ?? 'gray'),
                 Tables\Columns\TextColumn::make('total')->label('Totale')->money('EUR')->sortable(),
-                // Nascosta su richiesta (poco chiara/prematura), vedi note
-                // sulla stessa sezione nel form/infolist di questa risorsa.
-                Tables\Columns\TextColumn::make('commission_amount')->label('Provvigione')->money('EUR')->placeholder('—')->sortable()->hidden(),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('status')

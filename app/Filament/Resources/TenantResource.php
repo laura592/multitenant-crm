@@ -4,7 +4,6 @@ namespace App\Filament\Resources;
 
 use App\Filament\Forms\ItalianAddressFields;
 use App\Filament\Resources\TenantResource\Pages;
-use App\Filament\Resources\TenantResource\RelationManagers\DeadlinesRelationManager;
 use App\Models\Tenant;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -69,7 +68,7 @@ class TenantResource extends Resource
                     Forms\Components\TextInput::make('email')->label('Email')->email()->maxLength(255),
                     Forms\Components\TextInput::make('phone')->label('Telefono')->tel()->maxLength(255),
                     Forms\Components\TextInput::make('fax')->label('Fax')->tel()->maxLength(255),
-                    Forms\Components\Toggle::make('is_master')->label('Tenant master (Alex)')->live(),
+                    Forms\Components\Toggle::make('is_master')->label('Tenant master (Alex)'),
                     Forms\Components\Toggle::make('is_active')->label('Attivo')->default(true),
                 ]),
             Forms\Components\Section::make('Indirizzo')
@@ -93,75 +92,6 @@ class TenantResource extends Resource
                         ->imageResizeUpscale(false),
                     Forms\Components\ColorPicker::make('primary_color')->label('Colore primario'),
                 ]),
-            Forms\Components\Section::make('Condizioni contrattuali')
-                ->description('Vedi contratto di distribuzione tipo, artt. 3, 4, 11, 12, 13')
-                ->columns(2)
-                // Alex (il tenant master) non ha un contratto di distribuzione
-                // con se stesso: questi campi valgono solo per i tenant
-                // partner, su Alex sono rumore senza senso.
-                ->hidden(fn (Forms\Get $get) => (bool) $get('is_master'))
-                ->schema([
-                    Forms\Components\TextInput::make('machine_discount_percent')
-                        ->label('Sconto macchine (%)')
-                        ->numeric()
-                        ->default(30)
-                        ->suffix('%'),
-                    Forms\Components\Select::make('default_commission_scenario')
-                        ->label('Scenario provvigione predefinito')
-                        ->options([
-                            'A' => 'A - Segnalazione cliente',
-                            'B' => 'B - Partner procura cliente, installazione Alex',
-                            'C' => 'C - Partner installa in autonomia',
-                        ]),
-                    Forms\Components\TextInput::make('scenario_a_commission_percent')
-                        ->label('Provvigione Scenario A (%)')
-                        ->numeric()
-                        ->default(10)
-                        ->suffix('%'),
-                    Forms\Components\TextInput::make('scenario_b_installation_fee')
-                        ->label('Compenso installazione Scenario B (€)')
-                        ->numeric()
-                        ->default(1500)
-                        ->prefix('€'),
-                    Forms\Components\TextInput::make('scenario_c_preinstallation_fee')
-                        ->label('Compenso preinstallazione Scenario C (€)')
-                        ->numeric()
-                        ->default(500)
-                        ->prefix('€'),
-                    Forms\Components\Toggle::make('exclusive_supply_required')
-                        ->label('Obbligo approvvigionamento esclusivo')
-                        ->default(true),
-                    Forms\Components\Toggle::make('territory_exclusive')->label('Esclusiva territoriale'),
-                    Forms\Components\Textarea::make('territory_notes')->label('Note territorio')->columnSpanFull(),
-                    Forms\Components\DatePicker::make('contract_start_date')->label('Inizio contratto'),
-                    Forms\Components\TextInput::make('contract_duration_months')
-                        ->label('Durata (mesi)')
-                        ->numeric()
-                        ->default(36),
-                    Forms\Components\TextInput::make('notice_period_days')
-                        ->label('Preavviso disdetta (giorni)')
-                        ->numeric()
-                        ->default(90),
-                ]),
-            Forms\Components\Section::make('Canone piattaforma (opzionale)')
-                ->columns(3)
-                // Canone che il partner paga ad Alex per l'uso della
-                // piattaforma: Alex non paga un canone a se stessa.
-                ->hidden(fn (Forms\Get $get) => (bool) $get('is_master'))
-                ->schema([
-                    Forms\Components\Toggle::make('saas_billing_enabled')
-                        ->label('Canone attivo')
-                        ->live(),
-                    Forms\Components\TextInput::make('saas_plan_fee')
-                        ->label('Importo canone (€)')
-                        ->numeric()
-                        ->prefix('€')
-                        ->visible(fn (Forms\Get $get) => $get('saas_billing_enabled')),
-                    Forms\Components\Select::make('saas_billing_cycle')
-                        ->label('Periodicità')
-                        ->options(['monthly' => 'Mensile', 'annual' => 'Annuale'])
-                        ->visible(fn (Forms\Get $get) => $get('saas_billing_enabled')),
-                ]),
         ]);
     }
 
@@ -172,9 +102,6 @@ class TenantResource extends Resource
                 Tables\Columns\TextColumn::make('name')->label('Nome')->searchable(),
                 Tables\Columns\IconColumn::make('is_master')->label('Master')->boolean(),
                 Tables\Columns\IconColumn::make('is_active')->label('Attivo')->boolean(),
-                Tables\Columns\TextColumn::make('default_commission_scenario')->label('Scenario')->badge(),
-                Tables\Columns\TextColumn::make('machine_discount_percent')->label('Sconto')->suffix('%'),
-                Tables\Columns\TextColumn::make('contract_start_date')->label('Inizio contratto')->date(),
             ])
             ->filters([
                 Tables\Filters\TernaryFilter::make('is_active')->label('Attivo'),
@@ -233,13 +160,6 @@ class TenantResource extends Resource
                     Tables\Actions\ForceDeleteBulkAction::make(),
                 ]),
             ]);
-    }
-
-    public static function getRelations(): array
-    {
-        return [
-            DeadlinesRelationManager::class,
-        ];
     }
 
     public static function getPages(): array
