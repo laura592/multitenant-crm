@@ -7,53 +7,45 @@
         body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1f2937; line-height: 1.4; }
 
         @include('pdf.partials.letterhead-styles')
+        @include('pdf.partials.document-styles')
 
-        .row-table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
-        .row-table td { border: none; padding: 0; vertical-align: top; }
         .col-60 { width: 56%; padding-right: 20px; }
         .col-40 { width: 44%; }
 
-        .section-title { background: #020F30; color: #fff; padding: 5px 10px; font-size: 9.5px; font-weight: bold; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
-        .info-box { background: #f9fafb; border: 1px solid #e5e7eb; padding: 8px 10px; }
-        .info-box .customer-name { font-size: 12px; font-weight: bold; color: #020F30; margin-bottom: 6px; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
-        .info-box table { width: 100%; border-collapse: collapse; font-size: 9.5px; }
-        .info-box td { padding: 2px 0; }
-        .info-box td.label { font-weight: 600; color: #4b5563; padding-right: 6px; white-space: nowrap; }
+        {{-- .info-box qui ha bordo tutt'intorno tranne sopra (si aggancia
+             al section-title sopra di se'): nel partial condiviso .info-box
+             ha il bordo completo, adatto ai riquadri "isolati" senza barra
+             sopra (es. ordine-materiali). --}}
+        .info-box { border-top: none; }
 
-        .payment-box { margin-top: 8px; background: #020F30; color: #fff; padding: 8px 12px; font-size: 9.5px; }
-        .payment-box strong { text-transform: uppercase; letter-spacing: .04em; }
-        .rental-box { margin-top: 0; background: #fffbeb; border: 1px solid #fcd34d; border-left: 3px solid #f59e0b; border-top: none; color: #1f2937; padding: 8px 10px; font-size: 9px; line-height: 1.5; }
-        .rental-box strong { color: #92400e; }
+        .info-box .rental-note { margin-top: 8px; padding-top: 8px; border-top: 1px solid #e5e7eb; font-size: 9px; line-height: 1.5; color: #1f2937; }
+        .info-box .rental-note strong { color: #020F30; }
 
-        table.items { width: 100%; border-collapse: collapse; margin-top: 4px; }
-        table.items th { text-align: left; background: #f3f4f6; border: 1px solid #e5e7eb; padding: 6px 5px; font-size: 8px; font-weight: 600; color: #374151; text-transform: uppercase; letter-spacing: .03em; }
-        table.items td { border: 1px solid #e5e7eb; padding: 6px 5px; vertical-align: top; }
-        table.items td.numeric, table.items th.numeric { text-align: right; }
-        table.items td.center, table.items th.center { text-align: center; }
         table.items .option-row td { color: #4b5563; font-size: 9px; }
-        table.items .sku-text { color: #6b7280; font-size: 8.5px; }
 
         .totals-table { width: 46%; margin-left: 54%; margin-top: 12px; border-collapse: collapse; }
         .totals-table th, .totals-table td { padding: 5px 10px; border: 1px solid #e5e7eb; font-size: 9.5px; }
-        .totals-table th { background: #f9fafb; text-align: left; font-weight: 600; color: #374151; }
+        .totals-table th { background: #f9fafb; text-align: left; font-weight: bold; color: #374151; }
         .totals-table td { text-align: right; }
-        /* L'imponibile e' il dato che conta di piu' per chi legge, quindi
-           resta il piu' evidente della tabella; il totale (IVA inclusa)
-           e' bold ma su sfondo neutro, un gradino sotto. */
-        .totals-table .subtotal-row th, .totals-table .subtotal-row td { background: #020F30; border-color: #020F30; color: #fff; font-size: 12px; font-weight: bold; }
-        .totals-table .total-row th, .totals-table .total-row td { background: #f3f4f6; border-color: #d1d5db; color: #111827; font-size: 10px; font-weight: bold; }
-
-        .notes-box { margin-top: 18px; padding: 10px 12px; background: #fffbeb; border: 1px solid #fcd34d; border-left: 3px solid #f59e0b; }
-        .notes-box h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .03em; color: #92400e; margin: 0 0 4px; }
-        .notes-box p { margin: 0; font-size: 11px;}
-
-        .footer-note { margin-top: 24px; font-size: 8px; color: #9ca3af; text-align: center; }
-
-        .clearfix::after { content: ""; display: table; clear: both; }
+        /* Lo sconto e' il dato che deve saltare all'occhio (il risparmio
+           del cliente); l'imponibile resta un gradino sotto ma comunque
+           marcato (e' la base di calcolo); il totale finale un altro
+           gradino sotto ancora - vedi thread 2026-08-12. */
+        .totals-table .discount-row th, .totals-table .discount-row td { color: #047857; font-weight: bold; }
+        .totals-table .subtotal-row th, .totals-table .subtotal-row td { font-weight: bold; font-size: 10.5px; border-top: 2px solid #020F30; }
+        .totals-table .total-row th, .totals-table .total-row td { background: #f3f4f6; border-color: #d1d5db; color: #111827; font-weight: bold; }
     </style>
 </head>
 <body>
     <x-pdf-letterhead :tenant="$tenant" />
+
+    <table class="doc-meta">
+        <tr>
+            <td><span class="label">Preventivo</span><br><span class="value">{{ $quote->number }}</span></td>
+            <td class="to-right"><span class="label">Data</span><br><span class="value">{{ $quote->date->format('d/m/Y') }}</span></td>
+        </tr>
+    </table>
+
     <table class="row-table">
         <tr>
             <td class="col-60">
@@ -94,24 +86,17 @@
                 </div>
             </td>
             <td class="col-40">
-                <div class="section-title">Dati preventivo</div>
-                <div class="info-box">
-                    <table>
-                        <tr><td class="label">Numero:</td><td><strong>{{ $quote->number }}</strong></td></tr>
-                        <tr><td class="label">Data:</td><td>{{ $quote->date->format('d/m/Y') }}</td></tr>
-                    </table>
-                </div>
-                @if($quote->paymentMethodRelation?->name)
-                    <div class="payment-box">
-                        <strong>Condizioni di pagamento</strong><br>
-                        {{ $quote->paymentMethodRelation->name }}
-                    </div>
-                @endif
-                @if($quote->payment_method === 'noleggio-operativo' && $quote->rental_monthly_fee)
-                    <div class="rental-box">
-                        È disponibile il pagamento rateale tramite Grenke, con un canone di
-                        <strong>€ {{ number_format((float) $quote->rental_monthly_fee, 2, ',', '.') }} + IVA al mese</strong>
-                        per <strong>{{ $quote->rental_months }} mesi</strong>.
+                @if($quote->paymentMethodRelation?->name || ($quote->payment_method === 'noleggio-operativo' && $quote->rental_monthly_fee))
+                    <div class="section-title">Condizioni di pagamento</div>
+                    <div class="info-box">
+                        @if($quote->paymentMethodRelation?->name)
+                            <div>{{ $quote->paymentMethodRelation->name }}</div>
+                        @endif
+                        @if($quote->payment_method === 'noleggio-operativo' && $quote->rental_monthly_fee)
+                            <div class="rental-note">
+                                È disponibile il pagamento rateale tramite Grenke, con un canone di <strong>€ {{ number_format((float) $quote->rental_monthly_fee, 2, ',', '.') }} + IVA al mese</strong> per <strong>{{ $quote->rental_months }} mesi</strong>.
+                            </div>
+                        @endif
                     </div>
                 @endif
             </td>
@@ -138,7 +123,12 @@
                 </td>
                 <td class="center">{{ rtrim(rtrim(number_format($base->quantity, 2, ',', '.'), '0'), ',') }}</td>
                 <td class="numeric">€ {{ number_format($base->price, 2, ',', '.') }}</td>
-                <td class="numeric">{{ $base->discount ?: 0 }}%</td>
+                <td class="numeric">
+                    {{ $base->discount ?: 0 }}%
+                    @if($base->discount)
+                        <br><span class="sku-text">-€ {{ number_format(($base->quantity * $base->price) - $base->total, 2, ',', '.') }}</span>
+                    @endif
+                </td>
                 <td class="numeric">{{ $base->tax ?: 0 }}%</td>
                 <td class="numeric">€ {{ number_format($base->total, 2, ',', '.') }}</td>
             </tr>
@@ -150,7 +140,12 @@
                     </td>
                     <td class="center">{{ rtrim(rtrim(number_format($option->quantity, 2, ',', '.'), '0'), ',') }}</td>
                     <td class="numeric">€ {{ number_format($option->price, 2, ',', '.') }}</td>
-                    <td class="numeric">{{ $option->discount ?: 0 }}%</td>
+                    <td class="numeric">
+                        {{ $option->discount ?: 0 }}%
+                        @if($option->discount)
+                            <br><span class="sku-text">-€ {{ number_format(($option->quantity * $option->price) - $option->total, 2, ',', '.') }}</span>
+                        @endif
+                    </td>
                     <td class="numeric">{{ $option->tax ?: 0 }}%</td>
                     <td class="numeric">€ {{ number_format($option->total, 2, ',', '.') }}</td>
                 </tr>
@@ -159,14 +154,29 @@
         </tbody>
     </table>
 
+    @php
+        $productsGross = $quote->quoteProducts->sum(fn ($p) => $p->quantity * $p->price);
+        $productsNet = $quote->quoteProducts->sum('total');
+        $rowDiscountTotal = $productsGross - $productsNet;
+    @endphp
+
     <div class="clearfix">
         <table class="totals-table">
-            @if($quote->discount > 0)
-                <tr><th>Sconto generale</th><td>{{ number_format($quote->discount, 2, ',', '.') }}%</td></tr>
+            <tr><th colspan="3" style="text-align:left; background:#020F30; color:#fff;">Riepilogo</th></tr>
+            @if($rowDiscountTotal > 0)
+                <tr><th>Totale lordo</th><td colspan="2">€ {{ number_format($productsGross, 2, ',', '.') }}</td></tr>
+                <tr class="discount-row"><th>Sconto prodotti</th><td colspan="2">-€ {{ number_format($rowDiscountTotal, 2, ',', '.') }}</td></tr>
             @endif
-            <tr class="subtotal-row"><th>Imponibile</th><td>€ {{ number_format($quote->subtotal, 2, ',', '.') }}</td></tr>
-            <tr><th>IVA</th><td>€ {{ number_format($quote->tax_total, 2, ',', '.') }}</td></tr>
-            <tr class="total-row"><th>Totale IVA inclusa</th><td>€ {{ number_format($quote->total, 2, ',', '.') }}</td></tr>
+            @if($quote->discount > 0)
+                <tr class="discount-row">
+                    <th>Sconto generale</th>
+                    <td>{{ number_format($quote->discount, 2, ',', '.') }}%</td>
+                    <td>-€ {{ number_format($productsNet - $quote->subtotal, 2, ',', '.') }}</td>
+                </tr>
+            @endif
+            <tr class="subtotal-row"><th>Imponibile</th><td colspan="2">€ {{ number_format($quote->subtotal, 2, ',', '.') }}</td></tr>
+            <tr><th>IVA</th><td colspan="2">€ {{ number_format($quote->tax_total, 2, ',', '.') }}</td></tr>
+            <tr class="total-row"><th>Totale IVA inclusa</th><td colspan="2">€ {{ number_format($quote->total, 2, ',', '.') }}</td></tr>
         </table>
     </div>
 

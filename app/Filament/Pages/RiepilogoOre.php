@@ -262,6 +262,7 @@ class RiepilogoOre extends Page implements HasForms
                         'rows' => $this->getRows(),
                         'month' => $this->month,
                         'year' => $this->year,
+                        'tenant' => Filament::getTenant(),
                     ]),
                     "riepilogo-ore-{$this->year}-{$this->month}.pdf"
                 )),
@@ -285,6 +286,7 @@ class RiepilogoOre extends Page implements HasForms
                         'rows' => $this->getDailyDetailRows(),
                         'month' => $this->month,
                         'year' => $this->year,
+                        'tenant' => Filament::getTenant(),
                     ]),
                     "dettaglio-ore-{$this->year}-{$this->month}.pdf"
                 )),

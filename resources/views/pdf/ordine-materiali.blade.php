@@ -4,22 +4,11 @@
     <meta charset="utf-8">
     <title>Ordine materiali {{ $date->format('d/m/Y') }}</title>
     <style>
-        body { font-family: DejaVu Sans, sans-serif; font-size: 11px; color: #111827; }
+        body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1f2937; line-height: 1.4; }
 
         @include('pdf.partials.letterhead-styles')
+        @include('pdf.partials.document-styles')
 
-        .title-bar { width: 100%; margin-bottom: 16px; }
-        .title-bar td { border: none; padding: 0; vertical-align: bottom; }
-        h1 { font-size: 19px; margin: 0; }
-        .order-number { color: #6b7280; font-size: 12px; margin-top: 2px; }
-        .meta-box { text-align: right; font-size: 10px; color: #4b5563; }
-        .meta-box .meta-label { color: #9ca3af; text-transform: uppercase; font-size: 8px; letter-spacing: .04em; }
-        .meta-box .meta-value { font-size: 12px; color: #111827; font-weight: bold; }
-
-        table.items { width: 100%; border-collapse: collapse; }
-        table.items th { text-align: left; padding: 6px 6px; background: #111827; color: #fff; font-size: 9.5px; text-transform: uppercase; letter-spacing: .03em; }
-        table.items td { text-align: left; padding: 6px 6px; border-bottom: 1px solid #e5e7eb; }
-        table.items tr:nth-child(even) td { background: #f9fafb; }
         table.items td.qty, table.items th.qty { text-align: center; }
         table.items td.qty { font-weight: bold; font-size: 12px; }
         table.items small { color: #6b7280; }
@@ -27,56 +16,37 @@
         .category-row td { background: #eef1f5 !important; font-weight: bold; font-size: 10.5px; padding: 7px 6px; border-bottom: 1px solid #d1d5db; border-top: 1px solid #d1d5db; }
         .category-row .cat-count { float: right; font-weight: normal; color: #6b7280; }
 
-        .totals-row td { border-top: 2px solid #111827; border-bottom: none; font-weight: bold; padding-top: 8px; }
+        .totals-row td { border-top: 2px solid #020F30; border-bottom: none; font-weight: bold; padding-top: 8px; }
         .totals-row .qty { font-size: 13px; }
-
-        .notes { margin-top: 20px; padding: 10px 12px; background: #f9fafb; border-left: 3px solid #111827; }
-        .notes h2 { font-size: 10px; text-transform: uppercase; letter-spacing: .03em; color: #6b7280; margin: 0 0 4px; }
-        .notes p { margin: 0; }
-
-        .footer-note { margin-top: 24px; font-size: 9px; color: #9ca3af; text-align: center; }
-
-        .supplier-box { width: 280px; margin-bottom: 16px; padding: 8px 12px; border: 1px solid #d1d5db; }
-        .supplier-box .supplier-label { font-size: 8px; text-transform: uppercase; letter-spacing: .04em; color: #9ca3af; }
-        .supplier-box .supplier-name { font-size: 13px; font-weight: bold; }
-        .supplier-box .supplier-details { font-size: 10px; color: #4b5563; line-height: 1.5; }
     </style>
 </head>
 <body>
     <x-pdf-letterhead :tenant="$tenant" />
 
-    @if($supplier)
-        <div class="supplier-box">
-            <div class="supplier-label">Spett.le</div>
-            <div class="supplier-name">{{ $supplier->name }}</div>
-            @if($supplier->address || $supplier->postal_code || $supplier->city)
-                <div class="supplier-details">{{ trim("{$supplier->address}, {$supplier->postal_code} {$supplier->city} {$supplier->province}", ' ,') }}</div>
-            @endif
-            @if($supplier->phone || $supplier->email)
-                <div class="supplier-details">
-                    @if($supplier->phone)
-                        Tel. {{ $supplier->phone }}
-                    @endif
-                    @if($supplier->email)
-                        &nbsp;&ndash;&nbsp;{{ $supplier->email }}
-                    @endif
-                </div>
-            @endif
-        </div>
-    @endif
-
-    <table class="title-bar">
+    <table class="doc-meta">
         <tr>
-            <td>
-                <h1>Ordine materiali</h1>
-                <div class="order-number">{{ $number }}</div>
-            </td>
-            <td class="meta-box">
-                <div class="meta-label">Data</div>
-                <div class="meta-value">{{ $date->format('d/m/Y') }}</div>
-            </td>
+            <td><span class="label">Ordine materiali</span><br><span class="value">{{ $number }}</span></td>
+            <td class="to-right"><span class="label">Data</span><br><span class="value">{{ $date->format('d/m/Y') }}</span></td>
         </tr>
     </table>
+
+    @if($supplier)
+        <div class="section-title">Spett.le</div>
+        <div class="info-box" style="margin-bottom: 14px;">
+            <div class="customer-name">{{ $supplier->name }}</div>
+            <table>
+                @if($supplier->address || $supplier->postal_code || $supplier->city)
+                    <tr><td class="label">Sede:</td><td>{{ trim("{$supplier->address}, {$supplier->postal_code} {$supplier->city} {$supplier->province}", ' ,') }}</td></tr>
+                @endif
+                @if($supplier->phone)
+                    <tr><td class="label">Tel:</td><td>{{ $supplier->phone }}</td></tr>
+                @endif
+                @if($supplier->email)
+                    <tr><td class="label">Email:</td><td>{{ $supplier->email }}</td></tr>
+                @endif
+            </table>
+        </div>
+    @endif
 
     @php
         $groups = $rows->groupBy(fn ($row) => $row['material']->category);
@@ -139,7 +109,7 @@
     </table>
 
     @if($notes)
-        <div class="notes">
+        <div class="notes-box">
             <h2>Note</h2>
             <p>{{ $notes }}</p>
         </div>
