@@ -43,9 +43,10 @@ class AdminPanelProvider extends PanelProvider
             ->login()
             ->passwordReset()
             ->brandName('Alex Partner Hub')
-            ->brandLogo(asset('img/logo.png'))
+            ->brandLogo(asset('img/logo.svg'))
+            ->darkModeBrandLogo(asset('img/logo-white.svg'))
             ->brandLogoHeight('2.5rem')
-            ->favicon(asset('img/logo.png'))
+            ->favicon(asset('img/favicon-cup.svg'))
             ->renderHook(
                 'panels::sidebar.footer',
                 // NOTA: x-show legato allo store Alpine della sidebar, come fa il logo
@@ -57,7 +58,16 @@ class AdminPanelProvider extends PanelProvider
                 // sull'<aside> da chiuso), quindi la larghezza finale è quella del
                 // contenuto più largo. Un footer sempre visibile a 160px costringe la
                 // sidebar a restare larga anche "collassata".
-                fn () => '<div x-show="$store.sidebar.isOpen" x-cloak x-transition:enter="lg:transition lg:delay-100" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" style="text-align:center;padding:0.75rem 1rem;border-top:1px solid rgba(128,128,128,0.15);"><img src="'.asset('img/franke_partner_logo.png').'" alt="Franke Approved Partner" style="max-width:160px;height:auto;opacity:0.8;"></div>'
+                // Due SVG invece di un unico PNG: il testo "Approved Partner"
+                // nell'artwork originale Franke non ha un colore esplicito
+                // (nero di default), quindi in dark mode spariva sullo sfondo
+                // navy scuro della sidebar. franke_partner_logo_white.svg e'
+                // una copia con quel testo forzato a bianco (emblema rosso
+                // invariato); qui si sceglie l'una o l'altra con le stesse
+                // classi dark:hidden / hidden dark:flex che Filament usa per
+                // il proprio logo (vendor/filament/filament/resources/views/
+                // components/logo.blade.php).
+                fn () => '<div x-show="$store.sidebar.isOpen" x-cloak x-transition:enter="lg:transition lg:delay-100" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" style="text-align:center;padding:0.75rem 1rem;border-top:1px solid rgba(128,128,128,0.15);"><img src="'.asset('img/franke_partner_logo.svg').'" alt="Franke Approved Partner" class="dark:hidden" style="max-width:160px;height:auto;margin:0 auto;opacity:0.8;"><img src="'.asset('img/franke_partner_logo_white.svg').'" alt="Franke Approved Partner" class="hidden dark:flex" style="max-width:160px;height:auto;margin:0 auto;opacity:0.8;"></div>'
             )
             ->renderHook(
                 'panels::body.end',
