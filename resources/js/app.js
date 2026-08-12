@@ -41,6 +41,24 @@ function setupSaveButtonProcessingIndicator() {
 
 document.addEventListener('livewire:init', setupSaveButtonProcessingIndicator);
 
+// Di suo, quando una richiesta Livewire (salvataggio, cambio tab, ecc.) va in
+// 419 perche' la sessione e' scaduta, Livewire mostra un confirm() nativo del
+// browser in inglese e poi comunque un modale con l'HTML grezzo della
+// risposta d'errore (vendor/livewire/livewire/dist/livewire.js, handlePageExpiry
+// + showFailureModal, chiamati entrambi senza early return). Intercettiamo il
+// fallimento prima che Livewire lo gestisca a modo suo e mandiamo l'utente
+// sulla pagina "sessione scaduta" brandizzata (resources/views/errors/419.blade.php).
+document.addEventListener('livewire:init', () => {
+	Livewire.hook('request', ({ fail }) => {
+		fail(({ status, preventDefault }) => {
+			if (status === 419) {
+				preventDefault();
+				window.location.href = '/sessione-scaduta';
+			}
+		});
+	});
+});
+
 const nearbyMapInstances = new WeakMap();
 
 const ensureLeafletLoaded = (() => {

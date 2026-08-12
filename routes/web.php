@@ -14,6 +14,13 @@ Route::get('/', function () {
 // restituisce 500 invece di reindirizzare un ospite al login corretto.
 Route::get('/login', fn () => redirect()->route('filament.admin.auth.login'))->name('login');
 
+// Pagina dedicata per la sessione scaduta: sia il 419 "pieno" (submit di un
+// form non-Livewire con CSRF token ormai vecchio) sia le richieste AJAX di
+// Livewire (intercettate in resources/js/app.js, che altrimenti mostrerebbero
+// solo un confirm() del browser) puntano qui, cosi' l'utente vede sempre lo
+// stesso messaggio invece di un errore grezzo.
+Route::get('/sessione-scaduta', fn () => response()->view('errors.419', [], 419))->name('session.expired');
+
 Route::middleware(['auth'])->group(function () {
     Route::get('service-reports/{serviceReport}/pdf', [ServiceReportController::class, 'pdf'])->name('service-reports.pdf');
     Route::get('quotes/{quote}/pdf', [QuoteController::class, 'pdf'])->name('quotes.pdf');
