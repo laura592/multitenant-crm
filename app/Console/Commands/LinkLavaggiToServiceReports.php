@@ -19,6 +19,12 @@ use Illuminate\Console\Command;
  * consecutiva — tipicamente la stessa visita spezzata in due documenti sul
  * gestionale) la scelta sarebbe arbitraria, quindi restano segnalati per
  * revisione manuale invece di indovinare.
+ *
+ * Include anche i rapportini in stato 'bozza' (non solo CLOSED_STATUSES):
+ * countsAsLavaggio() e' un fatto materiale (il tecnico ha usato un ricambio
+ * "LAVAGGIO X VIE"/sanificazione), vero a prescindere da firma/invio del
+ * documento — un rapportino ancora bozza non e' meno prova di un lavaggio
+ * fatto solo perche' la pratica amministrativa non e' chiusa.
  */
 class LinkLavaggiToServiceReports extends Command
 {
@@ -42,12 +48,13 @@ class LinkLavaggiToServiceReports extends Command
         $linked = 0;
         $ambiguous = [];
         $noCandidate = [];
+        $duplicates = [];
 
         foreach ($lavaggi as $lavaggio) {
             $label = $this->describe($lavaggio);
 
             $candidates = ServiceReport::where('customer_id', $lavaggio->customer_id)
-                ->whereIn('status', ServiceReport::CLOSED_STATUSES)
+                ->whereIn('status', [...ServiceReport::CLOSED_STATUSES, 'bozza'])
                 ->whereBetween('intervention_date', [
                     $lavaggio->data->copy()->subDays($days),
                     $lavaggio->data->copy()->addDays($days),
@@ -70,21 +77,41 @@ class LinkLavaggiToServiceReports extends Command
             }
 
             $report = $candidates->first();
-            $this->line("  <info>LINK</info> {$label} → {$report->number} ({$report->intervention_date->format('Y-m-d')})");
-            $linked++;
 
             if (! $dryRun) {
-                $lavaggio->update(['service_report_id' => $report->id]);
+                try {
+                    $lavaggio->update(['service_report_id' => $report->id]);
+                } catch (\Illuminate\Database\UniqueConstraintViolationException) {
+                    // Un'altra riga Lavaggio sullo stesso piano e' gia' collegata a questo
+                    // rapportino (data leggermente diversa ma stesso evento reale, es. due
+                    // import della stessa visita con un paio di giorni di scarto): non e'
+                    // un errore, e' un doppione di questa riga da segnalare, non da linkare
+                    // di nuovo (violerebbe l'unicita' service_report_id+maintenance_schedule_id).
+                    $duplicates[] = "{$label} → {$report->number} (gia' rappresentato da un'altra riga sullo stesso piano)";
+
+                    continue;
+                }
             }
+
+            $this->line("  <info>LINK</info> {$label} → {$report->number} ({$report->intervention_date->format('Y-m-d')})");
+            $linked++;
         }
 
         $this->info(sprintf(
-            "%sCollegati: %d. Ambigui (piu' di un rapportino candidato): %d. Senza candidati: %d.",
+            "%sCollegati: %d. Ambigui (piu' di un rapportino candidato): %d. Senza candidati: %d. Righe duplicate (stesso rapportino gia' su un'altra riga dello stesso piano): %d.",
             $dryRun ? '[DRY RUN] ' : '',
             $linked,
             count($ambiguous),
             count($noCandidate),
+            count($duplicates),
         ));
+
+        if ($duplicates !== []) {
+            $this->warn('Possibili righe duplicate (da unire/eliminare a mano):');
+            foreach ($duplicates as $row) {
+                $this->line("  - {$row}");
+            }
+        }
 
         if ($ambiguous !== []) {
             $this->warn('Da rivedere a mano (piu\' rapportini candidati):');

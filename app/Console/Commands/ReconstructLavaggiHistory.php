@@ -24,6 +24,22 @@ use Illuminate\Console\Command;
  * stesso rapportino collegato lo stesso giorno). Se il cliente non ha nessun
  * piano lavaggio attivo, il rapportino resta fuori: crearne uno da zero
  * richiederebbe indovinare cadenza/beverage_type/macchina.
+ *
+ * Include anche i rapportini in stato 'bozza' (non solo CLOSED_STATUSES):
+ * countsAsLavaggio() e' un fatto materiale (il tecnico ha usato un ricambio
+ * "LAVAGGIO X VIE"/sanificazione), vero a prescindere da firma/invio del
+ * documento — un rapportino ancora bozza non e' meno prova di un lavaggio
+ * fatto solo perche' la pratica amministrativa non e' chiusa.
+ *
+ * Quando lo stesso cliente ha PIU' rapportini distinti (numeri diversi) che
+ * countano come lavaggio nello stesso giorno — tipicamente la stessa visita
+ * spezzata in piu' documenti sul gestionale, uno per impianto — il gruppo
+ * viene segnalato per revisione manuale invece di processarlo: elaborando i
+ * rapportini uno alla volta, il primo processato "vince" il piano (lo trova
+ * libero, lo occupa), i successivi trovano il piano gia' occupato da
+ * quel primo report e vengono scartati in silenzio — la loro prova di
+ * lavaggio andrebbe persa senza che nessuno se ne accorga. Non si prova a
+ * indovinare quale rapportino vada su quale piano.
  */
 class ReconstructLavaggiHistory extends Command
 {
@@ -38,7 +54,7 @@ class ReconstructLavaggiHistory extends Command
         $dryRun = (bool) $this->option('dry-run');
         $days = (int) $this->option('days');
 
-        $reports = ServiceReport::whereIn('status', ServiceReport::CLOSED_STATUSES)
+        $reports = ServiceReport::whereIn('status', [...ServiceReport::CLOSED_STATUSES, 'bozza'])
             ->with(['customer', 'materialsUsed.material'])
             ->get()
             ->filter(fn (ServiceReport $r) => $r->countsAsLavaggio());
@@ -52,8 +68,28 @@ class ReconstructLavaggiHistory extends Command
         $linked = 0;
         $alreadyPresent = 0;
         $noSchedule = [];
+        $multipleSameDay = [];
 
-        foreach ($reports as $report) {
+        $reportsByCustomerDate = $reports->groupBy(
+            fn (ServiceReport $r) => $r->customer_id.'|'.$r->intervention_date->format('Y-m-d')
+        );
+
+        foreach ($reportsByCustomerDate as $sameDayReports) {
+            if ($sameDayReports->count() > 1) {
+                $customerLabel = $sameDayReports->first()->customer->company_name
+                    ?? $sameDayReports->first()->customer->full_name
+                    ?? $sameDayReports->first()->customer_id;
+                $multipleSameDay[] = sprintf(
+                    '%s — %s (%s)',
+                    $customerLabel,
+                    $sameDayReports->first()->intervention_date->format('Y-m-d'),
+                    $sameDayReports->pluck('number')->implode(', '),
+                );
+
+                continue;
+            }
+
+            $report = $sameDayReports->first();
             $schedules = $schedulesByCustomer->get($report->customer_id, collect());
 
             if ($schedules->isEmpty()) {
@@ -103,13 +139,21 @@ class ReconstructLavaggiHistory extends Command
         }
 
         $this->info(sprintf(
-            "%sCreati: %d. Collegati a righe gia' esistenti: %d. Gia' presenti (nessuna azione): %d. Rapportini senza alcun piano lavaggio: %d.",
+            "%sCreati: %d. Collegati a righe gia' esistenti: %d. Gia' presenti (nessuna azione): %d. Rapportini senza alcun piano lavaggio: %d. Piu' rapportini stesso giorno (da rivedere a mano): %d.",
             $dryRun ? '[DRY RUN] ' : '',
             $created,
             $linked,
             $alreadyPresent - $linked,
             count($noSchedule),
+            count($multipleSameDay),
         ));
+
+        if ($multipleSameDay !== []) {
+            $this->warn('Da rivedere a mano (piu\' rapportini distinti lo stesso giorno per lo stesso cliente):');
+            foreach ($multipleSameDay as $row) {
+                $this->line("  - {$row}");
+            }
+        }
 
         if ($noSchedule !== []) {
             $this->warn('Rapportini di clienti senza alcun piano lavaggio (nessuna azione, per riferimento):');

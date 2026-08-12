@@ -34,9 +34,11 @@ class ExportLavaggiStorico extends Command
         $this->buildRapportiniSheet($spreadsheet, $lavaggi);
         $this->buildStoricoSheet($spreadsheet, $lavaggi);
 
-        // Il foglio vuoto creato di default da PhpSpreadsheet resta primo in ordine alfabetico
-        // solo se non lo rimuoviamo: qui i tre fogli utili vanno rimossi dall'indice 0 in poi.
-        $spreadsheet->removeSheetByIndex(3);
+        // Il foglio vuoto creato di default da PhpSpreadsheet e' sempre il primo (indice 0):
+        // i tre fogli utili vengono APPESI dopo con createSheet(), quindi e' l'indice 0 da
+        // togliere, non l'ultimo (bug gia' visto: removeSheetByIndex(3) cancellava "Storico
+        // per impianto" invece del foglio vuoto, perche' finiva per essere lui il 4o foglio).
+        $spreadsheet->removeSheetByIndex(0);
         $spreadsheet->setActiveSheetIndex(0);
 
         $path = base_path($this->option('path'));
