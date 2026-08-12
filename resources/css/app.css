@@ -11,6 +11,23 @@
 }
 
 /*
+ * Card "Panoramica rapida" (Rapportini/Preventivi/Piani di manutenzione): la
+ * variante dark: del gradiente chiaro (from-slate-50/via-white/to-sky-50) non
+ * vinceva mai sulle classi base, perche' in Tailwind v4 le utility dark:
+ * hanno la stessa specificita' di quelle senza prefisso (usano :where(), che
+ * azzera la specificita' della classe .dark antenata) — a parita' di
+ * specificita' decide l'ordine nel bundle compilato, non l'ordine nel
+ * markup, quindi il risultato dipendeva da quali altre classi "gray"/"slate"
+ * erano gia' state scoperte altrove nel progetto. Regola qui fuori da ogni
+ * @layer: fuori da un layer Tailwind vince sempre sulle utility, a
+ * prescindere dall'ordine di generazione del bundle.
+ */
+.dark .fi-quick-overview {
+    background-image: linear-gradient(to bottom right, var(--color-gray-900), var(--color-gray-950), var(--color-gray-900));
+    border-color: var(--color-gray-800);
+}
+
+/*
  * Filament's StatsOverviewWidget applica Stat::color() solo alla riga di
  * descrizione: l'icona resta sempre grigia (vedi il template del pacchetto),
  * quindi ogni card della dashboard sembrava identica anche quando il colore
@@ -42,6 +59,32 @@
 }
 .dark .fi-wi-stats-overview-stat:has(.fi-color-primary) .fi-wi-stats-overview-stat-icon {
     color: rgb(var(--primary-400));
+}
+
+/*
+ * Segnalato: in dark mode l'icona della lente di ricerca (in alto e nelle
+ * tabelle), il suo placeholder e le icone delle card statistiche senza un
+ * colore semantico (es. "Clienti", "Materiali a catalogo") erano quasi
+ * invisibili. Causa: la palette "gray" personalizzata (blu navy, vedi
+ * AdminPanelProvider::colors()) parte da un hex #2D324B gia' scuro di suo,
+ * quindi Filament genera l'intera scala gray-400/500/600... schiacciata
+ * verso il nero - questi toni sono il colore di default per placeholder e
+ * icone "neutre" (nessun ->color() o ->color('gray')) e finiscono quasi
+ * identici allo sfondo gray-900/950 delle card (contrasto reale ~1.5:1,
+ * sotto ogni soglia leggibile). Qui si schiariscono solo questi punti,
+ * usando gray-300 (~8:1 di contrasto sullo sfondo scuro), senza toccare il
+ * resto della scala gray (bordi, sfondi) per non alterare il tema altrove.
+ */
+.dark .fi-global-search-field .fi-input-wrp-icon,
+.dark .fi-ta-search-field .fi-input-wrp-icon {
+    color: rgb(var(--gray-300));
+}
+.dark .fi-global-search-field .fi-input::placeholder,
+.dark .fi-ta-search-field .fi-input::placeholder {
+    color: rgb(var(--gray-300));
+}
+.dark .fi-wi-stats-overview-stat:has(.fi-color-gray) .fi-wi-stats-overview-stat-icon {
+    color: rgb(var(--gray-300));
 }
 
 /*
