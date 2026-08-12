@@ -25,6 +25,6 @@ class EditLeaveRequest extends EditRecord
             $data['user_id'] = $this->record->user_id;
         }
 
-        return $data;
+        return LeaveRequestResource::normalizePermessoData($data);
     }
 }

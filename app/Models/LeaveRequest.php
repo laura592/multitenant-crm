@@ -21,6 +21,8 @@ class LeaveRequest extends Model
         'type',
         'date_from',
         'date_to',
+        'time_from',
+        'time_to',
         'hours',
         'status',
         'requested_at',
@@ -79,5 +81,24 @@ class LeaveRequest extends Model
     public function getDaysAttribute(): int
     {
         return $this->date_from->diffInDays($this->date_to) + 1;
+    }
+
+    /**
+     * Usato da notifiche in-app, mail e liste per non ripetere in tre posti
+     * diversi la stessa logica "stesso giorno? mostra orario, altrimenti
+     * intervallo di date".
+     */
+    public function periodLabel(): string
+    {
+        if ($this->type === self::TYPE_PERMESSO && $this->time_from && $this->time_to) {
+            $from = \Carbon\Carbon::parse($this->time_from)->format('H:i');
+            $to = \Carbon\Carbon::parse($this->time_to)->format('H:i');
+
+            return "{$this->date_from->format('d/m/Y')}, {$from} - {$to}";
+        }
+
+        return $this->date_from->isSameDay($this->date_to)
+            ? $this->date_from->format('d/m/Y')
+            : "{$this->date_from->format('d/m/Y')} - {$this->date_to->format('d/m/Y')}";
     }
 }

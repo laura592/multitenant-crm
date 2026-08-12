@@ -25,7 +25,7 @@ class CreateLeaveRequest extends CreateRecord
             $data['user_id'] = $user->id;
         }
 
-        return $data;
+        return LeaveRequestResource::normalizePermessoData($data);
     }
 
     // Avvisa i destinatari configurati per le ferie/permessi (pagina

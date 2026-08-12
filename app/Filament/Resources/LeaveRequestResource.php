@@ -67,26 +67,40 @@ class LeaveRequestResource extends Resource
                         }),
                     Forms\Components\Select::make('type')
                         ->label('Tipo')
-                        ->options(['ferie' => 'Ferie', 'permesso' => 'Permesso', 'malattia' => 'Malattia'])
+                        ->options(static::typeLabels())
                         ->live()
+                        ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => static::syncPermessoDateTo($get, $set))
                         ->required(),
-                    // Solo il permesso orario ha bisogno delle ore: per ferie/malattia
-                    // il campo restava visibile ma inutile, con rischio di lasciarlo
-                    // valorizzato per errore da una richiesta precedente.
-                    Forms\Components\TextInput::make('hours')
-                        ->label('Ore')
-                        ->numeric()
-                        ->minValue(0)
-                        ->visible(fn (Forms\Get $get) => $get('type') === 'permesso')
-                        ->required(fn (Forms\Get $get) => $get('type') === 'permesso'),
                     // La malattia si segnala spesso a posteriori (il giorno dopo
                     // l'assenza): il vincolo "non nel passato" vale solo per
                     // ferie/permesso, che invece sono richieste pianificate.
                     Forms\Components\DatePicker::make('date_from')
-                        ->label('Dal')
+                        ->label(fn (Forms\Get $get) => $get('type') === 'permesso' ? 'Giorno' : 'Dal')
                         ->required()
+                        ->live()
+                        ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => static::syncPermessoDateTo($get, $set))
                         ->minDate(fn (Forms\Get $get) => $get('type') === 'malattia' ? null : now()),
-                    Forms\Components\DatePicker::make('date_to')->label('Al')->required()->afterOrEqual('date_from'),
+                    // Il permesso e' sempre in un solo giorno: il campo "Al" non ha
+                    // senso in quel caso, si mostrano invece gli orari.
+                    Forms\Components\DatePicker::make('date_to')
+                        ->label('Al')
+                        ->required()
+                        ->afterOrEqual('date_from')
+                        ->visible(fn (Forms\Get $get) => $get('type') !== 'permesso'),
+                    // Le ore del permesso si ricavano da Dalle/Alle (vedi
+                    // normalizePermessoData()): niente campo "Ore" separato da
+                    // tenere allineato a mano.
+                    Forms\Components\TimePicker::make('time_from')
+                        ->label('Dalle')
+                        ->seconds(false)
+                        ->visible(fn (Forms\Get $get) => $get('type') === 'permesso')
+                        ->required(fn (Forms\Get $get) => $get('type') === 'permesso'),
+                    Forms\Components\TimePicker::make('time_to')
+                        ->label('Alle')
+                        ->seconds(false)
+                        ->after('time_from')
+                        ->visible(fn (Forms\Get $get) => $get('type') === 'permesso')
+                        ->required(fn (Forms\Get $get) => $get('type') === 'permesso'),
                     Forms\Components\Textarea::make('notes')->label('Note')->columnSpanFull(),
                 ]),
         ]);
@@ -101,18 +115,8 @@ class LeaveRequestResource extends Resource
                 Tables\Columns\TextColumn::make('type')
                     ->label('Tipo')
                     ->badge()
-                    ->formatStateUsing(fn (string $state) => match ($state) {
-                        'ferie' => 'Ferie',
-                        'permesso' => 'Permesso',
-                        'malattia' => 'Malattia',
-                        default => $state,
-                    })
-                    ->color(fn (string $state) => match ($state) {
-                        'ferie' => 'info',
-                        'permesso' => 'warning',
-                        'malattia' => 'danger',
-                        default => 'gray',
-                    }),
+                    ->formatStateUsing(fn (string $state) => static::typeLabels()[$state] ?? $state)
+                    ->color(fn (string $state) => static::typeColors()[$state] ?? 'gray'),
                 Tables\Columns\TextColumn::make('date_from')->label('Dal')->date()->sortable(),
                 Tables\Columns\TextColumn::make('date_to')->label('Al')->date()->sortable(),
                 // Il "permesso" e' orario: mostrare "1 giorno" (getDaysAttribute
@@ -127,11 +131,7 @@ class LeaveRequestResource extends Resource
                     ->label('Stato')
                     ->badge()
                     ->formatStateUsing(fn (string $state) => static::statusLabels()[$state] ?? ucfirst($state))
-                    ->color(fn (string $state) => match ($state) {
-                        'approvato' => 'success',
-                        'rifiutato' => 'danger',
-                        default => 'warning',
-                    }),
+                    ->color(fn (string $state) => static::statusColors()[$state] ?? 'warning'),
             ])
             ->headerActions([
                 // Prima esisteva solo l'aggregato di RiepilogoOre: nessun export
@@ -148,7 +148,7 @@ class LeaveRequestResource extends Resource
                     ->options(static::statusLabels()),
                 Tables\Filters\SelectFilter::make('type')
                     ->label('Tipo')
-                    ->options(['ferie' => 'Ferie', 'permesso' => 'Permesso', 'malattia' => 'Malattia']),
+                    ->options(static::typeLabels()),
                 Tables\Filters\Filter::make('date_from')
                     ->label('Periodo')
                     ->form([
@@ -268,18 +268,51 @@ class LeaveRequestResource extends Resource
 
     public static function decisionNotificationBody(LeaveRequest $record): string
     {
-        $period = $record->date_from->isSameDay($record->date_to)
-            ? $record->date_from->format('d/m/Y')
-            : "{$record->date_from->format('d/m/Y')} - {$record->date_to->format('d/m/Y')}";
+        $type = static::typeLabels()[$record->type] ?? $record->type;
 
-        $type = match ($record->type) {
-            'ferie' => 'Ferie',
-            'permesso' => 'Permesso',
-            'malattia' => 'Malattia',
-            default => $record->type,
-        };
+        return "{$type}: {$record->periodLabel()}";
+    }
 
-        return "{$type}: {$period}";
+    /**
+     * Il permesso non ha un campo "Ore" separato: le ore si ricavano sempre
+     * da Dalle/Alle qui, lato server, cosi' non possono disallinearsi
+     * dall'orario effettivo (e "Al", nascosto lato form per il permesso, non
+     * puo' arrivare da un submit forzato con un giorno diverso da "Dal").
+     */
+    public static function normalizePermessoData(array $data): array
+    {
+        if (($data['type'] ?? null) !== 'permesso') {
+            return $data;
+        }
+
+        $data['date_to'] = $data['date_from'] ?? null;
+        $data['hours'] = null;
+
+        if (! empty($data['time_from']) && ! empty($data['time_to'])) {
+            $minutes = \Carbon\Carbon::parse($data['time_from'])->diffInMinutes(\Carbon\Carbon::parse($data['time_to']), false);
+
+            if ($minutes > 0) {
+                $data['hours'] = round($minutes / 60, 2);
+            }
+        }
+
+        return $data;
+    }
+
+    /**
+     * Il permesso e' sempre un solo giorno: tiene "Al" allineato a "Dal" ogni
+     * volta che cambiano tipo o giorno, cosi' il campo nascosto non resta
+     * disallineato quando l'utente passa da un altro tipo a "permesso" (o
+     * torna indietro). La normalizzazione definitiva resta comunque server-
+     * side in normalizePermessoData(), questo e' solo per l'anteprima nel form.
+     */
+    public static function syncPermessoDateTo(Forms\Get $get, Forms\Set $set): void
+    {
+        if ($get('type') !== 'permesso') {
+            return;
+        }
+
+        $set('date_to', $get('date_from'));
     }
 
     /**
@@ -293,6 +326,33 @@ class LeaveRequestResource extends Resource
             'richiesto' => 'Richiesto',
             'approvato' => 'Approvato',
             'rifiutato' => 'Rifiutato',
+        ];
+    }
+
+    public static function statusColors(): array
+    {
+        return [
+            'richiesto' => 'warning',
+            'approvato' => 'success',
+            'rifiutato' => 'danger',
+        ];
+    }
+
+    public static function typeLabels(): array
+    {
+        return [
+            'ferie' => 'Ferie',
+            'permesso' => 'Permesso',
+            'malattia' => 'Malattia',
+        ];
+    }
+
+    public static function typeColors(): array
+    {
+        return [
+            'ferie' => 'info',
+            'permesso' => 'warning',
+            'malattia' => 'danger',
         ];
     }
 }

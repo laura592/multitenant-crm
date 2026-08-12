@@ -6,9 +6,7 @@
         \App\Models\LeaveRequest::TYPE_MALATTIA => 'malattia',
         default => $leaveRequest->type,
     };
-    $period = $leaveRequest->date_from->isSameDay($leaveRequest->date_to)
-        ? $leaveRequest->date_from->format('d/m/Y')
-        : "{$leaveRequest->date_from->format('d/m/Y')} - {$leaveRequest->date_to->format('d/m/Y')}";
+    $period = $leaveRequest->periodLabel();
 @endphp
 # Nuova richiesta {{ $type }}
 
