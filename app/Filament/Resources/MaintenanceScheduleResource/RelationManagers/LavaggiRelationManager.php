@@ -126,6 +126,35 @@ class LavaggiRelationManager extends RelationManager
                     ->url(fn (Lavaggio $record) => $record->service_report_id
                         ? ServiceReportResource::getUrl('view', ['record' => $record->service_report_id], tenant: $record->tenant)
                         : self::serviceReportCreateUrl($record)),
+                Tables\Actions\Action::make('collega_rapportino')
+                    // Copre il caso di un lavaggio inserito a mano il cui
+                    // rapportino esiste gia' nel sistema (es. creato a parte,
+                    // o importato da Eureka) invece di doverne creare uno
+                    // nuovo duplicato con "Crea rapportino".
+                    ->label('Collega rapportino')
+                    ->icon('heroicon-o-link')
+                    ->color('gray')
+                    ->visible(fn (Lavaggio $record) => ! $record->service_report_id)
+                    ->form(fn (Lavaggio $record) => [
+                        Forms\Components\Select::make('service_report_id')
+                            ->label('Rapportino')
+                            ->options(ServiceReport::query()
+                                ->where('customer_id', $record->customer_id)
+                                ->whereNotIn('id', Lavaggio::query()
+                                    ->where('maintenance_schedule_id', $record->maintenance_schedule_id)
+                                    ->whereNotNull('service_report_id')
+                                    ->pluck('service_report_id'))
+                                ->orderByDesc('intervention_date')
+                                ->get()
+                                ->mapWithKeys(fn (ServiceReport $report) => [
+                                    $report->id => $report->number.' — '.$report->intervention_date?->format('d/m/Y'),
+                                ]))
+                            ->searchable()
+                            ->required(),
+                    ])
+                    ->action(fn (Lavaggio $record, array $data) => $record->update([
+                        'service_report_id' => $data['service_report_id'],
+                    ])),
                 Tables\Actions\EditAction::make()
                     // Un lavaggio generato da un rapportino va modificato li' (il
                     // rapportino), non qui: editarlo direttamente verrebbe
