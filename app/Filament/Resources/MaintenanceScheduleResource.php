@@ -135,7 +135,7 @@ class MaintenanceScheduleResource extends Resource
                 ->columns(12)
                 ->columnSpanFull()
                 ->extraAttributes([
-                    'class' => 'rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50 shadow-sm dark:border-slate-800 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900',
+                    'class' => 'fi-quick-overview rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50 shadow-sm',
                 ])
                 ->schema([
                     TextEntry::make('customer.full_name')->label('Cliente')->columnSpan(4),
@@ -150,14 +150,7 @@ class MaintenanceScheduleResource extends Resource
                                 return 'Manutenzione';
                             }
 
-                            $label = match ($record->beverage_type) {
-                                MaintenanceSchedule::BEVERAGE_BIRRA => 'Birra',
-                                MaintenanceSchedule::BEVERAGE_ACQUA => 'Acqua',
-                                MaintenanceSchedule::BEVERAGE_VINO => 'Vino',
-                                MaintenanceSchedule::BEVERAGE_BIBITE => 'Bibite',
-                                MaintenanceSchedule::BEVERAGE_SELZ => 'Selz',
-                                default => 'Lavaggio',
-                            };
+                            $label = static::beverageLabels()[$record->beverage_type] ?? 'Lavaggio';
 
                             if (! $record->lines_count || $record->beverage_type === MaintenanceSchedule::BEVERAGE_ACQUA) {
                                 return $label;
@@ -166,20 +159,13 @@ class MaintenanceScheduleResource extends Resource
                             return $label.' · '.$record->lines_count.($record->lines_count === 1 ? ' via' : ' vie');
                         })
                         ->badge()
-                        ->color(fn (MaintenanceSchedule $record) => match ($record->beverage_type) {
-                            MaintenanceSchedule::BEVERAGE_BIRRA => 'warning',
-                            MaintenanceSchedule::BEVERAGE_ACQUA => 'info',
-                            MaintenanceSchedule::BEVERAGE_VINO => 'danger',
-                            MaintenanceSchedule::BEVERAGE_BIBITE => 'success',
-                            MaintenanceSchedule::BEVERAGE_SELZ => 'gray',
-                            default => 'gray',
-                        })
+                        ->color(fn (MaintenanceSchedule $record) => static::beverageColors()[$record->beverage_type] ?? 'gray')
                         ->columnSpan(3),
                     TextEntry::make('status')
                         ->label('Stato')
                         ->badge()
-                        ->formatStateUsing(fn (string $state) => $state === MaintenanceSchedule::STATUS_CHIUSO ? 'Chiuso' : 'Attivo')
-                        ->color(fn (string $state) => $state === MaintenanceSchedule::STATUS_CHIUSO ? 'gray' : 'success')
+                        ->formatStateUsing(fn (string $state) => static::statusLabels()[$state] ?? 'Attivo')
+                        ->color(fn (string $state) => static::statusColors()[$state] ?? 'success')
                         ->columnSpan(2),
                     TextEntry::make('next_due_date')->label('Prossima scadenza')->date()->placeholder('—')->columnSpan(3),
                 ]),
@@ -273,19 +259,13 @@ class MaintenanceScheduleResource extends Resource
                 ->schema([
                     Forms\Components\Select::make('type')
                         ->label('Tipo')
-                        ->options([
-                            MaintenanceSchedule::TYPE_MANUTENZIONE => 'Manutenzione',
-                            MaintenanceSchedule::TYPE_LAVAGGIO => 'Lavaggio',
-                        ])
+                        ->options(static::typeLabels())
                         ->default(MaintenanceSchedule::TYPE_MANUTENZIONE)
                         ->live()
                         ->required(),
                     Forms\Components\Select::make('status')
                         ->label('Stato')
-                        ->options([
-                            MaintenanceSchedule::STATUS_ATTIVO => 'Attivo',
-                            MaintenanceSchedule::STATUS_CHIUSO => 'Chiuso',
-                        ])
+                        ->options(static::statusLabels())
                         ->default(MaintenanceSchedule::STATUS_ATTIVO)
                         ->required(),
                     Forms\Components\Select::make('frequency')
@@ -300,13 +280,7 @@ class MaintenanceScheduleResource extends Resource
                         ->required(fn (Forms\Get $get) => $get('type') === MaintenanceSchedule::TYPE_MANUTENZIONE),
                     Forms\Components\Select::make('beverage_type')
                         ->label('Tipo impianto')
-                        ->options([
-                            MaintenanceSchedule::BEVERAGE_BIRRA => 'Birra',
-                            MaintenanceSchedule::BEVERAGE_ACQUA => 'Acqua',
-                            MaintenanceSchedule::BEVERAGE_VINO => 'Vino',
-                            MaintenanceSchedule::BEVERAGE_BIBITE => 'Bibite',
-                            MaintenanceSchedule::BEVERAGE_SELZ => 'Selz',
-                        ])
+                        ->options(static::beverageLabels())
                         ->live()
                         // Il vino non ha mai una cadenza standard (resta "a
                         // chiamata"): sovrascrive esplicitamente anche un
@@ -361,29 +335,15 @@ class MaintenanceScheduleResource extends Resource
                 Tables\Columns\TextColumn::make('type')
                     ->label('Tipo')
                     ->badge()
-                    ->formatStateUsing(fn (string $state) => $state === MaintenanceSchedule::TYPE_LAVAGGIO ? 'Lavaggio' : 'Manutenzione')
-                    ->color(fn (string $state) => $state === MaintenanceSchedule::TYPE_LAVAGGIO ? 'info' : 'gray')
+                    ->formatStateUsing(fn (string $state) => static::typeLabels()[$state] ?? 'Manutenzione')
+                    ->color(fn (string $state) => static::typeColors()[$state] ?? 'gray')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('beverage_type')
                     ->label('Impianto')
                     ->badge()
-                    ->formatStateUsing(fn (?string $state) => match ($state) {
-                        MaintenanceSchedule::BEVERAGE_BIRRA => 'Birra',
-                        MaintenanceSchedule::BEVERAGE_ACQUA => 'Acqua',
-                        MaintenanceSchedule::BEVERAGE_VINO => 'Vino',
-                        MaintenanceSchedule::BEVERAGE_BIBITE => 'Bibite',
-                        MaintenanceSchedule::BEVERAGE_SELZ => 'Selz',
-                        default => '—',
-                    })
-                    ->color(fn (?string $state) => match ($state) {
-                        MaintenanceSchedule::BEVERAGE_BIRRA => 'warning',
-                        MaintenanceSchedule::BEVERAGE_ACQUA => 'info',
-                        MaintenanceSchedule::BEVERAGE_VINO => 'danger',
-                        MaintenanceSchedule::BEVERAGE_BIBITE => 'success',
-                        MaintenanceSchedule::BEVERAGE_SELZ => 'gray',
-                        default => 'gray',
-                    })
+                    ->formatStateUsing(fn (?string $state) => static::beverageLabels()[$state] ?? '—')
+                    ->color(fn (?string $state) => static::beverageColors()[$state] ?? 'gray')
                     ->sortable(),
                 Tables\Columns\TextColumn::make('lines_count')
                     ->label('Vie')
@@ -405,8 +365,8 @@ class MaintenanceScheduleResource extends Resource
                 Tables\Columns\TextColumn::make('status')
                     ->label('Stato')
                     ->badge()
-                    ->formatStateUsing(fn (string $state) => $state === MaintenanceSchedule::STATUS_CHIUSO ? 'Chiuso' : 'Attivo')
-                    ->color(fn (string $state) => $state === MaintenanceSchedule::STATUS_CHIUSO ? 'gray' : 'success')
+                    ->formatStateUsing(fn (string $state) => static::statusLabels()[$state] ?? 'Attivo')
+                    ->color(fn (string $state) => static::statusColors()[$state] ?? 'success')
                     ->sortable(),
                 Tables\Columns\TextColumn::make('frequenza_label')
                     ->label('Frequenza')
@@ -426,17 +386,12 @@ class MaintenanceScheduleResource extends Resource
                     ->date()
                     ->placeholder('—')
                     ->sortable()
-                    ->color(fn (?MaintenanceSchedule $record) => match (true) {
-                        $record?->next_due_date === null => null,
-                        $record->next_due_date->isPast() => 'danger',
-                        $record->next_due_date->diffInDays(now()) <= 30 => 'warning',
-                        default => 'success',
-                    }),
+                    ->color(fn (?MaintenanceSchedule $record) => $record?->next_due_date?->isPast() ? 'danger' : null),
                 Tables\Columns\TextColumn::make('ultimo')
                     ->label('Ultimo')
                     ->state(fn (MaintenanceSchedule $record) => $record->type === MaintenanceSchedule::TYPE_LAVAGGIO
                         ? $record->lastLavaggio?->data?->format('d/m/Y')
-                        : $record->lastServiceReport?->number)
+                        : $record->lastServiceReport?->intervention_date?->format('d/m/Y'))
                     ->placeholder('Mai eseguito'),
             ])
             ->filters([
@@ -446,10 +401,7 @@ class MaintenanceScheduleResource extends Resource
                     ->default(),
                 Tables\Filters\SelectFilter::make('type')
                     ->label('Tipo')
-                    ->options([
-                        MaintenanceSchedule::TYPE_MANUTENZIONE => 'Manutenzione',
-                        MaintenanceSchedule::TYPE_LAVAGGIO => 'Lavaggio',
-                    ]),
+                    ->options(static::typeLabels()),
                 Tables\Filters\SelectFilter::make('customer_id')
                     ->label('Cliente')
                     ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
@@ -458,13 +410,7 @@ class MaintenanceScheduleResource extends Resource
                     ->preload(),
                 Tables\Filters\SelectFilter::make('beverage_type')
                     ->label('Impianto')
-                    ->options([
-                        MaintenanceSchedule::BEVERAGE_BIRRA => 'Birra',
-                        MaintenanceSchedule::BEVERAGE_ACQUA => 'Acqua',
-                        MaintenanceSchedule::BEVERAGE_VINO => 'Vino',
-                        MaintenanceSchedule::BEVERAGE_BIBITE => 'Bibite',
-                        MaintenanceSchedule::BEVERAGE_SELZ => 'Selz',
-                    ]),
+                    ->options(static::beverageLabels()),
                 Tables\Filters\Filter::make('due_soon')
                     ->label('In scadenza entro 30 giorni')
                     ->query(fn ($query) => $query->where('next_due_date', '<=', now()->addDays(30))),
@@ -496,6 +442,60 @@ class MaintenanceScheduleResource extends Resource
                     Tables\Actions\DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    public static function statusLabels(): array
+    {
+        return [
+            MaintenanceSchedule::STATUS_ATTIVO => 'Attivo',
+            MaintenanceSchedule::STATUS_CHIUSO => 'Chiuso',
+        ];
+    }
+
+    public static function statusColors(): array
+    {
+        return [
+            MaintenanceSchedule::STATUS_ATTIVO => 'success',
+            MaintenanceSchedule::STATUS_CHIUSO => 'gray',
+        ];
+    }
+
+    public static function typeLabels(): array
+    {
+        return [
+            MaintenanceSchedule::TYPE_MANUTENZIONE => 'Manutenzione',
+            MaintenanceSchedule::TYPE_LAVAGGIO => 'Lavaggio',
+        ];
+    }
+
+    public static function typeColors(): array
+    {
+        return [
+            MaintenanceSchedule::TYPE_MANUTENZIONE => 'gray',
+            MaintenanceSchedule::TYPE_LAVAGGIO => 'info',
+        ];
+    }
+
+    public static function beverageLabels(): array
+    {
+        return [
+            MaintenanceSchedule::BEVERAGE_BIRRA => 'Birra',
+            MaintenanceSchedule::BEVERAGE_ACQUA => 'Acqua',
+            MaintenanceSchedule::BEVERAGE_VINO => 'Vino',
+            MaintenanceSchedule::BEVERAGE_BIBITE => 'Bibite',
+            MaintenanceSchedule::BEVERAGE_SELZ => 'Selz',
+        ];
+    }
+
+    public static function beverageColors(): array
+    {
+        return [
+            MaintenanceSchedule::BEVERAGE_BIRRA => 'warning',
+            MaintenanceSchedule::BEVERAGE_ACQUA => 'info',
+            MaintenanceSchedule::BEVERAGE_VINO => 'danger',
+            MaintenanceSchedule::BEVERAGE_BIBITE => 'success',
+            MaintenanceSchedule::BEVERAGE_SELZ => 'gray',
+        ];
     }
 
     public static function getRelations(): array
