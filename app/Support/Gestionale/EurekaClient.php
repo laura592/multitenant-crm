@@ -10,9 +10,12 @@ use Illuminate\Support\Facades\Http;
 /**
  * Client per l'API REST del gestionale Eureka (ALEX srl), usata per inviare
  * i rapportini firmati come "scheda lavoro" (vedi ServiceReport::toGestionalePayload()).
- * Le credenziali sono per-tenant (Tenant::gestionale_eureka_*), non globali:
- * questo CRM e' multi-tenant e Eureka e' un'integrazione specifica di ALEX,
- * non di ogni partner.
+ * Le credenziali sono globali da .env (config/services.php → eureka.*), non
+ * per-tenant: questo CRM e' multi-tenant ma Eureka e' un'integrazione
+ * specifica di ALEX (il tenant master), non di ogni partner — un partner non
+ * deve mai poterle vedere o modificare dal pannello (vedi thread 2026-08-12).
+ * Il parametro $tenant resta comunque per il gate (Tenant::hasGestionaleEurekaCredentials(),
+ * vero solo per il master) e per la business logic a valle, non per le credenziali.
  */
 class EurekaClient
 {
@@ -26,11 +29,21 @@ class EurekaClient
 
     private int $poolFailures = 0;
 
+    private readonly string $baseUrl;
+
+    private readonly string $username;
+
+    private readonly string $password;
+
     public function __construct(private readonly Tenant $tenant)
     {
         if (! $tenant->hasGestionaleEurekaCredentials()) {
             throw new GestionaleEurekaException("Il tenant \"{$tenant->name}\" non ha credenziali Eureka configurate.");
         }
+
+        $this->baseUrl = config('services.eureka.base_url');
+        $this->username = config('services.eureka.username');
+        $this->password = config('services.eureka.password');
     }
 
     /**
@@ -52,11 +65,11 @@ class EurekaClient
      */
     public function inviaSchedaLavoro(array $payload, string $objectId): array
     {
-        $url = rtrim($this->tenant->gestionale_eureka_base_url, '/').'/schedelavoro/?checkObjectId=true';
+        $url = rtrim($this->baseUrl, '/').'/schedelavoro/?checkObjectId=true';
 
         $response = Http::withBasicAuth(
-            $this->tenant->gestionale_eureka_username,
-            $this->tenant->gestionale_eureka_password,
+            $this->username,
+            $this->password,
         )
             ->timeout(15)
             ->post($url, [...$payload, 'objectId' => $objectId]);
@@ -80,14 +93,14 @@ class EurekaClient
     public function cercaClienti(string $query): array
     {
         try {
-            $url = rtrim($this->tenant->gestionale_eureka_base_url, '/').'/anagrafica/cerca?'.http_build_query([
+            $url = rtrim($this->baseUrl, '/').'/anagrafica/cerca?'.http_build_query([
                 'nome' => $query,
                 'like' => 'true',
             ]);
 
             $response = Http::withBasicAuth(
-                $this->tenant->gestionale_eureka_username,
-                $this->tenant->gestionale_eureka_password,
+                $this->username,
+                $this->password,
             )->timeout(10)->get($url);
 
             if (! $response->successful()) {
@@ -111,13 +124,13 @@ class EurekaClient
     public function cercaClientePerPiva(string $piva): array
     {
         try {
-            $url = rtrim($this->tenant->gestionale_eureka_base_url, '/').'/anagrafica/cerca?'.http_build_query([
+            $url = rtrim($this->baseUrl, '/').'/anagrafica/cerca?'.http_build_query([
                 'piva' => $piva,
             ]);
 
             $response = Http::withBasicAuth(
-                $this->tenant->gestionale_eureka_username,
-                $this->tenant->gestionale_eureka_password,
+                $this->username,
+                $this->password,
             )->timeout(10)->get($url);
 
             if (! $response->successful()) {
@@ -141,13 +154,13 @@ class EurekaClient
     public function articoliInstallati(int $customerCode): array
     {
         try {
-            $url = rtrim($this->tenant->gestionale_eureka_base_url, '/').'/show/q/art_installati?'.http_build_query([
+            $url = rtrim($this->baseUrl, '/').'/show/q/art_installati?'.http_build_query([
                 'q' => $customerCode,
             ]);
 
             $response = Http::withBasicAuth(
-                $this->tenant->gestionale_eureka_username,
-                $this->tenant->gestionale_eureka_password,
+                $this->username,
+                $this->password,
             )->timeout(10)->get($url);
 
             if (! $response->successful()) {
@@ -176,7 +189,7 @@ class EurekaClient
      */
     public function pooledGet(string $path, array $paramsByKey, int $concurrency = 15): array
     {
-        $url = rtrim($this->tenant->gestionale_eureka_base_url, '/').$path;
+        $url = rtrim($this->baseUrl, '/').$path;
 
         // http_build_query() esplicito (non il secondo argomento di get()):
         // quest'ultimo codifica gli spazi come %20 invece di + come fanno le
@@ -201,7 +214,7 @@ class EurekaClient
      */
     public function pooledGetByPath(array $pathsByKey, int $concurrency = 15): array
     {
-        $base = rtrim($this->tenant->gestionale_eureka_base_url, '/');
+        $base = rtrim($this->baseUrl, '/');
 
         $urlsByKey = [];
         foreach ($pathsByKey as $key => $path) {
@@ -227,8 +240,8 @@ class EurekaClient
                     foreach ($chunk as $key => $url) {
                         $pool->as($key)
                             ->withBasicAuth(
-                                $this->tenant->gestionale_eureka_username,
-                                $this->tenant->gestionale_eureka_password,
+                                $this->username,
+                                $this->password,
                             )
                             ->timeout(10)
                             ->get($url);
@@ -274,11 +287,11 @@ class EurekaClient
     public function cercaArticoli(string $query): array
     {
         try {
-            $url = rtrim($this->tenant->gestionale_eureka_base_url, '/').'/articoli/lista/'.rawurlencode($query);
+            $url = rtrim($this->baseUrl, '/').'/articoli/lista/'.rawurlencode($query);
 
             $response = Http::withBasicAuth(
-                $this->tenant->gestionale_eureka_username,
-                $this->tenant->gestionale_eureka_password,
+                $this->username,
+                $this->password,
             )->timeout(10)->get($url);
 
             if (! $response->successful()) {
@@ -301,15 +314,15 @@ class EurekaClient
     public function cercaMatricole(int $idArticoloM10, string $query = ''): array
     {
         try {
-            $url = rtrim($this->tenant->gestionale_eureka_base_url, '/').'/crm_api/m14/search?'.http_build_query(array_filter([
+            $url = rtrim($this->baseUrl, '/').'/crm_api/m14/search?'.http_build_query(array_filter([
                 'id_articolo_m10' => $idArticoloM10,
                 'q' => $query,
                 'per_page' => 25,
             ]));
 
             $response = Http::withBasicAuth(
-                $this->tenant->gestionale_eureka_username,
-                $this->tenant->gestionale_eureka_password,
+                $this->username,
+                $this->password,
             )->timeout(10)->get($url);
 
             if (! $response->successful()) {

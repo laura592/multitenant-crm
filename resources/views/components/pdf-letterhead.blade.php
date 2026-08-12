@@ -5,6 +5,7 @@
     $hasFrankePartnerLogo = file_exists(public_path('img/franke_partner_logo.png'));
     $addressLine = $tenant?->pdfAddressLine();
     $fiscalLine = $tenant?->pdfFiscalLine();
+    $ibanLine = $tenant?->ibanLine();
     $contactLine = $tenant?->pdfContactLine();
 @endphp
 
@@ -31,8 +32,11 @@ tenant (Amministrazione > Aziende partner) non ha ancora logo/indirizzo. --}}
                         {{ $addressLine }}
                         @if($addressLine && ($contactLine || $fiscalLine))<br>@endif
                         {{ $contactLine }}
-                        @if($contactLine && $fiscalLine)<br>@endif
+                        @if($contactLine && ($fiscalLine || $ibanLine))<br>@endif
                         {{ $fiscalLine }}
+                        @if($fiscalLine && $ibanLine)<br>@endif
+                        {{ $ibanLine }}
+                        @if($ibanLine)<br>@endif
                     </div>
                 @endif
             @endif

@@ -65,10 +65,11 @@ class TenantResource extends Resource
                     Forms\Components\TextInput::make('vat_number')->label('P.IVA')->maxLength(255),
                     Forms\Components\TextInput::make('tax_code')->label('Codice fiscale')->maxLength(255),
                     Forms\Components\TextInput::make('sdi')->label('Codice SDI')->maxLength(255),
+                    Forms\Components\TextInput::make('iban')->label('IBAN')->maxLength(255),
                     Forms\Components\TextInput::make('email')->label('Email')->email()->maxLength(255),
                     Forms\Components\TextInput::make('phone')->label('Telefono')->tel()->maxLength(255),
                     Forms\Components\TextInput::make('fax')->label('Fax')->tel()->maxLength(255),
-                    Forms\Components\Toggle::make('is_master')->label('Tenant master (Alex)'),
+                    Forms\Components\Toggle::make('is_master')->label('Tenant master (Alex)')->live(),
                     Forms\Components\Toggle::make('is_active')->label('Attivo')->default(true),
                 ]),
             Forms\Components\Section::make('Indirizzo')
@@ -95,6 +96,10 @@ class TenantResource extends Resource
             Forms\Components\Section::make('Condizioni contrattuali')
                 ->description('Vedi contratto di distribuzione tipo, artt. 3, 4, 11, 12, 13')
                 ->columns(2)
+                // Alex (il tenant master) non ha un contratto di distribuzione
+                // con se stesso: questi campi valgono solo per i tenant
+                // partner, su Alex sono rumore senza senso.
+                ->hidden(fn (Forms\Get $get) => (bool) $get('is_master'))
                 ->schema([
                     Forms\Components\TextInput::make('machine_discount_percent')
                         ->label('Sconto macchine (%)')
@@ -140,6 +145,9 @@ class TenantResource extends Resource
                 ]),
             Forms\Components\Section::make('Canone piattaforma (opzionale)')
                 ->columns(3)
+                // Canone che il partner paga ad Alex per l'uso della
+                // piattaforma: Alex non paga un canone a se stessa.
+                ->hidden(fn (Forms\Get $get) => (bool) $get('is_master'))
                 ->schema([
                     Forms\Components\Toggle::make('saas_billing_enabled')
                         ->label('Canone attivo')
@@ -153,23 +161,6 @@ class TenantResource extends Resource
                         ->label('Periodicità')
                         ->options(['monthly' => 'Mensile', 'annual' => 'Annuale'])
                         ->visible(fn (Forms\Get $get) => $get('saas_billing_enabled')),
-                ]),
-            Forms\Components\Section::make('Integrazione Eureka')
-                ->description('Credenziali per inviare i rapportini firmati al gestionale esterno come "scheda lavoro". Lascia vuoto se questo tenant non usa Eureka.')
-                ->columns(2)
-                ->schema([
-                    Forms\Components\TextInput::make('gestionale_eureka_base_url')
-                        ->label('URL base API')
-                        ->url()
-                        ->placeholder('https://alex.api.gestionale-eureka.it')
-                        ->columnSpanFull(),
-                    Forms\Components\TextInput::make('gestionale_eureka_username')
-                        ->label('Utente'),
-                    Forms\Components\TextInput::make('gestionale_eureka_password')
-                        ->label('Password')
-                        ->password()
-                        ->revealable()
-                        ->dehydrated(fn ($state) => filled($state)),
                 ]),
         ]);
     }

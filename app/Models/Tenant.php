@@ -20,6 +20,7 @@ class Tenant extends Model implements HasName
         'vat_number',
         'tax_code',
         'sdi',
+        'iban',
         'email',
         'notify_staff_emails',
         'notify_information_request_emails',
@@ -57,9 +58,6 @@ class Tenant extends Model implements HasName
         'saas_billing_enabled',
         'saas_plan_fee',
         'saas_billing_cycle',
-        'gestionale_eureka_base_url',
-        'gestionale_eureka_username',
-        'gestionale_eureka_password',
     ];
 
     protected $casts = [
@@ -87,7 +85,6 @@ class Tenant extends Model implements HasName
         'notice_period_days' => 'integer',
         'saas_billing_enabled' => 'boolean',
         'saas_plan_fee' => 'decimal:2',
-        'gestionale_eureka_password' => 'encrypted',
     ];
 
     protected static function booted(): void
@@ -291,6 +288,14 @@ class Tenant extends Model implements HasName
         return $line ?: null;
     }
 
+    public function ibanLine(): ?string
+    {
+        $line = trim(collect([
+            $this->iban ? "IBAN: {$this->iban}" : null,
+        ])->filter()->implode(' — '));
+        return $line ?: null;
+    }
+
     public function pdfContactLine(): ?string
     {
         $line = trim(collect([
@@ -302,10 +307,19 @@ class Tenant extends Model implements HasName
         return $line ?: null;
     }
 
+    /**
+     * Eureka e' un'integrazione specifica di ALEX (il tenant master), non di
+     * ogni partner: le credenziali vivono in .env (config/services.php →
+     * eureka.*), globali per l'intera app, non per-tenant — un partner non
+     * deve mai poterle vedere o modificare dal pannello. Il gate resta
+     * comunque per-tenant (is_master) cosi' azioni/pulsanti Eureka restano
+     * nascosti sugli account partner anche a integrazione configurata.
+     */
     public function hasGestionaleEurekaCredentials(): bool
     {
-        return filled($this->gestionale_eureka_base_url)
-            && filled($this->gestionale_eureka_username)
-            && filled($this->gestionale_eureka_password);
+        return $this->is_master
+            && filled(config('services.eureka.base_url'))
+            && filled(config('services.eureka.username'))
+            && filled(config('services.eureka.password'));
     }
 }

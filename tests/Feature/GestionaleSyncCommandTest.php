@@ -21,9 +21,7 @@ class GestionaleSyncCommandTest extends TestCase
         return Tenant::create([
             'name' => 'Alex',
             'slug' => 'alex',
-            'gestionale_eureka_base_url' => 'https://alex.api.gestionale-eureka.it',
-            'gestionale_eureka_username' => 'serviziorest',
-            'gestionale_eureka_password' => 'secret',
+            'is_master' => true,
             'notify_customer_gestionale_emails' => ['ufficio@alexcaffe.it'],
         ]);
     }

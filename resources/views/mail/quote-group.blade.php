@@ -5,6 +5,7 @@
 	$footerCompany = $tenant?->legal_name ?: ($tenant?->name ?? config('app.name'));
 	$footerAddress = $tenant?->pdfAddressLine();
 	$footerFiscal = $tenant?->pdfFiscalLine();
+    $footerIban = $tenant?->ibanLine();
 	$footerContacts = $tenant?->pdfContactLine();
 	$renderedBody = trim((string) ($emailBody ?? ''));
 	$recipient = $group->customer?->invoiceRecipient();
@@ -70,8 +71,11 @@
 	@if($footerFiscal)
 		<div>{{ $footerFiscal }}</div>
 	@endif
-	@if($footerContacts)
-		<div>{{ $footerContacts }}</div>
+	@if($footerIban)
+		<div>{{ $footerIban }}</div>
 	@endif
+    @if($footerContacts)
+        <div>{{ $footerContacts }}</div>
+    @endif
 </div>
 </x-mail::message>
