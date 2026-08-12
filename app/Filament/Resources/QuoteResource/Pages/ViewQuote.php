@@ -56,7 +56,8 @@ class ViewQuote extends ViewRecord
                 ->label('PDF')
                 ->icon('heroicon-o-document-arrow-down')
                 ->color('gray')
-                ->action(fn () => QuoteResource::streamPdf($this->record)),
+                ->url(fn () => route('quotes.pdf', $this->record))
+                ->openUrlInNewTab(),
             Actions\Action::make('send')
                 ->label('Invia')
                 ->icon('heroicon-o-paper-airplane')

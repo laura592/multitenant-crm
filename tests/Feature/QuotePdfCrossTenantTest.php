@@ -19,11 +19,16 @@ use Tests\TestCase;
 /**
  * Copertura cross-tenant per i preventivi (dominio esplicitamente escluso da
  * SensitiveDownloadsAuthorizationTest quando quel ticket e' stato chiuso, in
- * quanto QuoteResource::streamPdf()/sendQuoteEmail() risolvono il record
- * tramite la stessa query Eloquent scoped-per-tenant di Filament gia'
- * verificata sicura per MaterialOrderResource — qui la si verifica
- * esplicitamente anche per Quote, il dato commerciale piu' sensibile
- * dell'app (prezzi, sconti, dati cliente).
+ * quanto sendQuoteEmail() risolve il record tramite la stessa query Eloquent
+ * scoped-per-tenant di Filament gia' verificata sicura per
+ * MaterialOrderResource — qui la si verifica esplicitamente anche per Quote,
+ * il dato commerciale piu' sensibile dell'app (prezzi, sconti, dati cliente).
+ *
+ * Il PDF (quotes.pdf) vive invece fuori dal pannello Filament da quando e'
+ * stato spostato su una route dedicata per aprirsi in una nuova tab invece
+ * di scaricarsi: la sua copertura cross-tenant e' in QuotePdfRouteTest,
+ * appoggiata al controllo esplicito di QuotePolicy::view() (stesso schema
+ * di ServiceReportPolicy::view()).
  */
 class QuotePdfCrossTenantTest extends TestCase
 {
@@ -61,9 +66,9 @@ class QuotePdfCrossTenantTest extends TestCase
     {
         $quote = $this->makeQuote($this->tenant);
 
-        $response = QuoteResource::streamPdf($quote->fresh());
+        $response = $this->get(route('quotes.pdf', $quote->fresh()));
 
-        $this->assertSame(200, $response->getStatusCode());
+        $response->assertOk();
         $this->assertStringContainsString("preventivo-{$quote->number}.pdf", $response->headers->get('content-disposition'));
     }
 

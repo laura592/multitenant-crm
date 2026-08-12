@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources;
 
-use App\Filament\Concerns\StreamsPdfDownloads;
 use App\Filament\Forms\CustomerContactFields;
 use App\Filament\Forms\ItalianAddressFields;
 use App\Filament\Resources\QuoteResource\Pages;
@@ -35,8 +34,6 @@ use Illuminate\Support\HtmlString;
 
 class QuoteResource extends Resource
 {
-    use StreamsPdfDownloads;
-
     protected static ?string $model = Quote::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-document-text';
@@ -56,7 +53,7 @@ class QuoteResource extends Resource
                 ->columns(12)
                 ->columnSpanFull()
                 ->extraAttributes([
-                    'class' => 'rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50 shadow-sm dark:border-slate-800 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900',
+                    'class' => 'fi-quick-overview rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50 shadow-sm',
                 ])
                 ->schema([
                     TextEntry::make('number')->label('Preventivo')->columnSpan(2),
@@ -244,7 +241,7 @@ class QuoteResource extends Resource
                 ->columnSpanFull()
                 ->visible(fn (?Quote $record) => $record !== null)
                 ->extraAttributes([
-                    'class' => 'rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50 shadow-sm dark:border-slate-800 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900',
+                    'class' => 'fi-quick-overview rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50 shadow-sm',
                 ])
                 ->schema([
                     Forms\Components\Placeholder::make('summary_number')
@@ -571,7 +568,8 @@ class QuoteResource extends Resource
                     ->label('PDF')
                     ->icon('heroicon-o-document-arrow-down')
                     ->color('gray')
-                    ->action(fn (Quote $record) => static::streamPdf($record)),
+                    ->url(fn (Quote $record) => route('quotes.pdf', $record))
+                    ->openUrlInNewTab(),
                 // "Invia" e' l'unica azione a colore pieno (success) della riga:
                 // e' quella che porta il preventivo verso il cliente, il resto
                 // sono azioni di supporto/secondarie (stesso criterio usato per
@@ -613,14 +611,6 @@ class QuoteResource extends Resource
             'quote' => $record,
             'tenant' => $record->tenant,
         ]);
-    }
-
-    public static function streamPdf(Quote $record)
-    {
-        return static::streamPdfDownload(
-            fn () => static::buildPdf($record),
-            "preventivo-{$record->number}.pdf"
-        );
     }
 
     public static function duplicateAsAlternativeAction(): Tables\Actions\Action

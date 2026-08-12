@@ -34,7 +34,8 @@ class EditQuote extends EditRecord
                 ->label('PDF')
                 ->icon('heroicon-o-document-arrow-down')
                 ->color('gray')
-                ->action(fn () => QuoteResource::streamPdf($this->record)),
+                ->url(fn () => route('quotes.pdf', $this->record))
+                ->openUrlInNewTab(),
             Actions\Action::make('duplicateAsAlternative')
                 ->label('Duplica come alternativa')
                 ->icon('heroicon-o-document-duplicate')

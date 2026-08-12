@@ -23,7 +23,14 @@ class QuotePolicy
      */
     public function view(User $user, Quote $quote): bool
     {
-        return $user->can('view_quote');
+        // La route quotes.pdf vive fuori dal pannello Filament
+        // (Filament::getTenant() torna null li'), quindi lo scope automatico
+        // tenant di BelongsToTenant non si applica: senza il confronto
+        // esplicito col tenant del preventivo, il solo permesso di ruolo
+        // basterebbe a scaricare il preventivo di un ALTRO tenant (stesso
+        // problema gia' risolto per i rapportini, ServiceReportPolicy::view).
+        // is_super_admin bypassa comunque tutto via Gate::before.
+        return $user->can('view_quote') && $user->tenant_id === $quote->tenant_id;
     }
 
     /**
