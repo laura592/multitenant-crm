@@ -88,6 +88,7 @@ class Tenant extends Model implements HasName
             || $this->quoteGroups()->exists()
             || $this->informationRequests()->exists()
             || $this->serviceReports()->exists()
+            || $this->machineUnits()->exists()
             || $this->vehicles()->exists()
             || $this->maintenanceSchedules()->exists()
             || $this->lavaggi()->exists()
@@ -154,6 +155,11 @@ class Tenant extends Model implements HasName
     public function serviceReports(): HasMany
     {
         return $this->hasMany(ServiceReport::class);
+    }
+
+    public function machineUnits(): HasMany
+    {
+        return $this->hasMany(MachineUnit::class);
     }
 
     public function vehicles(): HasMany

@@ -108,25 +108,27 @@ class TenantResource extends Resource
                 Tables\Filters\TrashedFilter::make(),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
-                // Il tenant master (Alex) e' quello dello staff che gestisce tutti gli
-                // altri partner: eliminarlo per errore blocca l'accesso di tutto lo staff.
-                Tables\Actions\DeleteAction::make()
-                    ->hidden(fn (Tenant $record) => $record->is_master)
-                    ->before(function (Tenant $record, Tables\Actions\DeleteAction $action) {
-                        if ($record->hasBlockingRelatedRecords()) {
-                            \Filament\Notifications\Notification::make()
-                                ->title('Impossibile eliminare')
-                                ->body('Questo tenant ha ancora dati collegati (utenti, clienti, preventivi, rapportini...): va svuotato prima di poterlo eliminare.')
-                                ->danger()
-                                ->send();
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\EditAction::make(),
+                    // Il tenant master (Alex) e' quello dello staff che gestisce tutti gli
+                    // altri partner: eliminarlo per errore blocca l'accesso di tutto lo staff.
+                    Tables\Actions\DeleteAction::make()
+                        ->hidden(fn (Tenant $record) => $record->is_master)
+                        ->before(function (Tenant $record, Tables\Actions\DeleteAction $action) {
+                            if ($record->hasBlockingRelatedRecords()) {
+                                \Filament\Notifications\Notification::make()
+                                    ->title('Impossibile eliminare')
+                                    ->body('Questo tenant ha ancora dati collegati (utenti, clienti, preventivi, rapportini...): va svuotato prima di poterlo eliminare.')
+                                    ->danger()
+                                    ->send();
 
-                            $action->halt();
-                        }
-                    }),
-                Tables\Actions\RestoreAction::make(),
-                Tables\Actions\ForceDeleteAction::make()
-                    ->hidden(fn (Tenant $record) => $record->is_master),
+                                $action->halt();
+                            }
+                        }),
+                    Tables\Actions\RestoreAction::make(),
+                    Tables\Actions\ForceDeleteAction::make()
+                        ->hidden(fn (Tenant $record) => $record->is_master),
+                ]),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
