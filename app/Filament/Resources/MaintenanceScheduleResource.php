@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\MaintenanceScheduleResource\Pages;
+use App\Filament\Resources\MaintenanceScheduleResource\RelationManagers\InterventiRelationManager;
 use App\Filament\Resources\MaintenanceScheduleResource\RelationManagers\LavaggiRelationManager;
 use App\Models\Customer;
 use App\Models\MachineUnit;
@@ -180,15 +181,13 @@ class MaintenanceScheduleResource extends Resource
                             TextEntry::make('impianti_info')
                                 ->label('Impianti installati')
                                 ->state(fn (MaintenanceSchedule $record) => static::equipmentSummary($record->customer_id, $record->machine_unit_id))
-                                // Senza machine_unit_id un piano lavaggio ha
-                                // gia' l'impianto (birra/vino/...) e le vie
-                                // nell'hero: il fallback su tutto il parco
-                                // macchine del cliente qui sarebbe solo
-                                // rumore ("Impianto Acqua, Impianto Vino,
-                                // Impianto Birra" ripetuti su ogni piano).
-                                // Resta utile solo con una macchina specifica
-                                // collegata, o sui piani di manutenzione.
-                                ->visible(fn (MaintenanceSchedule $record) => $record->machine_unit_id || $record->type !== MaintenanceSchedule::TYPE_LAVAGGIO),
+                                // Con machine_unit_id gia' impostato, equipmentSummary()
+                                // torna esattamente lo stesso display_name gia' mostrato
+                                // dal campo "Macchina" qui sopra - pura duplicazione,
+                                // niente da aggiungere. Resta utile solo come fallback
+                                // sul parco macchine del cliente quando il piano NON ha
+                                // ancora una macchina specifica collegata.
+                                ->visible(fn (MaintenanceSchedule $record) => ! $record->machine_unit_id),
                             TextEntry::make('pagante_info')
                                 ->label('Fatturare a')
                                 ->state(fn (MaintenanceSchedule $record) => static::billingSummary($record->customer_id, $record->machine_unit_id)),
@@ -203,10 +202,11 @@ class MaintenanceScheduleResource extends Resource
                             TextEntry::make('frequency_days')
                                 ->label('Cadenza')
                                 ->formatStateUsing(fn (?string $state) => $state ? "Ogni {$state} giorni" : 'A chiamata')
-                                ->visible(fn (MaintenanceSchedule $record) => $record->type === MaintenanceSchedule::TYPE_LAVAGGIO && $record->beverage_type !== MaintenanceSchedule::BEVERAGE_ACQUA),
+                                ->visible(fn (MaintenanceSchedule $record) => $record->type === MaintenanceSchedule::TYPE_LAVAGGIO),
                             TextEntry::make('filter_validity_days')
-                                ->label('Validita\' filtro')
-                                ->formatStateUsing(fn (?string $state) => $state ? "Ogni {$state} giorni (max 4 mesi)" : 'Ogni 4 mesi')
+                                ->label('Validita\' filtro (info)')
+                                ->formatStateUsing(fn (?string $state) => $state ? "Ogni {$state} giorni" : '—')
+                                ->placeholder('—')
                                 ->visible(fn (MaintenanceSchedule $record) => $record->type === MaintenanceSchedule::TYPE_LAVAGGIO && $record->beverage_type === MaintenanceSchedule::BEVERAGE_ACQUA),
                             TextEntry::make('lastFilterChange.data')
                                 ->label('Ultima sostituzione filtro')
@@ -249,7 +249,13 @@ class MaintenanceScheduleResource extends Resource
                         ->helperText('Qui compaiono solo i macchinari attualmente installati presso il cliente selezionato, in comodato o meno.'),
                     Forms\Components\Placeholder::make('impianti_info')
                         ->label('Impianti installati')
-                        ->content(fn (Forms\Get $get) => static::equipmentSummary($get('customer_id'), $get('machine_unit_id'))),
+                        ->content(fn (Forms\Get $get) => static::equipmentSummary($get('customer_id'), $get('machine_unit_id')))
+                        // Stessa duplicazione dell'infolist quando machine_unit_id e'
+                        // gia' impostato (equipmentSummary() torna lo stesso valore
+                        // del select "Macchina" qui sopra): visibile solo come
+                        // fallback sul parco macchine quando non c'e' ancora una
+                        // macchina specifica scelta.
+                        ->visible(fn (Forms\Get $get) => blank($get('machine_unit_id'))),
                     Forms\Components\Placeholder::make('pagante_info')
                         ->label('Fatturare a')
                         ->content(fn (Forms\Get $get) => static::billingSummary($get('customer_id'), $get('machine_unit_id'))),
@@ -298,13 +304,18 @@ class MaintenanceScheduleResource extends Resource
                         ->numeric()
                         ->minValue(1)
                         ->live()
-                        ->helperText('Es. 20 o 30. Ogni nuovo lavaggio registrato sposta in automatico la prossima scadenza di questi giorni. Lascia vuoto per un piano "a chiamata", senza cadenza fissa.')
-                        ->visible(fn (Forms\Get $get) => $get('type') === MaintenanceSchedule::TYPE_LAVAGGIO && $get('beverage_type') !== MaintenanceSchedule::BEVERAGE_ACQUA),
+                        // Stessa cadenza per tutti i beverage_type, acqua
+                        // inclusa: prima l'acqua aveva una regola a parte
+                        // (sanificazione ogni 4 mesi dall'ultimo cambio
+                        // filtro) che senza un lavaggio marcato "filtro
+                        // sostituito" lasciava la scadenza sempre vuota.
+                        ->helperText('Es. 20 o 30 (per l\'acqua tipicamente 120). Ogni nuovo lavaggio registrato sposta in automatico la prossima scadenza di questi giorni. Lascia vuoto per un piano "a chiamata", senza cadenza fissa.')
+                        ->visible(fn (Forms\Get $get) => $get('type') === MaintenanceSchedule::TYPE_LAVAGGIO),
                     Forms\Components\TextInput::make('filter_validity_days')
                         ->label('Validita\' filtro (giorni)')
                         ->numeric()
                         ->minValue(1)
-                        ->helperText('Scadenza = data ultima sostituzione filtro + questi giorni, con un tetto massimo di 4 mesi (sanificazione) anche se il filtro non si esaurisce prima. Lascia vuoto per usare solo il tetto dei 4 mesi.')
+                        ->helperText('Solo informativo, non calcola piu\' la scadenza (vedi "Cadenza" sopra): utile per sapere quando il filtro va sostituito a prescindere dalla prossima sanificazione.')
                         ->visible(fn (Forms\Get $get) => $get('type') === MaintenanceSchedule::TYPE_LAVAGGIO && $get('beverage_type') === MaintenanceSchedule::BEVERAGE_ACQUA),
                     Forms\Components\Placeholder::make('ultima_sostituzione_filtro')
                         ->label('Ultima sostituzione filtro')
@@ -312,7 +323,7 @@ class MaintenanceScheduleResource extends Resource
                         ->visible(fn (Forms\Get $get, ?MaintenanceSchedule $record) => $record && $get('type') === MaintenanceSchedule::TYPE_LAVAGGIO && $get('beverage_type') === MaintenanceSchedule::BEVERAGE_ACQUA),
                     Forms\Components\DatePicker::make('next_due_date')
                         ->label('Prossima scadenza')
-                        ->helperText(fn (Forms\Get $get) => $get('type') === MaintenanceSchedule::TYPE_LAVAGGIO && blank($get('frequency_days')) && $get('beverage_type') !== MaintenanceSchedule::BEVERAGE_ACQUA
+                        ->helperText(fn (Forms\Get $get) => $get('type') === MaintenanceSchedule::TYPE_LAVAGGIO && blank($get('frequency_days'))
                             ? 'Piano a chiamata: nessuna scadenza automatica.'
                             : null)
                         ->required(fn (Forms\Get $get) => $get('type') === MaintenanceSchedule::TYPE_MANUTENZIONE || filled($get('frequency_days')))
@@ -375,10 +386,6 @@ class MaintenanceScheduleResource extends Resource
                             return $record->frequency ? ucfirst($record->frequency) : '—';
                         }
 
-                        if ($record->beverage_type === MaintenanceSchedule::BEVERAGE_ACQUA) {
-                            return $record->filter_validity_days ? "Filtro ogni {$record->filter_validity_days} giorni (max 4 mesi)" : 'Sanificazione ogni 4 mesi';
-                        }
-
                         return $record->frequency_days ? "Ogni {$record->frequency_days} giorni" : 'A chiamata';
                     }),
                 Tables\Columns\TextColumn::make('next_due_date')
@@ -418,9 +425,10 @@ class MaintenanceScheduleResource extends Resource
             ->actions([
                 Tables\Actions\ViewAction::make()
                     ->color('gray'),
-                Tables\Actions\EditAction::make()
-                    ->color('gray'),
-                Tables\Actions\DeleteAction::make(),
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\EditAction::make(),
+                    Tables\Actions\DeleteAction::make(),
+                ]),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
@@ -502,6 +510,7 @@ class MaintenanceScheduleResource extends Resource
     {
         return [
             LavaggiRelationManager::class,
+            InterventiRelationManager::class,
         ];
     }
 

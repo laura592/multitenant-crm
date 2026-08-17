@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Carbon;
 
 class MaintenanceSchedule extends Model
 {
@@ -83,6 +82,25 @@ class MaintenanceSchedule extends Model
     public function lastServiceReport(): BelongsTo
     {
         return $this->belongsTo(ServiceReport::class, 'last_service_report_id');
+    }
+
+    /**
+     * Rapportini per la stessa macchina/cliente di questo piano - stesso
+     * criterio di recalculateFromServiceReports(), qui solo per la vista di
+     * sola lettura "Interventi" dei piani di manutenzione (vedi
+     * InterventiRelationManager). Senza machine_unit_id non si puo' sapere
+     * quali rapportini del cliente riguardino questa macchina: meglio
+     * restare vuoti che mostrare l'intero storico del cliente come se fosse
+     * di questo piano.
+     */
+    public function serviceReports(): HasMany
+    {
+        return $this->hasMany(ServiceReport::class, 'customer_id', 'customer_id')
+            ->when(
+                $this->machine_unit_id,
+                fn ($query) => $query->where('machine_unit_id', $this->machine_unit_id),
+                fn ($query) => $query->whereRaw('1 = 0'),
+            );
     }
 
     public function lastLavaggio(): BelongsTo
@@ -161,35 +179,24 @@ class MaintenanceSchedule extends Model
         // "Ultimo lavaggio" va aggiornato sempre, anche sui piani "a
         // chiamata" (senza frequency_days/filtro): solo la prossima scadenza
         // automatica non ha senso senza una cadenza fissa.
-        $update = ['last_lavaggio_id' => $last->id];
+        $update = [
+            'last_lavaggio_id' => $last->id,
+            // Stessa formula per tutti i beverage_type, acqua inclusa:
+            // ultimo lavaggio + cadenza in giorni impostata sul piano. Prima
+            // l'acqua usava una regola diversa (sanificazione ogni 4 mesi
+            // dall'ultimo CAMBIO FILTRO, non dall'ultimo lavaggio) che senza
+            // un lavaggio marcato "filtro sostituito" lasciava next_due_date
+            // sempre null, anche a fronte di una data messa a mano.
+            'next_due_date' => $this->frequency_days ? $last->data->copy()->addDays($this->frequency_days) : null,
+        ];
 
         if ($this->beverage_type === self::BEVERAGE_ACQUA) {
-            $lastFilterChange = $this->lavaggi()->where('filtro_sostituito', true)->orderByDesc('data')->first();
-
-            $update['last_filter_change_id'] = $lastFilterChange?->id;
-            $update['next_due_date'] = $lastFilterChange ? $this->nextAcquaDueDate($lastFilterChange) : null;
-        } else {
-            $update['next_due_date'] = $this->frequency_days ? $last->data->copy()->addDays($this->frequency_days) : null;
+            // last_filter_change_id resta tracciato solo come informazione
+            // (vedi "Ultima sostituzione filtro" in UI), non guida piu' la
+            // scadenza.
+            $update['last_filter_change_id'] = $this->lavaggi()->where('filtro_sostituito', true)->orderByDesc('data')->first()?->id;
         }
 
         $this->update($update);
-    }
-
-    /**
-     * Scadenza di un piano acqua: sanificazione ogni 4 mesi in ogni caso, a
-     * meno che il filtro non si esaurisca prima (filter_validity_days piu'
-     * stringente dei 4 mesi).
-     */
-    private function nextAcquaDueDate(Lavaggio $lastFilterChange): Carbon
-    {
-        $sanificazione = $lastFilterChange->data->copy()->addMonths(4);
-
-        if (! $this->filter_validity_days) {
-            return $sanificazione;
-        }
-
-        $filterExpiry = $lastFilterChange->data->copy()->addDays($this->filter_validity_days);
-
-        return $filterExpiry->lessThan($sanificazione) ? $filterExpiry : $sanificazione;
     }
 }
