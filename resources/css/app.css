@@ -155,3 +155,22 @@
 .fi-btn:has([x-show="isProcessing"]) svg[wire\:target] {
     display: none !important;
 }
+
+/*
+ * Segnalato: il pallino dei Toggle Filament accesi (es. "Ricambi/materiali
+ * utilizzati" > Chiamata/Manodopera/Lavaggio eseguito) sborda a destra della
+ * capsula e finisce sopra il testo della label. Causa: la pagina carica DUE
+ * fogli di stile che definiscono entrambi .translate-x-5 - quello pubblicato
+ * da Filament (Tailwind v3, css/filament/filament/app.css) scrive la
+ * proprieta' composita `transform: translate(1.25rem, ...)`; questo bundle
+ * (Tailwind v4 - lo @source su storage/framework/views/*.php intercetta
+ * anche le view vendor gia' compilate nella cache Blade) scrive invece la
+ * proprieta' STANDALONE `translate: 1.25rem ...`. transform e translate si
+ * sommano invece di sovrascriversi, quindi il pallino si sposta di 2.5rem
+ * invece di 1.25rem. Si azzera qui solo `transform` sullo span del pallino
+ * (unico figlio diretto del pulsante .fi-fo-toggle): resta cosi' attiva solo
+ * la proprieta' `translate` di questo bundle, con lo scostamento corretto.
+ */
+.fi-fo-toggle > span {
+    transform: none !important;
+}
