@@ -3,8 +3,8 @@
 namespace App\Support;
 
 /**
- * Unica fonte dei permessi per i 4 ruoli applicativi (dipendente,
- * amministrazione, partner, admin). Usata sia dal seeder di
+ * Unica fonte dei permessi per i 5 ruoli applicativi (dipendente,
+ * amministrazione, partner, admin, amministratore). Usata sia dal seeder di
  * produzione che dai test, cosi i due non rischiano di divergere
  * silenziosamente. Gestione Tenant e Ruoli resta riservata allo staff master
  * (is_super_admin), nessuno dei 5 ruoli le include (docs/architecture.md
@@ -17,6 +17,17 @@ namespace App\Support;
  * App\Filament\Concerns\ScopesToOwnUserUnlessResponsabile, che allarga la
  * visibilita' di time_entry/leave_request a questo ruolo senza equipararlo a
  * "responsabile" per le azioni di approvazione.
+ *
+ * "amministratore" (es. Alessandro Signorato) e' un admin pieno ma senza
+ * poteri distruttivi: stesso perimetro di risorse di "admin" (vedi sotto),
+ * ma senza delete/delete_any/force_delete/force_delete_any su nessuna -
+ * puo' vedere/creare/modificare/ripristinare tutto ma mai eliminare
+ * definitivamente ne' cestinare. Mantiene pero' l'autorita' di approvazione
+ * ferie di "admin" (vedi LeaveRequestPolicy::approve()/updateAfterDecision(),
+ * che riconoscono esplicitamente entrambi i ruoli - non e' automatico dai
+ * permessi granulari). Nome scelto deliberatamente vicino a
+ * "amministrazione" ma sono due ruoli distinti con perimetri molto diversi:
+ * non confonderli in fase di assegnazione.
  */
 class RolePermissions
 {
@@ -30,6 +41,11 @@ class RolePermissions
     // riservata a questo ruolo e allo staff master, mai a dipendente/
     // amministrazione/partner.
     private const FULL_MANAGE = [...self::MANAGE, 'force_delete', 'force_delete_any'];
+
+    // Come MANAGE ma senza alcun potere di eliminazione: usato da
+    // "amministratore", che rispecchia il perimetro di risorse di "admin" ma
+    // senza delete/delete_any (ne' force_delete, mai incluso in MANAGE).
+    private const MANAGE_NO_DELETE = ['view_any', 'view', 'create', 'update', 'restore', 'restore_any'];
 
     public static function for(string $role): array
     {
@@ -132,13 +148,46 @@ class RolePermissions
                 'page_NotificationSettings',
                 'page_GestionaleSyncReview',
             ],
+            // Specchio di "admin" sopra, risorsa per risorsa: stesso
+            // perimetro, solo MANAGE_NO_DELETE al posto di MANAGE/FULL_MANAGE.
+            'amministratore' => [
+                ...self::expand('brand', self::MANAGE_NO_DELETE),
+                ...self::expand('category', self::MANAGE_NO_DELETE),
+                ...self::expand('product', self::MANAGE_NO_DELETE),
+                ...self::expand('product::family', self::MANAGE_NO_DELETE),
+                ...self::expand('customer', self::MANAGE_NO_DELETE),
+                ...self::expand('quote', self::MANAGE_NO_DELETE),
+                ...self::expand('quote::group', self::MANAGE_NO_DELETE),
+                ...self::expand('information::request', self::MANAGE_NO_DELETE),
+                ...self::expand('service::report', self::MANAGE_NO_DELETE),
+                ...self::expand('maintenance::schedule', self::MANAGE_NO_DELETE),
+                ...self::expand('deadline', self::MANAGE_NO_DELETE),
+                ...self::expand('vehicle', self::MANAGE_NO_DELETE),
+                ...self::expand('material', self::MANAGE_NO_DELETE),
+                ...self::expand('material::order', self::MANAGE_NO_DELETE),
+                ...self::expand('supplier', self::MANAGE_NO_DELETE),
+                ...self::expand('price::list', self::MANAGE_NO_DELETE),
+                ...self::expand('time::entry', self::MANAGE_NO_DELETE),
+                ...self::expand('leave::request', self::MANAGE_NO_DELETE),
+                ...self::expand('payment::method', self::MANAGE_NO_DELETE),
+                ...self::expand('machine::unit', self::MANAGE_NO_DELETE),
+                ...self::expand('lavaggio', self::MANAGE_NO_DELETE),
+                ...self::expand('user', self::MANAGE_NO_DELETE),
+                ...self::expand('audit::log', self::VIEW),
+                'widget_TimbraWidget',
+                'widget_CreaPreventivoWidget',
+                'page_RiepilogoOre',
+                'page_ClientiVicini',
+                'page_NotificationSettings',
+                'page_GestionaleSyncReview',
+            ],
             default => throw new \InvalidArgumentException("Ruolo sconosciuto: {$role}"),
         };
     }
 
     public static function roles(): array
     {
-        return ['dipendente', 'amministrazione', 'partner', 'admin'];
+        return ['dipendente', 'amministrazione', 'partner', 'admin', 'amministratore'];
     }
 
     private static function expand(string $resource, array $prefixes): array

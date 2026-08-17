@@ -47,11 +47,13 @@ class LeaveRequestPolicy
      * decisa: riservato a chi e' "responsabile" (is_super_admin bypassa
      * comunque tutto via Gate::before). "amministrazione" ha update_leave::
      * request per integrare i dati ma NON l'autorita' di approvazione (vedi
-     * App\Support\RolePermissions).
+     * App\Support\RolePermissions). "amministratore" e' equiparato ad
+     * "admin" qui: stessa autorita' di approvazione pur senza i permessi di
+     * eliminazione che "admin" ha sulle altre risorse.
      */
     public function approve(User $user, LeaveRequest $leaveRequest): bool
     {
-        return $user->hasRole('admin');
+        return $user->hasRole(['admin', 'amministratore']);
     }
 
     /**
@@ -67,7 +69,7 @@ class LeaveRequestPolicy
             return $user->can('update_leave::request');
         }
 
-        return $user->hasRole('admin');
+        return $user->hasRole(['admin', 'amministratore']);
     }
 
     /**
