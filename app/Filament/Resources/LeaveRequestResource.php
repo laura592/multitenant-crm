@@ -212,19 +212,21 @@ class LeaveRequestResource extends Resource
                 // puo' ancora modificarla/cancellarla, e farlo la riporta a
                 // "richiesto" per una nuova approvazione: vedi
                 // LeaveRequestPolicy::updateAfterDecision().
-                Tables\Actions\EditAction::make()
-                    ->visible(fn (LeaveRequest $record) => auth()->user()?->can('updateAfterDecision', $record))
-                    ->mutateFormDataUsing(function (array $data, LeaveRequest $record): array {
-                        if ($record->status !== 'richiesto') {
-                            $data['status'] = 'richiesto';
-                            $data['approved_by_user_id'] = null;
-                            $data['approved_at'] = null;
-                        }
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\EditAction::make()
+                        ->visible(fn (LeaveRequest $record) => auth()->user()?->can('updateAfterDecision', $record))
+                        ->mutateFormDataUsing(function (array $data, LeaveRequest $record): array {
+                            if ($record->status !== 'richiesto') {
+                                $data['status'] = 'richiesto';
+                                $data['approved_by_user_id'] = null;
+                                $data['approved_at'] = null;
+                            }
 
-                        return $data;
-                    }),
-                Tables\Actions\DeleteAction::make()
-                    ->visible(fn (LeaveRequest $record) => auth()->user()?->can('updateAfterDecision', $record)),
+                            return $data;
+                        }),
+                    Tables\Actions\DeleteAction::make()
+                        ->visible(fn (LeaveRequest $record) => auth()->user()?->can('updateAfterDecision', $record)),
+                ]),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
