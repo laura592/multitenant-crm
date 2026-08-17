@@ -88,12 +88,7 @@ class DeadlineResource extends Resource
                         ->options(fn () => Deadline::statusLabels())
                         ->default(Deadline::STATUS_ATTIVA)
                         ->required(),
-                    Forms\Components\TextInput::make('amount')
-                        ->label('Importo pagato')
-                        ->numeric()
-                        ->prefix('€'),
                     Forms\Components\DatePicker::make('paid_at')->label('Data pagamento'),
-                    Forms\Components\Textarea::make('notes')->label('Note')->columnSpanFull(),
                 ]),
         ]);
     }
@@ -131,7 +126,6 @@ class DeadlineResource extends Resource
                         default => class_basename($record->deadlinable_type),
                     }),
                 Tables\Columns\TextColumn::make('policy_number')->label('Numero polizza')->placeholder('—'),
-                Tables\Columns\TextColumn::make('notes')->label('Note')->limit(40)->placeholder('—')->tooltip(fn (Deadline $record) => $record->notes),
                 Tables\Columns\TextColumn::make('due_date')
                     ->label('Scadenza')
                     ->date()
@@ -142,7 +136,6 @@ class DeadlineResource extends Resource
                     ->badge()
                     ->formatStateUsing(fn (string $state) => Deadline::statusLabels()[$state] ?? ucfirst($state))
                     ->color(fn (string $state) => Deadline::statusColors()[$state] ?? 'gray'),
-                Tables\Columns\TextColumn::make('amount')->label('Importo')->money('EUR')->placeholder('—'),
                 Tables\Columns\TextColumn::make('paid_at')->label('Pagato il')->date()->placeholder('—'),
             ])
             ->filters([
@@ -167,10 +160,6 @@ class DeadlineResource extends Resource
                     ->color('success')
                     ->visible(fn (Deadline $record) => $record->status !== Deadline::STATUS_RINNOVATA)
                     ->form([
-                        Forms\Components\TextInput::make('amount')
-                            ->label('Importo pagato')
-                            ->numeric()
-                            ->prefix('€'),
                         Forms\Components\DatePicker::make('paid_at')
                             ->label('Data pagamento')
                             ->default(now()),
@@ -181,8 +170,10 @@ class DeadlineResource extends Resource
                     ->modalHeading('Rinnova scadenza')
                     ->modalSubmitActionLabel('Rinnova')
                     ->action(fn (Deadline $record, array $data) => $record->renew($data)),
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\EditAction::make(),
+                    Tables\Actions\DeleteAction::make(),
+                ]),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([

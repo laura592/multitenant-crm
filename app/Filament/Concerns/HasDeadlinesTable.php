@@ -45,7 +45,6 @@ trait HasDeadlinesTable
                         ->numeric()
                         ->prefix('€'),
                     Forms\Components\DatePicker::make('paid_at')->label('Data pagamento'),
-                    Forms\Components\Textarea::make('notes')->label('Note')->columnSpanFull(),
                 ]),
         ]);
     }
@@ -70,7 +69,6 @@ trait HasDeadlinesTable
                     ->badge()
                     ->formatStateUsing(fn (string $state) => Deadline::typeLabels()[$state] ?? 'Altro'),
                 Tables\Columns\TextColumn::make('policy_number')->label('Numero polizza')->placeholder('—'),
-                Tables\Columns\TextColumn::make('notes')->label('Note')->limit(40)->placeholder('—')->tooltip(fn (Deadline $record) => $record->notes),
                 Tables\Columns\TextColumn::make('due_date')->label('Scadenza')->date()
                     ->color(fn (Deadline $record) => $record->dueDateColor()),
                 Tables\Columns\TextColumn::make('status')
@@ -105,8 +103,10 @@ trait HasDeadlinesTable
                     ->modalHeading('Rinnova scadenza')
                     ->modalSubmitActionLabel('Rinnova')
                     ->action(fn (Deadline $record, array $data) => $record->renew($data)),
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\EditAction::make(),
+                    Tables\Actions\DeleteAction::make(),
+                ]),
             ]);
     }
 }

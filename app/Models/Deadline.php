@@ -42,7 +42,6 @@ class Deadline extends Model
         'paid_at',
         'reminder_days_before',
         'status',
-        'notes',
     ];
 
     protected $casts = [

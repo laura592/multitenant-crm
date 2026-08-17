@@ -66,36 +66,36 @@ class ScadenzarioDemoSeeder extends Seeder
         // per gli scenari in cui l'installazione e' eseguita in autonomia)
         $tenant->deadlines()->updateOrCreate(
             ['type' => Deadline::TYPE_POLIZZA_RCT],
-            ['tenant_id' => $tenant->id, 'due_date' => now()->addMonths(9), 'reminder_days_before' => 45, 'status' => 'attiva', 'notes' => 'Responsabilità civile verso terzi per installazioni in autonomia (art. 17 contratto distribuzione).']
+            ['tenant_id' => $tenant->id, 'due_date' => now()->addMonths(9), 'reminder_days_before' => 45, 'status' => 'attiva', 'policy_number' => 'RCT installazioni in autonomia (art. 17 contratto distribuzione)']
         );
 
         // Contratti generici di gestione azienda
         $contracts = [
-            ['notes' => 'Contratto di locazione sede operativa', 'months' => 14],
-            ['notes' => 'Contratto commercialista/consulenza fiscale', 'months' => 5],
-            ['notes' => 'Contratto assistenza software gestionale', 'months' => 3],
+            ['policy_number' => 'Contratto di locazione sede operativa', 'months' => 14],
+            ['policy_number' => 'Contratto commercialista/consulenza fiscale', 'months' => 5],
+            ['policy_number' => 'Contratto assistenza software gestionale', 'months' => 3],
         ];
 
         foreach ($contracts as $i => $c) {
             $tenant->deadlines()->updateOrCreate(
-                ['type' => Deadline::TYPE_CONTRATTO, 'notes' => $c['notes']],
+                ['type' => Deadline::TYPE_CONTRATTO, 'policy_number' => $c['policy_number']],
                 ['tenant_id' => $tenant->id, 'due_date' => now()->addMonths($c['months']), 'reminder_days_before' => 60, 'status' => 'attiva']
             );
         }
 
         // Adempimenti/certificazioni ricorrenti tipici di una PMI italiana
         $compliance = [
-            ['notes' => 'DURC - Documento Unico di Regolarità Contributiva', 'months' => 1, 'reminder' => 15],
-            ['notes' => 'Assicurazione RC aziendale generale', 'months' => 7, 'reminder' => 30],
-            ['notes' => 'Polizza infortuni dipendenti', 'months' => 8, 'reminder' => 30],
-            ['notes' => 'Verifica/manutenzione estintori sede', 'months' => 4, 'reminder' => 15],
-            ['notes' => 'Verifica impianto elettrico e messa a terra', 'months' => 11, 'reminder' => 30],
-            ['notes' => 'Revisione periodica muletto/carrello elevatore magazzino', 'months' => 6, 'reminder' => 30],
+            ['policy_number' => 'DURC - Documento Unico di Regolarità Contributiva', 'months' => 1, 'reminder' => 15],
+            ['policy_number' => 'Assicurazione RC aziendale generale', 'months' => 7, 'reminder' => 30],
+            ['policy_number' => 'Polizza infortuni dipendenti', 'months' => 8, 'reminder' => 30],
+            ['policy_number' => 'Verifica/manutenzione estintori sede', 'months' => 4, 'reminder' => 15],
+            ['policy_number' => 'Verifica impianto elettrico e messa a terra', 'months' => 11, 'reminder' => 30],
+            ['policy_number' => 'Revisione periodica muletto/carrello elevatore magazzino', 'months' => 6, 'reminder' => 30],
         ];
 
         foreach ($compliance as $c) {
             $tenant->deadlines()->updateOrCreate(
-                ['type' => Deadline::TYPE_ALTRO, 'notes' => $c['notes']],
+                ['type' => Deadline::TYPE_ALTRO, 'policy_number' => $c['policy_number']],
                 ['tenant_id' => $tenant->id, 'due_date' => now()->addMonths($c['months']), 'reminder_days_before' => $c['reminder'], 'status' => 'attiva']
             );
         }

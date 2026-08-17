@@ -38,7 +38,6 @@ class UpcomingDeadlinesWidget extends BaseWidget
                     ->label('Scadenza')
                     ->date()
                     ->color(fn (Deadline $record) => $record->dueDateColor()),
-                Tables\Columns\TextColumn::make('notes')->label('Note')->limit(30)->placeholder('—'),
             ])
             ->paginated(false);
     }
