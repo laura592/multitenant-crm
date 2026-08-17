@@ -265,6 +265,11 @@ class Customer extends Model
         return $this->hasMany(Lavaggio::class);
     }
 
+    public function serviceReports(): HasMany
+    {
+        return $this->hasMany(ServiceReport::class);
+    }
+
     public function quoteGroups(): HasMany
     {
         return $this->hasMany(QuoteGroup::class);

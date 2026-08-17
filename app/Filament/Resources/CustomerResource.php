@@ -3,10 +3,13 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Forms\CustomerContactFields;
+use App\Filament\Forms\CustomerFiscalFields;
 use App\Filament\Forms\ItalianAddressFields;
 use App\Filament\Resources\CustomerResource\Pages;
 use App\Filament\Resources\CustomerResource\RelationManagers\LavaggiRelationManager;
 use App\Filament\Resources\CustomerResource\RelationManagers\MacchinariRelationManager;
+use App\Filament\Resources\CustomerResource\RelationManagers\QuotesRelationManager;
+use App\Filament\Resources\CustomerResource\RelationManagers\ServiceReportsRelationManager;
 use App\Models\Customer;
 use App\Support\Gestionale\EurekaClient;
 use Filament\Facades\Filament;
@@ -64,8 +67,7 @@ class CustomerResource extends Resource
             Forms\Components\Section::make('Dati fiscali')
                 ->columns(3)
                 ->schema([
-                    Forms\Components\TextInput::make('tax_code')->label('Codice fiscale')->maxLength(255),
-                    Forms\Components\TextInput::make('vat_number')->label('P.IVA')->maxLength(255),
+                    ...CustomerFiscalFields::schema(),
                     Forms\Components\TextInput::make('sdi')->label('Codice SDI')->maxLength(255),
                     Forms\Components\TextInput::make('pec')->label('PEC')->email()->maxLength(255),
                     Forms\Components\TextInput::make('gestionale_code')
@@ -344,7 +346,9 @@ class CustomerResource extends Resource
     {
         return [
             MacchinariRelationManager::class,
+            QuotesRelationManager::class,
             LavaggiRelationManager::class,
+            ServiceReportsRelationManager::class,
         ];
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Forms\CustomerContactFields;
+use App\Filament\Forms\CustomerFiscalFields;
 use App\Filament\Forms\ItalianAddressFields;
 use App\Filament\Resources\QuoteResource\Pages;
 use App\Filament\Resources\QuoteResource\RelationManagers\QuoteProductsRelationManager;
@@ -300,6 +301,7 @@ class QuoteResource extends Resource
                             Forms\Components\TextInput::make('first_name')->label('Nome'),
                             Forms\Components\TextInput::make('last_name')->label('Cognome'),
                             ...CustomerContactFields::schema(),
+                            ...CustomerFiscalFields::schema(),
                             ...ItalianAddressFields::schema(),
                         ]),
                     Forms\Components\DatePicker::make('date')

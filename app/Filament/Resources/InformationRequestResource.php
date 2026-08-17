@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Forms\CustomerContactFields;
+use App\Filament\Forms\CustomerFiscalFields;
 use App\Filament\Forms\ItalianAddressFields;
 use App\Filament\Resources\InformationRequestResource\Pages;
 use App\Models\InformationRequest;
@@ -67,6 +68,7 @@ class InformationRequestResource extends Resource
                             Forms\Components\TextInput::make('first_name')->label('Nome'),
                             Forms\Components\TextInput::make('last_name')->label('Cognome'),
                             ...CustomerContactFields::schema(),
+                            ...CustomerFiscalFields::schema(),
                             ...ItalianAddressFields::schema(),
                         ]),
                     Forms\Components\Select::make('status')
@@ -117,8 +119,10 @@ class InformationRequestResource extends Resource
                     ->options(static::statusLabels()),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\EditAction::make(),
+                    Tables\Actions\DeleteAction::make(),
+                ]),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
