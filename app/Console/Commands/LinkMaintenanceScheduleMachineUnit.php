@@ -74,6 +74,22 @@ class LinkMaintenanceScheduleMachineUnit extends Command
             }
 
             $unit = $candidates->first();
+
+            // Senza questo controllo, due piani lavaggio dello stesso cliente+
+            // beverage_type (es. doppioni residui di uno split) finiscono
+            // entrambi agganciati alla stessa macchina — trovato 8 casi reali
+            // il 2026-08-12 (vedi MergeDuplicateMaintenanceSchedules).
+            $alreadyLinked = MaintenanceSchedule::where('type', MaintenanceSchedule::TYPE_LAVAGGIO)
+                ->where('customer_id', $schedule->customer_id)
+                ->where('machine_unit_id', $unit->id)
+                ->exists();
+
+            if ($alreadyLinked) {
+                $ambiguous[] = "{$label} → {$unit->model_name} (già collegata a un altro piano per la stessa macchina)";
+
+                continue;
+            }
+
             $this->line("  <info>LINK</info> {$label} → {$unit->model_name} ({$unit->serial_number})");
             $linked++;
 

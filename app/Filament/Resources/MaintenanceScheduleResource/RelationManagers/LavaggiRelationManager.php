@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\MaintenanceScheduleResource\RelationManagers;
 
+use App\Filament\Resources\MaintenanceScheduleResource;
 use App\Filament\Resources\ServiceReportResource;
 use App\Models\Lavaggio;
 use App\Models\MaintenanceSchedule;
@@ -12,6 +13,7 @@ use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\HtmlString;
 
 class LavaggiRelationManager extends RelationManager
 {
@@ -28,16 +30,33 @@ class LavaggiRelationManager extends RelationManager
         return $ownerRecord->type === MaintenanceSchedule::TYPE_LAVAGGIO;
     }
 
+    // Filament rende di default sola-lettura le RelationManager sulla pagina
+    // "Visualizza" (non /edit), nascondendo Delete/Edit/Create nativi anche
+    // con ->visible()/->authorize() espliciti a posto - le azioni custom
+    // (collega/scollega rapportino) invece restano visibili, perche' non
+    // sono di uno dei tipi speciali intercettati da quella regola. Risultato
+    // per l'utente: "Scollega" funziona dalla scheda ma "Elimina" no, stessa
+    // pagina, senza un motivo visibile. Qui si usa quasi sempre la pagina
+    // Visualizza (mai la /edit), quindi meglio disattivare la sola-lettura
+    // piuttosto che spostare l'abitudine d'uso - i permessi veri restano
+    // comunque quelli di LavaggioPolicy. Vedi thread 2026-08-13.
+    public function isReadOnly(): bool
+    {
+        return false;
+    }
+
     public static function serviceReportCreateUrl(Lavaggio $record): string
     {
         $query = array_filter([
             'customer_id' => $record->customer_id,
             'machine_unit_id' => $record->machine_unit_id,
             'intervention_date' => $record->data?->toDateString(),
-            'intervention_type' => ServiceReport::TYPE_MANUTENZIONE_ORDINARIA,
+            // "Sanificazione" e non "Manutenzione ordinaria": un lavaggio non
+            // e' una manutenzione, e ServiceReport::countsAsLavaggio()
+            // riconosce esplicitamente anche questo tipo (vedi li').
+            'intervention_type' => ServiceReport::TYPE_SANIFICAZIONE,
             'problem_description' => 'Lavaggio impianto',
             'work_performed' => $record->descrizione,
-            'notes' => $record->note,
         ], fn ($value) => filled($value));
 
         return ServiceReportResource::getUrl('create', tenant: $record->tenant).'?'.http_build_query($query);
@@ -46,6 +65,23 @@ class LavaggiRelationManager extends RelationManager
     public function form(Form $form): Form
     {
         return $form->schema([
+            // Un cliente puo' avere piu' piani lavaggio (birra/acqua/vino su
+            // impianti diversi): senza indicare qui su quale si sta operando,
+            // arrivando da una vista filtrata diversa e' facile non accorgersi
+            // subito dell'impianto sbagliato.
+            Forms\Components\Placeholder::make('piano_contesto')
+                ->label('')
+                ->columnSpanFull()
+                ->content(function () {
+                    $schedule = $this->getOwnerRecord();
+                    $impianto = MaintenanceScheduleResource::beverageLabels()[$schedule->beverage_type] ?? 'impianto non specificato';
+
+                    return new HtmlString(
+                        '<div class="rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">'
+                            .'Stai registrando un lavaggio per: <strong>'.e($impianto).'</strong> presso <strong>'.e($schedule->customer?->full_name).'</strong>.'
+                            .'</div>'
+                    );
+                }),
             Forms\Components\Select::make('machine_unit_id')
                 ->label('Macchina')
                 ->relationship('machineUnit', 'serial_number', fn ($query) => $query
@@ -64,7 +100,6 @@ class LavaggiRelationManager extends RelationManager
                 ->label('Filtro sostituito in questa visita')
                 ->helperText('Impianti acqua: segna quando il filtro viene cambiato, serve a calcolare la prossima scadenza del piano.')
                 ->visible(fn () => $this->getOwnerRecord()->beverage_type === MaintenanceSchedule::BEVERAGE_ACQUA),
-            Forms\Components\Textarea::make('note')->label('Note')->columnSpanFull(),
         ]);
     }
 
@@ -79,25 +114,11 @@ class LavaggiRelationManager extends RelationManager
                     ->label('Filtro sostituito')
                     ->boolean()
                     ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('macchina')
-                    ->label('Macchina')
-                    // Qui siamo gia' nel contesto di un piano preciso (la
-                    // sua birra/vino/... e le vie sono nell'hero sopra): a
-                    // differenza di machineLabel() non torniamo al riepilogo
-                    // generico su tutto il parco macchine del cliente quando
-                    // la visita non specifica una macchina (era fuorviante,
-                    // es. mostrava "Impianto Vino" anche su un piano birra).
-                    // Un valore qui ha senso solo per segnalare l'eccezione:
-                    // "questa volta ho lavato solo questa macchina".
-                    ->state(fn (Lavaggio $record) => $record->machineUnit ? $record->machineUnit->display_name.' — '.$record->machineUnit->serial_number : null)
-                    ->placeholder('—')
-                    ->wrap(),
                 Tables\Columns\TextColumn::make('fatturare_a')
                     ->label('Fatturare a')
                     ->state(fn (Lavaggio $record) => $record->billingLabel())
                     ->wrap(),
                 Tables\Columns\TextColumn::make('descrizione')->label('Descrizione')->searchable(),
-                Tables\Columns\TextColumn::make('note')->label('Note')->limit(50)->placeholder('—'),
                 // Un lavaggio generato automaticamente da ServiceReport::syncMaintenanceSchedule()
                 // (rapportino di manutenzione ordinaria chiuso, o testo libero "lavagg/puliz/sanific"
                 // sullo storico importato) ha service_report_id valorizzato: qui si vede quale, con
@@ -117,15 +138,62 @@ class LavaggiRelationManager extends RelationManager
 
                         return $data;
                     }),
+                // Speculare all'azione di riga "collega_rapportino", ma qui in
+                // testata: senza, per collegare un rapportino gia' esistente a
+                // un piano che non ha ancora nessuna riga lavaggio bisognava
+                // prima crearne una vuota a mano e poi agganciarci il
+                // rapportino in un secondo passaggio.
+                Tables\Actions\Action::make('collega_rapportino_testata')
+                    // Nome diverso dall'azione di riga "collega_rapportino":
+                    // due azioni con lo stesso nome nella stessa tabella
+                    // (header + row) confondono il dispatch lato Livewire, il
+                    // click sembra non fare nulla (nessuna richiesta arriva
+                    // al server, nessun errore nei log).
+                    ->label('Collega rapportino')
+                    ->icon('heroicon-o-link')
+                    ->color('gray')
+                    ->form(fn () => [
+                        Forms\Components\Select::make('service_report_id')
+                            ->label('Rapportino')
+                            ->options(ServiceReport::query()
+                                ->where('customer_id', $this->getOwnerRecord()->customer_id)
+                                ->whereNotIn('id', Lavaggio::query()
+                                    ->where('maintenance_schedule_id', $this->getOwnerRecord()->id)
+                                    ->whereNotNull('service_report_id')
+                                    ->pluck('service_report_id'))
+                                ->orderByDesc('intervention_date')
+                                ->get()
+                                ->mapWithKeys(fn (ServiceReport $report) => [
+                                    $report->id => $report->number.' — '.$report->intervention_date?->format('d/m/Y'),
+                                ]))
+                            ->searchable()
+                            ->required(),
+                    ])
+                    ->action(function (array $data) {
+                        $report = ServiceReport::find($data['service_report_id']);
+                        $owner = $this->getOwnerRecord();
+
+                        Lavaggio::create([
+                            'tenant_id' => $report->tenant_id,
+                            'customer_id' => $owner->customer_id,
+                            'maintenance_schedule_id' => $owner->id,
+                            'service_report_id' => $report->id,
+                            'machine_unit_id' => $report->machine_unit_id,
+                            'data' => $report->intervention_date,
+                            'descrizione' => "Generato da rapportino {$report->number}",
+                        ]);
+                    }),
             ])
             ->actions([
                 Tables\Actions\Action::make('rapportino')
-                    ->label(fn (Lavaggio $record) => $record->service_report_id ? 'Vedi rapportino' : 'Crea rapportino')
-                    ->icon('heroicon-o-clipboard-document-check')
+                    ->label(fn (?Lavaggio $record) => $record?->service_report_id ? 'Vedi' : 'Crea rapportino')
+                    // Icona occhiello per "Vedi", coerente con ViewAction usato
+                    // ovunque nel resto dell'app per le azioni di sola visione.
+                    ->icon(fn (?Lavaggio $record) => $record?->service_report_id ? 'heroicon-o-eye' : 'heroicon-o-plus')
                     ->color('gray')
-                    ->url(fn (Lavaggio $record) => $record->service_report_id
+                    ->url(fn (?Lavaggio $record) => $record?->service_report_id
                         ? ServiceReportResource::getUrl('view', ['record' => $record->service_report_id], tenant: $record->tenant)
-                        : self::serviceReportCreateUrl($record)),
+                        : ($record ? self::serviceReportCreateUrl($record) : null)),
                 Tables\Actions\Action::make('collega_rapportino')
                     // Copre il caso di un lavaggio inserito a mano il cui
                     // rapportino esiste gia' nel sistema (es. creato a parte,
@@ -134,7 +202,7 @@ class LavaggiRelationManager extends RelationManager
                     ->label('Collega rapportino')
                     ->icon('heroicon-o-link')
                     ->color('gray')
-                    ->visible(fn (Lavaggio $record) => ! $record->service_report_id)
+                    ->visible(fn (?Lavaggio $record) => $record && ! $record->service_report_id)
                     ->form(fn (Lavaggio $record) => [
                         Forms\Components\Select::make('service_report_id')
                             ->label('Rapportino')
@@ -155,14 +223,35 @@ class LavaggiRelationManager extends RelationManager
                     ->action(fn (Lavaggio $record, array $data) => $record->update([
                         'service_report_id' => $data['service_report_id'],
                     ])),
-                Tables\Actions\EditAction::make()
-                    // Un lavaggio generato da un rapportino va modificato li' (il
-                    // rapportino), non qui: editarlo direttamente verrebbe
-                    // silenziosamente sovrascritto al prossimo salvataggio del
-                    // rapportino collegato (syncMaintenanceSchedule() lo rigenera).
-                    ->visible(fn (Lavaggio $record) => ! $record->service_report_id),
-                Tables\Actions\DeleteAction::make()
-                    ->visible(fn (Lavaggio $record) => ! $record->service_report_id),
+                Tables\Actions\Action::make('scollega_rapportino')
+                    // Speculare a "collega_rapportino": stacca il rapportino
+                    // da questa riga (es. collegamento sbagliato, o
+                    // duplicato con un piano fratello) senza cancellare la
+                    // riga lavaggio - resta come voce manuale, ricollegabile
+                    // dopo al rapportino giusto.
+                    ->label('Scollega')
+                    ->icon('heroicon-o-link-slash')
+                    ->color('gray')
+                    ->requiresConfirmation()
+                    ->visible(fn (?Lavaggio $record) => $record && $record->service_report_id)
+                    ->action(fn (Lavaggio $record) => $record->update([
+                        'service_report_id' => null,
+                    ])),
+                Tables\Actions\ActionGroup::make([
+                    // Anche su una riga generata da rapportino e' ormai sicuro
+                    // modificare la descrizione: ServiceReport::syncGeneratedLavaggi()
+                    // non la rigenera piu' se e' gia' stata personalizzata (solo le
+                    // righe ancora col placeholder "Generato da rapportino ..."
+                    // vengono riscritte al prossimo salvataggio del rapportino).
+                    Tables\Actions\EditAction::make(),
+                    // A differenza di Edit, cancellare una riga collegata a un
+                    // rapportino e' sicuro (tocca solo questa riga Lavaggio, non
+                    // il rapportino) e serve: es. un doppione su un piano fratello
+                    // sbagliato (vedi rimosso "Rimuovi duplicati con piano
+                    // fratello", troppo aggressivo) va ora tolto qui a mano, riga
+                    // per riga, dopo aver verificato che sia davvero un errore.
+                    Tables\Actions\DeleteAction::make(),
+                ]),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([

@@ -110,7 +110,7 @@ class ExportLavaggiStorico extends Command
     {
         $sheet = $spreadsheet->createSheet();
         $sheet->setTitle('Storico per impianto');
-        $sheet->fromArray(['Cliente', 'Impianto', 'Data lavaggio', 'Descrizione', 'Rapportino', 'Note'], null, 'A1');
+        $sheet->fromArray(['Cliente', 'Impianto', 'Data lavaggio', 'Descrizione', 'Rapportino'], null, 'A1');
 
         $row = 2;
         foreach ($lavaggi as $lavaggio) {
@@ -120,12 +120,11 @@ class ExportLavaggiStorico extends Command
                 $lavaggio->data->format('d/m/Y'),
                 $lavaggio->descrizione,
                 $lavaggio->serviceReport?->number ?? '— (inserito a mano)',
-                $lavaggio->note,
             ], null, "A{$row}");
             $row++;
         }
 
-        $this->autoSize($sheet, 6);
+        $this->autoSize($sheet, 5);
     }
 
     private function impiantoLabel(Lavaggio $lavaggio): string

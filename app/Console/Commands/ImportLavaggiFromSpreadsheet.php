@@ -10,7 +10,7 @@ use Illuminate\Console\Command;
  * tecnico) per i soli clienti gia' riconosciuti con certezza nel CRM.
  *
  * Il file JSON di input e' un array di {customer_id, data (Y-m-d),
- * descrizione, note}, prodotto da uno script di estrazione + matching
+ * descrizione}, prodotto da uno script di estrazione + matching
  * eseguito a parte (non versionato, dati di origine esterni al repo).
  * I casi ambigui o senza corrispondenza restano fuori: vanno risolti a
  * mano e importati separatamente.
@@ -51,7 +51,6 @@ class ImportLavaggiFromSpreadsheet extends Command
                     'customer_id' => $customer->id,
                     'data' => $row['data'],
                     'descrizione' => $row['descrizione'],
-                    'note' => $row['note'] ?? null,
                 ]);
             }
 

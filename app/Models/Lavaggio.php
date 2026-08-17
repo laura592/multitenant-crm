@@ -31,7 +31,6 @@ class Lavaggio extends Model
         'data',
         'descrizione',
         'filtro_sostituito',
-        'note',
     ];
 
     protected $casts = [
@@ -166,6 +165,16 @@ class Lavaggio extends Model
      */
     public function billingLabel(): string
     {
+        // Il rapportino collegato (se importato da Eureka con --with-detail)
+        // sa chi ha pagato DAVVERO quella visita specifica (destinazione,
+        // vedi ServiceReport::eureka_destinazione_label) - piu' affidabile del
+        // billing_customer_id impostato a mano su macchina/cliente, che puo'
+        // essere non ancora sistemato o non riflettere un cambio di pagante
+        // nel tempo (es. Il Filare SRL -> Ristoalma SRL sullo stesso impianto).
+        if ($this->service_report_id && ($label = $this->serviceReport?->eureka_destinazione_label)) {
+            return $label;
+        }
+
         if (! $this->machine_unit_id) {
             if ($scheduleUnit = $this->maintenanceSchedule?->machineUnit) {
                 return $scheduleUnit->billingCustomer?->full_name ?? $this->invoiceRecipient()->full_name;

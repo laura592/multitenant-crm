@@ -6,6 +6,7 @@ use App\Models\Lavaggio;
 use App\Models\MachineUnit;
 use App\Models\MaintenanceSchedule;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 /**
@@ -102,6 +103,28 @@ class SplitLavaggioSchedulesByBeverageType extends Command
 
     private function applyType(MaintenanceSchedule $schedule, string $type): void
     {
+        // Un cliente puo' avere due piani lavaggio "non ancora classificati"
+        // (whereNull('beverage_type') in handle() e' idempotente solo sul
+        // piano sorgente, non sulla destinazione): se il tipo rilevato per
+        // questo piano e' gia' quello di un altro piano dello stesso cliente
+        // gia' classificato, questo diventa un doppione da unire invece di
+        // classificare a se' — trovato 8 casi reali il 2026-08-12 (vedi
+        // MergeDuplicateMaintenanceSchedules).
+        $existing = MaintenanceSchedule::where('tenant_id', $schedule->tenant_id)
+            ->where('customer_id', $schedule->customer_id)
+            ->where('type', MaintenanceSchedule::TYPE_LAVAGGIO)
+            ->where('beverage_type', $type)
+            ->where('id', '!=', $schedule->id)
+            ->first();
+
+        if ($existing) {
+            $this->moveLavaggi(Lavaggio::where('maintenance_schedule_id', $schedule->id), $existing);
+            $schedule->delete();
+            $existing->recalculateLavaggioNextDue();
+
+            return;
+        }
+
         $schedule->update([
             'beverage_type' => $type,
             'frequency_days' => MaintenanceSchedule::STANDARD_FREQUENCY_DAYS[$type] ?? $schedule->frequency_days,
@@ -115,29 +138,59 @@ class SplitLavaggioSchedulesByBeverageType extends Command
      */
     private function createSplitSchedule(MaintenanceSchedule $original, string $type, Collection $machineTypes): void
     {
-        $newSchedule = MaintenanceSchedule::create([
-            'tenant_id' => $original->tenant_id,
-            'customer_id' => $original->customer_id,
-            'type' => MaintenanceSchedule::TYPE_LAVAGGIO,
-            'status' => $original->status,
-            'beverage_type' => $type,
-            'frequency_days' => MaintenanceSchedule::STANDARD_FREQUENCY_DAYS[$type] ?? null,
-            'notes' => $original->notes,
-        ]);
+        // Stessa ragione del controllo in applyType(): riusa un piano dello
+        // stesso tipo gia' esistente per questo cliente invece di crearne
+        // sempre uno nuovo.
+        $newSchedule = MaintenanceSchedule::firstOrCreate(
+            [
+                'tenant_id' => $original->tenant_id,
+                'customer_id' => $original->customer_id,
+                'type' => MaintenanceSchedule::TYPE_LAVAGGIO,
+                'beverage_type' => $type,
+            ],
+            [
+                'status' => $original->status,
+                'frequency_days' => MaintenanceSchedule::STANDARD_FREQUENCY_DAYS[$type] ?? null,
+                'notes' => $original->notes,
+            ],
+        );
 
         // Solo le macchine con un tipo unico e non ambiguo (es. non "vino+birra").
         $machineIdsForType = $machineTypes
             ->filter(fn (array $types) => $types === [$type])
             ->keys();
 
-        Lavaggio::where('maintenance_schedule_id', $original->id)
-            ->whereIn('machine_unit_id', $machineIdsForType)
-            ->get()
-            ->each(function (Lavaggio $lavaggio) use ($newSchedule) {
-                $lavaggio->maintenance_schedule_id = $newSchedule->id;
-                $lavaggio->save();
-            });
+        $this->moveLavaggi(
+            Lavaggio::where('maintenance_schedule_id', $original->id)->whereIn('machine_unit_id', $machineIdsForType),
+            $newSchedule,
+        );
 
         $newSchedule->recalculateLavaggioNextDue();
+    }
+
+    /**
+     * Sposta i lavaggi della query su $target, saltando quelli che
+     * duplicherebbero un lavaggio gia' presente sullo stesso
+     * service_report_id (violerebbe l'unique su
+     * lavaggi(service_report_id, maintenance_schedule_id)) — cancellati come
+     * duplicati veri invece di spostati.
+     */
+    private function moveLavaggi(Builder $query, MaintenanceSchedule $target): void
+    {
+        $query->get()->each(function (Lavaggio $lavaggio) use ($target) {
+            $duplicate = $lavaggio->service_report_id
+                && Lavaggio::where('maintenance_schedule_id', $target->id)
+                    ->where('service_report_id', $lavaggio->service_report_id)
+                    ->exists();
+
+            if ($duplicate) {
+                $lavaggio->delete();
+
+                return;
+            }
+
+            $lavaggio->maintenance_schedule_id = $target->id;
+            $lavaggio->save();
+        });
     }
 }

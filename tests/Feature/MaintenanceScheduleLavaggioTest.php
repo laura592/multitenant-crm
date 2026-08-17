@@ -337,7 +337,6 @@ class MaintenanceScheduleLavaggioTest extends TestCase
             'customer_id' => $customer->id,
             'data' => '2026-08-05',
             'descrizione' => '5 vie + apertura',
-            'note' => 'Filtro sostituito',
         ]);
 
         $url = LavaggiRelationManager::serviceReportCreateUrl($lavaggio);
@@ -351,6 +350,6 @@ class MaintenanceScheduleLavaggioTest extends TestCase
         $this->assertSame(ServiceReport::TYPE_MANUTENZIONE_ORDINARIA, $query['intervention_type']);
         $this->assertSame('Lavaggio impianto', $query['problem_description']);
         $this->assertSame('5 Vie + Apertura', $query['work_performed']);
-        $this->assertSame('Filtro sostituito', $query['notes']);
+        $this->assertArrayNotHasKey('notes', $query);
     }
 }

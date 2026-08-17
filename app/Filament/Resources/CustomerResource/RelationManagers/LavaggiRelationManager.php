@@ -27,6 +27,17 @@ class LavaggiRelationManager extends RelationManager
         return $ownerRecord->installedMachineUnits()->exists();
     }
 
+    // Filament rende di default sola-lettura le RelationManager sulla pagina
+    // "Visualizza" (non /edit), nascondendo Delete/Edit nativi anche con i
+    // permessi a posto - qui si usa quasi sempre la scheda cliente in
+    // visualizzazione, mai la /edit dedicata. Stesso fix di
+    // MaintenanceScheduleResource\RelationManagers\LavaggiRelationManager,
+    // vedi thread 2026-08-13.
+    public function isReadOnly(): bool
+    {
+        return false;
+    }
+
     public function form(Form $form): Form
     {
         return $form->schema([
@@ -48,7 +59,6 @@ class LavaggiRelationManager extends RelationManager
             Forms\Components\Toggle::make('filtro_sostituito')
                 ->label('Filtro sostituito in questa visita')
                 ->helperText('Solo per impianti acqua: segna quando il filtro viene cambiato, serve a calcolare la prossima scadenza del piano.'),
-            Forms\Components\Textarea::make('note')->label('Note')->columnSpanFull(),
         ]);
     }
 
@@ -68,7 +78,6 @@ class LavaggiRelationManager extends RelationManager
                     ->state(fn (Lavaggio $record) => $record->machineLabel())
                     ->wrap(),
                 Tables\Columns\TextColumn::make('descrizione')->label('Descrizione')->searchable(),
-                Tables\Columns\TextColumn::make('note')->label('Note')->limit(50)->placeholder('—'),
                 Tables\Columns\TextColumn::make('fatturare_a')
                     ->label('Fatturare a')
                     ->state(fn (Lavaggio $record) => $record->billingLabel())
@@ -78,8 +87,10 @@ class LavaggiRelationManager extends RelationManager
                 Tables\Actions\CreateAction::make(),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\EditAction::make(),
+                    Tables\Actions\DeleteAction::make(),
+                ]),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([

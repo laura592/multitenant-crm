@@ -54,8 +54,7 @@ class CustomerLavaggiRelationManagerTest extends TestCase
             'tenant_id' => $tenant->id,
             'customer_id' => $customer->id,
             'data' => '2025-04-20',
-            'descrizione' => 'Lavaggio impianto',
-            'note' => '5VIE+AP',
+            'descrizione' => '5 vie + apertura',
         ]);
 
         $this->actingAs($user);
@@ -65,7 +64,7 @@ class CustomerLavaggiRelationManagerTest extends TestCase
             'ownerRecord' => $customer,
             'pageClass' => ViewCustomer::class,
         ])
-            ->assertSee('5VIE+AP')
+            ->assertSee('5 Vie + Apertura')
             ->assertSee('Pagante SRL');
     }
 }
