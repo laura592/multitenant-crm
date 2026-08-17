@@ -45,7 +45,18 @@ class MachineUnitResource extends Resource
             Forms\Components\Section::make('Identificazione')
                 ->columns(2)
                 ->schema([
-                    Forms\Components\TextInput::make('serial_number')->label('Matricola')->required()->maxLength(255),
+                    Forms\Components\TextInput::make('serial_number')
+                        ->label('Matricola')
+                        ->required()
+                        ->maxLength(255)
+                        // table: MachineUnit::class (non la stringa tabella) applica
+                        // lo scope tenant del modello: senza, il controllo unicita'
+                        // ignorerebbe machine_units_tenant_id_serial_number_unique
+                        // e l'errore arriverebbe solo come 500 dal vincolo DB.
+                        ->unique(
+                            table: MachineUnit::class,
+                            ignorable: fn (?MachineUnit $record) => $record,
+                        ),
                     Forms\Components\Select::make('product_id')
                         ->label('Modello (da catalogo)')
                         ->relationship('product', 'name', modifyQueryUsing: fn ($query) => $query->where('type', Product::TYPE_MACHINE))
