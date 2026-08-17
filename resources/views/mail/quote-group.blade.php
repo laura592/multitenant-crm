@@ -2,25 +2,20 @@
 @php
 	$tenant = $group->tenant ?: $group->customer?->tenant;
 	$resolvedSubject = trim((string) ($subjectText ?? "Offerta {$group->number}"));
-	$footerCompany = $tenant?->legal_name ?: ($tenant?->name ?? config('app.name'));
-	$footerAddress = $tenant?->pdfAddressLine();
-	$footerFiscal = $tenant?->pdfFiscalLine();
-    $footerIban = $tenant?->ibanLine();
-	$footerContacts = $tenant?->pdfContactLine();
 	$renderedBody = trim((string) ($emailBody ?? ''));
 	$recipient = $group->customer?->invoiceRecipient();
 	$customerName = $recipient?->company_name ?: $recipient?->full_name;
 @endphp
 
-<div style="background:#0f172a;border-radius:10px;padding:16px 18px;color:#ffffff;margin-bottom:16px;">
-	<div style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;opacity:.75;margin-bottom:8px;">Offerta {{ $group->number }}</div>
-	<div style="font-size:18px;line-height:1.35;font-weight:700;">{{ $resolvedSubject }}</div>
-	<div style="font-size:13px;opacity:.8;margin-top:10px;">Destinatario: {{ $customerName }}</div>
-</div>
+<x-mail.hero
+	kicker="Offerta {{ $group->number }}"
+	:title="$resolvedSubject"
+	subtitle="Destinatario: {{ $customerName }}"
+/>
 
-<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:10px;padding:16px;">
-	{!! nl2br(e($renderedBody)) !!}
-</div>
+<x-mail.box>
+{!! nl2br(e($renderedBody)) !!}
+</x-mail.box>
 
 @if($quotes->isNotEmpty())
 
@@ -63,19 +58,7 @@
 
 @endif
 
-<div style="margin-top:22px;padding-top:12px;border-top:1px solid #e2e8f0;color:#64748b;font-size:11px;line-height:1.5;">
-	<div style="font-weight:700;color:#334155;">{{ $footerCompany }}</div>
-	@if($footerAddress)
-		<div>{{ $footerAddress }}</div>
-	@endif
-	@if($footerFiscal)
-		<div>{{ $footerFiscal }}</div>
-	@endif
-	@if($footerIban)
-		<div>{{ $footerIban }}</div>
-	@endif
-    @if($footerContacts)
-        <div>{{ $footerContacts }}</div>
-    @endif
-</div>
+<x-slot:footer>
+<x-mail.footer-tenant :tenant="$tenant" />
+</x-slot:footer>
 </x-mail::message>

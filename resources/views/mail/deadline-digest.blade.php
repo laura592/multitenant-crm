@@ -1,5 +1,9 @@
 <x-mail::message>
-# Scadenzario {{ $tenant->name }}
+<x-mail.hero
+	kicker="Scadenzario"
+	title="{{ $tenant->name }}"
+	subtitle="{{ count($deadlines) }} scadenze da controllare"
+/>
 
 Queste sono le scadenze in avvicinamento o gia' scadute, da controllare.
 
@@ -17,6 +21,7 @@ Apri lo scadenzario
 
 Ricevi questa mail ogni settimana finche' la scadenza non viene rinnovata o segnata come pagata.
 
-Grazie,<br>
-{{ $tenant->name }}
+<x-slot:footer>
+<x-mail.footer-tenant :tenant="$tenant" />
+</x-slot:footer>
 </x-mail::message>

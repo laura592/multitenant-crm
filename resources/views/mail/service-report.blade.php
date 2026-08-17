@@ -1,12 +1,22 @@
 <x-mail::message>
-# Rapportino di intervento {{ $report->number }}
+@php
+	$tenant = $report->tenant;
+	$customerName = $report->customer->company_name ?: $report->customer->full_name;
+@endphp
 
-Gentile {{ $report->customer->company_name ?: $report->customer->full_name }},
+<x-mail.hero
+	kicker="Rapportino {{ $report->number }}"
+	title="Intervento del {{ $report->intervention_date->format('d/m/Y') }}"
+	subtitle="Cliente: {{ $customerName }}"
+/>
 
-in allegato il rapportino relativo all'intervento del {{ $report->intervention_date->format('d/m/Y') }}.
+<x-mail.box>
+<p style="margin:0 0 12px;">Gentile {{ $customerName }},</p>
+<p style="margin:0 0 12px;">in allegato il rapportino relativo all'intervento del {{ $report->intervention_date->format('d/m/Y') }}.</p>
+<p style="margin:0;"><strong>Lavoro svolto:</strong> {{ $report->work_performed }}</p>
+</x-mail.box>
 
-**Lavoro svolto:** {{ $report->work_performed }}
-
-Grazie,<br>
-{{ $report->tenant->name }}
+<x-slot:footer>
+<x-mail.footer-tenant :tenant="$tenant" />
+</x-slot:footer>
 </x-mail::message>

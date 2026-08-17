@@ -1,7 +1,9 @@
 <x-mail::message>
-# Da controllare su Eureka
-
-Cliente: **{{ $customer->full_name }}**
+<x-mail.hero
+	kicker="Da controllare"
+	title="Da controllare su Eureka"
+	subtitle="Cliente: {{ $customer->full_name }}"
+/>
 
 <x-mail.severity-panel color="amber">
 {{ $reason }}
@@ -11,6 +13,7 @@ Cliente: **{{ $customer->full_name }}**
 Apri il cliente
 </x-mail::button>
 
-Grazie,<br>
-{{ $customer->tenant?->name }}
+<x-slot:footer>
+<x-mail.footer-tenant :tenant="$customer->tenant" />
+</x-slot:footer>
 </x-mail::message>

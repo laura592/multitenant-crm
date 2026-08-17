@@ -1,14 +1,19 @@
 <x-mail::message>
 @php
-    $type = match ($leaveRequest->type) {
-        \App\Models\LeaveRequest::TYPE_FERIE => 'ferie',
-        \App\Models\LeaveRequest::TYPE_PERMESSO => 'permesso',
-        \App\Models\LeaveRequest::TYPE_MALATTIA => 'malattia',
-        default => $leaveRequest->type,
-    };
-    $period = $leaveRequest->periodLabel();
+	$type = match ($leaveRequest->type) {
+		\App\Models\LeaveRequest::TYPE_FERIE => 'ferie',
+		\App\Models\LeaveRequest::TYPE_PERMESSO => 'permesso',
+		\App\Models\LeaveRequest::TYPE_MALATTIA => 'malattia',
+		default => $leaveRequest->type,
+	};
+	$period = $leaveRequest->periodLabel();
 @endphp
-# Nuova richiesta {{ $type }}
+
+<x-mail.hero
+	kicker="Richiesta {{ $type }}"
+	title="{{ $leaveRequest->user?->name }}"
+	subtitle="{{ $period }}"
+/>
 
 **{{ $leaveRequest->user?->name }}** ha richiesto **{{ $type }}** per il periodo **{{ $period }}**.
 
@@ -20,6 +25,7 @@ Note: {{ $leaveRequest->notes }}
 Apri la richiesta
 </x-mail::button>
 
-Grazie,<br>
-{{ $leaveRequest->tenant?->name }}
+<x-slot:footer>
+<x-mail.footer-tenant :tenant="$leaveRequest->tenant" />
+</x-slot:footer>
 </x-mail::message>

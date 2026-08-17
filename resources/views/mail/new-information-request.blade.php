@@ -1,7 +1,9 @@
 <x-mail::message>
-# Nuova richiesta informazioni {{ $informationRequest->number }}
-
-Cliente: **{{ $informationRequest->customer?->full_name ?: 'Non specificato' }}**
+<x-mail.hero
+	kicker="Richiesta informazioni {{ $informationRequest->number }}"
+	title="Nuova richiesta"
+	subtitle="Cliente: {{ $informationRequest->customer?->full_name ?: 'Non specificato' }}"
+/>
 
 @if($informationRequest->request_details)
 {{ $informationRequest->request_details }}
@@ -11,6 +13,7 @@ Cliente: **{{ $informationRequest->customer?->full_name ?: 'Non specificato' }}*
 Apri la richiesta
 </x-mail::button>
 
-Grazie,<br>
-{{ $informationRequest->tenant?->name }}
+<x-slot:footer>
+<x-mail.footer-tenant :tenant="$informationRequest->tenant" />
+</x-slot:footer>
 </x-mail::message>

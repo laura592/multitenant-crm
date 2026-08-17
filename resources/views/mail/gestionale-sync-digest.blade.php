@@ -1,7 +1,9 @@
 <x-mail::message>
-# Sync Eureka — {{ $tenant->name }}
-
-Riepilogo del controllo automatico tra il CRM e Eureka.
+<x-mail.hero
+	kicker="Sync Eureka"
+	title="{{ $tenant->name }}"
+	subtitle="Riepilogo del controllo automatico tra il CRM e Eureka"
+/>
 
 @php
     $summaryRows = array_filter([
@@ -122,6 +124,7 @@ Apri i clienti
 
 Usa i filtri "Da aggiornare su Eureka" e "Collegamento proposto" per trovare rapidamente le righe segnalate qui, oppure vai direttamente alla pagina "Sync Eureka" per tutto insieme, incluse le macchine importate di recente.
 
-Grazie,<br>
-{{ $tenant->name }}
+<x-slot:footer>
+<x-mail.footer-tenant :tenant="$tenant" />
+</x-slot:footer>
 </x-mail::message>

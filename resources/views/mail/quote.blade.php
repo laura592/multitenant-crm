@@ -1,16 +1,20 @@
 <x-mail::message>
-# Preventivo {{ $quote->number }}
+@php
+	$tenant = $quote->tenant;
+	$customerName = $quote->customer?->company_name ?: $quote->customer?->full_name;
+	$heroTitle = $customerName ? "Preventivo per {$customerName}" : "Preventivo {$quote->number}";
+@endphp
 
-<div>
+<x-mail.hero
+	kicker="Preventivo {{ $quote->number }}"
+	:title="$heroTitle"
+/>
+
+<x-mail.box>
 {!! $customMessage ?? '' !!}
-</div>
+</x-mail.box>
 
-@php($tenant = $quote->tenant)
 <x-slot:footer>
-{{ $tenant?->legal_name ?: $tenant?->name }}<br>
-@if($tenant?->pdfAddressLine()){{ $tenant->pdfAddressLine() }}<br>@endif
-@if($tenant?->pdfContactLine()){{ $tenant->pdfContactLine() }}<br>@endif
-@if($tenant?->pdfFiscalLine()){{ $tenant->pdfFiscalLine() }}<br>@endif
-@if($tenant?->ibanLine()){{ $tenant->ibanLine() }}<br>@endif
+<x-mail.footer-tenant :tenant="$tenant" />
 </x-slot:footer>
 </x-mail::message>
