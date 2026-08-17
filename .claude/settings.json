@@ -357,7 +357,22 @@
       "Bash(pdftoppm -png -r 150 -f 3 -l 3 om.pdf om-p3)",
       "Bash(pdftoppm -png -r 150 -f 1 -l 1 do.pdf do)",
       "Bash(pdftoppm -png -r 150 -f 1 -l 1 ro.pdf ro)",
-      "Bash(pdftoppm -png -r 150 -f 1 -l 1 svg-test.pdf svg-test)"
+      "Bash(pdftoppm -png -r 150 -f 1 -l 1 svg-test.pdf svg-test)",
+      "Bash(docker restart *)",
+      "Bash(textutil -convert txt -stdout \"/Users/laura/Downloads/Lavaggi - Storico e Scadenze \\(con rapportini\\).docx\")",
+      "Bash(grep -n \"^Data$\" \"/private/tmp/claude-501/-Users-laura-Documents-multitenant-crm/b1641436-7aa9-4d77-bdb6-1404ba1fd13d/scratchpad/lavaggi_storico.txt\")",
+      "Bash(xargs -I{} grep -l \"'note'\" {})",
+      "Bash(xargs -I{} sh -c 'echo == {} ==; cat {}')",
+      "Bash(grep -n 'class Deadline\\\\|protected $casts\\\\|due_date\\\\|function relatedLabel\\\\|function typeLabels' app/Models/Deadline.php)",
+      "Bash(grep \"CREATE TABLE \\\\`maintenance_schedules\\\\`\\\\|CREATE TABLE \\\\`lavaggi\\\\`\\\\|CREATE TABLE \\\\`machine_units\\\\`\" \"/Users/laura/Documents/multitenant-crm/storage/db-backups/multitenant_crm-20260813-115912.sql\")",
+      "Bash(grep -i \"docs\\\\|\\\\.md$\")",
+      "Bash(mkdir -p /private/tmp/claude-501/-Users-laura-Documents-multitenant-crm/b1641436-7aa9-4d77-bdb6-1404ba1fd13d/scratchpad/ods_extract)",
+      "Bash(unzip -o \"/Users/laura/Downloads/LAVAGGI.ods\" -d .)",
+      "Bash(grep -n '^[A-Z][A-Z ]*$' /private/tmp/claude-501/-Users-laura-Documents-multitenant-crm/a3e28b35-e04d-4d90-be94-63228770ffd5/scratchpad/lavaggi_storico.txt)",
+      "Bash(grep -n '^GOPPION$\\\\|^MARTELLOZZO$' /private/tmp/claude-501/-Users-laura-Documents-multitenant-crm/a3e28b35-e04d-4d90-be94-63228770ffd5/scratchpad/lavaggi_storico.txt)",
+      "Bash(nc -z localhost 3306)",
+      "Bash(grep -i \"full_name\\\\|company_name\\\\|->e\\(\\\\|e\\(\\\\$\")",
+      "Bash(grep -n 'protected static ?string $model\\\\|class AuditLogResource' app/Filament/Resources/AuditLogResource.php)"
     ],
     "additionalDirectories": [
       "/private/tmp/claude-501/-Users-laura-Documents-multitenant-crm/42c2ea60-257f-4721-955c-f0223b676257/scratchpad",
