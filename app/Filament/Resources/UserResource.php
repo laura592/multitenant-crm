@@ -135,7 +135,6 @@ class UserResource extends Resource
                     ->label('Attivo'),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
                 // Disattivare al posto di eliminare: preserva lo storico (appuntamenti,
                 // preventivi, ecc.) collegato all'utente e permette di riattivarlo in seguito.
                 // Non permettere di disattivare/cancellare il proprio account dalla lista:
@@ -147,8 +146,11 @@ class UserResource extends Resource
                     ->requiresConfirmation(fn (User $record) => $record->is_active)
                     ->hidden(fn (User $record) => $record->id === auth()->id())
                     ->action(fn (User $record) => $record->update(['is_active' => ! $record->is_active])),
-                Tables\Actions\DeleteAction::make()
-                    ->hidden(fn (User $record) => $record->id === auth()->id()),
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\EditAction::make(),
+                    Tables\Actions\DeleteAction::make()
+                        ->hidden(fn (User $record) => $record->id === auth()->id()),
+                ]),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([

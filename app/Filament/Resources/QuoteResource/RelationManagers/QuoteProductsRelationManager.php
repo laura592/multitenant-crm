@@ -117,10 +117,12 @@ class QuoteProductsRelationManager extends RelationManager
             ])
             ->actions([
                 ConfigureMachineAction::makeEdit(),
-                Tables\Actions\EditAction::make()
-                    ->after(fn (RelationManager $livewire) => $livewire->getOwnerRecord()->updateTotal()),
-                Tables\Actions\DeleteAction::make()
-                    ->after(fn (RelationManager $livewire) => $livewire->getOwnerRecord()->updateTotal()),
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\EditAction::make()
+                        ->after(fn (RelationManager $livewire) => $livewire->getOwnerRecord()->updateTotal()),
+                    Tables\Actions\DeleteAction::make()
+                        ->after(fn (RelationManager $livewire) => $livewire->getOwnerRecord()->updateTotal()),
+                ]),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([

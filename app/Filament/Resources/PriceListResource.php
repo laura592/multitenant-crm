@@ -95,8 +95,10 @@ class PriceListResource extends Resource
                     ->url(fn (PriceList $record) => $record->file_path ? Storage::disk('public')->url($record->file_path) : null)
                     ->openUrlInNewTab()
                     ->visible(fn (PriceList $record) => filled($record->file_path)),
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\EditAction::make(),
+                    Tables\Actions\DeleteAction::make(),
+                ]),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([

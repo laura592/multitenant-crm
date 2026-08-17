@@ -329,7 +329,7 @@ class QuoteGroupResource extends Resource
     protected static function sendEmailTableAction(): Tables\Actions\Action
     {
         return Tables\Actions\Action::make('send')
-            ->label('Invia offerta globale')
+            ->label('Invia')
             ->icon('heroicon-o-paper-airplane')
             ->color('success')
             ->form(fn () => static::sendEmailFormSchema())
@@ -339,7 +339,7 @@ class QuoteGroupResource extends Resource
     protected static function previewPdfsTableAction(): Tables\Actions\Action
     {
         return Tables\Actions\Action::make('previewPdfs')
-            ->label('Anteprima PDF')
+            ->label('PDF')
             ->icon('heroicon-o-document-text')
             ->color('gray')
             ->action(fn (QuoteGroup $record) => static::streamGroupPdfsZip($record));
