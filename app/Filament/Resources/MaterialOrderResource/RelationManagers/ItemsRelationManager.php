@@ -82,7 +82,7 @@ class ItemsRelationManager extends RelationManager
                 ]),
             ])
             ->emptyStateHeading('Nessun materiale ancora nell\'ordine')
-            ->emptyStateDescription('Usa "Aggiungi materiali" qui sopra per iniziare.')
+            ->emptyStateDescription('Usa "Aggiungi materiali" per iniziare.')
             ->emptyStateIcon('heroicon-o-clipboard-document-list');
     }
 

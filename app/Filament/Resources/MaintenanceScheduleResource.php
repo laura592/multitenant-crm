@@ -183,7 +183,7 @@ class MaintenanceScheduleResource extends Resource
                                 ->state(fn (MaintenanceSchedule $record) => static::equipmentSummary($record->customer_id, $record->machine_unit_id))
                                 // Con machine_unit_id gia' impostato, equipmentSummary()
                                 // torna esattamente lo stesso display_name gia' mostrato
-                                // dal campo "Macchina" qui sopra - pura duplicazione,
+                                // dal campo "Macchina" - pura duplicazione,
                                 // niente da aggiungere. Resta utile solo come fallback
                                 // sul parco macchine del cliente quando il piano NON ha
                                 // ancora una macchina specifica collegata.
@@ -252,7 +252,7 @@ class MaintenanceScheduleResource extends Resource
                         ->content(fn (Forms\Get $get) => static::equipmentSummary($get('customer_id'), $get('machine_unit_id')))
                         // Stessa duplicazione dell'infolist quando machine_unit_id e'
                         // gia' impostato (equipmentSummary() torna lo stesso valore
-                        // del select "Macchina" qui sopra): visibile solo come
+                        // del select "Macchina"): visibile solo come
                         // fallback sul parco macchine quando non c'e' ancora una
                         // macchina specifica scelta.
                         ->visible(fn (Forms\Get $get) => blank($get('machine_unit_id'))),
