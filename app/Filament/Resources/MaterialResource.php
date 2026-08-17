@@ -7,6 +7,9 @@ use App\Models\Material;
 use App\Models\Supplier;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Infolists\Components\Section as InfolistSection;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Infolist;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -30,6 +33,27 @@ class MaterialResource extends Resource
     protected static ?string $pluralModelLabel = 'Materiali';
 
     protected static ?string $recordTitleAttribute = 'code';
+
+    public static function infolist(Infolist $infolist): Infolist
+    {
+        return $infolist->schema([
+            InfolistSection::make('Materiale')
+                ->columns(2)
+                ->schema([
+                    TextEntry::make('code')->label('Codice'),
+                    TextEntry::make('supplier.name')->label('Fornitore')->placeholder('—'),
+                    TextEntry::make('category')->label('Categoria')->badge(),
+                    TextEntry::make('type')->label('Tipo'),
+                    TextEntry::make('variant')->label('Variante')->placeholder('—'),
+                    TextEntry::make('tube_diameter')->label('Tubo Ø')->placeholder('—'),
+                    TextEntry::make('tube_diameter_2')->label('Tubo Ø (2)')->placeholder('—'),
+                    TextEntry::make('thread_size')->label('Filetto')->placeholder('—'),
+                    TextEntry::make('thread_type')->label('Tipo filetto')->placeholder('—'),
+                    TextEntry::make('barb_diameter')->label('Codolo Ø')->placeholder('—'),
+                    TextEntry::make('notes')->label('Note')->placeholder('—')->columnSpanFull(),
+                ]),
+        ]);
+    }
 
     public static function form(Form $form): Form
     {
@@ -116,12 +140,6 @@ class MaterialResource extends Resource
                 Tables\Columns\TextColumn::make('supplier.name')->label('Fornitore')->placeholder('—')->toggleable(),
                 Tables\Columns\TextColumn::make('category')->label('Categoria')->badge()->toggleable(),
                 Tables\Columns\TextColumn::make('type')->label('Tipo')->searchable()->wrap(),
-                Tables\Columns\TextColumn::make('variant')->label('Variante')->toggleable()->placeholder('—'),
-                Tables\Columns\TextColumn::make('tube_diameter')->label('Tubo Ø')->placeholder('—'),
-                Tables\Columns\TextColumn::make('tube_diameter_2')->label('Tubo Ø (2)')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('thread_size')->label('Filetto')->placeholder('—'),
-                Tables\Columns\TextColumn::make('thread_type')->label('Tipo filetto')->placeholder('—')->toggleable(),
-                Tables\Columns\TextColumn::make('barb_diameter')->label('Codolo Ø')->placeholder('—')->toggleable(),
             ])
             ->defaultSort('category')
             ->filters([
@@ -133,6 +151,8 @@ class MaterialResource extends Resource
                     ->relationship('supplier', 'name'),
             ])
             ->actions([
+                Tables\Actions\ViewAction::make()
+                    ->color('gray'),
                 Tables\Actions\ActionGroup::make([
                     Tables\Actions\EditAction::make(),
                     Tables\Actions\DeleteAction::make(),
