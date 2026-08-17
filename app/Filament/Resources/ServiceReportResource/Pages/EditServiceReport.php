@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ServiceReportResource\Pages;
 
+use App\Filament\Concerns\RedirectsCancelToView;
 use App\Filament\Resources\ServiceReportResource;
 use Filament\Actions;
 use Filament\Notifications\Notification;
@@ -9,6 +10,8 @@ use Filament\Resources\Pages\EditRecord;
 
 class EditServiceReport extends EditRecord
 {
+    use RedirectsCancelToView;
+
     protected static string $resource = ServiceReportResource::class;
 
     protected function getHeaderActions(): array
@@ -19,13 +22,30 @@ class EditServiceReport extends EditRecord
     }
 
     /**
-     * I toggle "Chiamata"/"Lavaggio eseguito" e "Numero vie lavate" del form
-     * (ServiceReportResource, sezione "Ricambi/materiali utilizzati") sono
-     * campi di comodo, non colonne reali: sul fill() di un edit i loro
-     * ->default() non scattano (vedi ServiceReportResource::
+     * ServiceReportPolicy::update() gia' nega la modifica quando
+     * isLockedFromGestionale() e' vero, ma Gate::before() in
+     * AppServiceProvider (is_super_admin bypassa Shield/spatie ovunque)
+     * scavalca quel controllo per lo staff con quel flag. Il blocco Eureka
+     * deve valere per chiunque, senza eccezioni: ripetuto qui in modo
+     * indipendente dal sistema di permessi, sia su mount() (URL diretta)
+     * sia su ogni hydrate() (il record potrebbe diventare "bloccato" mentre
+     * la pagina e' gia' aperta, es. invio a gestionale completato altrove).
+     */
+    protected function authorizeAccess(): void
+    {
+        parent::authorizeAccess();
+
+        abort_if($this->getRecord()->isLockedFromGestionale(), 403);
+    }
+
+    /**
+     * I toggle "Chiamata"/"Manodopera"/"Lavaggio eseguito" e "Numero vie
+     * lavate" del form (ServiceReportResource, sezione "Ricambi/materiali
+     * utilizzati") sono campi di comodo, non colonne reali: sul fill() di un
+     * edit i loro ->default() non scattano (vedi ServiceReportResource::
      * resolveLavaggioShortcutDefaults()), quindi vanno iniettati qui, prima
-     * che il form li azzeri, per riflettere le righe CHIVE/CHIORD/LAV2/ULTVIA
-     * gia' presenti sul rapportino.
+     * che il form li azzeri, per riflettere le righe
+     * CHIVE/CHIORD/ORE/LAV2/ULTVIA gia' presenti sul rapportino.
      */
     protected function mutateFormDataBeforeFill(array $data): array
     {
@@ -35,6 +55,8 @@ class EditServiceReport extends EditRecord
             ...$data,
             'add_chiamata_material' => $defaults['chiamata_key'] !== null,
             '_chiamata_material_key' => $defaults['chiamata_key'],
+            'add_manodopera_material' => $defaults['manodopera_key'] !== null,
+            '_manodopera_material_key' => $defaults['manodopera_key'],
             '_lavaggio_vie_eseguito' => $defaults['lavaggio_base_key'] !== null,
             '_lavaggio_vie_count' => $defaults['vie_count'],
             '_lavaggio_base_material_key' => $defaults['lavaggio_base_key'],
