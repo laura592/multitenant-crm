@@ -14,6 +14,12 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // ENUM nativo esiste solo su MySQL: su sqlite (test) la colonna e'
+        // gia' testuale, TYPE_SANIFICAZIONE ci entra senza bisogno di ALTER.
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
         DB::statement("ALTER TABLE service_reports MODIFY intervention_type ENUM(
             'installazione', 'manutenzione_ordinaria', 'manutenzione_straordinaria', 'riparazione', 'garanzia', 'sanificazione'
         ) NOT NULL");
@@ -21,6 +27,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
         DB::statement("ALTER TABLE service_reports MODIFY intervention_type ENUM(
             'installazione', 'manutenzione_ordinaria', 'manutenzione_straordinaria', 'riparazione', 'garanzia'
         ) NOT NULL");

@@ -57,6 +57,7 @@ class CustomerAddressLookupTest extends TestCase
         Livewire::test(CreateCustomer::class)
             ->fillForm([
                 'company_name' => 'Client Estero SARL',
+                'vat_number' => 'CHE123456789',
                 'city' => 'Lugano',
                 'province' => 'CH',
                 'postal_code' => '6900',

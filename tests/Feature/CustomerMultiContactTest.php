@@ -30,6 +30,7 @@ class CustomerMultiContactTest extends TestCase
         Livewire::test(CreateCustomer::class)
             ->fillForm([
                 'company_name' => 'Multi Contact SRL',
+                'tax_code' => 'MLTCNT80A01H501Z',
                 'emails' => [
                     'item-1' => ['email' => 'amministrazione@multicontact.it'],
                     'item-2' => ['email' => 'referente@multicontact.it'],

@@ -211,7 +211,7 @@ class MaintenanceScheduleLavaggioTest extends TestCase
         $this->assertNull($schedule->fresh()->frequency_days);
     }
 
-    public function test_acqua_schedule_defaults_to_4_months_from_last_filter_change(): void
+    public function test_acqua_schedule_next_due_date_follows_frequency_days_like_other_beverages(): void
     {
         $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);
         $customer = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Bar Centrale']);
@@ -221,6 +221,7 @@ class MaintenanceScheduleLavaggioTest extends TestCase
             'customer_id' => $customer->id,
             'type' => MaintenanceSchedule::TYPE_LAVAGGIO,
             'beverage_type' => MaintenanceSchedule::BEVERAGE_ACQUA,
+            'frequency_days' => 120,
         ]);
 
         $filterChange = Lavaggio::create([
@@ -233,11 +234,14 @@ class MaintenanceScheduleLavaggioTest extends TestCase
         ]);
 
         $schedule->refresh();
+        // last_filter_change_id resta tracciato come informazione, ma non
+        // guida piu' la scadenza: quella segue sempre frequency_days come
+        // per gli altri beverage_type (vedi MaintenanceSchedule::recalculateLavaggioNextDue()).
         $this->assertSame($filterChange->id, $schedule->last_filter_change_id);
-        $this->assertTrue($schedule->next_due_date->isSameDay($filterChange->data->copy()->addMonths(4)));
+        $this->assertTrue($schedule->next_due_date->isSameDay($filterChange->data->copy()->addDays(120)));
     }
 
-    public function test_acqua_schedule_uses_filter_expiry_when_shorter_than_4_months(): void
+    public function test_acqua_schedule_without_frequency_days_has_no_next_due_date(): void
     {
         $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);
         $customer = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Bar Centrale']);
@@ -247,10 +251,9 @@ class MaintenanceScheduleLavaggioTest extends TestCase
             'customer_id' => $customer->id,
             'type' => MaintenanceSchedule::TYPE_LAVAGGIO,
             'beverage_type' => MaintenanceSchedule::BEVERAGE_ACQUA,
-            'filter_validity_days' => 60,
         ]);
 
-        $filterChange = Lavaggio::create([
+        Lavaggio::create([
             'tenant_id' => $tenant->id,
             'customer_id' => $customer->id,
             'maintenance_schedule_id' => $schedule->id,
@@ -260,33 +263,7 @@ class MaintenanceScheduleLavaggioTest extends TestCase
         ]);
 
         $schedule->refresh();
-        $this->assertTrue($schedule->next_due_date->isSameDay($filterChange->data->copy()->addDays(60)));
-    }
-
-    public function test_acqua_schedule_caps_filter_validity_at_4_months(): void
-    {
-        $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);
-        $customer = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Bar Centrale']);
-
-        $schedule = MaintenanceSchedule::create([
-            'tenant_id' => $tenant->id,
-            'customer_id' => $customer->id,
-            'type' => MaintenanceSchedule::TYPE_LAVAGGIO,
-            'beverage_type' => MaintenanceSchedule::BEVERAGE_ACQUA,
-            'filter_validity_days' => 365,
-        ]);
-
-        $filterChange = Lavaggio::create([
-            'tenant_id' => $tenant->id,
-            'customer_id' => $customer->id,
-            'maintenance_schedule_id' => $schedule->id,
-            'data' => now()->subDays(10),
-            'descrizione' => 'Sanificazione + cambio filtro',
-            'filtro_sostituito' => true,
-        ]);
-
-        $schedule->refresh();
-        $this->assertTrue($schedule->next_due_date->isSameDay($filterChange->data->copy()->addMonths(4)));
+        $this->assertNull($schedule->next_due_date);
     }
 
     public function test_manutenzione_plan_can_be_created_on_a_machine_not_in_comodato(): void
@@ -347,7 +324,7 @@ class MaintenanceScheduleLavaggioTest extends TestCase
 
         $this->assertSame($customer->id, $query['customer_id']);
         $this->assertSame('2026-08-05', $query['intervention_date']);
-        $this->assertSame(ServiceReport::TYPE_MANUTENZIONE_ORDINARIA, $query['intervention_type']);
+        $this->assertSame(ServiceReport::TYPE_SANIFICAZIONE, $query['intervention_type']);
         $this->assertSame('Lavaggio impianto', $query['problem_description']);
         $this->assertSame('5 Vie + Apertura', $query['work_performed']);
         $this->assertArrayNotHasKey('notes', $query);

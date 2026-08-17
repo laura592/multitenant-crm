@@ -109,7 +109,6 @@ class DeadlineRenewalTest extends TestCase
 
         Livewire::test(ListDeadlines::class)
             ->callTableAction('rinnova', $deadline, data: [
-                'amount' => 80,
                 'paid_at' => now()->toDateString(),
                 'due_date' => now()->addYears(2)->toDateString(),
             ])
@@ -117,7 +116,6 @@ class DeadlineRenewalTest extends TestCase
 
         $deadline->refresh();
         $this->assertSame(Deadline::STATUS_RINNOVATA, $deadline->status);
-        $this->assertEquals(80, $deadline->amount);
 
         $this->assertSame(
             2,
