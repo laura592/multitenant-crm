@@ -4,11 +4,14 @@ namespace App\Filament\Resources;
 
 use App\Filament\Forms\Components\SignaturePad;
 use App\Filament\Forms\CustomerContactFields;
+use App\Filament\Forms\CustomerFiscalFields;
+use App\Filament\Resources\CustomerResource;
 use App\Filament\Resources\ServiceReportResource\Pages;
 use App\Jobs\SendServiceReportToGestionaleJob;
 use App\Mail\ServiceReportMail;
 use App\Models\Customer;
 use App\Models\MachineUnit;
+use App\Models\MaintenanceSchedule;
 use App\Models\Material;
 use App\Models\Product;
 use App\Models\ServiceReport;
@@ -48,10 +51,12 @@ class ServiceReportResource extends Resource
     protected static ?string $pluralModelLabel = 'Rapportini tecnici';
 
     /**
-     * Materiale usato come riga "manodopera" aggiunta da sola sul form
-     * quando il tipo intervento non e' manutenzione ordinaria (vedi
-     * syncManodoperaMaterial()), al posto dei vecchi campi orario
-     * arrivo/uscita.
+     * Materiale per la riga "manodopera" (toggle "Manodopera" in "Ricambi/
+     * materiali utilizzati", vedi syncManodoperaMaterial()), al posto dei
+     * vecchi campi orario arrivo/uscita. Aggiunta solo su scelta esplicita
+     * del tecnico: prima si aggiungeva da sola cambiando "Tipo intervento",
+     * ma caricava una riga (e quindi un costo) senza che nessuno l'avesse
+     * chiesta esplicitamente.
      */
     private const MANODOPERA_MATERIAL_CODE = 'ORE';
 
@@ -67,6 +72,19 @@ class ServiceReportResource extends Resource
     public static function infolist(Infolist $infolist): Infolist
     {
         return $infolist->schema([
+            // Il pulsante "Modifica" scompare da solo quando isLockedFromGestionale()
+            // e' vero (ServiceReportPolicy::update()) — questo banner spiega perche',
+            // altrimenti sembra un bottone mancante per errore.
+            TextEntry::make('_gestionale_lock_notice')
+                ->hiddenLabel()
+                ->columnSpanFull()
+                ->visible(fn (ServiceReport $record) => $record->isLockedFromGestionale())
+                ->state(fn (ServiceReport $record) => $record->source === ServiceReport::SOURCE_EUREKA
+                    ? 'Rapportino arrivato da Eureka: non è modificabile da qui.'
+                    : 'Rapportino già inviato a Eureka: non è più modificabile.')
+                ->extraAttributes([
+                    'class' => 'rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200',
+                ]),
             // Stesso pattern di QuoteResource: riepilogo a colpo d'occhio in
             // alto, i dettagli (incl. orari) restano nelle sezioni sotto
             // senza ripetere qui i campi gia' mostrati nell'hero.
@@ -89,6 +107,7 @@ class ServiceReportResource extends Resource
                             ServiceReport::TYPE_MANUTENZIONE_STRAORDINARIA => 'Manutenzione straordinaria',
                             ServiceReport::TYPE_RIPARAZIONE => 'Riparazione',
                             ServiceReport::TYPE_GARANZIA => 'Garanzia',
+                            ServiceReport::TYPE_SANIFICAZIONE => 'Sanificazione',
                             default => $state,
                         })
                         ->columnSpan(2),
@@ -223,6 +242,21 @@ class ServiceReportResource extends Resource
                     // spesso archiviato in ufficio dopo l'intervento vero.
                     TextEntry::make('gestionale_document_date')->label('Data documento Eureka')->date()->placeholder('—'),
                     TextEntry::make('gestionale_synced_at')->label('Ultimo invio riuscito')->dateTime('d/m/Y H:i')->placeholder('—'),
+                    // "destinazione" della scheda lavoro Eureka: chi paga
+                    // davvero per questo intervento, se diverso
+                    // dall'intestatario (doc API §6.1) - letto da
+                    // ImportEurekaServiceReports solo con --with-detail.
+                    // Mostrato qui cosi' come lo dice Eureka, anche quando
+                    // non esiste ancora un Customer locale corrispondente
+                    // (link solo se risolto).
+                    TextEntry::make('eureka_destinazione_label')
+                        ->label('Pagante secondo Eureka')
+                        ->placeholder('— (paga il cliente stesso)')
+                        ->color(fn (ServiceReport $record) => filled($record->eureka_destinazione_label) ? 'primary' : 'gray')
+                        ->url(fn (ServiceReport $record) => $record->eurekaDestinazionePayer()
+                            ? CustomerResource::getUrl('view', ['record' => $record->eurekaDestinazionePayer()], tenant: $record->tenant)
+                            : null)
+                        ->columnSpan(2),
                     TextEntry::make('gestionale_sync_error')->label('Errore')->placeholder('—')->columnSpanFull(),
                 ]),
         ]);
@@ -259,6 +293,7 @@ class ServiceReportResource extends Resource
                             ServiceReport::TYPE_MANUTENZIONE_STRAORDINARIA => 'Manutenzione straordinaria',
                             ServiceReport::TYPE_RIPARAZIONE => 'Riparazione',
                             ServiceReport::TYPE_GARANZIA => 'Garanzia',
+                            ServiceReport::TYPE_SANIFICAZIONE => 'Sanificazione',
                             default => '—',
                         }),
                     Forms\Components\Placeholder::make('summary_date')
@@ -306,12 +341,14 @@ class ServiceReportResource extends Resource
                             Forms\Components\TextInput::make('first_name')->label('Nome'),
                             Forms\Components\TextInput::make('last_name')->label('Cognome'),
                             ...CustomerContactFields::schema(),
+                            ...CustomerFiscalFields::schema(),
                         ])
                         ->editOptionForm([
                             Forms\Components\TextInput::make('company_name')->label('Ragione sociale'),
                             Forms\Components\TextInput::make('first_name')->label('Nome'),
                             Forms\Components\TextInput::make('last_name')->label('Cognome'),
                             ...CustomerContactFields::schema(),
+                            ...CustomerFiscalFields::schema(),
                         ])
                         // L'editOptionForm sopra salva il Customer vero passando dal
                         // meccanismo generico di Filament sul Select, non dalla pagina
@@ -338,19 +375,14 @@ class ServiceReportResource extends Resource
                             ServiceReport::TYPE_MANUTENZIONE_STRAORDINARIA => 'Manutenzione straordinaria',
                             ServiceReport::TYPE_RIPARAZIONE => 'Riparazione',
                             ServiceReport::TYPE_GARANZIA => 'Garanzia',
+                            ServiceReport::TYPE_SANIFICAZIONE => 'Sanificazione',
                         ])
                         ->required()
-                        ->live()
-                        // Manutenzione ordinaria si addebita col codice specifico
-                        // della macchina (es. F2, DC3, C2 — un ricambio Material
-                        // diverso per ogni modello), da scegliere a mano qui sotto
-                        // in "Ricambi/materiali utilizzati": niente da precompilare.
-                        // Su tutti gli altri tipi (chiamata/riparazione/
-                        // installazione/garanzia) si addebitano invece le ore di
-                        // manodopera, oltre all'eventuale "Chiamata" (vedi
-                        // add_chiamata_material sotto) — qui la riga si aggiunge
-                        // da sola.
-                        ->afterStateUpdated(fn (?string $state, Forms\Set $set, Forms\Get $get) => self::syncManodoperaMaterial($state, $set, $get)),
+                        // La riga "manodopera" (ore lavorate) non si aggiunge piu'
+                        // da sola cambiando questo campo: vedi il toggle
+                        // "Manodopera" in "Ricambi/materiali utilizzati" piu' sotto,
+                        // scelta esplicita del tecnico invece che automatica.
+                        ->live(),
                     Forms\Components\DatePicker::make('intervention_date')
                         ->label('Data intervento')
                         ->default(now())
@@ -416,7 +448,40 @@ class ServiceReportResource extends Resource
                                 $set('customer_id', $machineUnit->current_customer_id);
                             }
                         })
-                        ->helperText('Scegliendo la matricola si compilano da soli cliente, modello e matricola qui sotto.'),
+                        ->helperText('Scegliendo la matricola si compilano da soli cliente, modello e matricola qui sotto.')
+                        // Se la matricola non e' ancora tracciata in CRM, prima
+                        // bisognava uscire da qui e crearla da Macchinari — stesso
+                        // "+" gia' presente sul cliente qui sopra. moveTo() (non un
+                        // update diretto di current_customer_id) per rispettare lo
+                        // stesso invariante di MachineUnitResource: tiene lo storico
+                        // posizionamenti coerente anche per una macchina creata al volo.
+                        ->createOptionForm([
+                            Forms\Components\TextInput::make('serial_number')
+                                ->label('Matricola')
+                                ->required()
+                                ->maxLength(255),
+                            Forms\Components\Select::make('product_id')
+                                ->label('Modello (da catalogo)')
+                                ->relationship('product', 'name', modifyQueryUsing: fn ($query) => $query->where('type', Product::TYPE_MACHINE))
+                                ->searchable()
+                                ->preload(),
+                            Forms\Components\TextInput::make('model_name')
+                                ->label('Modello (testo libero)')
+                                ->helperText('Solo se non e\' a catalogo (es. macchina non a listino Alex).')
+                                ->maxLength(255),
+                        ])
+                        ->createOptionUsing(function (array $data, Forms\Get $get) {
+                            $machineUnit = MachineUnit::create([
+                                'source' => MachineUnit::SOURCE_MANUALE,
+                                'serial_number' => $data['serial_number'],
+                                'product_id' => $data['product_id'] ?? null,
+                                'model_name' => $data['model_name'] ?? null,
+                            ]);
+
+                            $machineUnit->moveTo($get('customer_id') ? Customer::find($get('customer_id')) : null);
+
+                            return $machineUnit->id;
+                        }),
                     // Il collegamento Eureka manca spesso solo per il rapportino
                     // (vedi ServiceReport::gestionaleValidationErrors()), ma finora
                     // si scopriva solo al momento dell'invio, a rapportino gia'
@@ -431,6 +496,27 @@ class ServiceReportResource extends Resource
                         ->content(new HtmlString(
                             '<div class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">'
                                 .'⚠️ Questo modello non è ancora collegato a Eureka: il rapportino non potrà essere inviato al gestionale finché il back-office non lo collega da Macchinari.'
+                                .'</div>'
+                        )),
+                    // Il collegamento rapportino->piano di manutenzione e'
+                    // inferito da customer_id+machine_unit_id (nessuna FK
+                    // esplicita, vedi ServiceReport::syncMaintenanceSchedule()):
+                    // scegliendo la macchina sbagliata su un cliente con piu'
+                    // impianti, l'intervento riallinea in silenzio il piano
+                    // sbagliato (o nessuno). Avvisa solo per manutenzione
+                    // ordinaria: e' l'unico tipo che aggiorna un piano.
+                    Forms\Components\Placeholder::make('machine_unit_schedule_warning')
+                        ->label('')
+                        ->columnSpanFull()
+                        ->hidden(fn (Forms\Get $get) => blank($get('machine_unit_id'))
+                            || blank($get('customer_id'))
+                            || $get('intervention_type') !== ServiceReport::TYPE_MANUTENZIONE_ORDINARIA
+                            || self::activeMaintenanceScheduleCount($get) === 1)
+                        ->content(fn (Forms\Get $get) => new HtmlString(
+                            '<div class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">'
+                                .(self::activeMaintenanceScheduleCount($get) === 0
+                                    ? '⚠️ Nessun piano di manutenzione attivo per questa macchina: chiudendo questo rapportino nessuna scadenza verrà aggiornata automaticamente.'
+                                    : '⚠️ Questa macchina ha più piani di manutenzione attivi collegati: verranno aggiornati tutti. Controlla che non sia un doppione.')
                                 .'</div>'
                         )),
                     Forms\Components\Placeholder::make('fatturare_a')
@@ -476,7 +562,9 @@ class ServiceReportResource extends Resource
                     Forms\Components\Hidden::make('_chiamata_material_key')
                         ->dehydrated(false)
                         ->default(fn (?ServiceReport $record) => self::resolveLavaggioShortcutDefaults($record)['chiamata_key']),
-                    Forms\Components\Hidden::make('_manodopera_material_key')->dehydrated(false),
+                    Forms\Components\Hidden::make('_manodopera_material_key')
+                        ->dehydrated(false)
+                        ->default(fn (?ServiceReport $record) => self::resolveLavaggioShortcutDefaults($record)['manodopera_key']),
                     Forms\Components\Hidden::make('_lavaggio_base_material_key')
                         ->dehydrated(false)
                         ->default(fn (?ServiceReport $record) => self::resolveLavaggioShortcutDefaults($record)['lavaggio_base_key']),
@@ -545,6 +633,13 @@ class ServiceReportResource extends Resource
                                     $set('materialsUsed', $materialsUsed);
                                     $set('_chiamata_material_key', $newKey);
                                 }),
+                            Forms\Components\Toggle::make('add_manodopera_material')
+                                ->label('Manodopera')
+                                ->live()
+                                ->dehydrated(false)
+                                ->default(fn (?ServiceReport $record) => self::resolveLavaggioShortcutDefaults($record)['manodopera_key'] !== null)
+                                ->helperText('Aggiunge da sola la riga ore lavorate (ORE): segna poi la quantita\' come ore.')
+                                ->afterStateUpdated(fn (bool $state, Forms\Set $set, Forms\Get $get) => self::syncManodoperaMaterial($state, $set, $get)),
                             Forms\Components\Toggle::make('_lavaggio_vie_eseguito')
                                 ->label('Lavaggio eseguito')
                                 ->live()
@@ -572,10 +667,27 @@ class ServiceReportResource extends Resource
                         ->schema([
                             Forms\Components\Select::make('material_id')
                                 ->label('Materiale')
-                                ->options(fn () => Material::query()->get()->mapWithKeys(
-                                    fn (Material $material) => [$material->id => $material->display_label],
-                                ))
                                 ->searchable()
+                                ->getSearchResultsUsing(fn (string $search): array => Material::query()
+                                    ->where(function (Builder $query) use ($search) {
+                                        foreach (explode(' ', trim($search)) as $word) {
+                                            if ($word === '') {
+                                                continue;
+                                            }
+
+                                            $query->where(function (Builder $query) use ($word) {
+                                                $query->where('code', 'like', "%{$word}%")
+                                                    ->orWhere('type', 'like', "%{$word}%")
+                                                    ->orWhere('variant', 'like', "%{$word}%")
+                                                    ->orWhere('category', 'like', "%{$word}%");
+                                            });
+                                        }
+                                    })
+                                    ->limit(50)
+                                    ->get()
+                                    ->mapWithKeys(fn (Material $material) => [$material->id => "{$material->display_label} ({$material->code})"])
+                                    ->toArray())
+                                ->getOptionLabelUsing(fn ($value): ?string => Material::find($value)?->display_label)
                                 ->required()
                                 ->columnSpan(2),
                             Forms\Components\TextInput::make('quantity')->label('Quantità / ore')->numeric()->default(1)->required(),
@@ -620,6 +732,24 @@ class ServiceReportResource extends Resource
     }
 
     /**
+     * Piani di manutenzione attivi per la stessa combinazione cliente+macchina
+     * scelta sul form (stesso identico criterio di
+     * ServiceReport::syncMaintenanceSchedule()): il caso normale e' 1. Usata
+     * dal Placeholder "machine_unit_schedule_warning" sopra, prima ancora di
+     * salvare, per segnalare 0 (nessuna scadenza verra' aggiornata) o piu' di
+     * 1 (probabile doppione) piani.
+     */
+    private static function activeMaintenanceScheduleCount(Forms\Get $get): int
+    {
+        return MaintenanceSchedule::query()
+            ->where('customer_id', $get('customer_id'))
+            ->where('machine_unit_id', $get('machine_unit_id'))
+            ->where('type', MaintenanceSchedule::TYPE_MANUTENZIONE)
+            ->where('status', MaintenanceSchedule::STATUS_ATTIVO)
+            ->count();
+    }
+
+    /**
      * Stessa risoluzione di ServiceReport::invoiceRecipient(), ma sullo stato
      * del form prima ancora di salvare (usata dal Placeholder "Fatturare a" e
      * dal bottone "Crea preventivo" in Macchina): la macchina tracciata, se
@@ -644,19 +774,17 @@ class ServiceReportResource extends Resource
 
     /**
      * Stesso meccanismo (per key, dehydrated(false)) di add_chiamata_material
-     * sopra, ma agganciato al tipo intervento invece che a una checkbox
-     * manuale: la manutenzione ordinaria si addebita col codice specifico
-     * della macchina (F2/DC3/C2/...), da scegliere a mano — nessuna riga
-     * automatica. Tutti gli altri tipi sono di fatto una "chiamata": la
-     * manodopera (materiale ORE) si aggiunge da sola, il tecnico segna solo
-     * le ore lavorate in quantita'.
+     * sopra: il toggle "Manodopera" e' una scelta esplicita del tecnico, non
+     * piu' agganciata al tipo intervento (in precedenza si aggiungeva da
+     * sola per qualsiasi tipo diverso da manutenzione ordinaria, caricando un
+     * costo senza che nessuno l'avesse chiesto).
      */
-    private static function syncManodoperaMaterial(?string $interventionType, Forms\Set $set, Forms\Get $get): void
+    private static function syncManodoperaMaterial(bool $enabled, Forms\Set $set, Forms\Get $get): void
     {
         $materialsUsed = $get('materialsUsed') ?? [];
         $addedKey = $get('_manodopera_material_key');
 
-        if ($interventionType === null || $interventionType === ServiceReport::TYPE_MANUTENZIONE_ORDINARIA) {
+        if (! $enabled) {
             if ($addedKey && array_key_exists($addedKey, $materialsUsed)) {
                 unset($materialsUsed[$addedKey]);
                 $set('materialsUsed', $materialsUsed);
@@ -715,6 +843,7 @@ class ServiceReportResource extends Resource
     {
         $empty = [
             'chiamata_key' => null,
+            'manodopera_key' => null,
             'lavaggio_base_key' => null,
             'lavaggio_ult_key' => null,
             'vie_count' => null,
@@ -727,11 +856,13 @@ class ServiceReportResource extends Resource
         $rows = $record->materialsUsed()->with('material')->get();
 
         $chiamataRow = $rows->first(fn ($row) => in_array($row->material?->code, ['CHIVE', 'CHIORD'], true));
+        $manodoperaRow = $rows->first(fn ($row) => $row->material?->code === self::MANODOPERA_MATERIAL_CODE);
         $baseRow = $rows->first(fn ($row) => $row->material?->code === self::LAVAGGIO_VIE_BASE_MATERIAL_CODE);
         $ultRow = $rows->first(fn ($row) => $row->material?->code === self::LAVAGGIO_VIE_ULTERIORE_MATERIAL_CODE);
 
         return [
             'chiamata_key' => $chiamataRow?->id,
+            'manodopera_key' => $manodoperaRow?->id,
             'lavaggio_base_key' => $baseRow?->id,
             'lavaggio_ult_key' => $ultRow?->id,
             // Inverso esatto di syncLavaggioViaMaterials() (ULTVIA qty =
@@ -873,6 +1004,7 @@ class ServiceReportResource extends Resource
                         ServiceReport::TYPE_MANUTENZIONE_STRAORDINARIA => 'Manutenzione straordinaria',
                         ServiceReport::TYPE_RIPARAZIONE => 'Riparazione',
                         ServiceReport::TYPE_GARANZIA => 'Garanzia',
+                        ServiceReport::TYPE_SANIFICAZIONE => 'Sanificazione',
                     ]),
                 Tables\Filters\SelectFilter::make('status')
                     ->label('Stato')
@@ -926,7 +1058,7 @@ class ServiceReportResource extends Resource
                         ])
                         ->action(function (array $data, ServiceReport $record) {
                             $record->load(['customer', 'technician', 'machineProduct', 'machineUnit.billingCustomer', 'partsUsed.product', 'materialsUsed.material', 'tenant']);
-                            $pdf = Pdf::loadView('pdf.service-report', ['report' => $record]);
+                            $pdf = Pdf::loadView('pdf.service-report', ['report' => $record, 'showPrices' => false]);
 
                             $email = $record->emails()->create([
                                 'user_id' => auth()->id(),
@@ -997,7 +1129,10 @@ class ServiceReportResource extends Resource
                                 ->success()
                                 ->send();
                         }),
-                    Tables\Actions\EditAction::make(),
+                    // ->visible() esplicito, indipendente dal Gate: vedi lo
+                    // stesso commento su ViewServiceReport::getHeaderActions().
+                    Tables\Actions\EditAction::make()
+                        ->visible(fn (ServiceReport $record) => ! $record->isLockedFromGestionale()),
                     Tables\Actions\DeleteAction::make(),
                     Tables\Actions\RestoreAction::make(),
                     Tables\Actions\ForceDeleteAction::make(),
@@ -1028,17 +1163,25 @@ class ServiceReportResource extends Resource
     /**
      * Il modello non ha costanti per lo stato (campo stringa libero storico):
      * le etichette/colori restano centralizzati qui per non duplicarli tra
-     * tabella, infolist e form. "completato" e "firmato" sono stati rimossi:
-     * nessun flusso li assegna mai (la firma cliente in "Firma cliente" e' un
-     * concetto indipendente dallo stato, catturata anche su rapportini gia'
-     * "Inviato" — vedi il campo customer_signature_path). L'unico rapportino
-     * con "completato" era un'anomalia, corretta a mano in "inviato".
+     * tabella, infolist e form. "firmato" resta rimosso: nessun flusso lo
+     * assegna (la firma cliente in "Firma cliente" e' un concetto
+     * indipendente dallo stato, catturata anche su rapportini gia' "Inviato"
+     * — vedi il campo customer_signature_path).
+     *
+     * "completato" era stato tolto perche' l'unico rapportino che lo aveva
+     * era un'anomalia (corretta a mano in "inviato", nessun flusso lo
+     * assegnava). Reintrodotto il 2026-08-17 su richiesta esplicita, stavolta
+     * come stato valido a tutti gli effetti — vedi ServiceReport::CLOSED_STATUSES
+     * (conta come "chiuso" esattamente come "inviato") — per marcare in blocco
+     * lo storico gia' passato in amministrazione.
      */
     public static function statusLabels(): array
     {
         return [
             'bozza' => 'Bozza',
             'inviato' => 'Inviato',
+            'completato' => 'Completato',
+            'rifiutato' => 'Rifiutato',
         ];
     }
 
@@ -1047,6 +1190,8 @@ class ServiceReportResource extends Resource
         return [
             'bozza' => 'gray',
             'inviato' => 'success',
+            'completato' => 'info',
+            'rifiutato' => 'danger',
         ];
     }
 

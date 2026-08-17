@@ -45,7 +45,10 @@ class ServiceReportPolicy
      */
     public function update(User $user, ServiceReport $serviceReport): bool
     {
-        return $user->can('update_service::report');
+        // Rapportini arrivati da Eureka o gia' inviati la' non sono piu'
+        // modificabili da CRM, a prescindere dal ruolo — vedi
+        // ServiceReport::isLockedFromGestionale().
+        return $user->can('update_service::report') && ! $serviceReport->isLockedFromGestionale();
     }
 
     /**

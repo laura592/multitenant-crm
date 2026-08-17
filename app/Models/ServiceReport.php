@@ -24,6 +24,8 @@ class ServiceReport extends Model
 
     public const TYPE_GARANZIA = 'garanzia';
 
+    public const TYPE_SANIFICAZIONE = 'sanificazione';
+
     /**
      * Chi ha creato per primo questo rapportino — non lo stesso concetto di
      * "e' collegato a Eureka" (eureka_service_report_id si valorizza anche
@@ -46,11 +48,12 @@ class ServiceReport extends Model
     /**
      * Stati che contano come "rapportino chiuso" per gli scopi di
      * syncMaintenanceSchedule() (stesso set usato dall'azione "Invia a
-     * gestionale" in ServiceReportResource). Un solo stato per ora, ma resta
-     * un array: "chiuso" e' un concetto distinto da "e' 'inviato'", anche se
-     * al momento coincidono.
+     * gestionale" in ServiceReportResource). "chiuso" e' un concetto
+     * distinto da "e' 'inviato'": "completato" (rapportini gia' passati in
+     * amministrazione, vedi ServiceReportResource::statusLabels()) conta
+     * anche lui come chiuso, "rifiutato" no.
      */
-    public const CLOSED_STATUSES = ['inviato'];
+    public const CLOSED_STATUSES = ['inviato', 'completato'];
 
     /**
      * Parole chiave usate da countsAsLavaggio() sullo storico importato da Eureka,
@@ -99,6 +102,8 @@ class ServiceReport extends Model
         'signed_at',
         'notes',
         'eureka_service_report_id',
+        'eureka_destinazione_code',
+        'eureka_destinazione_label',
         'gestionale_scheda_lavoro_id',
         'gestionale_sync_status',
         'gestionale_sync_error',
@@ -165,19 +170,41 @@ class ServiceReport extends Model
      */
     public function syncMaintenanceSchedule(): void
     {
-        $schedules = $this->machine_unit_id
+        // La manutenzione resta sempre specifica per macchina: senza
+        // machine_unit_id sul rapportino non si sa quale macchina sia stata
+        // davvero manutenuta, meglio non toccare nessun piano che indovinare.
+        $manutenzioneSchedules = $this->machine_unit_id
             ? MaintenanceSchedule::query()
                 ->where('customer_id', $this->customer_id)
                 ->where('machine_unit_id', $this->machine_unit_id)
+                ->where('type', MaintenanceSchedule::TYPE_MANUTENZIONE)
                 ->where('status', MaintenanceSchedule::STATUS_ATTIVO)
                 ->get()
             : collect();
 
-        foreach ($schedules->where('type', MaintenanceSchedule::TYPE_MANUTENZIONE) as $schedule) {
+        foreach ($manutenzioneSchedules as $schedule) {
             $schedule->recalculateFromServiceReports();
         }
 
-        $this->syncGeneratedLavaggi($schedules->where('type', MaintenanceSchedule::TYPE_LAVAGGIO));
+        // Il lavaggio invece e' spesso "tutti gli impianti in una visita"
+        // (machine_unit_id lasciato vuoto apposta, vedi helperText su
+        // LavaggiRelationManager: "il caso normale"): in quel caso il
+        // rapportino riguarda TUTTI i piani lavaggio attivi del cliente, non
+        // nessuno. Prima machine_unit_id nullo risolveva a "nessun piano",
+        // lasciando la sincronizzazione muta e — peggio — facendo apparire
+        // "orfano" (quindi da cancellare) qualunque Lavaggio gia' generato in
+        // precedenza da questo stesso rapportino, vedi syncGeneratedLavaggi().
+        $lavaggioSchedules = MaintenanceSchedule::query()
+            ->where('customer_id', $this->customer_id)
+            ->where('type', MaintenanceSchedule::TYPE_LAVAGGIO)
+            ->where('status', MaintenanceSchedule::STATUS_ATTIVO)
+            ->when(
+                $this->machine_unit_id,
+                fn ($query) => $query->where('machine_unit_id', $this->machine_unit_id),
+            )
+            ->get();
+
+        $this->syncGeneratedLavaggi($lavaggioSchedules);
     }
 
     /**
@@ -208,16 +235,29 @@ class ServiceReport extends Model
         }
 
         foreach ($lavaggioSchedules as $schedule) {
-            Lavaggio::updateOrCreate(
-                ['service_report_id' => $this->id, 'maintenance_schedule_id' => $schedule->id],
-                [
-                    'tenant_id' => $this->tenant_id,
-                    'customer_id' => $this->customer_id,
-                    'machine_unit_id' => $this->machine_unit_id,
-                    'data' => $this->intervention_date,
-                    'descrizione' => "Generato da rapportino {$this->number}",
-                ],
-            );
+            $lavaggio = Lavaggio::firstOrNew([
+                'service_report_id' => $this->id,
+                'maintenance_schedule_id' => $schedule->id,
+            ]);
+
+            // Non risovrascrivere una descrizione gia' personalizzata (a
+            // mano, o importata da uno storico con piu' dettaglio del
+            // placeholder generico): solo le righe nuove o ancora col
+            // placeholder di default vengono (ri)generate.
+            $isGenericOrNew = ! $lavaggio->exists || $lavaggio->descrizione === "Generato da rapportino {$this->number}";
+
+            $lavaggio->fill([
+                'tenant_id' => $this->tenant_id,
+                'customer_id' => $this->customer_id,
+                'machine_unit_id' => $this->machine_unit_id,
+                'data' => $this->intervention_date,
+            ]);
+
+            if ($isGenericOrNew) {
+                $lavaggio->descrizione = "Generato da rapportino {$this->number}";
+            }
+
+            $lavaggio->save();
         }
     }
 
@@ -227,11 +267,30 @@ class ServiceReport extends Model
     }
 
     /**
+     * Un rapportino arrivato da Eureka (SOURCE_EUREKA, vedi ImportEurekaServiceReports)
+     * o gia' inviato con successo a Eureka (gestionale_sync_status=sent, vedi
+     * SendServiceReportToGestionaleJob) non deve piu' essere modificabile da CRM:
+     * in entrambi i casi Eureka e' ormai (anche) la fonte autorevole per questo
+     * documento, e una modifica lato CRM andrebbe fuori sincrono col gestionale
+     * senza che nessuno se ne accorga. Usato da ServiceReportPolicy::update().
+     */
+    public function isLockedFromGestionale(): bool
+    {
+        return $this->source === self::SOURCE_EUREKA || $this->gestionale_sync_status === 'sent';
+    }
+
+    /**
      * Vedi il commento su LAVAGGIO_KEYWORDS per il perche' del testo libero.
+     * TYPE_SANIFICAZIONE e' il tipo intervento dedicato ai lavaggi creati da
+     * qui in poi (vedi LavaggiRelationManager::serviceReportCreateUrl()):
+     * riconosciuto sempre, anche senza testo libero corrispondente.
+     * TYPE_MANUTENZIONE_ORDINARIA resta comunque riconosciuto per lo storico
+     * pre-esistente e per l'import da Eureka, dove il lavaggio finisce
+     * ancora schedato sotto quel tipo (vedi LAVAGGIO_KEYWORDS).
      */
     public function countsAsLavaggio(): bool
     {
-        if ($this->intervention_type === self::TYPE_MANUTENZIONE_ORDINARIA) {
+        if (in_array($this->intervention_type, [self::TYPE_MANUTENZIONE_ORDINARIA, self::TYPE_SANIFICAZIONE], true)) {
             return true;
         }
 
@@ -336,6 +395,25 @@ class ServiceReport extends Model
     public function isSigned(): bool
     {
         return ! is_null($this->signed_at);
+    }
+
+    /**
+     * Cliente locale corrispondente a eureka_destinazione_code (il pagante
+     * reale secondo Eureka, vedi ImportEurekaServiceReports), se gia'
+     * presente in CRM con quel gestionale_code. Puo' tornare null anche con
+     * eureka_destinazione_label valorizzato: Eureka conosce quel pagante,
+     * ma non e' detto che esista gia' come Customer qui.
+     */
+    public function eurekaDestinazionePayer(): ?Customer
+    {
+        if (! $this->eureka_destinazione_code) {
+            return null;
+        }
+
+        return Customer::query()
+            ->where('tenant_id', $this->tenant_id)
+            ->where('gestionale_code', $this->eureka_destinazione_code)
+            ->first();
     }
 
     /**

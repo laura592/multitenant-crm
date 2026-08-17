@@ -252,10 +252,24 @@ class ImportEurekaServiceReports extends Command
 
             $interventionDate = $appointmentDate ?? $documentDate;
 
+            // "destinazione" (doc API §6.1): chi paga davvero, se diverso
+            // dall'intestatario - mai letta prima da questo import (vedi
+            // audit fatturazione comodato, 2026-08-13). Solo nel detail
+            // (--with-detail), non nel summary. A volte ripete la stessa
+            // anagrafica dell'intestatario (stesso id_eureka): equivale a
+            // "nessun pagante diverso", va trattata come assenza.
+            $destinazioneCode = (int) ($detail['destinazione']['id_eureka'] ?? 0);
+            $intestatarioCode = (int) ($detail['id_intestatario'] ?? $summary['id_codice_f15'] ?? 0);
+            $hasDestinazione = $destinazioneCode > 0 && $destinazioneCode !== $intestatarioCode;
+
             $payload = [
                 'tenant_id' => $tenant->id,
                 'source' => ServiceReport::SOURCE_EUREKA,
                 'eureka_service_report_id' => $eurekaId,
+                'eureka_destinazione_code' => $hasDestinazione ? $destinazioneCode : null,
+                'eureka_destinazione_label' => $hasDestinazione
+                    ? $this->normalizeText($detail['destinazione']['rag_sociale'] ?? null)
+                    : null,
                 'customer_id' => $localCustomerId,
                 'machine_product_id' => $machineProduct?->id,
                 'machine_unit_id' => $machineUnit?->id,
