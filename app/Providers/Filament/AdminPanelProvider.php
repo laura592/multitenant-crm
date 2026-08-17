@@ -4,11 +4,13 @@ namespace App\Providers\Filament;
 
 use App\Filament\Widgets\CreaPreventivoWidget;
 use App\Filament\Widgets\DashboardStatsWidget;
+use App\Filament\Widgets\FailedGestionaleServiceReportsWidget;
 use App\Filament\Widgets\LatestQuotesWidget;
 use App\Filament\Widgets\MagazzinoStatsWidget;
 use App\Filament\Widgets\PrioritaWidget;
 use App\Filament\Widgets\TimbraWidget;
 use App\Filament\Widgets\UpcomingDeadlinesWidget;
+use App\Filament\Widgets\UpcomingMaintenanceWidget;
 use App\Http\Middleware\SetPermissionsTeamId;
 use App\Models\Tenant;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
@@ -154,6 +156,8 @@ class AdminPanelProvider extends PanelProvider
                 DashboardStatsWidget::class,
                 LatestQuotesWidget::class,
                 UpcomingDeadlinesWidget::class,
+                UpcomingMaintenanceWidget::class,
+                FailedGestionaleServiceReportsWidget::class,
             ])
             // Tutti collassati di default: con 5+ gruppi e fino a 6 voci
             // ciascuno la sidebar arrivava a scorrere parecchio prima ancora
