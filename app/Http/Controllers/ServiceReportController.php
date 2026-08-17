@@ -27,7 +27,7 @@ class ServiceReportController extends Controller
         Gate::authorize('view', $serviceReport);
 
         $pdf = Pdf::loadView('pdf.service-report', [
-            'report' => $serviceReport->load(['customer', 'technician', 'machineProduct', 'partsUsed.product', 'materialsUsed.material', 'tenant']),
+            'report' => $serviceReport->load(['customer', 'technician', 'machineProduct', 'machineUnit.product', 'partsUsed.product', 'materialsUsed.material', 'tenant']),
         ]);
 
         return $pdf->stream("rapportino-{$serviceReport->number}.pdf");

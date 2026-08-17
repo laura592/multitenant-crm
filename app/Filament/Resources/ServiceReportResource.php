@@ -122,7 +122,6 @@ class ServiceReportResource extends Resource
             InfolistSection::make('Macchina')
                 ->columns(3)
                 ->schema([
-                    TextEntry::make('quote.number')->label('Preventivo collegato')->placeholder('—'),
                     TextEntry::make('machineProduct.name')->label('Modello macchina')->placeholder('—'),
                     TextEntry::make('machine_serial_number')->label('Matricola')->placeholder('—'),
                     TextEntry::make('machine_unit_display_name')->label('Macchina (matricola tracciata)')->placeholder('—'),
@@ -320,8 +319,10 @@ class ServiceReportResource extends Resource
                     Forms\Components\Select::make('customer_id')
                         ->label('Cliente')
                         ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
-                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->full_name)
-                        ->searchable(['company_name', 'first_name', 'last_name'])
+                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->city
+                            ? "{$record->full_name} ({$record->city})"
+                            : $record->full_name)
+                        ->searchable(['company_name', 'first_name', 'last_name', 'city'])
                         ->preload()
                         ->required()
                         ->live()
@@ -329,11 +330,10 @@ class ServiceReportResource extends Resource
                         // macchinario (MachineUnitResource): vedi anche
                         // machine_unit_id sotto, stesso query param.
                         ->default(fn () => request()->query('customer_id'))
-                        // Preventivo e macchina tracciata sono entrambi filtrati per
-                        // cliente (vedi sotto): cambiando cliente le selezioni fatte
-                        // in precedenza non hanno piu' senso.
+                        // La macchina tracciata sotto e' filtrata per cliente:
+                        // cambiando cliente la selezione fatta in precedenza non
+                        // ha piu' senso.
                         ->afterStateUpdated(function (Forms\Set $set) {
-                            $set('quote_id', null);
                             $set('machine_unit_id', null);
                         })
                         ->createOptionForm([
@@ -396,20 +396,6 @@ class ServiceReportResource extends Resource
             Forms\Components\Section::make('Macchina')
                 ->columns(3)
                 ->schema([
-                    Forms\Components\Select::make('quote_id')
-                        ->label('Preventivo collegato')
-                        ->relationship(
-                            'quote',
-                            'number',
-                            modifyQueryUsing: fn (Builder $query, Forms\Get $get) => $query
-                                ->where('customer_id', $get('customer_id'))
-                                ->where('status', 'accettato'),
-                        )
-                        ->searchable()
-                        ->preload()
-                        ->disabled(fn (Forms\Get $get) => blank($get('customer_id')))
-                        ->createOptionAction(null)
-                        ->helperText('Seleziona prima il cliente: qui compaiono solo i suoi preventivi accettati.'),
                     Forms\Components\Select::make('machine_unit_id')
                         ->label('Macchina (matricola tracciata)')
                         ->relationship(
@@ -451,7 +437,7 @@ class ServiceReportResource extends Resource
                         ->helperText('Scegliendo la matricola si compilano da soli cliente, modello e matricola qui sotto.')
                         // Se la matricola non e' ancora tracciata in CRM, prima
                         // bisognava uscire da qui e crearla da Macchinari — stesso
-                        // "+" gia' presente sul cliente qui sopra. moveTo() (non un
+                        // "+" gia' presente sul cliente. moveTo() (non un
                         // update diretto di current_customer_id) per rispettare lo
                         // stesso invariante di MachineUnitResource: tiene lo storico
                         // posizionamenti coerente anche per una macchina creata al volo.
@@ -522,26 +508,34 @@ class ServiceReportResource extends Resource
                     Forms\Components\Placeholder::make('fatturare_a')
                         ->label('Fatturare a')
                         ->content(fn (Forms\Get $get) => self::resolvePayer($get)?->full_name ?? '—'),
-                    Forms\Components\Select::make('machine_product_id')
+                    // Non piu' una scelta manuale: il modello si ricava dalla
+                    // macchina/matricola selezionata sopra (afterStateUpdated
+                    // su machine_unit_id valorizza gia' l'Hidden sotto), cosi'
+                    // non puo' piu' disallinearsi da quella. Resta comunque
+                    // sempre visibile qui — non e' solo un dettaglio interno.
+                    Forms\Components\Placeholder::make('machine_product_display')
                         ->label('Modello macchina')
-                        ->options(fn () => Product::query()
-                            ->where('type', Product::TYPE_MACHINE)
-                            ->orderByRaw('gestionale_code IS NULL') // collegati a Eureka prima
-                            ->orderBy('name')
-                            ->get()
-                            ->mapWithKeys(fn (Product $product) => [
-                                $product->id => $product->name.($product->gestionale_code ? ' — ✓ Eureka' : ''),
-                            ]))
-                        // Su rapportini vecchi il valore salvato puo' puntare a un
-                        // Product che non e' (piu') type=machine (dato legacy):
-                        // resta fuori dalla lista options() sopra, e senza questo
-                        // Filament non trova un'etichetta e mostra l'uuid grezzo.
-                        ->getOptionLabelUsing(fn ($value) => Product::find($value)?->name)
-                        ->searchable()
-                        ->helperText('I modelli con "✓ Eureka" sono gia\' collegati al gestionale: usarli garantisce che il rapportino sia sempre inviabile.'),
-                    Forms\Components\TextInput::make('machine_serial_number')
+                        ->content(function (Forms\Get $get) {
+                            $machineUnit = $get('machine_unit_id') ? MachineUnit::find($get('machine_unit_id')) : null;
+
+                            if ($machineUnit) {
+                                return $machineUnit->display_name;
+                            }
+
+                            // Rapportino senza matricola tracciata collegata (es.
+                            // dato storico pre-esistente): mostra comunque quanto
+                            // gia' salvato, invece di sparire.
+                            return $get('machine_product_id')
+                                ? (Product::find($get('machine_product_id'))?->name ?? '—')
+                                : '— (seleziona la macchina/matricola)';
+                        }),
+                    Forms\Components\Hidden::make('machine_product_id'),
+                    // Stesso motivo del modello sopra: la matricola si ricava
+                    // dalla macchina tracciata, non si digita piu' a mano.
+                    Forms\Components\Placeholder::make('machine_serial_display')
                         ->label('Matricola')
-                        ->maxLength(255),
+                        ->content(fn (Forms\Get $get) => $get('machine_serial_number') ?: '— (seleziona la macchina/matricola)'),
+                    Forms\Components\Hidden::make('machine_serial_number'),
                 ]),
             Forms\Components\Section::make('Descrizione')
                 ->schema([
@@ -1057,7 +1051,7 @@ class ServiceReportResource extends Resource
                             Forms\Components\TextInput::make('cc_email')->label('CC (opzionale)')->email(),
                         ])
                         ->action(function (array $data, ServiceReport $record) {
-                            $record->load(['customer', 'technician', 'machineProduct', 'machineUnit.billingCustomer', 'partsUsed.product', 'materialsUsed.material', 'tenant']);
+                            $record->load(['customer', 'technician', 'machineProduct', 'machineUnit.product', 'machineUnit.billingCustomer', 'partsUsed.product', 'materialsUsed.material', 'tenant']);
                             $pdf = Pdf::loadView('pdf.service-report', ['report' => $record, 'showPrices' => false]);
 
                             $email = $record->emails()->create([

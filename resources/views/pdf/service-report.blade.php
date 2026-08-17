@@ -38,7 +38,7 @@
              fa da cornice (.header-cell) sia sulle righe label/valore
              dentro (.info-box td). --}}
         {{-- .row-table td.header-cell (non solo .header-cell): serve piu'
-             specificita' di ".row-table td" qui sopra, altrimenti il suo
+             specificita' di ".row-table td", altrimenti il suo
              padding:0 vince ugualmente ed e' proprio quello che incollava
              nome/sede al bordo della scheda. --}}
         {{-- Il padding "respiro" vive sull'.info-box interno, non sulla
@@ -101,6 +101,7 @@
             \App\Models\ServiceReport::TYPE_MANUTENZIONE_STRAORDINARIA => 'Manutenzione straordinaria',
             \App\Models\ServiceReport::TYPE_RIPARAZIONE => 'Riparazione',
             \App\Models\ServiceReport::TYPE_GARANZIA => 'Garanzia',
+            \App\Models\ServiceReport::TYPE_SANIFICAZIONE => 'Sanificazione',
         ];
         $hasMachineInfo = $report->machineProduct || $report->machine_serial_number || $report->machineUnit || $report->quote;
         // Stesso controllo gia' fatto dall'ImageEntry dell'infolist Filament
@@ -110,6 +111,12 @@
         // un'immagine inesistente e stampa il testo alt al suo posto invece
         // del placeholder "Non ancora firmato".
         $hasSignatureFile = $report->customer_signature_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($report->customer_signature_path);
+        // Il rapportino inviato via email al cliente non deve MAI mostrare
+        // prezzi (solo il download interno dell'operatore li mostra) — vedi
+        // i due chiamanti di questa view: ServiceReportController::pdf()
+        // (download, prezzi ok) e l'azione "Invia" in ServiceReportResource
+        // (email, $showPrices = false).
+        $showPrices ??= true;
     @endphp
 
     {{-- Solo numero e data qui, come semplice testo (niente piu' un box a
@@ -181,8 +188,9 @@
             <div class="intervento-block">
                 <div class="intervento-label">Macchina</div>
                 <table>
-                    @if($report->machineProduct)
-                        <tr><td class="label">Modello:</td><td>{{ $report->machineProduct->name }}</td></tr>
+                    @php($machineProduct = $report->machineProduct ?? $report->machineUnit?->product)
+                    @if($machineProduct)
+                        <tr><td class="label">Modello:</td><td>{{ $machineProduct->name }}</td></tr>
                     @endif
                     @if($report->machine_serial_number || $report->machineUnit?->serial_number)
                         <tr><td class="label">Matricola:</td><td>{{ $report->machine_serial_number ?: $report->machineUnit?->serial_number }}</td></tr>
@@ -215,17 +223,19 @@
     @if($report->materialsUsed->isNotEmpty())
         <div class="section-title">Ricambi/materiali utilizzati</div>
         <table class="items" style="margin-bottom: 14px;">
-            <thead><tr><th class="center">Quantità</th><th>Materiale</th><th class="numeric">Prezzo unit.</th><th class="numeric">Importo</th></tr></thead>
+            <thead><tr><th class="center">Quantità</th><th>Materiale</th>@if($showPrices)<th class="numeric">Prezzo unit.</th><th class="numeric">Importo</th>@endif</tr></thead>
             <tbody>
             @foreach($report->materialsUsed as $part)
                 <tr>
                     <td class="center">{{ $part->quantity }}</td>
                     <td>{{ $part->material->display_label }}</td>
-                    <td class="numeric">{{ $part->unit_cost_snapshot !== null ? '€ '.number_format($part->unit_cost_snapshot, 2, ',', '.') : '—' }}</td>
-                    <td class="numeric">{{ $part->line_total_snapshot !== null ? '€ '.number_format($part->line_total_snapshot, 2, ',', '.') : '—' }}</td>
+                    @if($showPrices)
+                        <td class="numeric">{{ $part->unit_cost_snapshot !== null ? '€ '.number_format($part->unit_cost_snapshot, 2, ',', '.') : '—' }}</td>
+                        <td class="numeric">{{ $part->line_total_snapshot !== null ? '€ '.number_format($part->line_total_snapshot, 2, ',', '.') : '—' }}</td>
+                    @endif
                 </tr>
             @endforeach
-            @if($report->materialsUsed->sum('line_total_snapshot') > 0)
+            @if($showPrices && $report->materialsUsed->sum('line_total_snapshot') > 0)
                 <tr>
                     <td colspan="3" class="numeric"><strong>Totale</strong></td>
                     <td class="numeric"><strong>€ {{ number_format($report->materialsUsed->sum('line_total_snapshot'), 2, ',', '.') }}</strong></td>
@@ -240,13 +250,15 @@
     @if($report->partsUsed->isNotEmpty())
         <div class="section-title">Ricambi/materiali utilizzati</div>
         <table class="items" style="margin-bottom: 14px;">
-            <thead><tr><th class="center">Quantità</th><th>Prodotto</th><th class="numeric">Prezzo</th></tr></thead>
+            <thead><tr><th class="center">Quantità</th><th>Prodotto</th>@if($showPrices)<th class="numeric">Prezzo</th>@endif</tr></thead>
             <tbody>
             @foreach($report->partsUsed as $part)
                 <tr>
                     <td class="center">{{ $part->quantity }}</td>
                     <td>{{ $part->product->name }}</td>
-                    <td class="numeric">{{ $part->unit_cost_snapshot !== null ? '€ '.number_format($part->unit_cost_snapshot, 2, ',', '.') : '—' }}</td>
+                    @if($showPrices)
+                        <td class="numeric">{{ $part->unit_cost_snapshot !== null ? '€ '.number_format($part->unit_cost_snapshot, 2, ',', '.') : '—' }}</td>
+                    @endif
                 </tr>
             @endforeach
             </tbody>
