@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\MachineUnitResource;
+use App\Filament\Resources\MachineUnitResource\Pages\EditMachineUnit;
 use App\Filament\Resources\MachineUnitResource\Pages\ListMachineUnits;
 use App\Filament\Resources\MachineUnitResource\Pages\ViewMachineUnit;
 use App\Filament\Resources\ProductResource;
@@ -207,6 +208,39 @@ class ProductAndMachineUnitViewPageTest extends TestCase
             ->assertOk()
             ->assertSee('ICON 2 GR TOTAL MATT BLACK')
             ->assertDontSee($product->id);
+    }
+
+    /**
+     * modifyQueryUsing sulla relationship() del campo (limita la ricerca ai
+     * prodotti type=machine) viene usato da Filament anche per risolvere
+     * l'etichetta del valore gia' selezionato: una macchina agganciata a un
+     * prodotto di tipo diverso (es. importata da Eureka come "service", mai
+     * censita come macchina a catalogo) non veniva piu' trovata da quella
+     * query, quindi il campo mostrava l'uuid grezzo invece del nome in
+     * modifica. ->getOptionLabelUsing() esplicito bypassa il filtro solo per
+     * l'etichetta.
+     */
+    public function test_machine_unit_edit_page_resolves_model_label_even_when_linked_product_is_not_type_machine(): void
+    {
+        $tenant = $this->loginAdmin();
+        $serviceProduct = Product::create([
+            'tenant_id' => $tenant->id,
+            'sku' => 'BRAVILOR-SERVICE',
+            'type' => Product::TYPE_SERVICE,
+            'name' => 'BRAVILOR',
+        ]);
+        $machine = MachineUnit::create([
+            'tenant_id' => $tenant->id,
+            'product_id' => $serviceProduct->id,
+            'status' => MachineUnit::STATUS_IN_MAGAZZINO,
+            'serial_number' => 'SN-NONMACHINE-001',
+        ]);
+
+        $label = Livewire::test(EditMachineUnit::class, ['record' => $machine->getRouteKey()])
+            ->instance()
+            ->getFormSelectOptionLabel('data.product_id');
+
+        $this->assertSame('BRAVILOR', $label);
     }
 
     public function test_machine_unit_row_click_opens_view_not_edit(): void

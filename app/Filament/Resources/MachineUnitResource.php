@@ -63,6 +63,17 @@ class MachineUnitResource extends Resource
                     Forms\Components\Select::make('product_id')
                         ->label('Modello (da catalogo)')
                         ->relationship('product', 'name', modifyQueryUsing: fn ($query) => $query->where('type', Product::TYPE_MACHINE))
+                        // Il modifyQueryUsing sopra limita giustamente la RICERCA ai
+                        // prodotti tipo "machine" (non ha senso agganciare un
+                        // macchinario a un servizio quando se ne sceglie uno nuovo),
+                        // ma Filament usa la STESSA query anche per risolvere
+                        // l'etichetta del valore gia' selezionato: qualche macchina
+                        // importata da Eureka e' agganciata a un prodotto di tipo
+                        // "service" (es. BRAVILOR, mai censito come macchina a
+                        // catalogo), quindi quella query non lo trova piu' e il
+                        // campo mostra l'uuid grezzo invece del nome. Override
+                        // esplicito, senza il filtro sul tipo, solo per l'etichetta.
+                        ->getOptionLabelUsing(fn ($value) => Product::find($value)?->name)
                         ->searchable()
                         ->preload(),
                     Forms\Components\TextInput::make('model_name')
