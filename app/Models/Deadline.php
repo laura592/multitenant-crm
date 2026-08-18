@@ -38,16 +38,12 @@ class Deadline extends Model
         'type',
         'policy_number',
         'due_date',
-        'amount',
-        'paid_at',
         'reminder_days_before',
         'status',
     ];
 
     protected $casts = [
         'due_date' => 'date',
-        'paid_at' => 'date',
-        'amount' => 'decimal:2',
         'reminder_days_before' => 'integer',
     ];
 
@@ -128,16 +124,15 @@ class Deadline extends Model
     }
 
     /**
-     * Chiude questa occorrenza (importo/data pagamento, stato "rinnovata") e
-     * ne crea una nuova identica con la prossima scadenza, invece di
-     * sovrascrivere due_date sulla stessa riga: cosi' lo storico
-     * costi/pagamenti resta leggibile come sequenza di righe passate.
+     * Chiude questa occorrenza (stato "rinnovata") e ne crea una nuova
+     * identica con la prossima scadenza, invece di sovrascrivere due_date
+     * sulla stessa riga: cosi' lo storico delle scadenze passate resta
+     * leggibile come sequenza di righe invece di essere perso ad ogni
+     * rinnovo.
      */
     public function renew(array $data): self
     {
         $this->forceFill([
-            'amount' => $data['amount'] ?? $this->amount,
-            'paid_at' => $data['paid_at'] ?? $this->paid_at,
             'status' => self::STATUS_RINNOVATA,
         ])->save();
 

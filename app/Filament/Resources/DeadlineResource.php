@@ -81,14 +81,12 @@ class DeadlineResource extends Resource
                         ->helperText('Da quanti giorni prima della scadenza viene segnalata come urgente.'),
                 ]),
             Forms\Components\Section::make('Stato')
-                ->columns(2)
                 ->schema([
                     Forms\Components\Select::make('status')
                         ->label('Stato')
                         ->options(fn () => Deadline::statusLabels())
                         ->default(Deadline::STATUS_ATTIVA)
                         ->required(),
-                    Forms\Components\DatePicker::make('paid_at')->label('Data pagamento'),
                 ]),
         ]);
     }
@@ -136,7 +134,6 @@ class DeadlineResource extends Resource
                     ->badge()
                     ->formatStateUsing(fn (string $state) => Deadline::statusLabels()[$state] ?? ucfirst($state))
                     ->color(fn (string $state) => Deadline::statusColors()[$state] ?? 'gray'),
-                Tables\Columns\TextColumn::make('paid_at')->label('Pagato il')->date()->placeholder('—'),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('type')
@@ -160,9 +157,6 @@ class DeadlineResource extends Resource
                     ->color('success')
                     ->visible(fn (Deadline $record) => $record->status !== Deadline::STATUS_RINNOVATA)
                     ->form([
-                        Forms\Components\DatePicker::make('paid_at')
-                            ->label('Data pagamento')
-                            ->default(now()),
                         Forms\Components\DatePicker::make('due_date')
                             ->label('Nuova scadenza')
                             ->required(),

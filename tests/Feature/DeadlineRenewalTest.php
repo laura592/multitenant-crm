@@ -16,8 +16,8 @@ use Tests\TestCase;
 /**
  * Assicurazione/bollo/revisione dei veicoli usavano un semplice
  * updateOrCreate() che sovrascriveva la riga esistente ad ogni rinnovo,
- * perdendo lo storico costi/pagamenti (segnalato dall'utente). Deadline::renew()
- * lo sostituisce: chiude la riga corrente (importo/data pagamento, stato
+ * perdendo lo storico delle scadenze passate (segnalato dall'utente).
+ * Deadline::renew() lo sostituisce: chiude la riga corrente (stato
  * "rinnovata") e ne crea una nuova, cosi' le occorrenze passate restano
  * leggibili come storico invece di essere perse.
  */
@@ -47,19 +47,14 @@ class DeadlineRenewalTest extends TestCase
         ]);
 
         $newDeadline = $deadline->renew([
-            'amount' => 450.50,
-            'paid_at' => now(),
             'due_date' => now()->addYear(),
         ]);
 
         $deadline->refresh();
 
         $this->assertSame(Deadline::STATUS_RINNOVATA, $deadline->status);
-        $this->assertEquals(450.50, $deadline->amount);
-        $this->assertNotNull($deadline->paid_at);
 
         $this->assertSame(Deadline::STATUS_ATTIVA, $newDeadline->status);
-        $this->assertNull($newDeadline->amount);
         $this->assertTrue($newDeadline->due_date->isSameDay(now()->addYear()));
         $this->assertSame(Deadline::TYPE_ASSICURAZIONE, $newDeadline->type);
         $this->assertSame($this->vehicle->id, $newDeadline->deadlinable_id);
@@ -79,17 +74,17 @@ class DeadlineRenewalTest extends TestCase
             'due_date' => now()->addDays(5),
         ]);
 
-        $deadline = $deadline->renew(['amount' => 120, 'paid_at' => now(), 'due_date' => now()->addYear()]);
-        $deadline = $deadline->renew(['amount' => 130, 'paid_at' => now()->addYear(), 'due_date' => now()->addYears(2)]);
+        $deadline = $deadline->renew(['due_date' => now()->addYear()]);
+        $deadline = $deadline->renew(['due_date' => now()->addYears(2)]);
 
         $this->assertCount(3, $this->vehicle->deadlines()->where('type', Deadline::TYPE_BOLLO)->get());
         $this->assertSame(
-            [120.00, 130.00, null],
+            [Deadline::STATUS_RINNOVATA, Deadline::STATUS_RINNOVATA, Deadline::STATUS_ATTIVA],
             $this->vehicle->deadlines()
                 ->where('type', Deadline::TYPE_BOLLO)
                 ->orderBy('due_date')
                 ->get()
-                ->map(fn (Deadline $d) => $d->amount === null ? null : (float) $d->amount)
+                ->map(fn (Deadline $d) => $d->status)
                 ->all()
         );
     }
@@ -109,7 +104,6 @@ class DeadlineRenewalTest extends TestCase
 
         Livewire::test(ListDeadlines::class)
             ->callTableAction('rinnova', $deadline, data: [
-                'paid_at' => now()->toDateString(),
                 'due_date' => now()->addYears(2)->toDateString(),
             ])
             ->assertHasNoTableActionErrors();

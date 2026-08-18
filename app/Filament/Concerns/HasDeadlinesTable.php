@@ -40,11 +40,6 @@ trait HasDeadlinesTable
                         ->options(fn () => Deadline::statusLabels())
                         ->default(Deadline::STATUS_ATTIVA)
                         ->required(),
-                    Forms\Components\TextInput::make('amount')
-                        ->label('Importo pagato')
-                        ->numeric()
-                        ->prefix('€'),
-                    Forms\Components\DatePicker::make('paid_at')->label('Data pagamento'),
                 ]),
         ]);
     }
@@ -76,8 +71,6 @@ trait HasDeadlinesTable
                     ->badge()
                     ->formatStateUsing(fn (string $state) => Deadline::statusLabels()[$state] ?? ucfirst($state))
                     ->color(fn (string $state) => Deadline::statusColors()[$state] ?? 'gray'),
-                Tables\Columns\TextColumn::make('amount')->label('Importo')->money('EUR')->placeholder('—'),
-                Tables\Columns\TextColumn::make('paid_at')->label('Pagato il')->date()->placeholder('—'),
             ])
             ->headerActions([
                 Tables\Actions\CreateAction::make(),
@@ -89,13 +82,6 @@ trait HasDeadlinesTable
                     ->color('success')
                     ->visible(fn (Deadline $record) => $record->status !== Deadline::STATUS_RINNOVATA)
                     ->form([
-                        Forms\Components\TextInput::make('amount')
-                            ->label('Importo pagato')
-                            ->numeric()
-                            ->prefix('€'),
-                        Forms\Components\DatePicker::make('paid_at')
-                            ->label('Data pagamento')
-                            ->default(now()),
                         Forms\Components\DatePicker::make('due_date')
                             ->label('Nuova scadenza')
                             ->required(),
