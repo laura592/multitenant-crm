@@ -53,7 +53,11 @@ document.addEventListener('livewire:init', () => {
 		fail(({ status, preventDefault }) => {
 			if (status === 419) {
 				preventDefault();
-				window.location.href = '/sessione-scaduta';
+				// Passiamo l'URL corrente cosi' la pagina di sessione scaduta puo'
+				// salvarlo come "url.intended": dopo il login Filament ci riporta li'
+				// invece che sulla dashboard di default (vedi errors/419.blade.php).
+				const redirect = encodeURIComponent(window.location.href);
+				window.location.href = `/sessione-scaduta?redirect=${redirect}`;
 			}
 		});
 	});

@@ -1,3 +1,23 @@
+@php
+    // Ricostruiamo l'URL a cui l'utente vuole tornare dopo il login: o dal
+    // parametro ?redirect= (impostato da resources/js/app.js sul 419 delle
+    // richieste Livewire), o dall'URL della richiesta precedente (caso del
+    // 419 "pieno" su submit di un form non-Livewire, dove non passiamo per
+    // il redirect JS ma questa vista viene renderizzata direttamente).
+    // Filament::Login::authenticate() fa redirect()->intended(...), quindi
+    // basta valorizzare session('url.intended') per farci riportare li'.
+    $redirectUrl = request()->query('redirect') ?: url()->previous();
+    $redirectHost = $redirectUrl ? parse_url($redirectUrl, PHP_URL_HOST) : null;
+
+    $isSafeRedirect = $redirectUrl
+        && $redirectHost === request()->getHost()
+        && ! str_starts_with($redirectUrl, route('login'))
+        && ! str_starts_with($redirectUrl, route('session.expired'));
+
+    if ($isSafeRedirect) {
+        session()->put('url.intended', $redirectUrl);
+    }
+@endphp
 <!DOCTYPE html>
 <html lang="it">
 <head>
