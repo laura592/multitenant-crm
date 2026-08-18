@@ -17,10 +17,21 @@ return new class extends Migration
         // attivi del cliente" / "solo il piano della machine_unit_id scelta".
         // Pura tabella pivot, senza tenant_id: entrambe le FK puntano gia' a
         // record dello stesso tenant.
+        // Nomi vincolo espliciti e corti: quello di default
+        // ("service_report_maintenance_schedule_maintenance_schedule_id_foreign",
+        // 67 caratteri) supera il limite di 64 di MySQL — fallisce solo su
+        // MySQL/MariaDB, non sullo sqlite dei test, quindi la suite non lo
+        // becca.
         Schema::create('service_report_maintenance_schedule', function (Blueprint $table) {
-            $table->foreignUuid('service_report_id')->constrained()->cascadeOnDelete();
-            $table->foreignUuid('maintenance_schedule_id')->constrained()->cascadeOnDelete();
+            $table->uuid('service_report_id');
+            $table->uuid('maintenance_schedule_id');
             $table->primary(['service_report_id', 'maintenance_schedule_id']);
+
+            $table->foreign('service_report_id', 'srms_service_report_fk')
+                ->references('id')->on('service_reports')->cascadeOnDelete();
+
+            $table->foreign('maintenance_schedule_id', 'srms_maintenance_schedule_fk')
+                ->references('id')->on('maintenance_schedules')->cascadeOnDelete();
         });
     }
 
