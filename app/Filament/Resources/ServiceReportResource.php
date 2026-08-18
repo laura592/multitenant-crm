@@ -127,7 +127,10 @@ class ServiceReportResource extends Resource
                     TextEntry::make('machineProduct.name')->label('Modello macchina')->placeholder('—'),
                     TextEntry::make('machine_serial_number')->label('Matricola')->placeholder('—'),
                     TextEntry::make('machine_unit_display_name')->label('Macchina (matricola tracciata)')->placeholder('—'),
-                    TextEntry::make('machineUnit.billingCustomer.full_name')->label('Fatturare a')->placeholder('—'),
+                    TextEntry::make('invoice_recipient')
+                        ->label('Fatturare a')
+                        ->state(fn (ServiceReport $record) => $record->invoiceRecipient()->full_name)
+                        ->placeholder('—'),
                 ]),
             InfolistSection::make('Descrizione')
                 ->schema([
