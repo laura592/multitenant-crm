@@ -8,7 +8,6 @@ use App\Models\Product;
 use App\Models\Tenant;
 use App\Support\PhoneNumber;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Str;
 
 /**
  * Confronta clienti/prodotti gia' collegati a Eureka con l'anagrafica reale
@@ -251,14 +250,20 @@ class GestionaleSyncRunner
             ->whereNull('gestionale_code')
             ->whereNull('gestionale_suggested_code')
             ->get()
-            ->filter(fn (Product $product) => filled(Str::of((string) $product->name)->explode(' ')->first()));
+            ->filter(fn (Product $product) => filled($product->sku));
 
         // Stesso principio di proposeCustomerLinks(): una ricerca articolo
         // per prodotto, tutte in gruppi concorrenti. cercaArticoli() ha il
         // termine di ricerca nel path (non in query string), quindi
         // pooledGetByPath() invece di pooledGet().
+        //
+        // Cerca per sku (codice), non per nome: cercaArticoli() e'
+        // "ricerca per codice" lato Eureka, e prodotti diversi possono
+        // condividere la prima parola del nome (es. "A300 NM 1G H1 W3" e
+        // "A300 NM 1G 2P H1 W3") — matchare sul nome proponeva lo stesso
+        // articolo a varianti diverse dello stesso modello.
         $paths = $candidates->mapWithKeys(fn (Product $product) => [
-            $product->id => '/articoli/lista/'.rawurlencode((string) Str::of((string) $product->name)->explode(' ')->first()),
+            $product->id => '/articoli/lista/'.rawurlencode((string) $product->sku),
         ])->all();
 
         $searchResults = $this->client->pooledGetByPath($paths);
