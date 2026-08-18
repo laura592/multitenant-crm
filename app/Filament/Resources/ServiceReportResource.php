@@ -6,6 +6,7 @@ use App\Filament\Forms\Components\SignaturePad;
 use App\Filament\Forms\CustomerContactFields;
 use App\Filament\Forms\CustomerFiscalFields;
 use App\Filament\Resources\CustomerResource;
+use App\Filament\Resources\MaintenanceScheduleResource;
 use App\Filament\Resources\ServiceReportResource\Pages;
 use App\Jobs\SendServiceReportToGestionaleJob;
 use App\Mail\ServiceReportMail;
@@ -468,6 +469,43 @@ class ServiceReportResource extends Resource
 
                             return $machineUnit->id;
                         }),
+                    // Una sanificazione spesso copre piu' impianti dello stesso
+                    // cliente in una sola visita: machine_unit_id sopra resta
+                    // per singola macchina/matricola. Selezionando qui uno o
+                    // piu' piani si sceglie esplicitamente quali coprire
+                    // (vince sulla regola implicita di ServiceReport::
+                    // syncMaintenanceSchedule() — machine_unit_id o "tutti i
+                    // piani attivi del cliente"); vuoto = comportamento di
+                    // sempre.
+                    Forms\Components\Select::make('maintenanceSchedules')
+                        ->label('Impianti/manutenzioni interessati')
+                        ->relationship(
+                            'maintenanceSchedules',
+                            'id',
+                            modifyQueryUsing: fn (Builder $query, Forms\Get $get) => $query
+                                ->where('type', MaintenanceSchedule::TYPE_LAVAGGIO)
+                                ->where('status', MaintenanceSchedule::STATUS_ATTIVO)
+                                ->when($get('customer_id'), fn ($q, $customerId) => $q->where('customer_id', $customerId)),
+                        )
+                        ->getOptionLabelFromRecordUsing(function (MaintenanceSchedule $record) {
+                            $label = MaintenanceScheduleResource::beverageLabels()[$record->beverage_type] ?? 'Lavaggio';
+
+                            if ($record->lines_count && $record->beverage_type !== MaintenanceSchedule::BEVERAGE_ACQUA) {
+                                $label .= ' '.$record->lines_count.' vie';
+                            }
+
+                            if ($record->machineUnit) {
+                                $label .= ' — '.$record->machineUnit->serial_number;
+                            }
+
+                            return $label;
+                        })
+                        ->multiple()
+                        ->searchable()
+                        ->preload()
+                        ->visible(fn (Forms\Get $get) => $get('intervention_type') === ServiceReport::TYPE_SANIFICAZIONE)
+                        ->helperText('Lascia vuoto per applicarla a tutti i piani lavaggio attivi del cliente (comportamento di sempre). Seleziona uno o più impianti per limitarla a quelli.')
+                        ->columnSpanFull(),
                     // Il collegamento Eureka manca spesso solo per il rapportino
                     // (vedi ServiceReport::gestionaleValidationErrors()), ma finora
                     // si scopriva solo al momento dell'invio, a rapportino gia'

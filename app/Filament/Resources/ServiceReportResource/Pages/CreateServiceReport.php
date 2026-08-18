@@ -56,4 +56,20 @@ class CreateServiceReport extends CreateRecord
 
         $this->callHook('afterFill');
     }
+
+    /**
+     * ServiceReport::syncMaintenanceSchedule() gira gia' su static::saved()
+     * durante handleRecordCreation() (vedi CreateRecord::create() nel core
+     * Filament), ma a quel punto il campo "Impianti/manutenzioni interessati"
+     * (relationship() many-to-many) non e' ancora stato collegato: Filament
+     * lo salva solo subito dopo, con $this->form->model(...)->saveRelationships().
+     * Senza questo ri-lancio, il primo salvataggio di una sanificazione multi-
+     * impianto genererebbe ancora i lavaggi con la regola implicita vecchia
+     * (tutti i piani/quello di machine_unit_id) invece che sulla selezione
+     * esplicita appena fatta — corretto solo al salvataggio successivo.
+     */
+    protected function afterCreate(): void
+    {
+        $this->getRecord()->syncMaintenanceSchedule();
+    }
 }

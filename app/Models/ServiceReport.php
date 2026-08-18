@@ -6,6 +6,7 @@ use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
@@ -166,7 +167,10 @@ class ServiceReport extends Model
      *   ("lavaggio"), quindi un rapportino che conta come lavaggio (countsAsLavaggio())
      *   genera/aggiorna una riga Lavaggio agganciata a questo rapportino
      *   (service_report_id) — il piano si riallinea da solo via
-     *   Lavaggio::booted()->recalculateLavaggioNextDue().
+     *   Lavaggio::booted()->recalculateLavaggioNextDue(). Generata gia' in
+     *   bozza (non solo da chiuso, vedi syncGeneratedLavaggi()): si vede
+     *   subito nello storico lavaggi mentre il rapportino viene compilato, e
+     *   si ripulisce da sola se la bozza viene scartata o cambiata.
      */
     public function syncMaintenanceSchedule(): void
     {
@@ -184,6 +188,21 @@ class ServiceReport extends Model
 
         foreach ($manutenzioneSchedules as $schedule) {
             $schedule->recalculateFromServiceReports();
+        }
+
+        // Selezione esplicita (campo "Impianti/manutenzioni interessati", solo
+        // sanificazione): una sanificazione puo' riguardare piu' impianti dello
+        // stesso cliente senza che siano "tutti quelli attivi" ne' "solo quello
+        // di machine_unit_id" — vince su entrambe le regole implicite sotto.
+        // Query fresca (non la relation gia' eventualmente in cache
+        // sull'istanza): un attach() successivo su questo stesso oggetto,
+        // come su un secondo giro di saveRelationships(), non invaliderebbe
+        // da solo una collezione gia' caricata.
+        $explicitSchedules = $this->maintenanceSchedules()->get();
+        if ($explicitSchedules->isNotEmpty()) {
+            $this->syncGeneratedLavaggi($explicitSchedules);
+
+            return;
         }
 
         // Il lavaggio invece e' spesso "tutti gli impianti in una visita"
@@ -215,8 +234,11 @@ class ServiceReport extends Model
         // trashed(): sul rapportino cancellato (static::deleted, dopo il soft
         // delete) non deve restare nessun lavaggio generato, a prescindere da
         // stato/tipo — la whereNotIn qui sotto altrimenti risparmierebbe quello
-        // sul piano ancora "corrente" per questa macchina.
-        $qualifies = ! $this->trashed() && $this->isClosed() && $this->countsAsLavaggio();
+        // sul piano ancora "corrente" per questa macchina. Niente piu'
+        // isClosed(): la riga si crea gia' in bozza (vedi syncMaintenanceSchedule()),
+        // cosi' lo storico lavaggi la mostra subito invece di sparire finche'
+        // il rapportino non viene inviato/completato.
+        $qualifies = ! $this->trashed() && $this->countsAsLavaggio();
         $scheduleIds = $lavaggioSchedules->pluck('id');
 
         // Ripulisce i lavaggi generati da una versione precedente di questo
@@ -353,6 +375,19 @@ class ServiceReport extends Model
     public function machineUnit(): BelongsTo
     {
         return $this->belongsTo(MachineUnit::class);
+    }
+
+    /**
+     * Selezione esplicita (form "Sanificazione") di quali piani lavaggio
+     * copre questo rapportino, per una sanificazione che riguarda piu'
+     * impianti dello stesso cliente in una sola visita — vedi
+     * syncGeneratedLavaggi(). Vuota per i rapportini che non l'hanno mai
+     * usata: in quel caso vale ancora la regola implicita di prima
+     * (machine_unit_id se presente, altrimenti tutti i piani attivi).
+     */
+    public function maintenanceSchedules(): BelongsToMany
+    {
+        return $this->belongsToMany(MaintenanceSchedule::class, 'service_report_maintenance_schedule');
     }
 
     public function quote(): BelongsTo
