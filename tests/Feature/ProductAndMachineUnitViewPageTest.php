@@ -177,6 +177,38 @@ class ProductAndMachineUnitViewPageTest extends TestCase
         $this->assertSame($newCustomer->id, $machine->fresh()->current_customer_id);
     }
 
+    /**
+     * Il ViewRecord senza infolist() esplicito ripiegava sul form()
+     * disabilitato: per una Select con ->relationship('product', 'name')
+     * la label giusta veniva risolta solo via una chiamata Livewire lato
+     * client dopo il caricamento, quindi l'HTML iniziale mostrava lo uuid
+     * grezzo di product_id invece del nome del modello a catalogo.
+     * MachineUnitResource::infolist() lo risolve lato server: qui si
+     * verifica che il nome del prodotto (non il suo id) sia gia' nell'HTML
+     * di risposta, non solo raggiungibile dopo un giro di JS.
+     */
+    public function test_machine_unit_view_page_shows_catalog_product_name_not_its_id(): void
+    {
+        $tenant = $this->loginAdmin();
+        $product = Product::create([
+            'tenant_id' => $tenant->id,
+            'sku' => 'GIFAR-CATALOGO-001',
+            'type' => Product::TYPE_MACHINE,
+            'name' => 'ICON 2 GR TOTAL MATT BLACK',
+        ]);
+        $machine = MachineUnit::create([
+            'tenant_id' => $tenant->id,
+            'product_id' => $product->id,
+            'status' => MachineUnit::STATUS_IN_MAGAZZINO,
+            'serial_number' => 'SN-CATALOGO-001',
+        ]);
+
+        $this->get(MachineUnitResource::getUrl('view', ['record' => $machine]))
+            ->assertOk()
+            ->assertSee('ICON 2 GR TOTAL MATT BLACK')
+            ->assertDontSee($product->id);
+    }
+
     public function test_machine_unit_row_click_opens_view_not_edit(): void
     {
         $tenant = $this->loginAdmin();

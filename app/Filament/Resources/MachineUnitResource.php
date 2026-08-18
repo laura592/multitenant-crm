@@ -12,6 +12,9 @@ use Filament\Actions\MountableAction;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Infolists\Components\Section as InfolistSection;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Infolist;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
@@ -84,6 +87,36 @@ class MachineUnitResource extends Resource
                         ->dehydrated(false)
                         ->helperText('Cambia automaticamente con l\'azione "Sposta".'),
                     Forms\Components\Textarea::make('notes')->label('Note')->columnSpanFull(),
+                ]),
+        ]);
+    }
+
+    /**
+     * Senza questo, ViewMachineUnit (ViewRecord senza infolist() definito)
+     * ripiega sul form() disabilitato: per una Select con ->relationship()
+     * la label giusta arriva solo via una chiamata Livewire lato client
+     * dopo il caricamento — se quella chiamata non va a buon fine (JS non
+     * caricato, rete lenta, ecc.) resta visibile l'id grezzo (es. "Modello
+     * macchina" mostrava lo uuid di product_id invece del nome). Un infolist
+     * risolve i nomi lato server nell'HTML iniziale, senza dipendere dal JS.
+     */
+    public static function infolist(Infolist $infolist): Infolist
+    {
+        return $infolist->schema([
+            InfolistSection::make('Identificazione')
+                ->columns(2)
+                ->schema([
+                    TextEntry::make('serial_number')->label('Matricola'),
+                    TextEntry::make('product.name')->label('Modello (da catalogo)')->placeholder('—'),
+                    TextEntry::make('model_name')->label('Modello (testo libero)')->placeholder('—'),
+                    TextEntry::make('billingCustomer.full_name')->label('Fatturare a')->placeholder('—'),
+                    TextEntry::make('currentCustomer.full_name')->label('Presso')->placeholder('In magazzino'),
+                    TextEntry::make('status')
+                        ->label('Stato')
+                        ->badge()
+                        ->formatStateUsing(fn (string $state) => static::statusLabels()[$state] ?? 'In magazzino')
+                        ->color(fn (string $state) => static::statusColors()[$state] ?? 'gray'),
+                    TextEntry::make('notes')->label('Note')->placeholder('—')->columnSpanFull(),
                 ]),
         ]);
     }
