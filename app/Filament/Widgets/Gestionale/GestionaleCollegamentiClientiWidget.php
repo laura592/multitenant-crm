@@ -17,12 +17,22 @@ class GestionaleCollegamentiClientiWidget extends BaseWidget
     // Vedi GestionaleDaRivedereWidget per il perche'.
     protected static bool $isLazy = false;
 
+    public static function canView(): bool
+    {
+        return static::baseQuery()->exists();
+    }
+
+    private static function baseQuery()
+    {
+        return Customer::query()->whereNotNull('gestionale_suggested_code');
+    }
+
     public function table(Table $table): Table
     {
         return $table
             // Vedi GestionaleDaRivedereWidget per il perche'.
             ->queryStringIdentifier('collegamentiClienti')
-            ->query(Customer::query()->whereNotNull('gestionale_suggested_code'))
+            ->query(static::baseQuery())
             ->columns([
                 Tables\Columns\TextColumn::make('full_name')->label('Cliente nel CRM'),
                 Tables\Columns\TextColumn::make('gestionale_suggested_label')

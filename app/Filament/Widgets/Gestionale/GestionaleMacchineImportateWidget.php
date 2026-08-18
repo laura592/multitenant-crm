@@ -22,16 +22,23 @@ class GestionaleMacchineImportateWidget extends BaseWidget
     // Vedi GestionaleDaRivedereWidget per il perche'.
     protected static bool $isLazy = false;
 
+    public static function canView(): bool
+    {
+        return static::baseQuery()->exists();
+    }
+
+    private static function baseQuery()
+    {
+        return MachineUnit::query()
+            ->where('source', MachineUnit::SOURCE_EUREKA)
+            ->where('created_at', '>=', now()->subDays(7));
+    }
+
     public function table(Table $table): Table
     {
         return $table
             ->queryStringIdentifier('macchineImportate')
-            ->query(
-                MachineUnit::query()
-                    ->where('source', MachineUnit::SOURCE_EUREKA)
-                    ->where('created_at', '>=', now()->subDays(7))
-                    ->latest('created_at')
-            )
+            ->query(static::baseQuery()->latest('created_at'))
             ->columns([
                 Tables\Columns\TextColumn::make('currentCustomer.full_name')->label('Cliente')->placeholder('—'),
                 Tables\Columns\TextColumn::make('serial_number')->label('Matricola'),

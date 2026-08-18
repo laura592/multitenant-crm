@@ -17,12 +17,22 @@ class GestionaleCollegamentiMacchinariWidget extends BaseWidget
     // Vedi GestionaleDaRivedereWidget per il perche'.
     protected static bool $isLazy = false;
 
+    public static function canView(): bool
+    {
+        return static::baseQuery()->exists();
+    }
+
+    private static function baseQuery()
+    {
+        return MachineUnit::query()->whereNotNull('gestionale_suggested_code');
+    }
+
     public function table(Table $table): Table
     {
         return $table
             // Vedi GestionaleDaRivedereWidget per il perche'.
             ->queryStringIdentifier('collegamentiMacchinari')
-            ->query(MachineUnit::query()->whereNotNull('gestionale_suggested_code'))
+            ->query(static::baseQuery())
             ->columns([
                 Tables\Columns\TextColumn::make('serial_number')->label('Matricola'),
                 Tables\Columns\TextColumn::make('display_name')->label('Modello'),

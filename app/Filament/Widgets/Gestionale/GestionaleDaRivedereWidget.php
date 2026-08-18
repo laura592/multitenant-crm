@@ -20,6 +20,27 @@ class GestionaleDaRivedereWidget extends BaseWidget
     // subito, altrimenti sembra rotta.
     protected static bool $isLazy = false;
 
+    public static function canView(): bool
+    {
+        return static::baseQuery()->exists();
+    }
+
+    private static function baseQuery()
+    {
+        return Customer::query()
+            ->whereNotNull('gestionale_review_flagged_at')
+            // Le segnalazioni generate solo da campi autocompilati (nessuna
+            // vera differenza da decidere, vedi GestionaleSyncRunner) sono
+            // gia' state applicate da sole: mostrarle qui è solo rumore,
+            // l'utente non deve fare nulla. Restano visibili le altre note
+            // (es. da notifyGestionaleReviewIfLinked(), che non iniziano con
+            // questo prefisso) e quelle con anche una vera differenza.
+            ->where(function ($query) {
+                $query->where('gestionale_review_note', 'not like', 'Compilati automaticamente:%')
+                    ->orWhere('gestionale_review_note', 'like', '%Da rivedere:%');
+            });
+    }
+
     public function table(Table $table): Table
     {
         return $table
@@ -33,21 +54,7 @@ class GestionaleDaRivedereWidget extends BaseWidget
             // questa versione — l'unico modo che funziona davvero e'
             // ->queryStringIdentifier() qui sulla Table stessa.
             ->queryStringIdentifier('daRivedere')
-            ->query(
-                Customer::query()
-                    ->whereNotNull('gestionale_review_flagged_at')
-                    // Le segnalazioni generate solo da campi autocompilati (nessuna
-                    // vera differenza da decidere, vedi GestionaleSyncRunner) sono
-                    // gia' state applicate da sole: mostrarle qui è solo rumore,
-                    // l'utente non deve fare nulla. Restano visibili le altre note
-                    // (es. da notifyGestionaleReviewIfLinked(), che non iniziano con
-                    // questo prefisso) e quelle con anche una vera differenza.
-                    ->where(function ($query) {
-                        $query->where('gestionale_review_note', 'not like', 'Compilati automaticamente:%')
-                            ->orWhere('gestionale_review_note', 'like', '%Da rivedere:%');
-                    })
-                    ->orderByDesc('gestionale_review_flagged_at')
-            )
+            ->query(static::baseQuery()->orderByDesc('gestionale_review_flagged_at'))
             ->columns([
                 Tables\Columns\TextColumn::make('full_name')->label('Cliente'),
                 Tables\Columns\TextColumn::make('gestionale_review_note')->label('Nota')->wrap(),
