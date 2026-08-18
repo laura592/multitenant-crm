@@ -32,45 +32,55 @@ class VehicleResource extends Resource
     public static function infolist(Infolist $infolist): Infolist
     {
         return $infolist->schema([
-            InfolistSection::make('Identificazione')
-                ->columns(4)
+            InfolistSection::make('Panoramica rapida')
+                ->columns(12)
+                ->columnSpanFull()
+                ->extraAttributes([
+                    'class' => 'fi-quick-overview rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50 shadow-sm',
+                ])
                 ->schema([
-                    TextEntry::make('plate')->label('Targa'),
-                    TextEntry::make('brand')->label('Marca')->placeholder('—'),
-                    TextEntry::make('model')->label('Modello')->placeholder('—'),
-                    TextEntry::make('year')->label('Anno')->placeholder('—'),
+                    TextEntry::make('plate')->label('Targa')->columnSpan(2),
+                    TextEntry::make('brand')->label('Marca')->placeholder('—')->columnSpan(3),
+                    TextEntry::make('model')->label('Modello')->placeholder('—')->columnSpan(3),
+                    TextEntry::make('year')->label('Anno')->placeholder('—')->columnSpan(1),
+                    TextEntry::make('assignedUser.name')
+                        ->label('Assegnato a')
+                        ->placeholder('Mezzo aziendale')
+                        ->columnSpan(3),
                 ]),
             InfolistSection::make('Scadenze attive')
                 ->columns(3)
                 ->schema([
                     TextEntry::make('insurance_due_date')
                         ->label('Assicurazione')
+                        ->icon('heroicon-o-shield-check')
                         ->state(fn (Vehicle $record) => $record->activeDeadline(Deadline::TYPE_ASSICURAZIONE)?->due_date)
                         ->date()
-                        ->placeholder('—')
+                        ->placeholder('Nessuna scadenza attiva')
                         ->badge()
                         ->color(fn (Vehicle $record) => self::deadlineColor($record->activeDeadline(Deadline::TYPE_ASSICURAZIONE))),
                     TextEntry::make('revision_due_date')
                         ->label('Revisione')
+                        ->icon('heroicon-o-wrench-screwdriver')
                         ->state(fn (Vehicle $record) => $record->activeDeadline(Deadline::TYPE_REVISIONE)?->due_date)
                         ->date()
-                        ->placeholder('—')
+                        ->placeholder('Nessuna scadenza attiva')
                         ->badge()
                         ->color(fn (Vehicle $record) => self::deadlineColor($record->activeDeadline(Deadline::TYPE_REVISIONE))),
                     TextEntry::make('bollo_due_date')
                         ->label('Bollo')
+                        ->icon('heroicon-o-document-text')
                         ->state(fn (Vehicle $record) => $record->activeDeadline(Deadline::TYPE_BOLLO)?->due_date)
                         ->date()
-                        ->placeholder('—')
+                        ->placeholder('Nessuna scadenza attiva')
                         ->badge()
                         ->color(fn (Vehicle $record) => self::deadlineColor($record->activeDeadline(Deadline::TYPE_BOLLO))),
                 ]),
-            InfolistSection::make('Assegnazione')
-                ->columns(1)
+            InfolistSection::make('Note')
                 ->schema([
-                    TextEntry::make('assignedUser.name')->label('Assegnato a')->placeholder('Nessuno (mezzo aziendale)'),
-                    TextEntry::make('notes')->label('Note')->placeholder('—'),
-                ]),
+                    TextEntry::make('notes')->label('')->placeholder('—'),
+                ])
+                ->visible(fn (Vehicle $record) => filled($record->notes)),
         ]);
     }
 
