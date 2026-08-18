@@ -108,7 +108,8 @@ class DeadlineResource extends Resource
                 Tables\Columns\TextColumn::make('type')
                     ->label('Tipo')
                     ->badge()
-                    ->formatStateUsing(fn (string $state) => Deadline::typeLabels()[$state] ?? 'Altro'),
+                    ->formatStateUsing(fn (string $state) => Deadline::typeLabels()[$state] ?? 'Altro')
+                    ->sortable(),
                 Tables\Columns\TextColumn::make('deadlinable')
                     ->label('Collegata a')
                     // Un automezzo assegnato a un utente e' un mezzo
@@ -122,8 +123,16 @@ class DeadlineResource extends Resource
                             : "{$record->deadlinable->plate} — aziendale",
                         $record->deadlinable instanceof Tenant => "Azienda {$record->deadlinable->name}",
                         default => class_basename($record->deadlinable_type),
-                    }),
-                Tables\Columns\TextColumn::make('policy_number')->label('Numero polizza')->placeholder('—'),
+                    })
+                    // Colonna calcolata su due relazioni morph diverse (Vehicle/
+                    // Tenant): non esiste un singolo campo DB da ordinare per il
+                    // valore mostrato. Si ordina sul tipo (deadlinable_type), che
+                    // almeno raggruppa insieme veicoli e aziende.
+                    ->sortable(['deadlinable_type']),
+                Tables\Columns\TextColumn::make('policy_number')
+                    ->label('Numero polizza')
+                    ->placeholder('—')
+                    ->sortable(),
                 Tables\Columns\TextColumn::make('due_date')
                     ->label('Scadenza')
                     ->date()
@@ -133,7 +142,8 @@ class DeadlineResource extends Resource
                     ->label('Stato')
                     ->badge()
                     ->formatStateUsing(fn (string $state) => Deadline::statusLabels()[$state] ?? ucfirst($state))
-                    ->color(fn (string $state) => Deadline::statusColors()[$state] ?? 'gray'),
+                    ->color(fn (string $state) => Deadline::statusColors()[$state] ?? 'gray')
+                    ->sortable(),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('type')

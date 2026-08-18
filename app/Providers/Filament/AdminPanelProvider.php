@@ -99,6 +99,7 @@ class AdminPanelProvider extends PanelProvider
             // solo a chi clicca il bottone, cioe' l'approvatore stesso).
             ->databaseNotifications()
             ->databaseNotificationsPolling('30s')
+            ->globalSearch(false)
             ->sidebarCollapsibleOnDesktop()
             ->maxContentWidth(MaxWidth::Full)
             // Tenancy nativa Filament: schema condiviso, un tenant = un partner

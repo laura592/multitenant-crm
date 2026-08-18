@@ -57,7 +57,14 @@ trait HasDeadlinesTable
     {
         return $table
             ->recordTitleAttribute('type')
-            ->defaultSort('due_date')
+            // Le "rinnovata" sono storico (create da Deadline::renew()): vanno
+            // in fondo invece di essere mescolate per data con le scadenze
+            // attuali, altrimenti la riga rilevante si perde tra anni di
+            // rinnovi passati. Dentro ciascun gruppo, scadenza piu' vicina
+            // (o piu' scaduta) prima.
+            ->defaultSort(fn ($query) => $query
+                ->orderByRaw("status = '".Deadline::STATUS_RINNOVATA."'")
+                ->orderBy('due_date'))
             ->columns([
                 Tables\Columns\TextColumn::make('type')
                     ->label('Tipo')
