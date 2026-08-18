@@ -59,7 +59,12 @@ class InformationRequestResource extends Resource
                     Forms\Components\Select::make('customer_id')
                         ->label('Cliente')
                         ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
-                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->full_name)
+                        // Tante ragioni sociali identiche tra clienti diversi (catene/
+                        // franchising con più punti vendita): la città in coda aiuta a
+                        // distinguerli nell'elenco invece di vederli tutti uguali.
+                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->city
+                            ? "{$record->full_name} ({$record->city})"
+                            : $record->full_name)
                         ->searchable(['company_name', 'first_name', 'last_name'])
                         ->preload()
                         ->required()
