@@ -103,7 +103,7 @@ class DeadlineResource extends Resource
                 ->with(['deadlinable' => fn ($morphTo) => $morphTo->morphWith([
                     Vehicle::class => ['assignedUser'],
                 ])]))
-            ->defaultSort('due_date', 'desc')
+            ->defaultSort('due_date')
             ->columns([
                 Tables\Columns\TextColumn::make('type')
                     ->label('Tipo')
