@@ -17,6 +17,7 @@ class ServiceReportMail extends Mailable
     public function __construct(
         public ServiceReport $report,
         public string $pdfContent,
+        public ?string $customMessage = null,
     ) {}
 
     public function envelope(): Envelope
@@ -30,7 +31,10 @@ class ServiceReportMail extends Mailable
     {
         return new Content(
             markdown: 'mail.service-report',
-            with: ['report' => $this->report],
+            with: [
+                'report' => $this->report,
+                'customMessage' => $this->customMessage,
+            ],
         );
     }
 

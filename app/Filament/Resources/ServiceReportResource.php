@@ -19,6 +19,7 @@ use App\Models\ServiceReport;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Forms\Get;
 use Filament\Infolists\Components\Actions\Action as InfolistAction;
 use Filament\Infolists\Components\Actions as InfolistActions;
 use Filament\Infolists\Components\ImageEntry;
@@ -1080,14 +1081,7 @@ class ServiceReportResource extends Resource
                     Tables\Actions\Action::make('send')
                         ->label('Invia')
                         ->icon('heroicon-o-paper-airplane')
-                        ->form([
-                            Forms\Components\TextInput::make('recipient_email')
-                                ->label('Email destinatario')
-                                ->email()
-                                ->required()
-                                ->default(fn (ServiceReport $record) => $record->customer?->primaryEmail()),
-                            Forms\Components\TextInput::make('cc_email')->label('CC (opzionale)')->email(),
-                        ])
+                        ->form(fn (ServiceReport $record) => static::sendEmailFormSchema($record))
                         ->action(function (array $data, ServiceReport $record) {
                             $record->load(['customer', 'technician', 'machineProduct', 'machineUnit.product', 'machineUnit.billingCustomer', 'partsUsed.product', 'materialsUsed.material', 'tenant']);
                             $pdf = Pdf::loadView('pdf.service-report', ['report' => $record, 'showPrices' => false]);
@@ -1108,7 +1102,7 @@ class ServiceReportResource extends Resource
                             try {
                                 Mail::to($data['recipient_email'])
                                     ->cc($ccRecipients)
-                                    ->send(new ServiceReportMail($record, $pdf->output()));
+                                    ->send(new ServiceReportMail($record, $pdf->output(), $data['custom_message'] ?? null));
 
                                 $record->update(['status' => 'inviato']);
                                 Notification::make()->title('Rapportino inviato')->success()->send();
@@ -1180,6 +1174,54 @@ class ServiceReportResource extends Resource
             ->emptyStateHeading('Nessun rapportino ancora')
             ->emptyStateDescription('Crea il primo rapportino con "Nuovo".')
             ->emptyStateIcon('heroicon-o-clipboard-document-check');
+    }
+
+    /**
+     * Form dell'azione "Invia": stesso principio di
+     * QuoteResource::sendEmailFormSchema() (testo modificabile con
+     * anteprima), con in piu' un placeholder reattivo che mostra il
+     * rendering reale della mail (stesso iframe gia' usato in "Storico
+     * invii email") mentre si scrive, invece di scoprirlo solo dopo
+     * l'invio. Il PDF allegato non cambia (resta sempre showPrices=false),
+     * qui si modifica solo il testo del corpo email.
+     *
+     * @return array<Forms\Components\Component>
+     */
+    protected static function sendEmailFormSchema(ServiceReport $record): array
+    {
+        return [
+            Forms\Components\TextInput::make('recipient_email')
+                ->label('Email destinatario')
+                ->email()
+                ->required()
+                ->default(fn () => $record->customer?->primaryEmail()),
+            Forms\Components\TextInput::make('cc_email')
+                ->label('CC (opzionale)')
+                ->email(),
+            Forms\Components\RichEditor::make('custom_message')
+                ->label('Testo email (modificabile)')
+                ->toolbarButtons(['bold', 'italic', 'bulletList', 'orderedList', 'link', 'undo', 'redo'])
+                ->helperText('Questo testo viene inviato realmente nella mail. Il rapportino allegato non mostra mai i prezzi.')
+                ->live(debounce: 500)
+                ->default(fn () => static::defaultServiceReportEmailBody($record)),
+            Forms\Components\Placeholder::make('email_preview')
+                ->label('Anteprima email')
+                ->content(fn (Get $get): HtmlString => new HtmlString(
+                    '<iframe srcdoc="'.e((new ServiceReportMail($record, '', is_string($get('custom_message')) ? $get('custom_message') : null))->render()).'" style="width:100%;height:60vh;border:0;border-radius:0.5rem;background:#fff;"></iframe>'
+                )),
+        ];
+    }
+
+    protected static function defaultServiceReportEmailBody(ServiceReport $record): string
+    {
+        $customerName = $record->customer?->company_name ?: ($record->customer?->full_name ?? 'Cliente');
+        $interventionDate = $record->intervention_date?->format('d/m/Y');
+
+        return implode('', [
+            '<p>Gentile '.e($customerName).',</p>',
+            '<p>in allegato il rapportino relativo all\'intervento del '.e($interventionDate).'.</p>',
+            '<p><strong>Lavoro svolto:</strong> '.e($record->work_performed).'</p>',
+        ]);
     }
 
     public static function getPages(): array
