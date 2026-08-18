@@ -96,12 +96,20 @@ class UserResource extends Resource
                         ->dehydrated(fn () => (bool) auth()->user()?->is_super_admin)
                         ->columnSpanFull(),
                 ]),
+            // Le tre colonne sotto sono NOT NULL con un default lato DB
+            // (8 ore, 40 ore, 26 giorni — vedi migration
+            // add_tenant_fields_to_users_table): il default DB pero' scatta
+            // solo se la colonna resta assente dall'INSERT, non se arriva
+            // esplicitamente NULL. Un campo lasciato vuoto qui manda NULL
+            // (Filament svuota le TextInput a null), quindi bypassava il
+            // default e faceva fallire la creazione con un 500 - required()
+            // + default() qui evita che possano mai arrivare vuoti.
             Forms\Components\Section::make('Contratto')
                 ->columns(3)
                 ->schema([
-                    Forms\Components\TextInput::make('daily_contract_hours')->label('Ore giornaliere')->numeric(),
-                    Forms\Components\TextInput::make('weekly_contract_hours')->label('Ore settimanali')->numeric(),
-                    Forms\Components\TextInput::make('annual_leave_days')->label('Giorni ferie annui')->numeric(),
+                    Forms\Components\TextInput::make('daily_contract_hours')->label('Ore giornaliere')->numeric()->default(8)->required(),
+                    Forms\Components\TextInput::make('weekly_contract_hours')->label('Ore settimanali')->numeric()->default(40)->required(),
+                    Forms\Components\TextInput::make('annual_leave_days')->label('Giorni ferie annui')->numeric()->default(26)->required(),
                 ]),
             Forms\Components\Section::make('Orario standard')
                 ->description('Usato per pre-compilare gli orari in Presenze e per il pulsante "Turno standard di oggi". Lascia vuoto se l\'orario di questo dipendente varia troppo per avere un default.')
