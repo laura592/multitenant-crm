@@ -63,6 +63,35 @@ document.addEventListener('livewire:init', () => {
 	});
 });
 
+// Di suo, un errore server non gestito (es. eccezione durante un'azione
+// dentro un form Filament) fa mostrare a Livewire l'HTML grezzo della
+// risposta d'errore in un overlay a pagina intera — pessima UX (sembra
+// un crash totale dell'app) e in piu' espone lo stack trace se APP_DEBUG
+// e' attivo. L'errore resta comunque loggato lato server (report() nel
+// normale flusso Laravel, prima che la risposta arrivi qui); qui si
+// sostituisce solo la presentazione con un toast, stesso stile delle
+// notifiche Filament native (window.FilamentNotification, esposta dal
+// pacchetto filament/notifications). Non tocca 419 (gestito sopra) ne'
+// gli altri stati (401/403/404/422): quelli hanno gia' un trattamento
+// specifico o arrivano come risposta "riuscita" col proprio HTTP status.
+document.addEventListener('livewire:init', () => {
+	Livewire.hook('request', ({ fail }) => {
+		fail(({ status, preventDefault }) => {
+			if (status < 500) {
+				return;
+			}
+
+			preventDefault();
+
+			new window.FilamentNotification()
+				.title('Si è verificato un errore')
+				.body('L\'operazione non è andata a buon fine. Riprova; se il problema persiste contatta l\'assistenza.')
+				.danger()
+				.send();
+		});
+	});
+});
+
 const nearbyMapInstances = new WeakMap();
 
 const ensureLeafletLoaded = (() => {

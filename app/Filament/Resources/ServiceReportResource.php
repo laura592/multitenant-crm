@@ -17,6 +17,7 @@ use App\Models\Material;
 use App\Models\Product;
 use App\Models\ServiceReport;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
@@ -29,6 +30,7 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Support\Exceptions\Halt;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -70,6 +72,13 @@ class ServiceReportResource extends Resource
     private const LAVAGGIO_VIE_BASE_MATERIAL_CODE = 'LAV2';
 
     private const LAVAGGIO_VIE_ULTERIORE_MATERIAL_CODE = 'ULTVIA';
+
+    /**
+     * Convenzione gia' in uso (vedi ApplyEurekaBillingDestinazione) per le
+     * macchine create al volo dal campo "Macchina (matricola tracciata)"
+     * quando il tecnico non conosce la matricola reale.
+     */
+    private const MACHINE_UNIT_NO_SERIAL_PLACEHOLDER = '0000000';
 
     public static function infolist(Infolist $infolist): Infolist
     {
@@ -449,7 +458,7 @@ class ServiceReportResource extends Resource
                         ->createOptionForm([
                             Forms\Components\TextInput::make('serial_number')
                                 ->label('Matricola')
-                                ->required()
+                                ->helperText('Se non la conosci lascia vuoto o scrivi "'.self::MACHINE_UNIT_NO_SERIAL_PLACEHOLDER.'": ne viene generata una segnaposto univoca in automatico.')
                                 ->maxLength(255),
                             Forms\Components\Select::make('product_id')
                                 ->label('Modello (da catalogo)')
@@ -464,7 +473,7 @@ class ServiceReportResource extends Resource
                         ->createOptionUsing(function (array $data, Forms\Get $get) {
                             $machineUnit = MachineUnit::create([
                                 'source' => MachineUnit::SOURCE_MANUALE,
-                                'serial_number' => $data['serial_number'],
+                                'serial_number' => self::resolveUniqueMachineSerialNumber($data['serial_number'] ?? null),
                                 'product_id' => $data['product_id'] ?? null,
                                 'model_name' => $data['model_name'] ?? null,
                             ]);
@@ -806,6 +815,46 @@ class ServiceReportResource extends Resource
         }
 
         return null;
+    }
+
+    /**
+     * "0000000" (o vuoto) e' il segnaposto gia' in uso quando il tecnico non
+     * conosce la matricola reale (vedi ApplyEurekaBillingDestinazione), ma
+     * l'indice unico (tenant_id, serial_number) faceva fallire con un errore
+     * non gestito il secondo inserimento identico per lo stesso tenant. Qui
+     * lo si rende univoco da solo (0000000-2, 0000000-3, ...); una matricola
+     * reale che collide invece con una gia' tracciata resta un errore
+     * esplicito, perche' li' e' piu' probabile un doppione della stessa
+     * macchina che una matricola davvero mancante.
+     */
+    private static function resolveUniqueMachineSerialNumber(?string $serialNumber): string
+    {
+        $trimmed = trim((string) $serialNumber);
+        $tenantId = Filament::getTenant()?->id;
+
+        if ($trimmed !== '' && $trimmed !== self::MACHINE_UNIT_NO_SERIAL_PLACEHOLDER) {
+            if (MachineUnit::withTrashed()->where('tenant_id', $tenantId)->where('serial_number', $trimmed)->exists()) {
+                Notification::make()
+                    ->danger()
+                    ->title('Matricola già tracciata')
+                    ->body('Esiste già una macchina con questa matricola per questo cliente. Se è la stessa, selezionala dall\'elenco invece di crearne una nuova.')
+                    ->send();
+
+                throw new Halt;
+            }
+
+            return $trimmed;
+        }
+
+        $candidate = self::MACHINE_UNIT_NO_SERIAL_PLACEHOLDER;
+        $suffix = 2;
+
+        while (MachineUnit::withTrashed()->where('tenant_id', $tenantId)->where('serial_number', $candidate)->exists()) {
+            $candidate = self::MACHINE_UNIT_NO_SERIAL_PLACEHOLDER."-{$suffix}";
+            $suffix++;
+        }
+
+        return $candidate;
     }
 
     /**
