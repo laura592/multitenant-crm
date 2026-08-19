@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class InformationRequest extends Model
 {
@@ -18,7 +19,13 @@ class InformationRequest extends Model
         'number',
         'request_details',
         'status',
+        'appointment_at',
+        'appointment_notes',
         'handled_by_user_id',
+    ];
+
+    protected $casts = [
+        'appointment_at' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -66,5 +73,10 @@ class InformationRequest extends Model
     public function handledByUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'handled_by_user_id');
+    }
+
+    public function notes(): HasMany
+    {
+        return $this->hasMany(InformationRequestNote::class)->orderByDesc('logged_at');
     }
 }

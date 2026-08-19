@@ -6,6 +6,7 @@ use App\Filament\Forms\CustomerContactFields;
 use App\Filament\Forms\CustomerFiscalFields;
 use App\Filament\Forms\ItalianAddressFields;
 use App\Filament\Resources\InformationRequestResource\Pages;
+use App\Models\Customer;
 use App\Models\InformationRequest;
 use Filament\Facades\Filament;
 use Filament\Forms;
@@ -13,6 +14,8 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\HtmlString;
 
 class InformationRequestResource extends Resource
 {
@@ -68,6 +71,9 @@ class InformationRequestResource extends Resource
                         ->searchable(['company_name', 'first_name', 'last_name'])
                         ->preload()
                         ->required()
+                        // Serve al placeholder "Contatti cliente" sotto, che deve
+                        // aggiornarsi subito quando si cambia/crea/modifica il cliente.
+                        ->live()
                         ->createOptionForm([
                             Forms\Components\TextInput::make('company_name')->label('Ragione sociale'),
                             Forms\Components\TextInput::make('first_name')->label('Nome'),
@@ -75,7 +81,37 @@ class InformationRequestResource extends Resource
                             ...CustomerContactFields::schema(),
                             ...CustomerFiscalFields::schema(),
                             ...ItalianAddressFields::schema(),
-                        ]),
+                        ])
+                        // Come in ServiceReportResource: permette di correggere email/
+                        // telefono del cliente già selezionato senza uscire da questa
+                        // richiesta per cercarlo in CustomerResource.
+                        ->editOptionForm([
+                            Forms\Components\TextInput::make('company_name')->label('Ragione sociale'),
+                            Forms\Components\TextInput::make('first_name')->label('Nome'),
+                            Forms\Components\TextInput::make('last_name')->label('Cognome'),
+                            ...CustomerContactFields::schema(),
+                            ...CustomerFiscalFields::schema(),
+                            ...ItalianAddressFields::schema(),
+                        ])
+                        ->editOptionAction(fn (Forms\Components\Actions\Action $action) => $action->after(
+                            fn (Forms\Components\Select $component) => $component->getSelectedRecord()
+                                ?->notifyGestionaleReviewIfLinked(array_keys($component->getSelectedRecord()->getChanges()))
+                        )),
+                    Forms\Components\Placeholder::make('customer_contact_info')
+                        ->label('Contatti cliente')
+                        ->content(function (Forms\Get $get) {
+                            $customer = $get('customer_id') ? Customer::find($get('customer_id')) : null;
+
+                            if (! $customer) {
+                                return '— (seleziona un cliente)';
+                            }
+
+                            return new HtmlString(collect([
+                                $customer->primaryEmail() ? "✉️ {$customer->primaryEmail()}" : null,
+                                $customer->primaryPhone() ? "📞 {$customer->primaryPhone()}" : null,
+                                $customer->city ?: null,
+                            ])->filter()->implode('&emsp;') ?: '— (nessun contatto salvato)');
+                        }),
                     Forms\Components\Select::make('status')
                         ->label('Stato')
                         ->options(static::statusLabels())
@@ -92,6 +128,50 @@ class InformationRequestResource extends Resource
                         ->rows(3)
                         ->columnSpanFull(),
                 ]),
+            Forms\Components\Section::make('Appuntamento')
+                ->columns(2)
+                ->schema([
+                    Forms\Components\DateTimePicker::make('appointment_at')
+                        ->label('Data appuntamento')
+                        ->native(false)
+                        ->displayFormat('d/m/Y H:i'),
+                    Forms\Components\Textarea::make('appointment_notes')
+                        ->label('Note appuntamento')
+                        ->rows(2)
+                        ->columnSpanFull(),
+                ]),
+            Forms\Components\Section::make('Note')
+                ->schema([
+                    // Diario libero (es. "mandata mail con listino il 20/08"):
+                    // a differenza dell'appuntamento sopra (un solo prossimo
+                    // evento programmato), qui si accumula lo storico di cosa
+                    // e' gia' stato fatto, una riga per contatto.
+                    Forms\Components\Repeater::make('notes')
+                        ->relationship()
+                        ->label('')
+                        ->schema([
+                            Forms\Components\DatePicker::make('logged_at')
+                                ->label('Data')
+                                ->native(false)
+                                ->displayFormat('d/m/Y')
+                                ->default(now())
+                                ->required(),
+                            Forms\Components\Textarea::make('body')
+                                ->label('Nota')
+                                ->rows(1)
+                                ->required(),
+                        ])
+                        ->columns(2)
+                        ->defaultItems(0)
+                        ->addActionLabel('Aggiungi nota')
+                        ->reorderable(false)
+                        ->itemLabel(fn (array $state) => filled($state['logged_at'] ?? null)
+                            ? Carbon::parse($state['logged_at'])->format('d/m/Y').(filled($state['body'] ?? null) ? " — {$state['body']}" : '')
+                            : null)
+                        ->collapsed()
+                        ->collapsible(),
+                ])
+                ->visibleOn('edit'),
             Forms\Components\Section::make('Gestione')
                 ->schema([
                     Forms\Components\Select::make('handled_by_user_id')
@@ -107,14 +187,57 @@ class InformationRequestResource extends Resource
     {
         return $table
             ->defaultSort('created_at', 'desc')
+            // customer/notes gia' usati da piu' colonne sotto (email, telefono,
+            // ultima nota): senza eager load sarebbe una query per riga.
+            ->modifyQueryUsing(fn ($query) => $query->with(['customer', 'notes']))
             ->columns([
                 Tables\Columns\TextColumn::make('number')->label('Numero')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->searchable()->sortable(),
+                // Recapiti diretti in tabella: prima bisognava aprire il cliente per
+                // vedere email/telefono, ora sono a colpo d'occhio e copiabili.
+                Tables\Columns\TextColumn::make('customer_email')
+                    ->label('Email')
+                    ->getStateUsing(fn (InformationRequest $record) => $record->customer?->primaryEmail())
+                    ->placeholder('—')
+                    ->copyable()
+                    ->copyMessage('Email copiata')
+                    ->icon('heroicon-o-envelope')
+                    ->toggleable(),
+                Tables\Columns\TextColumn::make('customer_phone')
+                    ->label('Telefono')
+                    ->getStateUsing(fn (InformationRequest $record) => $record->customer?->primaryPhone())
+                    ->placeholder('—')
+                    ->copyable()
+                    ->copyMessage('Telefono copiato')
+                    ->icon('heroicon-o-phone')
+                    ->toggleable(),
                 Tables\Columns\TextColumn::make('status')
                     ->label('Stato')
                     ->badge()
                     ->formatStateUsing(fn (string $state) => static::statusLabels()[$state] ?? ucfirst($state))
                     ->color(fn (string $state) => static::statusColors()[$state] ?? 'gray'),
+                Tables\Columns\TextColumn::make('appointment_at')
+                    ->label('Appuntamento')
+                    ->dateTime('d/m/Y H:i')
+                    ->placeholder('—')
+                    ->sortable()
+                    // Rosso se l'appuntamento è passato e la richiesta non è ancora
+                    // stata chiusa: segnala a colpo d'occhio cosa richiede attenzione.
+                    ->color(fn (?InformationRequest $record) => $record?->appointment_at
+                        && $record->appointment_at->isPast()
+                        && ! in_array($record->status, ['gestita', 'chiusa'], true)
+                            ? 'danger'
+                            : null),
+                Tables\Columns\TextColumn::make('latest_note')
+                    ->label('Ultima nota')
+                    ->getStateUsing(function (InformationRequest $record) {
+                        $note = $record->notes->first();
+
+                        return $note ? $note->logged_at->format('d/m/Y').' — '.$note->body : null;
+                    })
+                    ->limit(40)
+                    ->placeholder('—')
+                    ->toggleable(),
                 Tables\Columns\TextColumn::make('handledByUser.name')->label('Gestita da')->placeholder('—'),
                 Tables\Columns\TextColumn::make('created_at')->label('Ricevuta il')->dateTime('d/m/Y H:i')->sortable(),
             ])
@@ -125,6 +248,44 @@ class InformationRequestResource extends Resource
             ])
             ->actions([
                 Tables\Actions\ActionGroup::make([
+                    // Fissare/spostare l'appuntamento è l'azione più frequente su una
+                    // richiesta già presa in carico: un modal rapido evita di aprire
+                    // tutto il form di modifica solo per questo.
+                    Tables\Actions\Action::make('setAppointment')
+                        ->label('Fissa appuntamento')
+                        ->icon('heroicon-o-calendar-days')
+                        ->form([
+                            Forms\Components\DateTimePicker::make('appointment_at')
+                                ->label('Data appuntamento')
+                                ->native(false)
+                                ->displayFormat('d/m/Y H:i'),
+                            Forms\Components\Textarea::make('appointment_notes')
+                                ->label('Note appuntamento')
+                                ->rows(2),
+                        ])
+                        ->fillForm(fn (InformationRequest $record) => [
+                            'appointment_at' => $record->appointment_at,
+                            'appointment_notes' => $record->appointment_notes,
+                        ])
+                        ->action(fn (InformationRequest $record, array $data) => $record->update($data)),
+                    // Come sopra: loggare "mandata mail il 20/08" non deve
+                    // richiedere di aprire tutto il form di modifica.
+                    Tables\Actions\Action::make('addNote')
+                        ->label('Aggiungi nota')
+                        ->icon('heroicon-o-pencil-square')
+                        ->form([
+                            Forms\Components\DatePicker::make('logged_at')
+                                ->label('Data')
+                                ->native(false)
+                                ->displayFormat('d/m/Y')
+                                ->default(now())
+                                ->required(),
+                            Forms\Components\Textarea::make('body')
+                                ->label('Nota')
+                                ->rows(2)
+                                ->required(),
+                        ])
+                        ->action(fn (InformationRequest $record, array $data) => $record->notes()->create($data)),
                     Tables\Actions\EditAction::make(),
                     Tables\Actions\DeleteAction::make(),
                 ]),
