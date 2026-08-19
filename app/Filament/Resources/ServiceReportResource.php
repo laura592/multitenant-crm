@@ -911,10 +911,10 @@ class ServiceReportResource extends Resource
      * partire i toggle/hidden di cui sopra gia' allineati a quello che c'e'
      * davvero in "Ricambi/materiali utilizzati" (es. un rapportino importato
      * da Eureka con CHIORD+LAV2 gia' in elenco), invece che sempre spenti.
-     * Le key restituite sono gli id delle righe ServiceReportMaterial, cosi'
-     * da poter essere riusate cosi' come sono come chiavi del repeater
-     * ->relationship() (che su un edit e' keyed per id di riga, non per uuid
-     * generato al volo).
+     * Le key restituite sono gli id delle righe ServiceReportMaterial con
+     * prefisso "record-", cosi' da poter essere riusate cosi' come sono come
+     * chiavi del repeater ->relationship() (che su un edit e' keyed per
+     * "record-{id}", non per id nudo ne' per uuid generato al volo).
      *
      * Pubblico perche' su EditServiceReport i ->default() qui sotto NON
      * bastano: Filament valuta getDefaultState() solo quando fill() e'
@@ -946,10 +946,15 @@ class ServiceReportResource extends Resource
         $ultRow = $rows->first(fn ($row) => $row->material?->code === self::LAVAGGIO_VIE_ULTERIORE_MATERIAL_CODE);
 
         return [
-            'chiamata_key' => $chiamataRow?->id,
-            'manodopera_key' => $manodoperaRow?->id,
-            'lavaggio_base_key' => $baseRow?->id,
-            'lavaggio_ult_key' => $ultRow?->id,
+            // Prefisso "record-": il repeater ->relationship() tiene le righe
+            // gia' persistite nello stato con chiave "record-{id}", non
+            // l'id nudo (vedi Repeater::getCachedExistingRecords()) — senza
+            // prefisso i toggle "spengono" solo in apparenza, l'unset() sulla
+            // key sbagliata non trova mai la riga e questa resta in elenco.
+            'chiamata_key' => $chiamataRow ? "record-{$chiamataRow->id}" : null,
+            'manodopera_key' => $manodoperaRow ? "record-{$manodoperaRow->id}" : null,
+            'lavaggio_base_key' => $baseRow ? "record-{$baseRow->id}" : null,
+            'lavaggio_ult_key' => $ultRow ? "record-{$ultRow->id}" : null,
             // Inverso esatto di syncLavaggioViaMaterials() (ULTVIA qty =
             // vieCount - 2): LAV2 da solo, senza ULTVIA, non permette di
             // distinguere "1 via lavata con la tariffa minima agevolata" da
