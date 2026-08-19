@@ -1,8 +1,8 @@
 <x-mail::message>
 <x-mail.hero
-	kicker="Richiesta informazioni {{ $informationRequest->number }}"
+	:kicker="'Richiesta informazioni '.$informationRequest->number"
 	title="Nuova richiesta"
-	subtitle="Cliente: {{ $informationRequest->customer?->full_name ?: 'Non specificato' }}"
+	:subtitle="'Cliente: '.($informationRequest->customer?->full_name ?: 'Non specificato')"
 />
 
 @if($informationRequest->request_details)

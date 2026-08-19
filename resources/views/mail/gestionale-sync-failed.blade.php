@@ -2,7 +2,7 @@
 <x-mail.hero
 	tone="red"
 	kicker="Sync Eureka"
-	title="{{ $tenant->name }}"
+	:title="$tenant->name"
 	subtitle="Controllo automatico non riuscito"
 />
 

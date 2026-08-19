@@ -6,7 +6,7 @@
 @endphp
 
 <x-mail.hero
-	kicker="Preventivo {{ $quote->number }}"
+	:kicker="'Preventivo '.$quote->number"
 	:title="$heroTitle"
 />
 

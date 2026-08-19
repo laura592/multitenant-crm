@@ -10,9 +10,9 @@
 @endphp
 
 <x-mail.hero
-	kicker="Richiesta {{ $type }}"
-	title="{{ $leaveRequest->user?->name }}"
-	subtitle="{{ $period }}"
+	:kicker="'Richiesta '.$type"
+	:title="$leaveRequest->user?->name"
+	:subtitle="$period"
 />
 
 **{{ $leaveRequest->user?->name }}** ha richiesto **{{ $type }}** per il periodo **{{ $period }}**.

@@ -12,9 +12,9 @@
 
 <x-mail.hero
 	:tone="$approved ? 'dark' : 'red'"
-	kicker="Richiesta {{ $type }}"
-	title="{{ $approved ? 'Approvata' : 'Rifiutata' }}"
-	subtitle="{{ $leaveRequest->user?->name }} — {{ $period }}"
+	:kicker="'Richiesta '.$type"
+	:title="$approved ? 'Approvata' : 'Rifiutata'"
+	:subtitle="$leaveRequest->user?->name.' — '.$period"
 />
 
 Ciao {{ $leaveRequest->user?->name }},

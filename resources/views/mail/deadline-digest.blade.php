@@ -1,8 +1,8 @@
 <x-mail::message>
 <x-mail.hero
 	kicker="Scadenzario"
-	title="{{ $tenant->name }}"
-	subtitle="{{ count($deadlines) }} scadenze da controllare"
+	:title="$tenant->name"
+	:subtitle="count($deadlines).' scadenze da controllare'"
 />
 
 Queste sono le scadenze in avvicinamento o gia' scadute, da controllare.

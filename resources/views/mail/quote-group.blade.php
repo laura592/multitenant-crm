@@ -8,9 +8,9 @@
 @endphp
 
 <x-mail.hero
-	kicker="Offerta {{ $group->number }}"
+	:kicker="'Offerta '.$group->number"
 	:title="$resolvedSubject"
-	subtitle="Destinatario: {{ $customerName }}"
+	:subtitle="'Destinatario: '.$customerName"
 />
 
 <x-mail.box>

@@ -1,7 +1,7 @@
 <x-mail::message>
 <x-mail.hero
 	kicker="Sync Eureka"
-	title="{{ $tenant->name }}"
+	:title="$tenant->name"
 	subtitle="Riepilogo del controllo automatico tra il CRM e Eureka"
 />
 

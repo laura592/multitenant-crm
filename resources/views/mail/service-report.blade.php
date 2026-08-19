@@ -5,9 +5,9 @@
 @endphp
 
 <x-mail.hero
-	kicker="Rapportino {{ $report->number }}"
-	title="Intervento del {{ $report->intervention_date->format('d/m/Y') }}"
-	subtitle="Cliente: {{ $customerName }}"
+	:kicker="'Rapportino '.$report->number"
+	:title="'Intervento del '.$report->intervention_date->format('d/m/Y')"
+	:subtitle="'Cliente: '.$customerName"
 />
 
 <x-mail.box>
