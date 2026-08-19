@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Support\DisplayName;
 use App\Support\LavaggioDescrizione;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
@@ -172,22 +173,22 @@ class Lavaggio extends Model
         // essere non ancora sistemato o non riflettere un cambio di pagante
         // nel tempo (es. Il Filare SRL -> Ristoalma SRL sullo stesso impianto).
         if ($this->service_report_id && ($label = $this->serviceReport?->eureka_destinazione_label)) {
-            return $label;
+            return DisplayName::titleCase($label);
         }
 
         if (! $this->machine_unit_id) {
             if ($scheduleUnit = $this->maintenanceSchedule?->machineUnit) {
-                return $scheduleUnit->billingCustomer?->full_name ?? $this->invoiceRecipient()->full_name;
+                return DisplayName::titleCase($scheduleUnit->billingCustomer?->full_name) ?? DisplayName::titleCase($this->invoiceRecipient()->full_name);
             }
 
             $units = MachineUnit::where('current_customer_id', $this->customer_id)->get();
-            $targets = $units->map(fn (MachineUnit $u) => $u->billingCustomer?->full_name ?? 'se stesso');
+            $targets = $units->map(fn (MachineUnit $u) => DisplayName::titleCase($u->billingCustomer?->full_name) ?? 'se stesso');
 
             if ($targets->unique()->count() > 1) {
-                return 'Misto: '.$units->map(fn (MachineUnit $u) => $u->model_name.'='.($u->billingCustomer?->full_name ?? 'se stesso'))->implode(', ');
+                return 'Misto: '.$units->map(fn (MachineUnit $u) => $u->model_name.'='.(DisplayName::titleCase($u->billingCustomer?->full_name) ?? 'se stesso'))->implode(', ');
             }
         }
 
-        return $this->invoiceRecipient()->full_name;
+        return DisplayName::titleCase($this->invoiceRecipient()->full_name);
     }
 }

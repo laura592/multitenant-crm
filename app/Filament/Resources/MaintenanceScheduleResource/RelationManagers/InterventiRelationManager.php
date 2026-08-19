@@ -125,7 +125,7 @@ class InterventiRelationManager extends RelationManager
                     // destinazione letta da Eureka su QUESTO rapportino batte
                     // il billing_customer_id generico di macchina/cliente,
                     // quando disponibile.
-                    ->state(fn (ServiceReport $record) => $record->eureka_destinazione_label ?? DisplayName::titleCase($record->invoiceRecipient()->full_name))
+                    ->state(fn (ServiceReport $record) => DisplayName::titleCase($record->eureka_destinazione_label) ?? DisplayName::titleCase($record->invoiceRecipient()->full_name))
                     ->wrap(),
                 // work_performed e' il campo obbligatorio "cosa e' stato
                 // fatto" sul rapportino - stesso ruolo di Lavaggio.descrizione
