@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Forms\CustomerContactFields;
 use App\Filament\Forms\CustomerFiscalFields;
 use App\Filament\Forms\ItalianAddressFields;
+use App\Filament\Forms\MoneyInput;
 use App\Filament\Resources\QuoteResource\Pages;
 use App\Filament\Resources\QuoteResource\RelationManagers\QuoteProductsRelationManager;
 use App\Mail\QuoteMail;
@@ -319,9 +320,8 @@ class QuoteResource extends Resource
                         ->label('Metodo di pagamento')
                         ->options(fn () => PaymentMethod::query()->where('is_active', true)->pluck('name', 'slug'))
                         ->live(),
-                    Forms\Components\TextInput::make('rental_monthly_fee')
+                    MoneyInput::make('rental_monthly_fee')
                         ->label('Canone mensile noleggio (€)')
-                        ->numeric()
                         ->visible(fn (Get $get) => $get('payment_method') === 'noleggio-operativo'),
                     Forms\Components\TextInput::make('rental_months')
                         ->label('Durata (mesi)')
@@ -395,9 +395,8 @@ class QuoteResource extends Resource
                                         ->options(fn () => PaymentMethod::query()->where('is_active', true)->pluck('name', 'slug'))
                                         ->live()
                                         ->columnSpan(4),
-                                    Forms\Components\TextInput::make('rental_monthly_fee')
+                                    MoneyInput::make('rental_monthly_fee')
                                         ->label('Canone mensile noleggio (€)')
-                                        ->numeric()
                                         ->columnSpan(4)
                                         ->visible(fn (Get $get) => $get('payment_method') === 'noleggio-operativo'),
                                     Forms\Components\TextInput::make('rental_months')

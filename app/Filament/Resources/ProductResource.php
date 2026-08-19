@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Forms\MoneyInput;
 use App\Filament\Resources\ProductResource\Pages;
 use App\Filament\Resources\ProductResource\RelationManagers;
 use App\Models\Product;
@@ -120,9 +121,8 @@ class ProductResource extends Resource
                         ->label('')
                         ->columns(3)
                         ->schema([
-                            Forms\Components\TextInput::make('price')
+                            MoneyInput::make('price')
                                 ->label('Prezzo (€)')
-                                ->numeric()
                                 ->prefix('€')
                                 ->required(),
                             Forms\Components\DatePicker::make('valid_from')->label('Valido da'),

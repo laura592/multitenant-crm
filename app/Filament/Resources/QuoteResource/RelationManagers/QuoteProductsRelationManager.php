@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\QuoteResource\RelationManagers;
 
 use App\Filament\Actions\ConfigureMachineAction;
+use App\Filament\Forms\MoneyInput;
 use App\Filament\Resources\QuoteResource\Pages\ViewQuote;
 use App\Models\Brand;
 use App\Models\Category;
@@ -83,7 +84,7 @@ class QuoteProductsRelationManager extends RelationManager
                 })
                 ->required(),
             Forms\Components\TextInput::make('quantity')->label('Quantità')->numeric()->default(1)->required(),
-            Forms\Components\TextInput::make('price')->label('Prezzo (€)')->numeric()->prefix('€')->required(),
+            MoneyInput::make('price')->label('Prezzo (€)')->prefix('€')->required(),
             Forms\Components\TextInput::make('discount')->label('Sconto (%)')->numeric()->default(0),
             Forms\Components\TextInput::make('tax')->label('IVA (%)')->numeric()->default(22),
         ]);
