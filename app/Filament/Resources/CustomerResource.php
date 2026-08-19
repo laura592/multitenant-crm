@@ -11,6 +11,7 @@ use App\Filament\Resources\CustomerResource\RelationManagers\MacchinariRelationM
 use App\Filament\Resources\CustomerResource\RelationManagers\QuotesRelationManager;
 use App\Filament\Resources\CustomerResource\RelationManagers\ServiceReportsRelationManager;
 use App\Models\Customer;
+use App\Support\DisplayName;
 use App\Support\Gestionale\EurekaClient;
 use Filament\Facades\Filament;
 use Filament\Forms;
@@ -97,8 +98,10 @@ class CustomerResource extends Resource
             InfolistSection::make('Anagrafica')
                 ->columns(2)
                 ->schema([
-                    TextEntry::make('company_name')->label('Ragione sociale')->placeholder('—'),
-                    TextEntry::make('full_name')->label('Referente')->placeholder('—'),
+                    TextEntry::make('company_name')->label('Ragione sociale')->placeholder('—')
+                        ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
+                    TextEntry::make('full_name')->label('Referente')->placeholder('—')
+                        ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                     TextEntry::make('emails')->label('Email')->listWithLineBreaks()->placeholder('—'),
                     TextEntry::make('phones')->label('Telefoni')->listWithLineBreaks()->placeholder('—'),
                     TextEntry::make('website')->label('Sito web')->placeholder('—')
@@ -119,7 +122,8 @@ class CustomerResource extends Resource
                     TextEntry::make('vat_number')->label('P.IVA')->placeholder('—'),
                     TextEntry::make('sdi')->label('Codice SDI')->placeholder('—'),
                     TextEntry::make('pec')->label('PEC')->placeholder('—'),
-                    TextEntry::make('billingCustomer.full_name')->label('Fatturare a')->placeholder('Se stesso'),
+                    TextEntry::make('billingCustomer.full_name')->label('Fatturare a')->placeholder('Se stesso')
+                        ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                 ]),
             InfolistSection::make('Gestionale')
                 ->columns(3)
@@ -141,7 +145,8 @@ class CustomerResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('company_name')->label('Ragione sociale')->searchable()->sortable(),
+                Tables\Columns\TextColumn::make('company_name')->label('Ragione sociale')->searchable()->sortable()
+                    ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                 Tables\Columns\TextColumn::make('emails')
                     ->label('Email')
                     ->listWithLineBreaks()
