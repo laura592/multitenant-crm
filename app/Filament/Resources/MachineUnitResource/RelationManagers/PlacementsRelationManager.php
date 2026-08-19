@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\MachineUnitResource\RelationManagers;
 
+use App\Support\DisplayName;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -22,7 +23,8 @@ class PlacementsRelationManager extends RelationManager
         return $table
             ->recordTitleAttribute('id')
             ->columns([
-                Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->placeholder('Magazzino'),
+                Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->placeholder('Magazzino')
+                    ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                 Tables\Columns\TextColumn::make('placed_at')->label('Dal')->dateTime('d/m/Y H:i'),
                 Tables\Columns\TextColumn::make('removed_at')->label('Al')->dateTime('d/m/Y H:i')->placeholder('In corso'),
                 Tables\Columns\TextColumn::make('notes')->label('Note')->limit(50)->tooltip(fn ($state) => $state),

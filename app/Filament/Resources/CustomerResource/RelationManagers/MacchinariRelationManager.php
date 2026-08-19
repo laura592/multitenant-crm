@@ -5,6 +5,7 @@ namespace App\Filament\Resources\CustomerResource\RelationManagers;
 use App\Filament\Resources\MachineUnitResource;
 use App\Models\Customer;
 use App\Models\MachineUnit;
+use App\Support\DisplayName;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\RelationManagers\RelationManager;
@@ -40,7 +41,7 @@ class MacchinariRelationManager extends RelationManager
             Forms\Components\Select::make('billing_customer_id')
                 ->label('Fatturare a')
                 ->relationship('billingCustomer', 'company_name')
-                ->getOptionLabelFromRecordUsing(fn (Customer $record) => $record->full_name)
+                ->getOptionLabelFromRecordUsing(fn (Customer $record) => DisplayName::titleCase($record->full_name))
                 ->searchable(['company_name', 'first_name', 'last_name'])
                 ->preload()
                 ->helperText('Lascia vuoto se paga il cliente presso cui è installata questa macchina.'),
@@ -72,6 +73,7 @@ class MacchinariRelationManager extends RelationManager
                 Tables\Columns\TextColumn::make('billingCustomer.full_name')
                     ->label('Fatturare a')
                     ->placeholder('Se stesso')
+                    ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state))
                     ->wrap(),
             ])
             ->actions([

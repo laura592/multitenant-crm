@@ -8,6 +8,7 @@ use App\Filament\Forms\ItalianAddressFields;
 use App\Filament\Resources\InformationRequestResource\Pages;
 use App\Models\Customer;
 use App\Models\InformationRequest;
+use App\Support\DisplayName;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -66,8 +67,8 @@ class InformationRequestResource extends Resource
                         // franchising con più punti vendita): la città in coda aiuta a
                         // distinguerli nell'elenco invece di vederli tutti uguali.
                         ->getOptionLabelFromRecordUsing(fn ($record) => $record->city
-                            ? "{$record->full_name} ({$record->city})"
-                            : $record->full_name)
+                            ? DisplayName::titleCase($record->full_name)." ({$record->city})"
+                            : DisplayName::titleCase($record->full_name))
                         ->searchable(['company_name', 'first_name', 'last_name'])
                         ->preload()
                         ->required()
@@ -192,7 +193,8 @@ class InformationRequestResource extends Resource
             ->modifyQueryUsing(fn ($query) => $query->with(['customer', 'notes']))
             ->columns([
                 Tables\Columns\TextColumn::make('number')->label('Numero')->searchable()->sortable(),
-                Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->searchable()->sortable(),
+                Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->searchable()->sortable()
+                    ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                 // Recapiti diretti in tabella: prima bisognava aprire il cliente per
                 // vedere email/telefono, ora sono a colpo d'occhio e copiabili.
                 Tables\Columns\TextColumn::make('customer_email')

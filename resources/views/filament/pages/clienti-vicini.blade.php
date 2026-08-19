@@ -162,7 +162,7 @@
                                 <div class="flex items-start justify-between gap-3">
                                     <div>
                                         <p class="text-xs font-semibold uppercase tracking-[0.12em] text-gray-500 dark:text-gray-400">#{{ $index + 1 }}</p>
-                                        <h3 class="mt-1 text-sm font-semibold text-gray-950 dark:text-white">{{ $row['customer']->full_name }}</h3>
+                                        <h3 class="mt-1 text-sm font-semibold text-gray-950 dark:text-white">{{ \App\Support\DisplayName::titleCase($row['customer']->full_name) }}</h3>
                                         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                             {{ $row['customer']->city }}
                                         </p>

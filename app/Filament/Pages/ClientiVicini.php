@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Filament\Resources\ServiceReportResource;
 use App\Models\Customer;
+use App\Support\DisplayName;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Facades\Filament;
 use Filament\Pages\Page;
@@ -127,7 +128,7 @@ class ClientiVicini extends Page
     {
         return $this->getNearbyCustomers()
             ->map(fn (array $row) => [
-                'name' => $row['customer']->full_name,
+                'name' => DisplayName::titleCase($row['customer']->full_name),
                 'street' => $row['customer']->street,
                 'city' => $row['customer']->city,
                 'lat' => (float) $row['customer']->latitude,

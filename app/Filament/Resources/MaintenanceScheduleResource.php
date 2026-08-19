@@ -8,6 +8,7 @@ use App\Filament\Resources\MaintenanceScheduleResource\RelationManagers\LavaggiR
 use App\Models\Customer;
 use App\Models\MachineUnit;
 use App\Models\MaintenanceSchedule;
+use App\Support\DisplayName;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Infolists\Components\Grid as InfolistGrid;
@@ -100,7 +101,7 @@ class MaintenanceScheduleResource extends Resource
             $unit = MachineUnit::with('billingCustomer')->find($machineUnitId);
 
             if ($unit) {
-                return $unit->billingCustomer?->full_name ?? static::customerFor($customerId ?? '')?->invoiceRecipient()->full_name ?? '—';
+                return DisplayName::titleCase($unit->billingCustomer?->full_name) ?? DisplayName::titleCase(static::customerFor($customerId ?? '')?->invoiceRecipient()->full_name) ?? '—';
             }
         }
 
@@ -116,14 +117,14 @@ class MaintenanceScheduleResource extends Resource
         $units = static::machineUnitsFor($customerId);
 
         if ($units->isEmpty()) {
-            return $customer->invoiceRecipient()->full_name;
+            return DisplayName::titleCase($customer->invoiceRecipient()->full_name);
         }
 
-        $perUnit = $units->map(fn (MachineUnit $u) => ($u->billingCustomer?->full_name ?? 'se stesso'));
+        $perUnit = $units->map(fn (MachineUnit $u) => DisplayName::titleCase($u->billingCustomer?->full_name) ?? 'se stesso');
 
         return $perUnit->unique()->count() === 1
             ? $perUnit->first()
-            : $units->map(fn (MachineUnit $u) => $u->model_name.': '.($u->billingCustomer?->full_name ?? 'se stesso'))->implode('; ');
+            : $units->map(fn (MachineUnit $u) => $u->model_name.': '.(DisplayName::titleCase($u->billingCustomer?->full_name) ?? 'se stesso'))->implode('; ');
     }
 
     public static function infolist(Infolist $infolist): Infolist
@@ -139,7 +140,8 @@ class MaintenanceScheduleResource extends Resource
                     'class' => 'fi-quick-overview rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50 shadow-sm',
                 ])
                 ->schema([
-                    TextEntry::make('customer.full_name')->label('Cliente')->columnSpan(4),
+                    TextEntry::make('customer.full_name')->label('Cliente')->columnSpan(4)
+                        ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                     // Al colpo d'occhio conta di piu' "cosa" (birra/vino/... e
                     // quante vie) che il semplice "lavaggio vs manutenzione":
                     // sostituisce il vecchio badge "Tipo", che per un piano
@@ -228,7 +230,7 @@ class MaintenanceScheduleResource extends Resource
                     Forms\Components\Select::make('customer_id')
                         ->label('Cliente')
                         ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
-                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->full_name)
+                        ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::titleCase($record->full_name))
                         ->searchable(['company_name', 'first_name', 'last_name'])
                         ->preload()
                         ->live()
@@ -342,7 +344,8 @@ class MaintenanceScheduleResource extends Resource
             // in fondo.
             ->defaultSort(fn ($query) => $query->orderByRaw('next_due_date IS NULL, next_due_date ASC'))
             ->columns([
-                Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->searchable()->sortable(),
+                Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->searchable()->sortable()
+                    ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                 Tables\Columns\TextColumn::make('type')
                     ->label('Tipo')
                     ->badge()

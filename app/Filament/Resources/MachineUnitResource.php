@@ -7,6 +7,7 @@ use App\Filament\Resources\MachineUnitResource\RelationManagers\PlacementsRelati
 use App\Models\Customer;
 use App\Models\MachineUnit;
 use App\Models\Product;
+use App\Support\DisplayName;
 use App\Support\Gestionale\EurekaClient;
 use Filament\Actions\MountableAction;
 use Filament\Facades\Filament;
@@ -83,7 +84,7 @@ class MachineUnitResource extends Resource
                     Forms\Components\Select::make('billing_customer_id')
                         ->label('Fatturare a')
                         ->relationship('billingCustomer', 'company_name')
-                        ->getOptionLabelFromRecordUsing(fn (Customer $record) => $record->full_name)
+                        ->getOptionLabelFromRecordUsing(fn (Customer $record) => DisplayName::titleCase($record->full_name))
                         ->searchable(['company_name', 'first_name', 'last_name'])
                         ->preload()
                         ->helperText('Lascia vuoto se paga il cliente presso cui è installata questa macchina.'),
@@ -120,8 +121,10 @@ class MachineUnitResource extends Resource
                     TextEntry::make('serial_number')->label('Matricola'),
                     TextEntry::make('product.name')->label('Modello (da catalogo)')->placeholder('—'),
                     TextEntry::make('model_name')->label('Modello (testo libero)')->placeholder('—'),
-                    TextEntry::make('billingCustomer.full_name')->label('Fatturare a')->placeholder('—'),
-                    TextEntry::make('currentCustomer.full_name')->label('Presso')->placeholder('In magazzino'),
+                    TextEntry::make('billingCustomer.full_name')->label('Fatturare a')->placeholder('—')
+                        ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
+                    TextEntry::make('currentCustomer.full_name')->label('Presso')->placeholder('In magazzino')
+                        ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                     TextEntry::make('status')
                         ->label('Stato')
                         ->badge()
@@ -144,7 +147,8 @@ class MachineUnitResource extends Resource
                             ->where('model_name', 'like', "%{$search}%")
                             ->orWhereHas('product', fn ($q) => $q->where('name', 'like', "%{$search}%")),
                     ),
-                Tables\Columns\TextColumn::make('currentCustomer.company_name')->label('Presso')->placeholder('In magazzino')->searchable(),
+                Tables\Columns\TextColumn::make('currentCustomer.company_name')->label('Presso')->placeholder('In magazzino')->searchable()
+                    ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                 Tables\Columns\IconColumn::make('gestionale_code')
                     ->label('Da Eureka')
                     ->boolean()
@@ -280,7 +284,7 @@ class MachineUnitResource extends Resource
                     ->label('Nuovo cliente')
                     ->helperText('Lascia vuoto per riportare la macchina in magazzino/rimuoverla.')
                     ->options(fn () => Customer::query()->orderBy('company_name')->get()->mapWithKeys(
-                        fn (Customer $customer) => [$customer->id => $customer->full_name ?: 'Cliente senza nome']
+                        fn (Customer $customer) => [$customer->id => DisplayName::titleCase($customer->full_name) ?: 'Cliente senza nome']
                     ))
                     ->searchable(),
                 Forms\Components\Textarea::make('notes')->label('Note sullo spostamento'),
@@ -290,7 +294,7 @@ class MachineUnitResource extends Resource
                 $record->moveTo($customer, $data['notes'] ?? null);
 
                 Notification::make()
-                    ->title($customer ? "Macchina spostata presso {$customer->company_name}" : 'Macchina rientrata in magazzino')
+                    ->title($customer ? 'Macchina spostata presso '.DisplayName::titleCase($customer->company_name) : 'Macchina rientrata in magazzino')
                     ->success()
                     ->send();
             });

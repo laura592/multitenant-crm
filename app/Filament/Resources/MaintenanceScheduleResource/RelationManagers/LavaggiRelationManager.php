@@ -7,6 +7,7 @@ use App\Filament\Resources\ServiceReportResource;
 use App\Models\Lavaggio;
 use App\Models\MaintenanceSchedule;
 use App\Models\ServiceReport;
+use App\Support\DisplayName;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\RelationManagers\RelationManager;
@@ -78,7 +79,7 @@ class LavaggiRelationManager extends RelationManager
 
                     return new HtmlString(
                         '<div class="rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">'
-                            .'Stai registrando un lavaggio per: <strong>'.e($impianto).'</strong> presso <strong>'.e($schedule->customer?->full_name).'</strong>.'
+                            .'Stai registrando un lavaggio per: <strong>'.e($impianto).'</strong> presso <strong>'.e(DisplayName::titleCase($schedule->customer?->full_name)).'</strong>.'
                             .'</div>'
                     );
                 }),
