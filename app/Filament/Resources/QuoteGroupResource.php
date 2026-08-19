@@ -7,6 +7,7 @@ use App\Filament\Resources\QuoteGroupResource\RelationManagers\QuotesRelationMan
 use App\Mail\QuoteGroupMail;
 use App\Models\Quote;
 use App\Models\QuoteGroup;
+use App\Support\DisplayName;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -73,7 +74,7 @@ class QuoteGroupResource extends Resource
                     Forms\Components\Select::make('customer_id')
                         ->label('Cliente')
                         ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
-                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->full_name)
+                        ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::titleCase($record->full_name))
                         ->searchable(['company_name', 'first_name', 'last_name'])
                         ->preload()
                         ->required(),
@@ -95,7 +96,8 @@ class QuoteGroupResource extends Resource
             ->defaultSort('created_at', 'desc')
             ->columns([
                 Tables\Columns\TextColumn::make('number')->label('Numero')->searchable()->sortable(),
-                Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->searchable()->sortable(),
+                Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->searchable()->sortable()
+                    ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                 Tables\Columns\TextColumn::make('status')
                     ->label('Stato')
                     ->badge()
@@ -172,7 +174,7 @@ class QuoteGroupResource extends Resource
 
     protected static function defaultGroupEmailSubject(QuoteGroup $record): string
     {
-        $customerName = $record->customer?->company_name ?: ($record->customer?->full_name ?? 'Cliente');
+        $customerName = DisplayName::titleCase($record->customer?->company_name) ?: (DisplayName::titleCase($record->customer?->full_name) ?? 'Cliente');
         $solutionsCount = max(1, (int) $record->quotes()->count());
         $solutionsLabel = $solutionsCount === 1 ? 'soluzione' : 'soluzioni';
 
@@ -181,7 +183,7 @@ class QuoteGroupResource extends Resource
 
     protected static function defaultGroupEmailBody(QuoteGroup $record): string
     {
-        $customerName = $record->customer?->company_name ?: ($record->customer?->full_name ?? 'Cliente');
+        $customerName = DisplayName::titleCase($record->customer?->company_name) ?: (DisplayName::titleCase($record->customer?->full_name) ?? 'Cliente');
         $tenant = $record->tenant ?: $record->customer?->tenant;
         $signatureLines = static::commercialSignatureLines($tenant);
 

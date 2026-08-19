@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets\Gestionale;
 
 use App\Models\MachineUnit;
+use App\Support\DisplayName;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
@@ -40,7 +41,8 @@ class GestionaleMacchineImportateWidget extends BaseWidget
             ->queryStringIdentifier('macchineImportate')
             ->query(static::baseQuery()->latest('created_at'))
             ->columns([
-                Tables\Columns\TextColumn::make('currentCustomer.full_name')->label('Cliente')->placeholder('—'),
+                Tables\Columns\TextColumn::make('currentCustomer.full_name')->label('Cliente')->placeholder('—')
+                    ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                 Tables\Columns\TextColumn::make('serial_number')->label('Matricola'),
                 Tables\Columns\TextColumn::make('display_name')->label('Modello'),
                 Tables\Columns\TextColumn::make('created_at')->label('Importata il')->date(),

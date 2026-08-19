@@ -4,6 +4,7 @@ namespace App\Filament\Widgets;
 
 use App\Filament\Resources\QuoteResource;
 use App\Models\Quote;
+use App\Support\DisplayName;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
@@ -32,7 +33,8 @@ class LatestQuotesWidget extends BaseWidget
             ->query(Quote::query()->with('customer')->latest('created_at')->limit(5))
             ->columns([
                 Tables\Columns\TextColumn::make('number')->label('Numero'),
-                Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente'),
+                Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')
+                    ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                 Tables\Columns\TextColumn::make('total')->label('Totale')->money('EUR'),
                 Tables\Columns\TextColumn::make('status')
                     ->label('Stato')

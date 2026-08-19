@@ -4,6 +4,7 @@ namespace App\Filament\Widgets;
 
 use App\Filament\Resources\MaintenanceScheduleResource;
 use App\Models\MaintenanceSchedule;
+use App\Support\DisplayName;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
@@ -36,7 +37,8 @@ class UpcomingMaintenanceWidget extends BaseWidget
                 ->orderBy('next_due_date')
                 ->limit(5))
             ->columns([
-                Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->wrap(),
+                Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->wrap()
+                    ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                 Tables\Columns\TextColumn::make('type')
                     ->label('Tipo')
                     ->badge()

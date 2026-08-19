@@ -16,6 +16,7 @@ use App\Models\MaintenanceSchedule;
 use App\Models\Material;
 use App\Models\Product;
 use App\Models\ServiceReport;
+use App\Support\DisplayName;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Facades\Filament;
 use Filament\Forms;
@@ -107,7 +108,8 @@ class ServiceReportResource extends Resource
                 ])
                 ->schema([
                     TextEntry::make('number')->label('Numero')->columnSpan(2),
-                    TextEntry::make('customer.full_name')->label('Cliente')->columnSpan(3),
+                    TextEntry::make('customer.full_name')->label('Cliente')->columnSpan(3)
+                        ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                     TextEntry::make('technician.name')->label('Tecnico')->columnSpan(3),
                     TextEntry::make('intervention_type')
                         ->label('Tipo intervento')
@@ -138,7 +140,7 @@ class ServiceReportResource extends Resource
                     TextEntry::make('machine_unit_display_name')->label('Macchina (matricola tracciata)')->placeholder('—'),
                     TextEntry::make('invoice_recipient')
                         ->label('Fatturare a')
-                        ->state(fn (ServiceReport $record) => $record->invoiceRecipient()->full_name)
+                        ->state(fn (ServiceReport $record) => DisplayName::titleCase($record->invoiceRecipient()->full_name))
                         ->placeholder('—'),
                 ]),
             InfolistSection::make('Descrizione')
@@ -294,7 +296,7 @@ class ServiceReportResource extends Resource
                         ->content(fn (?ServiceReport $record) => $record?->number ?? '—'),
                     Forms\Components\Placeholder::make('summary_customer')
                         ->label('Cliente')
-                        ->content(fn (?ServiceReport $record) => $record?->customer?->full_name ?? '—'),
+                        ->content(fn (?ServiceReport $record) => DisplayName::titleCase($record?->customer?->full_name) ?? '—'),
                     Forms\Components\Placeholder::make('summary_technician')
                         ->label('Tecnico')
                         ->content(fn (?ServiceReport $record) => $record?->technician?->name ?? '—'),
@@ -334,8 +336,8 @@ class ServiceReportResource extends Resource
                         ->label('Cliente')
                         ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
                         ->getOptionLabelFromRecordUsing(fn ($record) => $record->city
-                            ? "{$record->full_name} ({$record->city})"
-                            : $record->full_name)
+                            ? DisplayName::titleCase($record->full_name)." ({$record->city})"
+                            : DisplayName::titleCase($record->full_name))
                         ->searchable(['company_name', 'first_name', 'last_name', 'city'])
                         ->preload()
                         ->required()
@@ -558,7 +560,7 @@ class ServiceReportResource extends Resource
                         )),
                     Forms\Components\Placeholder::make('fatturare_a')
                         ->label('Fatturare a')
-                        ->content(fn (Forms\Get $get) => self::resolvePayer($get)?->full_name ?? '—'),
+                        ->content(fn (Forms\Get $get) => DisplayName::titleCase(self::resolvePayer($get)?->full_name) ?? '—'),
                     // Non piu' una scelta manuale: il modello si ricava dalla
                     // macchina/matricola selezionata sopra (afterStateUpdated
                     // su machine_unit_id valorizza gia' l'Hidden sotto), cosi'
@@ -1045,7 +1047,8 @@ class ServiceReportResource extends Resource
                     // default per non riportare via lo spazio recuperato
                     // sulla colonna Eureka — visibile via toggle colonne.
                     ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->searchable(),
+                Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->searchable()
+                    ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                 Tables\Columns\TextColumn::make('technician.name')->label('Tecnico'),
                 Tables\Columns\TextColumn::make('intervention_type')
                     ->label('Tipo')
@@ -1118,7 +1121,7 @@ class ServiceReportResource extends Resource
                 Tables\Filters\SelectFilter::make('customer_id')
                     ->label('Cliente')
                     ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
-                    ->getOptionLabelFromRecordUsing(fn ($record) => $record->full_name)
+                    ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::titleCase($record->full_name))
                     ->searchable()
                     ->preload(),
                 Tables\Filters\SelectFilter::make('technician_id')
@@ -1271,7 +1274,7 @@ class ServiceReportResource extends Resource
 
     protected static function defaultServiceReportEmailBody(ServiceReport $record): string
     {
-        $customerName = $record->customer?->company_name ?: ($record->customer?->full_name ?? 'Cliente');
+        $customerName = DisplayName::titleCase($record->customer?->company_name) ?: (DisplayName::titleCase($record->customer?->full_name) ?? 'Cliente');
         $interventionDate = $record->intervention_date?->format('d/m/Y');
 
         return implode('', [

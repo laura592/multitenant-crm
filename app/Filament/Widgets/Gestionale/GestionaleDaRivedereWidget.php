@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets\Gestionale;
 
 use App\Models\Customer;
+use App\Support\DisplayName;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
@@ -56,7 +57,8 @@ class GestionaleDaRivedereWidget extends BaseWidget
             ->queryStringIdentifier('daRivedere')
             ->query(static::baseQuery()->orderByDesc('gestionale_review_flagged_at'))
             ->columns([
-                Tables\Columns\TextColumn::make('full_name')->label('Cliente'),
+                Tables\Columns\TextColumn::make('full_name')->label('Cliente')
+                    ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                 Tables\Columns\TextColumn::make('gestionale_review_note')->label('Nota')->wrap(),
                 Tables\Columns\TextColumn::make('gestionale_review_flagged_at')->label('Dal')->date(),
             ])

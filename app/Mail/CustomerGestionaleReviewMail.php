@@ -3,6 +3,7 @@
 namespace App\Mail;
 
 use App\Models\Customer;
+use App\Support\DisplayName;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
@@ -21,7 +22,7 @@ class CustomerGestionaleReviewMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: "Da controllare su Eureka: {$this->customer->full_name}",
+            subject: 'Da controllare su Eureka: '.DisplayName::titleCase($this->customer->full_name),
         );
     }
 

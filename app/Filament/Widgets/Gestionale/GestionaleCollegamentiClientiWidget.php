@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets\Gestionale;
 
 use App\Models\Customer;
+use App\Support\DisplayName;
 use Filament\Notifications\Notification;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -34,7 +35,8 @@ class GestionaleCollegamentiClientiWidget extends BaseWidget
             ->queryStringIdentifier('collegamentiClienti')
             ->query(static::baseQuery())
             ->columns([
-                Tables\Columns\TextColumn::make('full_name')->label('Cliente nel CRM'),
+                Tables\Columns\TextColumn::make('full_name')->label('Cliente nel CRM')
+                    ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                 Tables\Columns\TextColumn::make('gestionale_suggested_label')
                     ->label('Trovato su Eureka')
                     ->description(fn (Customer $record) => "id {$record->gestionale_suggested_code}")
@@ -65,7 +67,7 @@ class GestionaleCollegamentiClientiWidget extends BaseWidget
 
                             Notification::make()
                                 ->title('Collegamento scartato')
-                                ->body("Il codice Eureka {$record->gestionale_suggested_code} è già assegnato a \"{$conflict->full_name}\": probabile doppione da unire a mano, non confermabile automaticamente.")
+                                ->body('Il codice Eureka '.$record->gestionale_suggested_code.' è già assegnato a "'.DisplayName::titleCase($conflict->full_name).'": probabile doppione da unire a mano, non confermabile automaticamente.')
                                 ->warning()
                                 ->send();
 

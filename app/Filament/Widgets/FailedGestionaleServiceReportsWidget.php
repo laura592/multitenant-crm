@@ -4,6 +4,7 @@ namespace App\Filament\Widgets;
 
 use App\Filament\Resources\ServiceReportResource;
 use App\Models\ServiceReport;
+use App\Support\DisplayName;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
@@ -38,7 +39,8 @@ class FailedGestionaleServiceReportsWidget extends BaseWidget
                     ->label('Rapportino')
                     ->url(fn (ServiceReport $record) => ServiceReportResource::getUrl('view', ['record' => $record->id], tenant: $record->tenant))
                     ->color('primary'),
-                Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->wrap(),
+                Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->wrap()
+                    ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                 Tables\Columns\TextColumn::make('gestionale_sync_error')->label('Errore')->limit(40)->placeholder('—'),
             ])
             ->paginated(false)
