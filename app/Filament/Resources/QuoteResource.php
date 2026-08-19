@@ -11,6 +11,7 @@ use App\Mail\QuoteMail;
 use App\Models\PaymentMethod;
 use App\Models\Quote;
 use App\Models\QuoteGroup;
+use App\Support\DisplayName;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Facades\Filament;
 use Filament\Forms;
@@ -58,7 +59,8 @@ class QuoteResource extends Resource
                 ])
                 ->schema([
                     TextEntry::make('number')->label('Preventivo')->columnSpan(2),
-                    TextEntry::make('customer.full_name')->label('Cliente')->columnSpan(5),
+                    TextEntry::make('customer.full_name')->label('Cliente')->columnSpan(5)
+                        ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                     TextEntry::make('date')->label('Data')->date()->columnSpan(2),
                     TextEntry::make('status')
                         ->label('Stato')
@@ -237,7 +239,7 @@ class QuoteResource extends Resource
                         ->content(fn (?Quote $record) => $record?->number ?? '—'),
                     Forms\Components\Placeholder::make('summary_customer')
                         ->label('Cliente')
-                        ->content(fn (?Quote $record) => $record?->customer?->full_name ?? '—'),
+                        ->content(fn (?Quote $record) => DisplayName::titleCase($record?->customer?->full_name) ?? '—'),
                     Forms\Components\Placeholder::make('summary_date')
                         ->label('Data')
                         ->content(fn (?Quote $record) => $record
@@ -283,7 +285,7 @@ class QuoteResource extends Resource
                     Forms\Components\Select::make('customer_id')
                         ->label('Cliente')
                         ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
-                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->full_name)
+                        ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::titleCase($record->full_name))
                         ->searchable(['company_name', 'first_name', 'last_name'])
                         ->preload()
                         ->required()
@@ -358,7 +360,7 @@ class QuoteResource extends Resource
                                     Forms\Components\Select::make('customer_id')
                                         ->label('Cliente')
                                         ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
-                                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->full_name)
+                                        ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::titleCase($record->full_name))
                                         ->searchable(['company_name', 'first_name', 'last_name'])
                                         ->preload()
                                         ->required()
@@ -466,7 +468,8 @@ class QuoteResource extends Resource
             ->defaultSort('number', 'desc')
             ->columns([
                 Tables\Columns\TextColumn::make('number')->label('Numero')->searchable()->sortable(),
-                Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->searchable()->sortable(),
+                Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->searchable()->sortable()
+                    ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                 Tables\Columns\TextColumn::make('date')->label('Data')->date()->sortable(),
                 Tables\Columns\TextColumn::make('status')
                     ->label('Stato')
@@ -657,7 +660,7 @@ class QuoteResource extends Resource
     protected static function defaultQuoteEmailBody(Quote $record): string
     {
         $recipient = $record->customer?->invoiceRecipient();
-        $customerName = $recipient?->company_name ?: ($recipient?->full_name ?? 'Cliente');
+        $customerName = DisplayName::titleCase($recipient?->company_name) ?: (DisplayName::titleCase($recipient?->full_name) ?? 'Cliente');
         $total = '€ '.number_format((float) $record->subtotal, 2, ',', '.').' + IVA';
         $signatureName = Auth::user()?->name ?: ($record->tenant?->name ?? config('app.name'));
 
