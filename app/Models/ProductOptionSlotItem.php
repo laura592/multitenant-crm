@@ -13,12 +13,10 @@ class ProductOptionSlotItem extends Model
     protected $fillable = [
         'slot_id',
         'component_product_id',
-        'price_delta_override',
         'sort_order',
     ];
 
     protected $casts = [
-        'price_delta_override' => 'decimal:2',
         'sort_order' => 'integer',
     ];
 
