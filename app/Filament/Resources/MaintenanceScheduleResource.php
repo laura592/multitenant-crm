@@ -415,12 +415,28 @@ class MaintenanceScheduleResource extends Resource
                 Tables\Filters\SelectFilter::make('customer_id')
                     ->label('Cliente')
                     ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
-                    ->getOptionLabelFromRecordUsing(fn ($record) => $record->full_name)
+                    ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::titleCase($record->full_name))
                     ->searchable()
                     ->preload(),
                 Tables\Filters\SelectFilter::make('beverage_type')
                     ->label('Impianto')
                     ->options(static::beverageLabels()),
+                Tables\Filters\SelectFilter::make('cadenza')
+                    ->label('Cadenza')
+                    ->options([
+                        'programmata' => 'Programmata',
+                        'a_chiamata' => 'A chiamata',
+                    ])
+                    // Nessuna colonna dedicata: "a chiamata" e' gia'
+                    // rappresentato da frequency_days nullo (vedi
+                    // MaintenanceSchedule::recalculateLavaggioNextDue) - un
+                    // campo separato duplicherebbe lo stesso stato e
+                    // rischierebbe di disallinearsi da esso.
+                    ->query(fn ($query, array $data) => match ($data['value'] ?? null) {
+                        'programmata' => $query->whereNotNull('frequency_days'),
+                        'a_chiamata' => $query->whereNull('frequency_days'),
+                        default => $query,
+                    }),
                 Tables\Filters\Filter::make('due_soon')
                     ->label('In scadenza entro 30 giorni')
                     ->query(fn ($query) => $query->where('next_due_date', '<=', now()->addDays(30))),

@@ -83,7 +83,7 @@ class CustomerResource extends Resource
                         ->relationship('billingCustomer', 'company_name', modifyQueryUsing: fn ($query, ?Customer $record) => $query
                             ->when($record, fn ($q) => $q->whereKeyNot($record->id))
                             ->orderBy('company_name'))
-                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->full_name)
+                        ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::titleCase($record->full_name))
                         ->searchable(['company_name', 'first_name', 'last_name'])
                         ->preload()
                         ->columnSpanFull()
@@ -321,7 +321,7 @@ class CustomerResource extends Resource
                             if ($blocked->isNotEmpty()) {
                                 Notification::make()
                                     ->title('Alcuni clienti non sono stati eliminati')
-                                    ->body('Hanno ancora preventivi, offerte, rapportini o macchine installate collegate: '.$blocked->pluck('full_name')->implode(', ').'.')
+                                    ->body('Hanno ancora preventivi, offerte, rapportini o macchine installate collegate: '.$blocked->pluck('full_name')->map(fn ($name) => DisplayName::titleCase($name))->implode(', ').'.')
                                     ->danger()
                                     ->send();
 

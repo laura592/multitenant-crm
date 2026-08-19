@@ -485,7 +485,7 @@ class QuoteResource extends Resource
                 Tables\Filters\SelectFilter::make('customer_id')
                     ->label('Cliente')
                     ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
-                    ->getOptionLabelFromRecordUsing(fn ($record) => $record->full_name)
+                    ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::titleCase($record->full_name))
                     ->searchable()
                     ->preload(),
                 Tables\Filters\Filter::make('date')
