@@ -4,7 +4,7 @@
 	$resolvedSubject = trim((string) ($subjectText ?? "Offerta {$group->number}"));
 	$renderedBody = trim((string) ($emailBody ?? ''));
 	$recipient = $group->customer?->invoiceRecipient();
-	$customerName = $recipient?->company_name ?: $recipient?->full_name;
+	$customerName = \App\Support\DisplayName::titleCase($recipient?->company_name) ?: \App\Support\DisplayName::titleCase($recipient?->full_name);
 @endphp
 
 <x-mail.hero

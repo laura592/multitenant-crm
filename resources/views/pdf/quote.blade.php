@@ -52,14 +52,14 @@
                 <div class="section-title">Dati cliente</div>
                 <div class="info-box">
                     @if($quote->customer?->company_name)
-                        <div class="customer-name">{{ $quote->customer->company_name }}</div>
+                        <div class="customer-name">{{ \App\Support\DisplayName::titleCase($quote->customer->company_name) }}</div>
                     @endif
                     <table>
                         @if($quote->customer?->billingCustomer)
-                            <tr><td class="label">Fatturato a:</td><td>{{ $quote->customer->billingCustomer->full_name }}</td></tr>
+                            <tr><td class="label">Fatturato a:</td><td>{{ \App\Support\DisplayName::titleCase($quote->customer->billingCustomer->full_name) }}</td></tr>
                         @endif
                         @if($quote->customer?->first_name || $quote->customer?->last_name)
-                            <tr><td class="label">Rif.to:</td><td>{{ trim("{$quote->customer->first_name} {$quote->customer->last_name}") }}</td></tr>
+                            <tr><td class="label">Rif.to:</td><td>{{ \App\Support\DisplayName::titleCase(trim("{$quote->customer->first_name} {$quote->customer->last_name}")) }}</td></tr>
                         @endif
                         @if($quote->customer?->street || $quote->customer?->postal_code || $quote->customer?->city)
                             <tr><td class="label">Sede:</td><td>{{ trim("{$quote->customer->street}, {$quote->customer->postal_code} {$quote->customer->city}".($quote->customer->province ? " ({$quote->customer->province})" : ''), ' ,') }}</td></tr>

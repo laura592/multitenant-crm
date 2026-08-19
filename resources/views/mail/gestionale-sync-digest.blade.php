@@ -38,7 +38,7 @@ Campi diversi tra CRM ed Eureka: **non sono stati toccati**, serve una scelta ma
 | Cliente | Differenze |
 | :--- | :--- |
 @foreach($diffs as $row)
-| {{ $row['customer']->full_name }} | {{ implode('; ', $row['fields']) }} |
+| {{ \App\Support\DisplayName::titleCase($row['customer']->full_name) }} | {{ implode('; ', $row['fields']) }} |
 @endforeach
 @endcomponent
 @endif
@@ -53,7 +53,7 @@ Macchinari risultati installati presso un cliente su Eureka: creati direttamente
 | Cliente | Matricola | Modello |
 | :--- | :--- | :--- |
 @foreach($newMachines as $row)
-| {{ $row['customer']->full_name }} | {{ $row['machineUnit']->serial_number }} | {{ $row['machineUnit']->model_name ?? '—' }} |
+| {{ \App\Support\DisplayName::titleCase($row['customer']->full_name) }} | {{ $row['machineUnit']->serial_number }} | {{ $row['machineUnit']->model_name ?? '—' }} |
 @endforeach
 @endcomponent
 @endif
@@ -68,7 +68,7 @@ Trovato un possibile cliente corrispondente su Eureka, da confermare.
 | Cliente CRM | Trovato su Eureka |
 | :--- | :--- |
 @foreach($customerLinks as $row)
-| {{ $row['customer']->full_name }} | {{ $row['label'] }} (id {{ $row['id'] }}) |
+| {{ \App\Support\DisplayName::titleCase($row['customer']->full_name) }} | {{ $row['label'] }} (id {{ $row['id'] }}) |
 @endforeach
 @endcomponent
 @endif
@@ -113,7 +113,7 @@ Campi che erano vuoti nel CRM e sono stati riempiti con quanto trovato su Eureka
 | Cliente | Campi compilati |
 | :--- | :--- |
 @foreach($autofilled as $row)
-| {{ $row['customer']->full_name }} | {{ implode(', ', $row['fields']) }} |
+| {{ \App\Support\DisplayName::titleCase($row['customer']->full_name) }} | {{ implode(', ', $row['fields']) }} |
 @endforeach
 @endcomponent
 @endif

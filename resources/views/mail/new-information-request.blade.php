@@ -2,7 +2,7 @@
 <x-mail.hero
 	:kicker="'Richiesta informazioni '.$informationRequest->number"
 	title="Nuova richiesta"
-	:subtitle="'Cliente: '.($informationRequest->customer?->full_name ?: 'Non specificato')"
+	:subtitle="'Cliente: '.(\App\Support\DisplayName::titleCase($informationRequest->customer?->full_name) ?: 'Non specificato')"
 />
 
 @if($informationRequest->request_details)

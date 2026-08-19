@@ -1,7 +1,7 @@
 <x-mail::message>
 @php
 	$tenant = $quote->tenant;
-	$customerName = $quote->customer?->company_name ?: $quote->customer?->full_name;
+	$customerName = \App\Support\DisplayName::titleCase($quote->customer?->company_name) ?: \App\Support\DisplayName::titleCase($quote->customer?->full_name);
 	$heroTitle = $customerName ? "Preventivo per {$customerName}" : "Preventivo {$quote->number}";
 @endphp
 

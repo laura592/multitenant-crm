@@ -137,7 +137,7 @@
             <td class="col-half header-cell">
                 <div class="section-title">Luogo intervento</div>
                 <div class="info-box">
-                    <div class="customer-name">{{ $report->customer->company_name ?: $report->customer->full_name }}</div>
+                    <div class="customer-name">{{ \App\Support\DisplayName::titleCase($report->customer->company_name) ?: \App\Support\DisplayName::titleCase($report->customer->full_name) }}</div>
                     <table>
                         @if($report->customer->street || $report->customer->postal_code || $report->customer->city)
                             <tr><td class="label">Sede:</td><td>{{ trim("{$report->customer->street}, {$report->customer->postal_code} {$report->customer->city}".($report->customer->province ? " ({$report->customer->province})" : ''), ' ,') }}</td></tr>
@@ -159,7 +159,7 @@
             <td class="col-half header-cell">
                 <div class="section-title">Dati di fatturazione</div>
                 <div class="info-box">
-                    <div class="customer-name">{{ $recipient->company_name ?: $recipient->full_name }}</div>
+                    <div class="customer-name">{{ \App\Support\DisplayName::titleCase($recipient->company_name) ?: \App\Support\DisplayName::titleCase($recipient->full_name) }}</div>
                     <table>
                         @if($recipient->street || $recipient->postal_code || $recipient->city)
                             <tr><td class="label">Sede:</td><td>{{ trim("{$recipient->street}, {$recipient->postal_code} {$recipient->city}".($recipient->province ? " ({$recipient->province})" : ''), ' ,') }}</td></tr>

@@ -2,7 +2,7 @@
 <x-mail.hero
 	kicker="Da controllare"
 	title="Da controllare su Eureka"
-	:subtitle="'Cliente: '.$customer->full_name"
+	:subtitle="'Cliente: '.\App\Support\DisplayName::titleCase($customer->full_name)"
 />
 
 <x-mail.severity-panel color="amber">

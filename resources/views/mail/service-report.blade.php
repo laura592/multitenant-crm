@@ -1,7 +1,7 @@
 <x-mail::message>
 @php
 	$tenant = $report->tenant;
-	$customerName = $report->customer->company_name ?: $report->customer->full_name;
+	$customerName = \App\Support\DisplayName::titleCase($report->customer->company_name) ?: \App\Support\DisplayName::titleCase($report->customer->full_name);
 @endphp
 
 <x-mail.hero
