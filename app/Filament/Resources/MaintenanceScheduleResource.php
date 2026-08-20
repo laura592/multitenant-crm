@@ -383,7 +383,7 @@ class MaintenanceScheduleResource extends Resource
                     ->label('Vie')
                     ->placeholder('—')
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->toggleable(),
                 Tables\Columns\TextColumn::make('machineUnit.display_name')->label('Macchina')->placeholder('—')
                     ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('impianti')

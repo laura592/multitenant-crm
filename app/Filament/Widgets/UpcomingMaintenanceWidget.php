@@ -4,16 +4,19 @@ namespace App\Filament\Widgets;
 
 use App\Filament\Resources\MaintenanceScheduleResource;
 use App\Models\MaintenanceSchedule;
-use App\Support\DisplayName;
-use Filament\Tables;
-use Filament\Tables\Table;
-use Filament\Widgets\TableWidget as BaseWidget;
+use Filament\Widgets\Widget;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
 
-class UpcomingMaintenanceWidget extends BaseWidget
+class UpcomingMaintenanceWidget extends Widget
 {
-    // Stesso sort/columnSpan di UpcomingDeadlinesWidget e LatestQuotesWidget:
-    // le tre tabelle (colSpan 1) finiscono affiancate sulla dashboard.
+    // A differenza di UpcomingDeadlinesWidget e LatestQuotesWidget (colSpan
+    // 1, affiancate sulla dashboard): questa lista tende ad avere piu' righe
+    // utili delle altre due, quindi occupa tutta la riga. Niente
+    // Tables\Table qui (era un TableWidget): il contentGrid() di Filament
+    // interlaccia i record riga per riga fra le colonne (1-2-3-4 sparsi su 2
+    // colonne), mentre qui servono due liste sequenziali separate (1-5 a
+    // sinistra, 6-10 a destra) - da qui la vista custom.
     protected static ?int $sort = 5;
 
     public static function canView(): bool
@@ -21,38 +24,49 @@ class UpcomingMaintenanceWidget extends BaseWidget
         return Auth::user()->can('view_any_maintenance::schedule');
     }
 
-    protected int|string|array $columnSpan = 1;
+    protected int|string|array $columnSpan = 'full';
 
-    protected static ?string $heading = 'Piani in scadenza';
+    protected static string $view = 'filament.widgets.upcoming-maintenance-widget';
 
-    public function table(Table $table): Table
+    protected int $perColumn = 5;
+
+    public function getSchedules(): Collection
     {
-        return $table
-            // Nessun limite superiore sulla data: i piani gia' scaduti
-            // (next_due_date passata) devono comparire per primi, non sparire
-            // dalla vista solo perche' sono oltre i "prossimi 30 giorni".
-            ->query(MaintenanceSchedule::query()
-                ->where('status', MaintenanceSchedule::STATUS_ATTIVO)
-                ->whereNotNull('next_due_date')
-                ->orderBy('next_due_date')
-                ->limit(5))
-            ->columns([
-                Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->wrap()
-                    ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
-                // Stessa etichetta "composizione impianto" dell'infolist (es.
-                // "Vino · 8 vie"): il badge "Tipo" (lavaggio/manutenzione) da
-                // solo non bastava a capire cosa andare a fare dal cliente.
-                Tables\Columns\TextColumn::make('impianto_hero')
-                    ->label('Impianto')
-                    ->state(fn (MaintenanceSchedule $record) => MaintenanceScheduleResource::impiantoHero($record))
-                    ->badge()
-                    ->color(fn (MaintenanceSchedule $record) => MaintenanceScheduleResource::beverageColors()[$record->beverage_type] ?? 'gray'),
-                Tables\Columns\TextColumn::make('next_due_date')
-                    ->label('Scadenza')
-                    ->date()
-                    ->color(fn (MaintenanceSchedule $record) => $record->next_due_date?->isPast() ? 'danger' : null),
-            ])
-            ->recordUrl(fn (MaintenanceSchedule $record) => MaintenanceScheduleResource::getUrl('view', ['record' => $record], tenant: $record->tenant))
-            ->paginated(false);
+        // Nessun limite superiore sulla data: i piani gia' scaduti
+        // (next_due_date passata) devono comparire per primi, non sparire
+        // dalla vista solo perche' sono oltre i "prossimi 30 giorni".
+        return MaintenanceSchedule::query()
+            ->where('status', MaintenanceSchedule::STATUS_ATTIVO)
+            ->whereNotNull('next_due_date')
+            ->with('customer')
+            ->orderBy('next_due_date')
+            ->limit($this->perColumn * 2)
+            ->get();
+    }
+
+    /** @return array{0: Collection, 1: Collection} */
+    public function getColumnsSplit(): array
+    {
+        $schedules = $this->getSchedules();
+
+        return [
+            $schedules->slice(0, $this->perColumn)->values(),
+            $schedules->slice($this->perColumn)->values(),
+        ];
+    }
+
+    public function impiantoHero(MaintenanceSchedule $record): string
+    {
+        return MaintenanceScheduleResource::impiantoHero($record);
+    }
+
+    public function beverageColor(MaintenanceSchedule $record): string
+    {
+        return MaintenanceScheduleResource::beverageColors()[$record->beverage_type] ?? 'gray';
+    }
+
+    public function recordUrl(MaintenanceSchedule $record): string
+    {
+        return MaintenanceScheduleResource::getUrl('view', ['record' => $record], tenant: $record->tenant);
     }
 }
