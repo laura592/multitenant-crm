@@ -81,6 +81,10 @@ class MachineUnitResource extends Resource
                         ->label('Modello (testo libero)')
                         ->helperText('Solo se non e\' a catalogo (es. macchina non a listino Alex).')
                         ->maxLength(255),
+                    Forms\Components\Select::make('type')
+                        ->label('Categoria impianto')
+                        ->options(static::typeLabels())
+                        ->helperText('Solo per impianti bevande: colonna spina (birra/vino/selz) o impianto acqua standalone. Lascia vuoto per le altre macchine (caffe, macinadosatori, ecc.).'),
                     Forms\Components\Select::make('billing_customer_id')
                         ->label('Fatturare a')
                         ->relationship('billingCustomer', 'company_name')
@@ -121,6 +125,9 @@ class MachineUnitResource extends Resource
                     TextEntry::make('serial_number')->label('Matricola'),
                     TextEntry::make('product.name')->label('Modello (da catalogo)')->placeholder('—'),
                     TextEntry::make('model_name')->label('Modello (testo libero)')->placeholder('—'),
+                    TextEntry::make('type')
+                        ->label('Categoria impianto')
+                        ->formatStateUsing(fn (?string $state) => static::typeLabels()[$state] ?? '—'),
                     TextEntry::make('billingCustomer.full_name')->label('Fatturare a')->placeholder('—')
                         ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                     TextEntry::make('currentCustomer.full_name')->label('Presso')->placeholder('In magazzino')
@@ -149,6 +156,10 @@ class MachineUnitResource extends Resource
                     ),
                 Tables\Columns\TextColumn::make('currentCustomer.company_name')->label('Presso')->placeholder('In magazzino')->searchable()
                     ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
+                Tables\Columns\TextColumn::make('type')
+                    ->label('Categoria')
+                    ->formatStateUsing(fn (?string $state) => static::typeLabels()[$state] ?? '—')
+                    ->toggleable(),
                 Tables\Columns\IconColumn::make('gestionale_code')
                     ->label('Da Eureka')
                     ->boolean()
@@ -166,6 +177,9 @@ class MachineUnitResource extends Resource
                 Tables\Filters\SelectFilter::make('status')
                     ->label('Stato')
                     ->options(static::statusLabels()),
+                Tables\Filters\SelectFilter::make('type')
+                    ->label('Categoria impianto')
+                    ->options(static::typeLabels()),
                 Tables\Filters\Filter::make('gestionale_suggested_code')
                     ->label('Collegamento proposto')
                     ->query(fn ($query) => $query->whereNotNull('gestionale_suggested_code')),
@@ -322,6 +336,14 @@ class MachineUnitResource extends Resource
             MachineUnit::STATUS_IN_MAGAZZINO => 'gray',
             MachineUnit::STATUS_INSTALLATA => 'success',
             MachineUnit::STATUS_RIMOSSA => 'danger',
+        ];
+    }
+
+    public static function typeLabels(): array
+    {
+        return [
+            MachineUnit::TYPE_COLONNA_SPINA => 'Colonna spina (birra/vino/selz)',
+            MachineUnit::TYPE_IMPIANTO_ACQUA => 'Impianto acqua',
         ];
     }
 

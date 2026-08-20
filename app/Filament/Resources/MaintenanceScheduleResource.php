@@ -64,6 +64,27 @@ class MaintenanceScheduleResource extends Resource
     }
 
     /**
+     * Etichetta "composizione impianto" (birra/vino/... e quante vie) usata
+     * sia nell'infolist che nel widget "Piani in scadenza": conta di piu' di
+     * un semplice "lavaggio vs manutenzione", perche' per un piano lavaggio
+     * quest'ultimo non diceva nulla di utile.
+     */
+    public static function impiantoHero(MaintenanceSchedule $record): string
+    {
+        if ($record->type !== MaintenanceSchedule::TYPE_LAVAGGIO) {
+            return 'Manutenzione';
+        }
+
+        $label = static::beverageLabels()[$record->beverage_type] ?? 'Lavaggio';
+
+        if (! $record->lines_count || $record->beverage_type === MaintenanceSchedule::BEVERAGE_ACQUA) {
+            return $label;
+        }
+
+        return $label.' · '.$record->lines_count.($record->lines_count === 1 ? ' via' : ' vie');
+    }
+
+    /**
      * Impianto/i rilevanti per questo piano. Se il piano ha una macchina
      * collegata (machine_unit_id) mostra solo quella - e' il caso normale,
      * altrimenti un piano lavaggio birra mostrerebbe anche il macinacaffe'
@@ -148,19 +169,7 @@ class MaintenanceScheduleResource extends Resource
                     // lavaggio non diceva nulla di utile.
                     TextEntry::make('impianto_hero')
                         ->label('Impianto')
-                        ->state(function (MaintenanceSchedule $record) {
-                            if ($record->type !== MaintenanceSchedule::TYPE_LAVAGGIO) {
-                                return 'Manutenzione';
-                            }
-
-                            $label = static::beverageLabels()[$record->beverage_type] ?? 'Lavaggio';
-
-                            if (! $record->lines_count || $record->beverage_type === MaintenanceSchedule::BEVERAGE_ACQUA) {
-                                return $label;
-                            }
-
-                            return $label.' · '.$record->lines_count.($record->lines_count === 1 ? ' via' : ' vie');
-                        })
+                        ->state(fn (MaintenanceSchedule $record) => static::impiantoHero($record))
                         ->badge()
                         ->color(fn (MaintenanceSchedule $record) => static::beverageColors()[$record->beverage_type] ?? 'gray')
                         ->columnSpan(3),
@@ -343,6 +352,17 @@ class MaintenanceScheduleResource extends Resource
             // vere. "IS NULL" prima valuta a 0/1, quindi i null (1) finiscono
             // in fondo.
             ->defaultSort(fn ($query) => $query->orderByRaw('next_due_date IS NULL, next_due_date ASC'))
+            // Vista di apertura raggruppata per cliente (una volta sola, con
+            // tutta la sua composizione - lavaggi + manutenzioni - sotto);
+            // l'ordinamento per prossima scadenza resta disponibile
+            // togliendo il raggruppamento dal selettore "Raggruppa per".
+            ->groups([
+                Tables\Grouping\Group::make('customer.company_name')
+                    ->label('Cliente')
+                    ->getKeyFromRecordUsing(fn (MaintenanceSchedule $record) => $record->customer_id)
+                    ->getTitleFromRecordUsing(fn (MaintenanceSchedule $record) => DisplayName::titleCase($record->customer?->full_name) ?? '—'),
+            ])
+            ->defaultGroup('customer.company_name')
             ->columns([
                 Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->searchable()->sortable()
                     ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
@@ -370,7 +390,7 @@ class MaintenanceScheduleResource extends Resource
                     ->label('Impianti')
                     ->state(fn (MaintenanceSchedule $record) => static::equipmentSummary($record->customer_id, $record->machine_unit_id))
                     ->wrap()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->toggleable(),
                 Tables\Columns\TextColumn::make('pagante')
                     ->label('Pagante')
                     ->state(fn (MaintenanceSchedule $record) => static::billingSummary($record->customer_id, $record->machine_unit_id))
@@ -511,6 +531,7 @@ class MaintenanceScheduleResource extends Resource
             MaintenanceSchedule::BEVERAGE_VINO => 'Vino',
             MaintenanceSchedule::BEVERAGE_BIBITE => 'Bibite',
             MaintenanceSchedule::BEVERAGE_SELZ => 'Selz',
+            MaintenanceSchedule::BEVERAGE_SPRITZ => 'Spritz',
         ];
     }
 

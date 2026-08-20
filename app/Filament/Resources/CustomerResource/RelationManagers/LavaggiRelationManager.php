@@ -50,9 +50,14 @@ class LavaggiRelationManager extends RelationManager
                 ->preload()
                 ->helperText('Lascia vuoto se la visita ha lavato tutti gli impianti (il caso normale). Seleziona la macchina solo se questa volta ne e\' stato lavato uno solo.'),
             Forms\Components\DatePicker::make('data')->label('Data')->required()->default(now()),
+            Forms\Components\TextInput::make('lines_washed')
+                ->label('Vie lavate')
+                ->numeric()
+                ->minValue(0)
+                ->helperText('Non rilevante per impianti acqua.'),
             Forms\Components\TextInput::make('descrizione')
-                ->label('Descrizione')
-                ->helperText('Es. "5 vie + apertura", "chiusura stagionale".')
+                ->label('Note')
+                ->helperText('Es. "apertura", "chiusura stagionale". Il conteggio vie va nel campo sopra.')
                 ->required()
                 ->maxLength(255)
                 ->default('Lavaggio Impianto'),
@@ -69,6 +74,7 @@ class LavaggiRelationManager extends RelationManager
             ->defaultSort('data', 'desc')
             ->columns([
                 Tables\Columns\TextColumn::make('data')->label('Data')->date()->sortable(),
+                Tables\Columns\TextColumn::make('lines_washed')->label('Vie lavate')->placeholder('—'),
                 Tables\Columns\IconColumn::make('filtro_sostituito')
                     ->label('Filtro sostituito')
                     ->boolean()
@@ -77,7 +83,7 @@ class LavaggiRelationManager extends RelationManager
                     ->label('Macchina')
                     ->state(fn (Lavaggio $record) => $record->machineLabel())
                     ->wrap(),
-                Tables\Columns\TextColumn::make('descrizione')->label('Descrizione')->searchable(),
+                Tables\Columns\TextColumn::make('descrizione')->label('Note')->searchable(),
                 Tables\Columns\TextColumn::make('fatturare_a')
                     ->label('Fatturare a')
                     ->state(fn (Lavaggio $record) => $record->billingLabel())

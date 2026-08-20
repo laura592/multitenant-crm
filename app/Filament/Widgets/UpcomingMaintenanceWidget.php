@@ -39,11 +39,14 @@ class UpcomingMaintenanceWidget extends BaseWidget
             ->columns([
                 Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->wrap()
                     ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
-                Tables\Columns\TextColumn::make('type')
-                    ->label('Tipo')
+                // Stessa etichetta "composizione impianto" dell'infolist (es.
+                // "Vino · 8 vie"): il badge "Tipo" (lavaggio/manutenzione) da
+                // solo non bastava a capire cosa andare a fare dal cliente.
+                Tables\Columns\TextColumn::make('impianto_hero')
+                    ->label('Impianto')
+                    ->state(fn (MaintenanceSchedule $record) => MaintenanceScheduleResource::impiantoHero($record))
                     ->badge()
-                    ->formatStateUsing(fn (string $state) => MaintenanceScheduleResource::typeLabels()[$state] ?? 'Manutenzione')
-                    ->color(fn (string $state) => MaintenanceScheduleResource::typeColors()[$state] ?? 'gray'),
+                    ->color(fn (MaintenanceSchedule $record) => MaintenanceScheduleResource::beverageColors()[$record->beverage_type] ?? 'gray'),
                 Tables\Columns\TextColumn::make('next_due_date')
                     ->label('Scadenza')
                     ->date()

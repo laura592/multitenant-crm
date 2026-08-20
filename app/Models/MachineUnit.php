@@ -29,6 +29,10 @@ class MachineUnit extends Model
 
     public const SOURCE_EUREKA = 'eureka';
 
+    public const TYPE_COLONNA_SPINA = 'colonna_spina';
+
+    public const TYPE_IMPIANTO_ACQUA = 'impianto_acqua';
+
     protected $fillable = [
         'tenant_id',
         'source',
@@ -37,6 +41,7 @@ class MachineUnit extends Model
         'billing_customer_id',
         'serial_number',
         'model_name',
+        'type',
         'status',
         'notes',
         'gestionale_code',

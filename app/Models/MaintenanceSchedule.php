@@ -30,6 +30,8 @@ class MaintenanceSchedule extends Model
 
     public const BEVERAGE_SELZ = 'selz';
 
+    public const BEVERAGE_SPRITZ = 'spritz';
+
     /**
      * Cadenza standard per tipo di impianto, usata come default sul form e
      * dalla bulk action di correzione in MaintenanceScheduleResource. Vino,

@@ -31,12 +31,14 @@ class Lavaggio extends Model
         'service_report_id',
         'data',
         'descrizione',
+        'lines_washed',
         'filtro_sostituito',
     ];
 
     protected $casts = [
         'data' => 'date',
         'filtro_sostituito' => 'boolean',
+        'lines_washed' => 'integer',
     ];
 
     // Proprieta' reale (non un attributo Eloquent): dichiararla esplicitamente

@@ -92,11 +92,20 @@ class LavaggiRelationManager extends RelationManager
                 ->preload()
                 ->helperText('Lascia vuoto se la visita ha lavato tutti gli impianti (il caso normale). Seleziona la macchina solo se questa volta ne e\' stato lavato uno solo.'),
             Forms\Components\DatePicker::make('data')->label('Data')->required()->default(now()),
+            Forms\Components\TextInput::make('lines_washed')
+                ->label('Vie lavate')
+                ->numeric()
+                ->minValue(0)
+                ->default(fn () => $this->getOwnerRecord()->lines_count)
+                ->helperText(fn () => $this->getOwnerRecord()->lines_count
+                    ? 'Vie previste su questo piano: '.$this->getOwnerRecord()->lines_count.'. Cambia il numero se questa volta ne hai lavate meno/di piu\'.'
+                    : 'Non rilevante per questo impianto (es. acqua).'),
             Forms\Components\TextInput::make('descrizione')
-                ->label('Descrizione')
-                ->helperText('Es. "5 vie + apertura", "chiusura stagionale".')
+                ->label('Note')
+                ->helperText('Es. "apertura", "chiusura stagionale". Il conteggio vie va nel campo sopra.')
                 ->required()
-                ->maxLength(255),
+                ->maxLength(255)
+                ->default('Lavaggio impianto'),
             Forms\Components\Toggle::make('filtro_sostituito')
                 ->label('Filtro sostituito in questa visita')
                 ->helperText('Impianti acqua: segna quando il filtro viene cambiato, serve a calcolare la prossima scadenza del piano.')
@@ -111,6 +120,7 @@ class LavaggiRelationManager extends RelationManager
             ->defaultSort('data', 'desc')
             ->columns([
                 Tables\Columns\TextColumn::make('data')->label('Data')->date()->sortable(),
+                Tables\Columns\TextColumn::make('lines_washed')->label('Vie lavate')->placeholder('—'),
                 Tables\Columns\IconColumn::make('filtro_sostituito')
                     ->label('Filtro sostituito')
                     ->boolean()
@@ -119,7 +129,7 @@ class LavaggiRelationManager extends RelationManager
                     ->label('Fatturare a')
                     ->state(fn (Lavaggio $record) => $record->billingLabel())
                     ->wrap(),
-                Tables\Columns\TextColumn::make('descrizione')->label('Descrizione')->searchable(),
+                Tables\Columns\TextColumn::make('descrizione')->label('Note')->searchable(),
                 // Un lavaggio generato automaticamente da ServiceReport::syncMaintenanceSchedule()
                 // (rapportino di manutenzione ordinaria chiuso, o testo libero "lavagg/puliz/sanific"
                 // sullo storico importato) ha service_report_id valorizzato: qui si vede quale, con
