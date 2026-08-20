@@ -279,16 +279,6 @@ class ServiceReport extends Model
                 $lavaggio->descrizione = "Generato da rapportino {$this->number}";
             }
 
-            // Valorizzata solo per la selezione esplicita (pivot
-            // maintenance_schedule_id + lines_washed, vedi il campo
-            // "Impianti e vie lavate" del form): la regola implicita sotto
-            // (tutti i piani attivi/quello di machine_unit_id) non ha un
-            // numero di vie per-impianto da proporre, resta a chi compila
-            // aggiornare lines_washed a mano su ogni riga se serve.
-            if (isset($schedule->pivot) && $schedule->pivot->lines_washed !== null) {
-                $lavaggio->lines_washed = $schedule->pivot->lines_washed;
-            }
-
             $lavaggio->save();
         }
     }
@@ -406,8 +396,7 @@ class ServiceReport extends Model
      */
     public function maintenanceSchedules(): BelongsToMany
     {
-        return $this->belongsToMany(MaintenanceSchedule::class, 'service_report_maintenance_schedule')
-            ->withPivot('lines_washed');
+        return $this->belongsToMany(MaintenanceSchedule::class, 'service_report_maintenance_schedule');
     }
 
     public function quote(): BelongsTo

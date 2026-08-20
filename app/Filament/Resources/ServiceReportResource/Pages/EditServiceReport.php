@@ -67,7 +67,8 @@ class EditServiceReport extends EditRecord
 
     /**
      * lavaggio_impianti non e' una colonna reale (vedi il campo sul form):
-     * estratto qui prima del save() e riapplicato in afterSave().
+     * estratto qui prima del save() e riapplicato in afterSave(), stesso
+     * meccanismo di CreateServiceReport.
      */
     protected array $lavaggioImpianti = [];
 
@@ -80,16 +81,13 @@ class EditServiceReport extends EditRecord
     }
 
     /**
-     * Stesso ordine di CreateServiceReport::afterCreate(): prima la pivot
-     * (id piano + vie lavate), poi syncMaintenanceSchedule() cosi' le righe
-     * Lavaggio generate leggono gia' il lines_washed appena sincronizzato.
+     * Stesso motivo di CreateServiceReport::afterCreate(): applica la
+     * selezione esplicita dei piani e le vie lavate del Repeater, che
+     * Filament non salva da solo.
      */
     protected function afterSave(): void
     {
-        $record = $this->getRecord();
-
-        ServiceReportResource::syncLavaggioImpianti($record, $this->lavaggioImpianti);
-        $record->syncMaintenanceSchedule();
+        ServiceReportResource::syncLavaggioImpianti($this->getRecord(), $this->lavaggioImpianti);
     }
 
     /**

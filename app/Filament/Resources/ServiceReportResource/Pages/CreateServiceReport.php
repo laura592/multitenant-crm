@@ -14,7 +14,8 @@ class CreateServiceReport extends CreateRecord
     /**
      * lavaggio_impianti non e' una colonna reale (vedi il campo sul form):
      * estratto qui prima del create() e riapplicato in afterCreate(), dove
-     * il record ha finalmente un id da usare per la pivot.
+     * il record ha finalmente un id da usare per collegare i piani e
+     * scrivere le vie lavate sulle righe Lavaggio generate.
      */
     protected array $lavaggioImpianti = [];
 
@@ -91,23 +92,20 @@ class CreateServiceReport extends CreateRecord
     /**
      * ServiceReport::syncMaintenanceSchedule() gira gia' su static::saved()
      * durante handleRecordCreation() (vedi CreateRecord::create() nel core
-     * Filament), ma a quel punto il campo "Impianti/manutenzioni interessati"
-     * (relationship() many-to-many) non e' ancora stato collegato: Filament
-     * lo salva solo subito dopo, con $this->form->model(...)->saveRelationships().
-     * Senza questo ri-lancio, il primo salvataggio di una sanificazione multi-
-     * impianto genererebbe ancora i lavaggi con la regola implicita vecchia
-     * (tutti i piani/quello di machine_unit_id) invece che sulla selezione
-     * esplicita appena fatta — corretto solo al salvataggio successivo.
+     * Filament), ma a quel punto il campo "Impianti e vie lavate" (Repeater,
+     * non ->relationship()) non e' ancora stato applicato: Filament non lo
+     * salva da solo (vedi mutateFormDataBeforeCreate() sopra). Senza questo
+     * ri-lancio (dentro ServiceReportResource::syncLavaggioImpianti()), il
+     * primo salvataggio di una sanificazione multi-impianto genererebbe
+     * ancora i lavaggi con la regola implicita vecchia (tutti i piani/quello
+     * di machine_unit_id) invece che sulla selezione esplicita appena fatta
+     * — corretto solo al salvataggio successivo.
      */
     protected function afterCreate(): void
     {
         $record = $this->getRecord();
 
-        // Prima la pivot (id piano + vie lavate dal Repeater), poi
-        // syncMaintenanceSchedule() cosi' le righe Lavaggio generate
-        // leggono gia' il lines_washed appena sincronizzato.
         ServiceReportResource::syncLavaggioImpianti($record, $this->lavaggioImpianti);
-        $record->syncMaintenanceSchedule();
 
         $this->linkSourceLavaggio($record);
     }

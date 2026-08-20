@@ -11,6 +11,7 @@ use App\Filament\Resources\ServiceReportResource\Pages;
 use App\Jobs\SendServiceReportToGestionaleJob;
 use App\Mail\ServiceReportMail;
 use App\Models\Customer;
+use App\Models\Lavaggio;
 use App\Models\MachineUnit;
 use App\Models\MaintenanceSchedule;
 use App\Models\Material;
@@ -495,10 +496,11 @@ class ServiceReportResource extends Resource
                     // ServiceReport::syncMaintenanceSchedule() ("tutti i piani
                     // attivi del cliente"/quello di machine_unit_id); nessuna
                     // riga = comportamento di sempre. Non ->relationship():
-                    // Filament non porta dati pivot extra (lines_washed) con
-                    // un binding automatico su una BelongsToMany, il sync va
-                    // fatto a mano (vedi CreateServiceReport/EditServiceReport
-                    // ::syncMaintenanceScheduleLines()).
+                    // Filament non porta dati extra (lines_washed) con un
+                    // binding automatico su una BelongsToMany, il collegamento
+                    // piani + scrittura vie va fatto a mano (vedi
+                    // CreateServiceReport/EditServiceReport, entrambi passano
+                    // da ServiceReportResource::syncLavaggioImpianti()).
                     Forms\Components\Repeater::make('lavaggio_impianti')
                         ->label('Impianti e vie lavate')
                         ->schema([
@@ -927,6 +929,63 @@ class ServiceReportResource extends Resource
     }
 
     /**
+     * Stato "reale" (da DB) del campo "Impianti e vie lavate" per un
+     * rapportino esistente: niente pivot dedicata, le vie lavate si leggono
+     * direttamente dalle righe Lavaggio gia' generate per questo rapportino
+     * (stesso criterio univoco service_report_id+maintenance_schedule_id di
+     * Lavaggio::firstOrNew() dentro ServiceReport::syncGeneratedLavaggi()).
+     * Iniettato da EditServiceReport::mutateFormDataBeforeFill(), stesso
+     * motivo di resolveLavaggioShortcutDefaults() qui sotto.
+     */
+    public static function resolveLavaggioImpiantiDefaults(?ServiceReport $record): array
+    {
+        if (! $record) {
+            return [];
+        }
+
+        return $record->maintenanceSchedules()->get()
+            ->map(fn (MaintenanceSchedule $schedule) => [
+                'maintenance_schedule_id' => $schedule->id,
+                'lines_washed' => Lavaggio::where('service_report_id', $record->id)
+                    ->where('maintenance_schedule_id', $schedule->id)
+                    ->value('lines_washed'),
+            ])
+            ->all();
+    }
+
+    /**
+     * Applica le righe del Repeater "Impianti e vie lavate": prima la
+     * selezione esplicita dei piani coinvolti (attach nudo, senza dati extra
+     * sulla pivot — vince sulla regola implicita di
+     * ServiceReport::syncMaintenanceSchedule(), vedi il commento sul campo
+     * nel form), poi la generazione/aggiornamento delle righe Lavaggio, poi
+     * le vie lavate scritte direttamente su quelle righe (niente colonna
+     * pivot dedicata: piu' semplice riscrivere lines_washed a colpo sicuro
+     * sulla riga Lavaggio che il sync ha appena creato/toccato). Chiamata da
+     * CreateServiceReport::afterCreate() ed EditServiceReport::afterSave().
+     */
+    public static function syncLavaggioImpianti(ServiceReport $record, array $rows): void
+    {
+        $scheduleIds = collect($rows)
+            ->pluck('maintenance_schedule_id')
+            ->filter()
+            ->values();
+
+        $record->maintenanceSchedules()->sync($scheduleIds);
+        $record->syncMaintenanceSchedule();
+
+        foreach ($rows as $row) {
+            if (blank($row['maintenance_schedule_id'] ?? null) || blank($row['lines_washed'] ?? null)) {
+                continue;
+            }
+
+            Lavaggio::where('service_report_id', $record->id)
+                ->where('maintenance_schedule_id', $row['maintenance_schedule_id'])
+                ->update(['lines_washed' => $row['lines_washed']]);
+        }
+    }
+
+    /**
      * Stato "reale" (da DB, non dal form) delle righe CHIVE/CHIORD e
      * LAV2/ULTVIA gia' presenti su un rapportino esistente: serve a far
      * partire i toggle/hidden di cui sopra gia' allineati a quello che c'e'
@@ -945,47 +1004,6 @@ class ServiceReportResource extends Resource
      * incluso. Serve quindi iniettare questi valori PRIMA, in
      * EditServiceReport::mutateFormDataBeforeFill().
      */
-    /**
-     * Stato "reale" (da DB) del campo "Impianti e vie lavate" per un
-     * rapportino esistente: stesso motivo di resolveLavaggioShortcutDefaults()
-     * qui sotto, iniettato da EditServiceReport::mutateFormDataBeforeFill()
-     * perche' il Repeater non e' un ->relationship() (serve il dato pivot
-     * lines_washed, che il binding automatico non porta).
-     */
-    public static function resolveLavaggioImpiantiDefaults(?ServiceReport $record): array
-    {
-        if (! $record) {
-            return [];
-        }
-
-        return $record->maintenanceSchedules()->get()
-            ->map(fn (MaintenanceSchedule $schedule) => [
-                'maintenance_schedule_id' => $schedule->id,
-                'lines_washed' => $schedule->pivot->lines_washed,
-            ])
-            ->all();
-    }
-
-    /**
-     * Sincronizza a mano la pivot service_report_maintenance_schedule (id
-     * piano + vie lavate) dalle righe del Repeater "Impianti e vie lavate":
-     * niente ->relationship() sul campo (vedi il commento sul form), quindi
-     * Filament non salva questa parte da solo. Chiamata da
-     * CreateServiceReport::afterCreate() ed EditServiceReport::afterSave(),
-     * PRIMA di ServiceReport::syncMaintenanceSchedule() cosi' che le righe
-     * Lavaggio generate leggano gia' il lines_washed appena sincronizzato.
-     */
-    public static function syncLavaggioImpianti(ServiceReport $record, array $rows): void
-    {
-        $pairs = collect($rows)
-            ->filter(fn (array $row) => filled($row['maintenance_schedule_id'] ?? null))
-            ->mapWithKeys(fn (array $row) => [
-                $row['maintenance_schedule_id'] => ['lines_washed' => $row['lines_washed'] ?? null],
-            ]);
-
-        $record->maintenanceSchedules()->sync($pairs);
-    }
-
     public static function resolveLavaggioShortcutDefaults(?ServiceReport $record): array
     {
         $empty = [
