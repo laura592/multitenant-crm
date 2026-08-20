@@ -61,7 +61,35 @@ class EditServiceReport extends EditRecord
             '_lavaggio_vie_count' => $defaults['vie_count'],
             '_lavaggio_base_material_key' => $defaults['lavaggio_base_key'],
             '_lavaggio_ult_material_key' => $defaults['lavaggio_ult_key'],
+            'lavaggio_impianti' => ServiceReportResource::resolveLavaggioImpiantiDefaults($this->getRecord()),
         ];
+    }
+
+    /**
+     * lavaggio_impianti non e' una colonna reale (vedi il campo sul form):
+     * estratto qui prima del save() e riapplicato in afterSave().
+     */
+    protected array $lavaggioImpianti = [];
+
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        $this->lavaggioImpianti = $data['lavaggio_impianti'] ?? [];
+        unset($data['lavaggio_impianti']);
+
+        return $data;
+    }
+
+    /**
+     * Stesso ordine di CreateServiceReport::afterCreate(): prima la pivot
+     * (id piano + vie lavate), poi syncMaintenanceSchedule() cosi' le righe
+     * Lavaggio generate leggono gia' il lines_washed appena sincronizzato.
+     */
+    protected function afterSave(): void
+    {
+        $record = $this->getRecord();
+
+        ServiceReportResource::syncLavaggioImpianti($record, $this->lavaggioImpianti);
+        $record->syncMaintenanceSchedule();
     }
 
     /**

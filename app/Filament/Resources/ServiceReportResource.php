@@ -487,41 +487,58 @@ class ServiceReportResource extends Resource
                             return $machineUnit->id;
                         }),
                     // Una sanificazione spesso copre piu' impianti dello stesso
-                    // cliente in una sola visita: machine_unit_id sopra resta
-                    // per singola macchina/matricola. Selezionando qui uno o
-                    // piu' piani si sceglie esplicitamente quali coprire
-                    // (vince sulla regola implicita di ServiceReport::
-                    // syncMaintenanceSchedule() — machine_unit_id o "tutti i
-                    // piani attivi del cliente"); vuoto = comportamento di
-                    // sempre.
-                    Forms\Components\Select::make('maintenanceSchedules')
-                        ->label('Impianti/manutenzioni interessati')
-                        ->relationship(
-                            'maintenanceSchedules',
-                            'id',
-                            modifyQueryUsing: fn (Builder $query, Forms\Get $get) => $query
-                                ->where('type', MaintenanceSchedule::TYPE_LAVAGGIO)
-                                ->where('status', MaintenanceSchedule::STATUS_ATTIVO)
-                                ->when($get('customer_id'), fn ($q, $customerId) => $q->where('customer_id', $customerId)),
-                        )
-                        ->getOptionLabelFromRecordUsing(function (MaintenanceSchedule $record) {
-                            $label = MaintenanceScheduleResource::beverageLabels()[$record->beverage_type] ?? 'Lavaggio';
+                    // cliente in una sola visita, ognuno con le sue vie lavate
+                    // (es. Birra 2 vie, Vino 5 vie): machine_unit_id sopra resta
+                    // per singola macchina/matricola. Una riga qui = un piano
+                    // esplicitamente coperto da questa visita, con le vie
+                    // lavate quella volta — vince sulla regola implicita di
+                    // ServiceReport::syncMaintenanceSchedule() ("tutti i piani
+                    // attivi del cliente"/quello di machine_unit_id); nessuna
+                    // riga = comportamento di sempre. Non ->relationship():
+                    // Filament non porta dati pivot extra (lines_washed) con
+                    // un binding automatico su una BelongsToMany, il sync va
+                    // fatto a mano (vedi CreateServiceReport/EditServiceReport
+                    // ::syncMaintenanceScheduleLines()).
+                    Forms\Components\Repeater::make('lavaggio_impianti')
+                        ->label('Impianti e vie lavate')
+                        ->schema([
+                            Forms\Components\Select::make('maintenance_schedule_id')
+                                ->label('Impianto')
+                                ->options(function (Forms\Get $get) {
+                                    $customerId = $get('../../customer_id');
 
-                            if ($record->lines_count && $record->beverage_type !== MaintenanceSchedule::BEVERAGE_ACQUA) {
-                                $label .= ' '.$record->lines_count.' vie';
-                            }
+                                    if (! $customerId) {
+                                        return [];
+                                    }
 
-                            if ($record->machineUnit) {
-                                $label .= ' — '.$record->machineUnit->serial_number;
-                            }
+                                    return MaintenanceSchedule::query()
+                                        ->where('customer_id', $customerId)
+                                        ->where('type', MaintenanceSchedule::TYPE_LAVAGGIO)
+                                        ->where('status', MaintenanceSchedule::STATUS_ATTIVO)
+                                        ->get()
+                                        ->mapWithKeys(fn (MaintenanceSchedule $record) => [$record->id => MaintenanceScheduleResource::impiantoHero($record)]);
+                                })
+                                ->required()
+                                ->searchable()
+                                ->live()
+                                ->afterStateUpdated(function (Forms\Set $set, ?string $state) {
+                                    if (! $state) {
+                                        return;
+                                    }
 
-                            return $label;
-                        })
-                        ->multiple()
-                        ->searchable()
-                        ->preload()
+                                    $schedule = MaintenanceSchedule::find($state);
+                                    $set('lines_washed', $schedule?->lines_count);
+                                }),
+                            Forms\Components\TextInput::make('lines_washed')
+                                ->label('Vie lavate')
+                                ->numeric()
+                                ->minValue(0),
+                        ])
+                        ->columns(2)
                         ->visible(fn (Forms\Get $get) => $get('intervention_type') === ServiceReport::TYPE_SANIFICAZIONE)
-                        ->helperText('Lascia vuoto per applicarla a tutti i piani lavaggio attivi del cliente (comportamento di sempre). Seleziona uno o più impianti per limitarla a quelli.')
+                        ->helperText('Lascia vuoto (nessuna riga) per applicarla a tutti i piani lavaggio attivi del cliente, senza vie specifiche per impianto (comportamento di sempre). Aggiungi una riga per ogni impianto coperto da questa visita.')
+                        ->addActionLabel('Aggiungi impianto')
+                        ->defaultItems(0)
                         ->columnSpanFull(),
                     // Il collegamento Eureka manca spesso solo per il rapportino
                     // (vedi ServiceReport::gestionaleValidationErrors()), ma finora
@@ -928,6 +945,47 @@ class ServiceReportResource extends Resource
      * incluso. Serve quindi iniettare questi valori PRIMA, in
      * EditServiceReport::mutateFormDataBeforeFill().
      */
+    /**
+     * Stato "reale" (da DB) del campo "Impianti e vie lavate" per un
+     * rapportino esistente: stesso motivo di resolveLavaggioShortcutDefaults()
+     * qui sotto, iniettato da EditServiceReport::mutateFormDataBeforeFill()
+     * perche' il Repeater non e' un ->relationship() (serve il dato pivot
+     * lines_washed, che il binding automatico non porta).
+     */
+    public static function resolveLavaggioImpiantiDefaults(?ServiceReport $record): array
+    {
+        if (! $record) {
+            return [];
+        }
+
+        return $record->maintenanceSchedules()->get()
+            ->map(fn (MaintenanceSchedule $schedule) => [
+                'maintenance_schedule_id' => $schedule->id,
+                'lines_washed' => $schedule->pivot->lines_washed,
+            ])
+            ->all();
+    }
+
+    /**
+     * Sincronizza a mano la pivot service_report_maintenance_schedule (id
+     * piano + vie lavate) dalle righe del Repeater "Impianti e vie lavate":
+     * niente ->relationship() sul campo (vedi il commento sul form), quindi
+     * Filament non salva questa parte da solo. Chiamata da
+     * CreateServiceReport::afterCreate() ed EditServiceReport::afterSave(),
+     * PRIMA di ServiceReport::syncMaintenanceSchedule() cosi' che le righe
+     * Lavaggio generate leggano gia' il lines_washed appena sincronizzato.
+     */
+    public static function syncLavaggioImpianti(ServiceReport $record, array $rows): void
+    {
+        $pairs = collect($rows)
+            ->filter(fn (array $row) => filled($row['maintenance_schedule_id'] ?? null))
+            ->mapWithKeys(fn (array $row) => [
+                $row['maintenance_schedule_id'] => ['lines_washed' => $row['lines_washed'] ?? null],
+            ]);
+
+        $record->maintenanceSchedules()->sync($pairs);
+    }
+
     public static function resolveLavaggioShortcutDefaults(?ServiceReport $record): array
     {
         $empty = [

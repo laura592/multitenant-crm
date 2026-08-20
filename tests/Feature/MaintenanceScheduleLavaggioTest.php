@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Filament\Resources\MaintenanceScheduleResource\Pages\CreateMaintenanceSchedule;
 use App\Filament\Resources\MaintenanceScheduleResource\Pages\EditMaintenanceSchedule;
 use App\Filament\Resources\MaintenanceScheduleResource\RelationManagers\LavaggiRelationManager;
+use App\Filament\Resources\ServiceReportResource\Pages\CreateServiceReport;
 use App\Models\Customer;
 use App\Models\Lavaggio;
 use App\Models\MachineUnit;
@@ -328,5 +329,67 @@ class MaintenanceScheduleLavaggioTest extends TestCase
         $this->assertSame('Lavaggio impianto', $query['problem_description']);
         $this->assertSame('5 Vie + Apertura', $query['work_performed']);
         $this->assertArrayNotHasKey('notes', $query);
+    }
+
+    /**
+     * Bug segnalato dall'utente 2026-08-20: "Crea rapportino" da una riga
+     * Lavaggio non la collegava al rapportino appena creato -
+     * ServiceReport::syncGeneratedLavaggi() cercava per service_report_id
+     * (ancora nullo sulla riga originale) e ne creava sempre una seconda,
+     * lasciando due righe per la stessa visita. Vedi
+     * CreateServiceReport::linkSourceLavaggio().
+     */
+    public function test_creating_a_rapportino_from_a_lavaggio_row_links_it_instead_of_duplicating(): void
+    {
+        $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);
+        $tech = User::create([
+            'tenant_id' => $tenant->id, 'name' => 'Tecnico Sei', 'email' => 'tech6@gifar.it', 'password' => bcrypt('password'),
+        ]);
+        $this->giveRole($tech, $tenant, 'dipendente');
+        $customer = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Bar Centrale']);
+
+        $schedule = MaintenanceSchedule::create([
+            'tenant_id' => $tenant->id,
+            'customer_id' => $customer->id,
+            'type' => MaintenanceSchedule::TYPE_LAVAGGIO,
+            'beverage_type' => MaintenanceSchedule::BEVERAGE_BIRRA,
+            'frequency_days' => 30,
+        ]);
+
+        $lavaggio = Lavaggio::create([
+            'tenant_id' => $tenant->id,
+            'customer_id' => $customer->id,
+            'maintenance_schedule_id' => $schedule->id,
+            'data' => now(),
+            'descrizione' => '5 vie + apertura',
+            'lines_washed' => 5,
+        ]);
+
+        $this->actingAs($tech);
+        Filament::setTenant($tenant);
+
+        $url = LavaggiRelationManager::serviceReportCreateUrl($lavaggio);
+        parse_str(parse_url($url, PHP_URL_QUERY) ?? '', $query);
+        $this->assertSame((string) $lavaggio->id, $query['lavaggio_id']);
+
+        Livewire::withQueryParams($query)
+            ->test(CreateServiceReport::class)
+            ->fillForm(['technician_id' => $tech->id])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        // Una sola riga lavaggio per questo piano, non due: quella originale
+        // (con note/vie lavate inserite a mano) va collegata al rapportino
+        // appena creato invece di restare orfana accanto a un duplicato
+        // generato automaticamente.
+        $this->assertSame(1, Lavaggio::where('maintenance_schedule_id', $schedule->id)->count());
+
+        $report = ServiceReport::firstOrFail();
+        $lavaggio->refresh();
+        $this->assertSame($report->id, $lavaggio->service_report_id);
+        // Title Case: stessa normalizzazione automatica del modello vista
+        // nell'altro test di questo file (query['work_performed'] sopra).
+        $this->assertSame('5 Vie + Apertura', $lavaggio->descrizione);
+        $this->assertSame(5, $lavaggio->lines_washed);
     }
 }

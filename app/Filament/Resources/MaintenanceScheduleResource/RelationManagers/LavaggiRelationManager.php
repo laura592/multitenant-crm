@@ -58,6 +58,12 @@ class LavaggiRelationManager extends RelationManager
             'intervention_type' => ServiceReport::TYPE_SANIFICAZIONE,
             'problem_description' => 'Lavaggio impianto',
             'work_performed' => $record->descrizione,
+            // Riga di origine: CreateServiceReport::afterCreate() la collega
+            // al rapportino appena creato invece di lasciarla orfana mentre
+            // ServiceReport::syncGeneratedLavaggi() ne genera un'altra
+            // "gemella" per lo stesso piano - senza questo, il "Crea
+            // rapportino" produceva sempre una riga lavaggio doppia.
+            'lavaggio_id' => $record->id,
         ], fn ($value) => filled($value));
 
         return ServiceReportResource::getUrl('create', tenant: $record->tenant).'?'.http_build_query($query);

@@ -110,4 +110,59 @@ class ServiceReportLavaggioSyncTest extends TestCase
             Lavaggio::where('service_report_id', $report->id)->pluck('maintenance_schedule_id')->sort()->values()->all()
         );
     }
+
+    public function test_explicit_selection_with_pivot_lines_washed_sets_it_on_the_generated_lavaggio(): void
+    {
+        [$tenant, $tech, $customer] = $this->makeTenantAndCustomer();
+
+        $birra = MaintenanceSchedule::create([
+            'tenant_id' => $tenant->id,
+            'customer_id' => $customer->id,
+            'type' => MaintenanceSchedule::TYPE_LAVAGGIO,
+            'beverage_type' => MaintenanceSchedule::BEVERAGE_BIRRA,
+            'lines_count' => 2,
+        ]);
+
+        $vino = MaintenanceSchedule::create([
+            'tenant_id' => $tenant->id,
+            'customer_id' => $customer->id,
+            'type' => MaintenanceSchedule::TYPE_LAVAGGIO,
+            'beverage_type' => MaintenanceSchedule::BEVERAGE_VINO,
+            'lines_count' => 5,
+        ]);
+
+        $report = ServiceReport::create([
+            'tenant_id' => $tenant->id,
+            'customer_id' => $customer->id,
+            'technician_id' => $tech->id,
+            'intervention_type' => ServiceReport::TYPE_SANIFICAZIONE,
+            'intervention_date' => '2026-08-20',
+            'work_performed' => 'Sanificazione birra+vino',
+            'status' => 'bozza',
+        ]);
+
+        $report->maintenanceSchedules()->sync([
+            $birra->id => ['lines_washed' => 2],
+            $vino->id => ['lines_washed' => 3],
+        ]);
+        $report->syncMaintenanceSchedule();
+
+        $rows = Lavaggio::where('service_report_id', $report->id)->get()->keyBy('maintenance_schedule_id');
+
+        $this->assertSame(2, $rows->get($birra->id)->lines_washed);
+        $this->assertSame(3, $rows->get($vino->id)->lines_washed);
+
+        // Un secondo salvataggio con vie diverse aggiorna la riga esistente
+        // invece di duplicarla.
+        $report->maintenanceSchedules()->sync([
+            $birra->id => ['lines_washed' => 1],
+            $vino->id => ['lines_washed' => 5],
+        ]);
+        $report->syncMaintenanceSchedule();
+
+        $this->assertSame(2, Lavaggio::where('service_report_id', $report->id)->count());
+        $rows = Lavaggio::where('service_report_id', $report->id)->get()->keyBy('maintenance_schedule_id');
+        $this->assertSame(1, $rows->get($birra->id)->lines_washed);
+        $this->assertSame(5, $rows->get($vino->id)->lines_washed);
+    }
 }

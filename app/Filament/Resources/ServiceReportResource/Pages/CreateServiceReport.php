@@ -3,12 +3,41 @@
 namespace App\Filament\Resources\ServiceReportResource\Pages;
 
 use App\Filament\Resources\ServiceReportResource;
+use App\Models\Lavaggio;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
 
 class CreateServiceReport extends CreateRecord
 {
     protected static string $resource = ServiceReportResource::class;
+
+    /**
+     * lavaggio_impianti non e' una colonna reale (vedi il campo sul form):
+     * estratto qui prima del create() e riapplicato in afterCreate(), dove
+     * il record ha finalmente un id da usare per la pivot.
+     */
+    protected array $lavaggioImpianti = [];
+
+    /**
+     * Letto da fillForm() (mount, unica chiamata che vede davvero la query
+     * string della pagina) e riusato in afterCreate(): le action Livewire
+     * successive come "create" girano su una richiesta separata (l'endpoint
+     * di update, senza piu' i query param originali - request()->query('lavaggio_id')
+     * li' dentro sarebbe sempre vuoto) con un'istanza del componente
+     * rideidratata da zero. Deve essere public: solo le proprieta' pubbliche
+     * di un componente Livewire sopravvivono nello snapshot tra una
+     * richiesta e l'altra, una protected/private tornerebbe sempre al
+     * default ad ogni azione successiva al mount.
+     */
+    public ?string $sourceLavaggioId = null;
+
+    protected function mutateFormDataBeforeCreate(array $data): array
+    {
+        $this->lavaggioImpianti = $data['lavaggio_impianti'] ?? [];
+        unset($data['lavaggio_impianti']);
+
+        return $data;
+    }
 
     /**
      * Vedi lo stesso override su EditServiceReport.
@@ -54,6 +83,8 @@ class CreateServiceReport extends CreateRecord
             $this->form->fill(array_merge($this->form->getRawState(), $prefill));
         }
 
+        $this->sourceLavaggioId = request()->query('lavaggio_id');
+
         $this->callHook('afterFill');
     }
 
@@ -70,6 +101,46 @@ class CreateServiceReport extends CreateRecord
      */
     protected function afterCreate(): void
     {
-        $this->getRecord()->syncMaintenanceSchedule();
+        $record = $this->getRecord();
+
+        // Prima la pivot (id piano + vie lavate dal Repeater), poi
+        // syncMaintenanceSchedule() cosi' le righe Lavaggio generate
+        // leggono gia' il lines_washed appena sincronizzato.
+        ServiceReportResource::syncLavaggioImpianti($record, $this->lavaggioImpianti);
+        $record->syncMaintenanceSchedule();
+
+        $this->linkSourceLavaggio($record);
+    }
+
+    /**
+     * Quando si arriva da "Crea rapportino" su una riga Lavaggio
+     * (?lavaggio_id=..., vedi MaintenanceScheduleResource\LavaggiRelationManager::serviceReportCreateUrl()),
+     * syncMaintenanceSchedule() sopra ha appena generato una riga lavaggio
+     * "gemella" per lo stesso piano (ServiceReport::syncGeneratedLavaggi()
+     * cerca per service_report_id, che sulla riga originale e' ancora nullo,
+     * quindi non la trova e ne crea una nuova). Qui si elimina quella
+     * generata e si collega invece la riga originale, cosi' restano le
+     * note/vie lavate/filtro gia' inseriti a mano invece del placeholder
+     * generico "Generato da rapportino ...".
+     */
+    private function linkSourceLavaggio($record): void
+    {
+        if (! $this->sourceLavaggioId) {
+            return;
+        }
+
+        $original = Lavaggio::find($this->sourceLavaggioId);
+
+        if (! $original || $original->service_report_id) {
+            return;
+        }
+
+        Lavaggio::where('service_report_id', $record->id)
+            ->where('maintenance_schedule_id', $original->maintenance_schedule_id)
+            ->where('id', '!=', $original->id)
+            ->get()
+            ->each->delete();
+
+        $original->update(['service_report_id' => $record->id]);
     }
 }

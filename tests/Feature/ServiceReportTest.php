@@ -166,6 +166,64 @@ class ServiceReportTest extends TestCase
     }
 
     /**
+     * Il campo "Impianti e vie lavate" (Repeater, non ->relationship(): vedi
+     * ServiceReportResource::syncLavaggioImpianti()) deve sincronizzare la
+     * pivot service_report_maintenance_schedule con le vie indicate riga per
+     * riga, e ServiceReport::syncGeneratedLavaggi() deve leggerle per
+     * popolare Lavaggio::lines_washed sulla riga generata per ogni impianto.
+     */
+    public function test_create_page_saves_lavaggio_impianti_lines_washed_on_generated_lavaggi(): void
+    {
+        $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);
+        $tech = User::create([
+            'tenant_id' => $tenant->id, 'name' => 'Tecnico Cinque', 'email' => 'tech5@gifar.it', 'password' => bcrypt('password'),
+        ]);
+        $this->giveRole($tech, $tenant, 'dipendente');
+        $customer = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Bar Centrale']);
+
+        $birra = \App\Models\MaintenanceSchedule::create([
+            'tenant_id' => $tenant->id,
+            'customer_id' => $customer->id,
+            'type' => \App\Models\MaintenanceSchedule::TYPE_LAVAGGIO,
+            'beverage_type' => \App\Models\MaintenanceSchedule::BEVERAGE_BIRRA,
+            'lines_count' => 2,
+        ]);
+        $vino = \App\Models\MaintenanceSchedule::create([
+            'tenant_id' => $tenant->id,
+            'customer_id' => $customer->id,
+            'type' => \App\Models\MaintenanceSchedule::TYPE_LAVAGGIO,
+            'beverage_type' => \App\Models\MaintenanceSchedule::BEVERAGE_VINO,
+            'lines_count' => 5,
+        ]);
+
+        $this->actingAs($tech);
+        Filament::setTenant($tenant);
+
+        Livewire::test(CreateServiceReport::class)
+            ->fillForm([
+                'customer_id' => $customer->id,
+                'technician_id' => $tech->id,
+                'intervention_type' => ServiceReport::TYPE_SANIFICAZIONE,
+                'intervention_date' => '2026-08-20',
+                'problem_description' => 'Lavaggio impianto',
+                'work_performed' => 'Lavaggio impianto',
+                'lavaggio_impianti' => [
+                    ['maintenance_schedule_id' => $birra->id, 'lines_washed' => 2],
+                    ['maintenance_schedule_id' => $vino->id, 'lines_washed' => 3],
+                ],
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $report = ServiceReport::where('customer_id', $customer->id)->latest()->first();
+        $rows = \App\Models\Lavaggio::where('service_report_id', $report->id)->get()->keyBy('maintenance_schedule_id');
+
+        $this->assertCount(2, $rows);
+        $this->assertSame(2, $rows->get($birra->id)->lines_washed);
+        $this->assertSame(3, $rows->get($vino->id)->lines_washed);
+    }
+
+    /**
      * "LAVAGGIO 2 VIE" e' la tariffa minima gia' agevolata per i tecnici,
      * dovuta anche lavando una sola via: il widget "Lavaggio vie" del form
      * deve aggiungere sempre quella riga con quantita' 1, piu' "ULTERIORE VIA

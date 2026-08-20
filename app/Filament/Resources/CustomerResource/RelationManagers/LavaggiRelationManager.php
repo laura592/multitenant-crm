@@ -2,8 +2,10 @@
 
 namespace App\Filament\Resources\CustomerResource\RelationManagers;
 
+use App\Filament\Resources\MaintenanceScheduleResource;
 use App\Models\Customer;
 use App\Models\Lavaggio;
+use App\Models\MaintenanceSchedule;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\RelationManagers\RelationManager;
@@ -41,6 +43,15 @@ class LavaggiRelationManager extends RelationManager
     public function form(Form $form): Form
     {
         return $form->schema([
+            Forms\Components\Select::make('maintenance_schedule_id')
+                ->label('Impianto')
+                ->options(fn () => MaintenanceSchedule::query()
+                    ->where('customer_id', $this->getOwnerRecord()->id)
+                    ->where('type', MaintenanceSchedule::TYPE_LAVAGGIO)
+                    ->get()
+                    ->mapWithKeys(fn (MaintenanceSchedule $schedule) => [$schedule->id => MaintenanceScheduleResource::impiantoHero($schedule)]))
+                ->searchable()
+                ->helperText('A quale impianto (birra, vino, selz...) si riferisce questa visita. Lascia vuoto solo per lavaggi storici non ancora collegati a un piano.'),
             Forms\Components\Select::make('machine_unit_id')
                 ->label('Macchina')
                 ->relationship('machineUnit', 'serial_number', fn ($query) => $query
@@ -54,7 +65,7 @@ class LavaggiRelationManager extends RelationManager
                 ->label('Vie lavate')
                 ->numeric()
                 ->minValue(0)
-                ->helperText('Non rilevante per impianti acqua.'),
+                ->helperText('Quante vie di QUESTO impianto sono state lavate. Non rilevante per impianti acqua.'),
             Forms\Components\TextInput::make('descrizione')
                 ->label('Note')
                 ->helperText('Es. "apertura", "chiusura stagionale". Il conteggio vie va nel campo sopra.')
