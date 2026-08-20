@@ -169,7 +169,9 @@ class DeadlineResource extends Resource
                     ->form([
                         Forms\Components\DatePicker::make('due_date')
                             ->label('Nuova scadenza')
-                            ->required(),
+                            ->required()
+                            ->default(fn (Deadline $record) => $record->suggestedRenewalDate())
+                            ->helperText('Precompilata in base alla periodicità standard di legge: modificala se necessario.'),
                     ])
                     ->modalHeading('Rinnova scadenza')
                     ->modalSubmitActionLabel('Rinnova')

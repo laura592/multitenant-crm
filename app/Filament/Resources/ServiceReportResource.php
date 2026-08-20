@@ -84,16 +84,18 @@ class ServiceReportResource extends Resource
     public static function infolist(Infolist $infolist): Infolist
     {
         return $infolist->schema([
-            // Il pulsante "Modifica" scompare da solo quando isLockedFromGestionale()
-            // e' vero (ServiceReportPolicy::update()) — questo banner spiega perche',
-            // altrimenti sembra un bottone mancante per errore.
+            // Il pulsante "Modifica" scompare da solo quando isLocked() e'
+            // vero (ServiceReportPolicy::update()) — questo banner spiega
+            // perche', altrimenti sembra un bottone mancante per errore.
             TextEntry::make('_gestionale_lock_notice')
                 ->hiddenLabel()
                 ->columnSpanFull()
-                ->visible(fn (ServiceReport $record) => $record->isLockedFromGestionale())
-                ->state(fn (ServiceReport $record) => $record->source === ServiceReport::SOURCE_EUREKA
-                    ? 'Rapportino arrivato da Eureka: non è modificabile da qui.'
-                    : 'Rapportino già inviato a Eureka: non è più modificabile.')
+                ->visible(fn (ServiceReport $record) => $record->isLocked())
+                ->state(fn (ServiceReport $record) => match (true) {
+                    $record->source === ServiceReport::SOURCE_EUREKA => 'Rapportino arrivato da Eureka: non è modificabile da qui.',
+                    $record->gestionale_sync_status === 'sent' => 'Rapportino già inviato a Eureka: non è più modificabile.',
+                    default => 'Rapportino segnato come completato: non è più modificabile.',
+                })
                 ->extraAttributes([
                     'class' => 'rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200',
                 ]),
@@ -1218,7 +1220,7 @@ class ServiceReportResource extends Resource
                     // ->visible() esplicito, indipendente dal Gate: vedi lo
                     // stesso commento su ViewServiceReport::getHeaderActions().
                     Tables\Actions\EditAction::make()
-                        ->visible(fn (ServiceReport $record) => ! $record->isLockedFromGestionale()),
+                        ->visible(fn (ServiceReport $record) => ! $record->isLocked()),
                     Tables\Actions\DeleteAction::make(),
                     Tables\Actions\RestoreAction::make(),
                     Tables\Actions\ForceDeleteAction::make(),

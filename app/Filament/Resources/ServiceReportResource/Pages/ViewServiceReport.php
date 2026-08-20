@@ -29,13 +29,13 @@ class ViewServiceReport extends ViewRecord
                 ->openUrlInNewTab(),
             // ->visible() esplicito e indipendente dal Gate: EditAction usa
             // di default ServiceReportPolicy::update(), che nega gia' la
-            // modifica sui rapportini bloccati da Eureka, ma Gate::before()
-            // (is_super_admin bypassa Shield/spatie ovunque, vedi
-            // AppServiceProvider) lo scavalcherebbe per lo staff con quel
-            // flag — il pulsante non deve comparire per nessuno su un
+            // modifica sui rapportini bloccati (Eureka o "completato"), ma
+            // Gate::before() (is_super_admin bypassa Shield/spatie ovunque,
+            // vedi AppServiceProvider) lo scavalcherebbe per lo staff con
+            // quel flag — il pulsante non deve comparire per nessuno su un
             // record bloccato, si veda anche EditServiceReport::authorizeAccess().
             Actions\EditAction::make()
-                ->visible(fn () => ! $this->record->isLockedFromGestionale()),
+                ->visible(fn () => ! $this->record->isLocked()),
         ];
     }
 }

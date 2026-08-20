@@ -83,6 +83,31 @@ class Deadline extends Model
         ];
     }
 
+    /**
+     * Periodicita' standard di legge per tipo, in anni: usata solo per
+     * precompilare la data nel modal "Rinnova" (resta sempre modificabile a
+     * mano, es. bollo pagato per pochi mesi o revisione anticipata).
+     */
+    public static function renewalPeriodsInYears(): array
+    {
+        return [
+            self::TYPE_ASSICURAZIONE => 1,
+            self::TYPE_BOLLO => 1,
+            self::TYPE_REVISIONE => 2,
+            self::TYPE_POLIZZA_RCT => 1,
+            self::TYPE_LICENZA => 1,
+            self::TYPE_CONTRATTO => 1,
+            self::TYPE_ALTRO => 1,
+        ];
+    }
+
+    public function suggestedRenewalDate(): \Illuminate\Support\Carbon
+    {
+        $years = self::renewalPeriodsInYears()[$this->type] ?? 1;
+
+        return $this->due_date->copy()->addYears($years);
+    }
+
     public function deadlinable(): MorphTo
     {
         return $this->morphTo();

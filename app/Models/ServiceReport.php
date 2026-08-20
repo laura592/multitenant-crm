@@ -289,16 +289,25 @@ class ServiceReport extends Model
     }
 
     /**
-     * Un rapportino arrivato da Eureka (SOURCE_EUREKA, vedi ImportEurekaServiceReports)
-     * o gia' inviato con successo a Eureka (gestionale_sync_status=sent, vedi
-     * SendServiceReportToGestionaleJob) non deve piu' essere modificabile da CRM:
-     * in entrambi i casi Eureka e' ormai (anche) la fonte autorevole per questo
-     * documento, e una modifica lato CRM andrebbe fuori sincrono col gestionale
-     * senza che nessuno se ne accorga. Usato da ServiceReportPolicy::update().
+     * Un rapportino non e' piu' modificabile da CRM quando:
+     * - e' arrivato da Eureka (SOURCE_EUREKA, vedi ImportEurekaServiceReports), o
+     * - e' gia' stato inviato con successo a Eureka (gestionale_sync_status=sent,
+     *   vedi SendServiceReportToGestionaleJob) — in entrambi i casi Eureka e'
+     *   ormai (anche) la fonte autorevole per questo documento, e una modifica
+     *   lato CRM andrebbe fuori sincrono col gestionale senza che nessuno se ne
+     *   accorga; oppure
+     * - e' segnato "completato" (passato in amministrazione): per ora e' un
+     *   flag impostato a mano, ma segna comunque il rapportino come chiuso e
+     *   non piu' da toccare — in futuro questo stato coincidera' con l'invio
+     *   vero a Eureka (vedi gestionale_sync_status=sent sopra), diventando
+     *   modificabile solo da li'.
+     * Usato da ServiceReportPolicy::update().
      */
-    public function isLockedFromGestionale(): bool
+    public function isLocked(): bool
     {
-        return $this->source === self::SOURCE_EUREKA || $this->gestionale_sync_status === 'sent';
+        return $this->source === self::SOURCE_EUREKA
+            || $this->gestionale_sync_status === 'sent'
+            || $this->status === 'completato';
     }
 
     /**

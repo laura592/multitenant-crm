@@ -22,20 +22,20 @@ class EditServiceReport extends EditRecord
     }
 
     /**
-     * ServiceReportPolicy::update() gia' nega la modifica quando
-     * isLockedFromGestionale() e' vero, ma Gate::before() in
-     * AppServiceProvider (is_super_admin bypassa Shield/spatie ovunque)
-     * scavalca quel controllo per lo staff con quel flag. Il blocco Eureka
-     * deve valere per chiunque, senza eccezioni: ripetuto qui in modo
-     * indipendente dal sistema di permessi, sia su mount() (URL diretta)
-     * sia su ogni hydrate() (il record potrebbe diventare "bloccato" mentre
-     * la pagina e' gia' aperta, es. invio a gestionale completato altrove).
+     * ServiceReportPolicy::update() gia' nega la modifica quando isLocked()
+     * e' vero, ma Gate::before() in AppServiceProvider (is_super_admin
+     * bypassa Shield/spatie ovunque) scavalca quel controllo per lo staff con
+     * quel flag. Il blocco deve valere per chiunque, senza eccezioni:
+     * ripetuto qui in modo indipendente dal sistema di permessi, sia su
+     * mount() (URL diretta) sia su ogni hydrate() (il record potrebbe
+     * diventare "bloccato" mentre la pagina e' gia' aperta, es. invio a
+     * gestionale completato altrove, o stato segnato "completato").
      */
     protected function authorizeAccess(): void
     {
         parent::authorizeAccess();
 
-        abort_if($this->getRecord()->isLockedFromGestionale(), 403);
+        abort_if($this->getRecord()->isLocked(), 403);
     }
 
     /**
