@@ -18,6 +18,7 @@ use App\Models\Material;
 use App\Models\Product;
 use App\Models\ServiceReport;
 use App\Support\DisplayName;
+use App\Support\OutsideLivewireRender;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Facades\Filament;
 use Filament\Forms;
@@ -1222,7 +1223,14 @@ class ServiceReportResource extends Resource
                         ->form(fn (ServiceReport $record) => static::sendEmailFormSchema($record))
                         ->action(function (array $data, ServiceReport $record) {
                             $record->load(['customer', 'technician', 'machineProduct', 'machineUnit.product', 'machineUnit.billingCustomer', 'partsUsed.product', 'materialsUsed.material', 'tenant']);
-                            $pdf = Pdf::loadView('pdf.service-report', ['report' => $record, 'showPrices' => false]);
+
+                            // Vedi App\Support\OutsideLivewireRender: senza,
+                            // il PDF e la parte testo dell'email mostrano
+                            // letteralmente i commenti di tracciamento
+                            // <!--[if BLOCK]><![endif]--> che Livewire
+                            // inietta attorno a ogni @if quando il rendering
+                            // parte da dentro un'azione Livewire come questa.
+                            $pdf = OutsideLivewireRender::run(fn () => Pdf::loadView('pdf.service-report', ['report' => $record, 'showPrices' => false]));
 
                             $recipientEmails = array_values(array_filter($data['recipient_emails'] ?? []));
                             $ccEmails = array_values(array_filter($data['cc_emails'] ?? []));
@@ -1241,9 +1249,9 @@ class ServiceReportResource extends Resource
                             ))));
 
                             try {
-                                Mail::to($recipientEmails)
+                                OutsideLivewireRender::run(fn () => Mail::to($recipientEmails)
                                     ->cc($ccRecipients)
-                                    ->send(new ServiceReportMail($record, $pdf->output(), $data['custom_message'] ?? null));
+                                    ->send(new ServiceReportMail($record, $pdf->output(), $data['custom_message'] ?? null)));
 
                                 $record->update(['status' => 'inviato']);
                                 Notification::make()->title('Rapportino inviato')->success()->send();
@@ -1354,7 +1362,14 @@ class ServiceReportResource extends Resource
             Forms\Components\Placeholder::make('email_preview')
                 ->label('Anteprima email')
                 ->content(fn (Get $get): HtmlString => new HtmlString(
-                    '<iframe srcdoc="'.e((new ServiceReportMail($record, '', is_string($get('custom_message')) ? $get('custom_message') : null))->render()).'" style="width:100%;height:60vh;border:0;border-radius:0.5rem;background:#fff;"></iframe>'
+                    // Vedi App\Support\OutsideLivewireRender: questo
+                    // ->content() e' un Placeholder reattivo (->live() su
+                    // custom_message sopra), quindi il ->render() qui sotto
+                    // parte SEMPRE mentre Livewire sta ridisegnando il
+                    // pannello — senza il fix, i commenti di tracciamento
+                    // <!--[if BLOCK]><![endif]--> di Livewire finiscono
+                    // ogni volta nell'anteprima (bug segnalato 2026-08-20).
+                    '<iframe srcdoc="'.e(OutsideLivewireRender::run(fn () => (new ServiceReportMail($record, '', is_string($get('custom_message')) ? $get('custom_message') : null))->render())).'" style="width:100%;height:60vh;border:0;border-radius:0.5rem;background:#fff;"></iframe>'
                 )),
         ];
     }

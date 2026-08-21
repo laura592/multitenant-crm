@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Filament\Resources\ServiceReportResource\Pages\CreateServiceReport;
 use App\Filament\Resources\ServiceReportResource\Pages\EditServiceReport;
+use App\Filament\Resources\ServiceReportResource\Pages\ListServiceReports;
 use App\Mail\ServiceReportMail;
 use App\Models\Customer;
 use App\Models\Material;
@@ -78,6 +79,57 @@ class ServiceReportTest extends TestCase
         Mail::assertSent(ServiceReportMail::class, fn ($mail) => $mail->hasTo('cliente@test.it'));
         $this->assertSame(1, ServiceReportEmail::where('service_report_id', $report->id)->count());
         $this->assertSame('inviato', $report->fresh()->status);
+    }
+
+    /**
+     * Bug segnalato 2026-08-20: l'anteprima email (Placeholder reattivo,
+     * ->live() su custom_message) e l'invio vero renderizzano
+     * ServiceReportMail da DENTRO un'azione/render Livewire — il compilatore
+     * Blade avvolge allora ogni @if di footer-tenant.blade.php in commenti
+     * di tracciamento <!--[if BLOCK]><![endif]--> (usati da Livewire per il
+     * DOM diffing), che il convertitore testo di Laravel Mail non riconosce
+     * come commenti e lascia visibili come testo grezzo. Vedi
+     * App\Support\OutsideLivewireRender.
+     */
+    public function test_email_preview_does_not_leak_livewire_tracking_comments(): void
+    {
+        $tenant = Tenant::create([
+            'name' => 'Gifar', 'slug' => 'gifar',
+            'street' => 'Via Test 1', 'postal_code' => '30100', 'city' => 'Venezia',
+            'tax_code' => '12345678901', 'iban' => 'IT00X0000000000000000000000',
+            'phone' => '0421000000', 'email' => 'test@gifar.it',
+        ]);
+        $tech = User::create([
+            'tenant_id' => $tenant->id, 'name' => 'Tecnico Sei', 'email' => 'tech6@gifar.it', 'password' => bcrypt('password'),
+        ]);
+        $this->giveRole($tech, $tenant, 'dipendente');
+        $customer = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Bar Centrale']);
+
+        $report = ServiceReport::create([
+            'tenant_id' => $tenant->id,
+            'customer_id' => $customer->id,
+            'technician_id' => $tech->id,
+            'intervention_type' => ServiceReport::TYPE_MANUTENZIONE_ORDINARIA,
+            'intervention_date' => now(),
+            'work_performed' => 'Sostituzione guarnizioni',
+        ]);
+
+        $this->actingAs($tech);
+        Filament::setTenant($tenant);
+
+        $html = Livewire::test(ListServiceReports::class)
+            ->mountTableAction('send', $report)
+            ->html();
+
+        // Il resto della pagina (bottoni, altri campi) e' Livewire vero e
+        // ha LEGITTIMAMENTE questi marcatori nel proprio HTML grezzo — normali
+        // li', invisibili in un DOM reale. Qui si controlla solo il contenuto
+        // dell'iframe (l'email), che e' HTML-escaped dentro l'attributo
+        // srcdoc: un marcatore leaked ci comparirebbe come "&lt;!--[if
+        // BLOCK]&gt;", una stringa che non puo' comparire per nessun altro
+        // motivo sulla pagina.
+        $this->assertStringNotContainsString('&lt;!--[if BLOCK]&gt;', $html);
+        $this->assertStringNotContainsString('&lt;!--[if ENDBLOCK]&gt;', $html);
     }
 
     /**
