@@ -34,7 +34,7 @@
                     @endif
                 </div>
 
-                <div class="h-8 w-px shrink-0 bg-gray-200 dark:bg-gray-700"></div>
+                <div class="hidden h-8 w-px shrink-0 bg-gray-200 dark:bg-gray-700 sm:block"></div>
 
                 <label class="flex shrink-0 items-center gap-2">
                     <span class="text-xs font-semibold uppercase tracking-[0.1em] text-gray-500 dark:text-gray-400">Raggio (km)</span>
@@ -61,7 +61,7 @@
                 </div>
 
                 @if($latitude !== null && $longitude !== null)
-                    <div class="h-8 w-px shrink-0 bg-gray-200 dark:bg-gray-700"></div>
+                    <div class="hidden h-8 w-px shrink-0 bg-gray-200 dark:bg-gray-700 sm:block"></div>
 
                     <div class="flex shrink-0 items-center gap-3 text-xs">
                         <span class="text-gray-500 dark:text-gray-400">
@@ -75,7 +75,7 @@
                     </div>
                 @endif
 
-                <p class="ml-auto shrink-0 text-right text-xs text-gray-400 dark:text-gray-500">
+                <p class="w-full shrink-0 text-xs text-gray-400 dark:text-gray-500 sm:ml-auto sm:w-auto sm:text-right">
                     Predefinito {{ number_format($this->defaultMaxDistanceKm(), 0) }} km &middot; max {{ $this->maxResults() }} risultati
                 </p>
             </div>
@@ -123,8 +123,7 @@
                             data-user-lat="{{ $latitude }}"
                             data-user-lng="{{ $longitude }}"
                             data-markers-id="{{ $mapMarkersId }}"
-                            style="height: 520px;"
-                            class="w-full overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-950"
+                            class="h-[320px] w-full overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-950 sm:h-[520px]"
                         ></div>
 
                         <script type="application/json" id="{{ $mapMarkersId }}">@json($markers)</script>
@@ -137,8 +136,7 @@
                             data-nearby-map-fallback
                             title="Mappa clienti vicini (fallback)"
                             src="{{ $this->mapEmbedUrl() }}"
-                            style="height: 520px;"
-                            class="w-full overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700"
+                            class="h-[320px] w-full overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 sm:h-[520px]"
                             loading="lazy"
                         ></iframe>
                     </div>

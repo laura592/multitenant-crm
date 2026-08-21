@@ -262,6 +262,22 @@ async function renderNearbyMap(mapElement) {
 		if (fallbackElement) {
 			fallbackElement.classList.add('hidden');
 		}
+
+		// Su mobile il container puo' cambiare dimensione dopo che Leaflet ha
+		// gia' calcolato la sua (sidebar che si chiude, cambio orientamento,
+		// tastiera che si apre/chiude): senza invalidateSize() la mappa resta
+		// tagliata o con le tile solo parzialmente caricate, visibile solo
+		// dopo aver interagito a mano (pan/zoom). Un solo observer per
+		// elemento (persiste tra un re-render e l'altro dello stesso div).
+		requestAnimationFrame(() => map.invalidateSize());
+
+		if (!mapElement.dataset.nearbyMapResizeObserved && 'ResizeObserver' in window) {
+			mapElement.dataset.nearbyMapResizeObserved = '1';
+
+			new ResizeObserver(() => {
+				nearbyMapInstances.get(mapElement)?.invalidateSize();
+			}).observe(mapElement);
+		}
 	} catch (error) {
 		console.error('Nearby customers map render failed', error);
 
