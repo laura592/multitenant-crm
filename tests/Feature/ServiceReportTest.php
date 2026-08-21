@@ -73,7 +73,7 @@ class ServiceReportTest extends TestCase
 
         // invio email dall'azione della tabella
         Livewire::test(\App\Filament\Resources\ServiceReportResource\Pages\ListServiceReports::class)
-            ->callTableAction('send', $report, data: ['recipient_email' => 'cliente@test.it']);
+            ->callTableAction('send', $report, data: ['recipient_emails' => ['cliente@test.it']]);
 
         Mail::assertSent(ServiceReportMail::class, fn ($mail) => $mail->hasTo('cliente@test.it'));
         $this->assertSame(1, ServiceReportEmail::where('service_report_id', $report->id)->count());
@@ -167,10 +167,11 @@ class ServiceReportTest extends TestCase
 
     /**
      * Il campo "Impianti e vie lavate" (Repeater, non ->relationship(): vedi
-     * ServiceReportResource::syncLavaggioImpianti()) deve sincronizzare la
-     * pivot service_report_maintenance_schedule con le vie indicate riga per
-     * riga, e ServiceReport::syncGeneratedLavaggi() deve leggerle per
-     * popolare Lavaggio::lines_washed sulla riga generata per ogni impianto.
+     * ServiceReportResource::syncLavaggioImpianti()) deve collegare
+     * esplicitamente i piani scelti e scrivere le vie indicate riga per riga
+     * direttamente sulle righe Lavaggio generate da
+     * ServiceReport::syncGeneratedLavaggi() per ogni impianto — niente
+     * colonna pivot dedicata.
      */
     public function test_create_page_saves_lavaggio_impianti_lines_washed_on_generated_lavaggi(): void
     {

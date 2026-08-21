@@ -1224,21 +1224,24 @@ class ServiceReportResource extends Resource
                             $record->load(['customer', 'technician', 'machineProduct', 'machineUnit.product', 'machineUnit.billingCustomer', 'partsUsed.product', 'materialsUsed.material', 'tenant']);
                             $pdf = Pdf::loadView('pdf.service-report', ['report' => $record, 'showPrices' => false]);
 
+                            $recipientEmails = array_values(array_filter($data['recipient_emails'] ?? []));
+                            $ccEmails = array_values(array_filter($data['cc_emails'] ?? []));
+
                             $email = $record->emails()->create([
                                 'user_id' => auth()->id(),
-                                'recipient_email' => $data['recipient_email'],
-                                'cc_email' => $data['cc_email'] ?? null,
+                                'recipient_email' => implode(', ', $recipientEmails),
+                                'cc_email' => $ccEmails ? implode(', ', $ccEmails) : null,
                                 'subject' => "Rapportino di intervento {$record->number}",
                                 'status' => 'sent',
                             ]);
 
                             $ccRecipients = array_values(array_unique(array_filter(array_merge(
-                                $data['cc_email'] ? [$data['cc_email']] : [],
+                                $ccEmails,
                                 $record->tenant?->notificationRecipients('service_report') ?? [],
                             ))));
 
                             try {
-                                Mail::to($data['recipient_email'])
+                                Mail::to($recipientEmails)
                                     ->cc($ccRecipients)
                                     ->send(new ServiceReportMail($record, $pdf->output(), $data['custom_message'] ?? null));
 
@@ -1328,14 +1331,20 @@ class ServiceReportResource extends Resource
     protected static function sendEmailFormSchema(ServiceReport $record): array
     {
         return [
-            Forms\Components\TextInput::make('recipient_email')
+            Forms\Components\TagsInput::make('recipient_emails')
                 ->label('Email destinatario')
-                ->email()
+                ->helperText('Il cliente ha piu\' indirizzi salvati: scegli tra i suggerimenti o digitane uno nuovo. Puoi selezionarne piu\' di uno.')
+                ->suggestions(fn () => $record->customer?->emails ?? [])
+                ->splitKeys([',', ' ', 'Tab', 'Enter'])
                 ->required()
-                ->default(fn () => $record->customer?->primaryEmail()),
-            Forms\Components\TextInput::make('cc_email')
+                ->rules([fn () => static::emailListValidationRule()])
+                ->default(fn () => array_filter([$record->customer?->primaryEmail()])),
+            Forms\Components\TagsInput::make('cc_emails')
                 ->label('CC (opzionale)')
-                ->email(),
+                ->helperText('Anche qui puoi aggiungere piu\' indirizzi, ad es. le altre email del cliente.')
+                ->suggestions(fn () => $record->customer?->emails ?? [])
+                ->splitKeys([',', ' ', 'Tab', 'Enter'])
+                ->rules([fn () => static::emailListValidationRule()]),
             Forms\Components\RichEditor::make('custom_message')
                 ->label('Testo email (modificabile)')
                 ->toolbarButtons(['bold', 'italic', 'bulletList', 'orderedList', 'link', 'undo', 'redo'])
@@ -1348,6 +1357,17 @@ class ServiceReportResource extends Resource
                     '<iframe srcdoc="'.e((new ServiceReportMail($record, '', is_string($get('custom_message')) ? $get('custom_message') : null))->render()).'" style="width:100%;height:60vh;border:0;border-radius:0.5rem;background:#fff;"></iframe>'
                 )),
         ];
+    }
+
+    protected static function emailListValidationRule(): \Closure
+    {
+        return function (string $attribute, $value, \Closure $fail) {
+            foreach ((array) $value as $item) {
+                if (! filter_var($item, FILTER_VALIDATE_EMAIL)) {
+                    $fail("\"{$item}\" non e' un indirizzo email valido.");
+                }
+            }
+        };
     }
 
     protected static function defaultServiceReportEmailBody(ServiceReport $record): string
