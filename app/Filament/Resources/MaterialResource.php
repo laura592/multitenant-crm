@@ -42,6 +42,7 @@ class MaterialResource extends Resource
                 ->schema([
                     TextEntry::make('code')->label('Codice'),
                     TextEntry::make('supplier.name')->label('Fornitore')->placeholder('—'),
+                    TextEntry::make('list_price')->label('Prezzo di listino')->money('EUR')->placeholder('—'),
                     TextEntry::make('category')->label('Categoria')->badge(),
                     TextEntry::make('type')->label('Tipo'),
                     TextEntry::make('variant')->label('Variante')->placeholder('—'),
@@ -99,6 +100,11 @@ class MaterialResource extends Resource
                     Forms\Components\TextInput::make('name')->label('Ragione sociale')->required(),
                 ])
                 ->createOptionUsing(fn (array $data) => Supplier::create($data)->id),
+            Forms\Components\TextInput::make('list_price')
+                ->label('Prezzo di listino')
+                ->numeric()
+                ->prefix('€')
+                ->helperText('Solo per consultazione qui in Materiali: non viene mai usato per calcolare automaticamente i prezzi sui rapportini.'),
             Forms\Components\Select::make('category')
                 ->label('Categoria')
                 ->options(fn () => Material::query()->distinct()->orderBy('category')->pluck('category', 'category'))
@@ -140,6 +146,7 @@ class MaterialResource extends Resource
                 Tables\Columns\TextColumn::make('supplier.name')->label('Fornitore')->placeholder('—')->toggleable(),
                 Tables\Columns\TextColumn::make('category')->label('Categoria')->badge()->toggleable(),
                 Tables\Columns\TextColumn::make('type')->label('Tipo')->searchable()->wrap(),
+                Tables\Columns\TextColumn::make('list_price')->label('Prezzo di listino')->money('EUR')->placeholder('—')->sortable(),
             ])
             ->defaultSort('category')
             ->filters([

@@ -23,6 +23,7 @@ class Material extends Model
         'supplier_id',
         'code',
         'gestionale_code',
+        'list_price',
         'category',
         'type',
         'variant',
@@ -32,6 +33,10 @@ class Material extends Model
         'thread_type',
         'barb_diameter',
         'notes',
+    ];
+
+    protected $casts = [
+        'list_price' => 'decimal:2',
     ];
 
     public function supplier(): BelongsTo

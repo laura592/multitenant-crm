@@ -7,9 +7,15 @@ use App\Filament\Widgets\Gestionale\GestionaleCollegamentiMacchinariWidget;
 use App\Filament\Widgets\Gestionale\GestionaleCollegamentiProdottiWidget;
 use App\Filament\Widgets\Gestionale\GestionaleDaRivedereWidget;
 use App\Filament\Widgets\Gestionale\GestionaleMacchineImportateWidget;
+use App\Jobs\ImportEurekaServiceReportsJob;
+use App\Jobs\RefreshMaterialPricesFromEurekaJob;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
+use Filament\Actions\Action;
 use Filament\Facades\Filament;
+use Filament\Forms;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Illuminate\Support\Facades\Auth;
 
 /**
  * Punto unico per rivedere cosa il sync automatico con Eureka
@@ -59,6 +65,74 @@ class GestionaleSyncReview extends Page
     public function getHeaderWidgetsColumns(): int | string | array
     {
         return 1;
+    }
+
+    /**
+     * "Importa rapportini da Eureka" forza a mano quello che
+     * eureka:import-service-reports fa gia' ogni notte via cron (ultimi 7
+     * giorni, vedi routes/console.php) — utile per non aspettare fino al
+     * giorno dopo quando manca un rapportino/materiale appena inserito lato
+     * Eureka. Il periodo di default replica quello del cron, ma resta
+     * modificabile per un recupero piu' ampio all'occorrenza. Sempre
+     * accodato (mai sincrono): --with-detail puo' girare per minuti su un
+     * intervallo ampio.
+     */
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('importaRapportiniEureka')
+                ->label('Importa rapportini da Eureka')
+                ->icon('heroicon-o-arrow-down-tray')
+                ->color('gray')
+                ->form([
+                    Forms\Components\DatePicker::make('from')
+                        ->label('Dal')
+                        ->default(now()->subDays(7))
+                        ->required(),
+                    Forms\Components\DatePicker::make('to')
+                        ->label('Al')
+                        ->default(now())
+                        ->required(),
+                    Forms\Components\Toggle::make('with_detail')
+                        ->label('Includi ricambi/materiali (dettaglio)')
+                        ->helperText('Necessario per creare i materiali mancanti come NR621216 — piu\' lento su periodi ampi.')
+                        ->default(true),
+                ])
+                ->action(function (array $data) {
+                    ImportEurekaServiceReportsJob::dispatch(
+                        Filament::getTenant(),
+                        $data['from'],
+                        $data['to'],
+                        (bool) $data['with_detail'],
+                        Auth::user(),
+                    );
+
+                    Notification::make()
+                        ->title('Import avviato')
+                        ->body('Verrai avvisato qui quando termina.')
+                        ->success()
+                        ->send();
+                }),
+            // Stesso motivo del bottone sopra: il refresh gira gia' ogni
+            // notte via cron (877 chiamate, una per materiale a catalogo),
+            // ma un aggiornamento immediato serve a chi non vuole aspettare
+            // fino alla notte per un prezzo appena cambiato su Eureka.
+            Action::make('aggiornaPrezziMateriali')
+                ->label('Aggiorna prezzi materiali')
+                ->icon('heroicon-o-currency-euro')
+                ->color('gray')
+                ->requiresConfirmation()
+                ->modalDescription('Ricontrolla ogni materiale gia\' a catalogo su Eureka (una chiamata per materiale) e aggiorna il prezzo di listino se cambiato. Puo\' richiedere qualche minuto.')
+                ->action(function () {
+                    RefreshMaterialPricesFromEurekaJob::dispatch(Filament::getTenant(), Auth::user());
+
+                    Notification::make()
+                        ->title('Aggiornamento prezzi avviato')
+                        ->body('Verrai avvisato qui quando termina.')
+                        ->success()
+                        ->send();
+                }),
+        ];
     }
 
     protected function getHeaderWidgets(): array
