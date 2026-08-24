@@ -9,6 +9,7 @@ use App\Filament\Widgets\Gestionale\GestionaleDaRivedereWidget;
 use App\Filament\Widgets\Gestionale\GestionaleMacchineImportateWidget;
 use App\Jobs\ImportEurekaServiceReportsJob;
 use App\Jobs\RefreshMaterialPricesFromEurekaJob;
+use App\Jobs\SweepEurekaMaterialsCatalogJob;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -128,6 +129,24 @@ class GestionaleSyncReview extends Page
 
                     Notification::make()
                         ->title('Aggiornamento prezzi avviato')
+                        ->body('Verrai avvisato qui quando termina.')
+                        ->success()
+                        ->send();
+                }),
+            // Gira gia' ogni lunedi' alle 6:00 via cron (100 ricerche a 2
+            // cifre, vedi routes/console.php) — bottone per non aspettare
+            // fino a lunedi' se serve un giro extra subito.
+            Action::make('scansionaCatalogoMateriali')
+                ->label('Scansiona catalogo materiali')
+                ->icon('heroicon-o-magnifying-glass')
+                ->color('gray')
+                ->requiresConfirmation()
+                ->modalDescription('Cerca su Eureka con tutte le combinazioni a 2 cifre (100 ricerche) per scoprire materiali mai referenziati in un rapportino, e li crea a catalogo. Puo\' richiedere qualche minuto.')
+                ->action(function () {
+                    SweepEurekaMaterialsCatalogJob::dispatch(Filament::getTenant(), Auth::user());
+
+                    Notification::make()
+                        ->title('Scansione catalogo avviata')
                         ->body('Verrai avvisato qui quando termina.')
                         ->success()
                         ->send();

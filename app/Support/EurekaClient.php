@@ -129,6 +129,62 @@ class EurekaClient
     }
 
     /**
+     * Come pooledGetServiceReports() ma per /articoli/lista/(query): usata
+     * da eureka:sweep-materials-catalog per scansionare il catalogo con
+     * tante ricerche parziali diverse (l'endpoint non offre un elenco
+     * completo/paginato, solo ricerca per codice — vedi thread 2026-08-21).
+     * Stessa concorrenza bassa (8) e pausa fra i gruppi di
+     * pooledGetServiceReports(), per lo stesso motivo (vedi il suo
+     * commento): confermato dal vivo senza errori su un giro completo
+     * 00-99 (2026-08-21).
+     *
+     * @param  array<int, string>  $queries
+     * @return array<string, array<int, array<string, mixed>>> query => righe trovate
+     */
+    public function pooledSearchArticles(array $queries, int $concurrency = 8, int $pauseMicroseconds = 400_000): array
+    {
+        $results = [];
+        $chunks = array_chunk(array_values(array_unique($queries)), $concurrency);
+
+        foreach ($chunks as $index => $chunk) {
+            if ($index > 0 && $pauseMicroseconds > 0) {
+                usleep($pauseMicroseconds);
+            }
+
+            try {
+                $responses = Http::pool(function (Pool $pool) use ($chunk) {
+                    foreach ($chunk as $query) {
+                        $pool->as($query)
+                            ->baseUrl(rtrim($this->baseUrl, '/'))
+                            ->withBasicAuth($this->username, $this->password)
+                            ->acceptJson()
+                            ->timeout(20)
+                            ->get('/articoli/lista/'.rawurlencode($query));
+                    }
+                });
+            } catch (\Throwable) {
+                continue;
+            }
+
+            foreach ($chunk as $query) {
+                $response = $responses[$query] ?? null;
+
+                if (! $response instanceof Response || ! $response->successful()) {
+                    continue;
+                }
+
+                $rows = $response->json();
+
+                if (is_array($rows)) {
+                    $results[$query] = array_values(array_filter($rows, fn (mixed $row) => is_array($row)));
+                }
+            }
+        }
+
+        return $results;
+    }
+
+    /**
      * @return array<string, mixed>|null
      */
     public function findArticleByCode(string $code): ?array

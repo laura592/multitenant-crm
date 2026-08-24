@@ -35,6 +35,14 @@ Schedule::command('eureka:import-service-reports', [
 // sfalsato di un'ora dagli altri due sync Eureka per non sommarsi.
 Schedule::command('eureka:refresh-material-prices', ['--tenant' => 'alex'])->dailyAt('05:00');
 
+// Settimanale, non ogni notte: la prima scansione (2026-08-21, a mano) ha
+// trovato 1368 materiali nuovi, ma i giri successivi trovano sempre meno
+// (il catalogo locale cresce) — ~100 chiamate quasi ogni notte per
+// diminishing returns non ha senso, un giro a settimana intercetta comunque
+// gli articoli nuovi che Eureka aggiunge nel tempo senza esagerare col
+// carico sulla loro API.
+Schedule::command('eureka:sweep-materials-catalog', ['--tenant' => 'alex'])->weeklyOn(1, '06:00');
+
 // QUEUE_CONNECTION=database in produzione: senza questo, i job accodati
 // (invio a gestionale, geocodifica cliente) restano nella tabella `jobs`
 // e non partono mai, perche' l'hosting condiviso non permette un worker
