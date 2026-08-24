@@ -367,10 +367,13 @@ class GestionaleSyncRunner
         // restare "sconosciuta" qui, cosi' il ciclo sotto la incontra di
         // nuovo e la ripristina (invece di saltarla per sempre) se Eureka la
         // segnala ancora installata presso un cliente.
-        $knownSerials = MachineUnit::query()->pluck('serial_number')
-            ->map(fn (string $serial) => mb_strtolower(trim($serial)))
-            ->flip()
-            ->all();
+        // Qui (a differenza di prima) si tiene anche l'id, non solo la
+        // presenza: serve per aggiornare eureka_billing_customer_code anche
+        // sulle macchine gia' note, che altrimenti il ciclo sotto salterebbe
+        // del tutto (era pensato solo per creare macchine nuove).
+        $knownMachineUnits = MachineUnit::query()->get(['id', 'serial_number', 'eureka_billing_customer_code'])
+            ->keyBy(fn (MachineUnit $m) => mb_strtolower(trim($m->serial_number)));
+        $knownSerials = $knownMachineUnits->map(fn () => true)->all();
 
         $customers = Customer::query()
             ->where('tenant_id', $this->tenant->id)
@@ -397,7 +400,35 @@ class GestionaleSyncRunner
 
                 $key = mb_strtolower($serial);
 
+                // id_intestatario_fattura_f15 (confermato dal vendor via email
+                // 2026-08-24): chi paga davvero per questa macchina, se diverso
+                // dal cliente presso cui e' installata — 0/assente quando
+                // coincide col cliente. Va tenuto aggiornato ad ogni sync anche
+                // per le macchine gia' note, non solo alla prima importazione
+                // (vedi eureka:apply-machine-billing-payer per come si traduce
+                // in billing_customer_id — questo comando scrive solo il
+                // valore grezzo, non decide mai da solo il pagante).
+                $billingCode = (int) ($row['id_intestatario_fattura_f15'] ?? 0);
+                $billingCode = $billingCode > 0 ? $billingCode : null;
+
                 if (isset($knownSerials[$key])) {
+                    $known = $knownMachineUnits->get($key);
+
+                    // Matricole segnaposto (tutta la stringa "0", es. "0000000")
+                    // possono comparire nell'art_installati di piu' clienti
+                    // diversi nello stesso giro e collassare su un'unica
+                    // MachineUnit (bug reale gia' trovato/aggirato in
+                    // ApplyEurekaBillingDestinazione, 2026-08-17: "FORNO"
+                    // condivisa da 10 clienti) — scrivere qui il pagante
+                    // dell'ultimo cliente processato sarebbe corretto solo per
+                    // lui e silenziosamente sbagliato per tutti gli altri.
+                    $isPlaceholderSerial = (bool) preg_match('/^0+$/', $serial);
+
+                    if ($known && ! $isPlaceholderSerial && $known->eureka_billing_customer_code !== $billingCode) {
+                        $known->eureka_billing_customer_code = $billingCode;
+                        $known->save();
+                    }
+
                     continue;
                 }
 
@@ -453,9 +484,11 @@ class GestionaleSyncRunner
                         'model_name' => $modelName,
                         'status' => MachineUnit::STATUS_INSTALLATA,
                         'source' => MachineUnit::SOURCE_EUREKA,
+                        'eureka_billing_customer_code' => $billingCode,
                     ]);
                     $machineUnit->save();
                 } else {
+                    $machineUnit->eureka_billing_customer_code = $billingCode;
                     $machineUnit->restore();
                 }
 

@@ -47,6 +47,7 @@ class MachineUnit extends Model
         'gestionale_code',
         'gestionale_suggested_code',
         'gestionale_suggested_label',
+        'eureka_billing_customer_code',
     ];
 
     protected $attributes = [

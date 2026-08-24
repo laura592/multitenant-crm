@@ -287,6 +287,8 @@ class ImportEurekaServiceReports extends Command
                     ? $this->normalizeText($detail['sl_lavorazione'] ?? null)
                     : null,
                 'status' => $this->mapStatus($detail['stato_documento'] ?? $summary['stato_documento'] ?? null),
+                'eureka_stato_documento' => $this->normalizeStatoDocumento($detail['stato_documento'] ?? $summary['stato_documento'] ?? null),
+                'eureka_stato_label' => $this->statoDocumentoLabel($detail['stato_documento'] ?? $summary['stato_documento'] ?? null),
                 'notes' => $detail ? $this->buildNotes($detail) : null,
             ];
 
@@ -949,6 +951,41 @@ class ImportEurekaServiceReports extends Command
         // → documento chiuso/definitivo → inviato (il cliente ha già il documento).
         // Qualsiasi altro valore (es. 3="Ricevuto") → non ancora archiviato → bozza.
         return (int) $statoDocumento === 10 ? 'inviato' : 'bozza';
+    }
+
+    /**
+     * "Stato mobile" Eureka, scala fissa 0-10 confermata dal vendor via email
+     * 2026-08-24 (indipendente dai codici stato per-tenant visti in Eureka,
+     * es. "C"/"EP"). Salvato cosi' com'e' — non usato ancora da mapStatus(),
+     * che resta volutamente binario: e' materiale grezzo per quando servira'
+     * una logica di invio al gestionale piu' fine (non ancora progettata).
+     */
+    private function normalizeStatoDocumento(mixed $statoDocumento): ?int
+    {
+        return $statoDocumento === null ? null : (int) $statoDocumento;
+    }
+
+    /**
+     * @see self::normalizeStatoDocumento()
+     */
+    private function statoDocumentoLabel(mixed $statoDocumento): ?string
+    {
+        if ($statoDocumento === null) {
+            return null;
+        }
+
+        // Mappatura confermata dal vendor via email 2026-08-24, non dedotta:
+        // valori diversi da questi (es. 0, 4, 5, 8, 9) non sono mai stati
+        // confermati e restano senza etichetta piuttosto che indovinati.
+        return match ((int) $statoDocumento) {
+            1 => 'Nuova',
+            2 => 'Inviata ai tablet',
+            3 => 'Nessuno stato assegnato',
+            6 => 'Evaso parzialmente',
+            7 => 'Finita/Conclusa',
+            10 => 'Chiuso',
+            default => null,
+        };
     }
 
     /**

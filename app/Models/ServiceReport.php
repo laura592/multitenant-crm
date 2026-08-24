@@ -105,6 +105,8 @@ class ServiceReport extends Model
         'eureka_service_report_id',
         'eureka_destinazione_code',
         'eureka_destinazione_label',
+        'eureka_stato_documento',
+        'eureka_stato_label',
         'gestionale_scheda_lavoro_id',
         'gestionale_sync_status',
         'gestionale_sync_error',
