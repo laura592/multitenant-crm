@@ -8,7 +8,7 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-Schedule::command('deadlines:send-reminders')->weeklyOn(1, '16:00');
+Schedule::command('deadlines:send-reminders')->weeklyOn(1, '08:00');
 
 Schedule::command('gestionale:sync')->dailyAt('03:00');
 
