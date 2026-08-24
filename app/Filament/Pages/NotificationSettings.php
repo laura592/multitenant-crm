@@ -64,7 +64,8 @@ class NotificationSettings extends Page implements HasForms
                     ->nestedRecursiveRules(['email'])
                     ->splitKeys([',', 'Tab'])
                     ->color('primary')
-                    ->helperText('Chi riceve le richieste che arrivano dal sito o da inserimento manuale.'),
+                    ->helperText('Chi riceve le richieste che arrivano dal sito o da inserimento manuale.')
+                    ->extraAttributes(['data-tour' => 'notification-settings-field-first']),
                 TagsInput::make('notify_leave_request_emails')
                     ->label('Ferie e permessi')
                     ->placeholder('indirizzo@esempio.it')

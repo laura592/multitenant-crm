@@ -346,14 +346,31 @@ if (document.body) {
 // Tour guidato (icona accanto alla campana notifiche, vedi App\Livewire\
 // TourGuide): App\Support\HelpGuide\TourRegistry definisce gli step lato
 // server (selettore CSS + testo), qui si costruisce/avvia driver.js.
-// Ogni step il cui selettore non esiste ancora nel DOM (es. una colonna
-// nascosta su mobile, o non ancora renderizzata da Livewire) viene scartato
-// invece di far fallire l'intero tour su un `element not found`.
+// Ogni step il cui selettore non esiste ancora nel DOM viene scartato subito
+// (es. una colonna nascosta su mobile, un campo di un tipo intervento non
+// selezionato, il pulsante "crea" quando si e' gia' sulla pagina di
+// creazione) invece di far fallire l'intero tour su un `element not found`.
+//
+// Eccezione esplicita: gli step marcati waitFor:true (vedi TourRegistry, usati
+// solo per i campi dentro la modale di una risorsa Filament "ManageRecords"
+// tipo Materiali/Marchi — niente cambio pagina, quindi niente nuovo giro di
+// questo stesso filtro) restano nel tour e usano waitForElement/
+// skipMissingElement nativi di driver.js: aspettano che l'elemento compaia
+// (una MutationObserver, non un timer a occhio) dopo che l'utente clicca il
+// vero pulsante "+ Crea" evidenziato nello step precedente, e solo se non
+// compare affatto vengono comunque saltati. Il wait resta breve e SOLO su
+// questi step specifici apposta: applicarlo a ogni step mancante in generale
+// riapre il popover del passo precedente per tutta l'attesa, e un doppio
+// click su "Avanti" in quella finestra rilancia l'attesa da capo invece di
+// avanzare (mai verificato con un flag per-step assente, solo dedotto qui).
 function runAppTour(steps, onFinish) {
 	const validSteps = steps
-		.filter((step) => !step.element || document.querySelector(step.element))
+		.filter((step) => !step.element || step.waitFor || document.querySelector(step.element))
 		.map((step) => ({
 			element: step.element || undefined,
+			...(step.waitFor && step.element && !document.querySelector(step.element)
+				? { waitForElement: 400, skipMissingElement: true }
+				: {}),
 			popover: {
 				title: step.title,
 				description: step.text,

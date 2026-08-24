@@ -70,7 +70,8 @@ class LeaveRequestResource extends Resource
                         ->options(static::typeLabels())
                         ->live()
                         ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => static::syncPermessoDateTo($get, $set))
-                        ->required(),
+                        ->required()
+                        ->extraAttributes(['data-tour' => 'leave-requests-field-type']),
                     // La malattia si segnala spesso a posteriori (il giorno dopo
                     // l'assenza): il vincolo "non nel passato" vale solo per
                     // ferie/permesso, che invece sono richieste pianificate.
@@ -79,7 +80,8 @@ class LeaveRequestResource extends Resource
                         ->required()
                         ->live()
                         ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => static::syncPermessoDateTo($get, $set))
-                        ->minDate(fn (Forms\Get $get) => $get('type') === 'malattia' ? null : now()),
+                        ->minDate(fn (Forms\Get $get) => $get('type') === 'malattia' ? null : now())
+                        ->extraAttributes(['data-tour' => 'leave-requests-field-date']),
                     // Il permesso e' sempre in un solo giorno: il campo "Al" non ha
                     // senso in quel caso, si mostrano invece gli orari.
                     Forms\Components\DatePicker::make('date_to')

@@ -23,6 +23,7 @@ class ViewLeaveRequest extends ViewRecord
                 ->label('Approva')
                 ->icon('heroicon-o-check')
                 ->color('success')
+                ->extraAttributes(['data-tour' => 'leave-requests-approve'])
                 ->visible(fn (LeaveRequest $record) => $record->status !== 'approvato' && auth()->user()?->can('approve', $record))
                 ->requiresConfirmation()
                 ->action(function (LeaveRequest $record) {

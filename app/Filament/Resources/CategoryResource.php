@@ -36,7 +36,8 @@ class CategoryResource extends Resource
             Forms\Components\TextInput::make('name')
                 ->label('Nome')
                 ->required()
-                ->maxLength(255),
+                ->maxLength(255)
+                ->extraAttributes(['data-tour' => 'categories-field-name']),
             Forms\Components\Select::make('parent_id')
                 ->label('Categoria padre')
                 ->options(fn (?Category $record) => Category::query()
@@ -44,7 +45,8 @@ class CategoryResource extends Resource
                     ->orderBy('name')
                     ->pluck('name', 'id'))
                 ->searchable()
-                ->native(false),
+                ->native(false)
+                ->extraAttributes(['data-tour' => 'categories-field-parent']),
         ]);
     }
 

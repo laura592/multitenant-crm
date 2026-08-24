@@ -43,7 +43,8 @@ class SupplierResource extends Resource
                         ->label('Ragione sociale')
                         ->required()
                         ->maxLength(255)
-                        ->columnSpanFull(),
+                        ->columnSpanFull()
+                        ->extraAttributes(['data-tour' => 'suppliers-field-name']),
                     ...ItalianAddressFields::schema(streetField: 'address'),
                     Forms\Components\TextInput::make('phone')
                         ->label('Telefono')

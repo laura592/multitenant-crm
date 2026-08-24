@@ -36,7 +36,8 @@ class BrandResource extends Resource
                 ->label('Nome')
                 ->required()
                 ->unique(ignoreRecord: true)
-                ->maxLength(255),
+                ->maxLength(255)
+                ->extraAttributes(['data-tour' => 'brands-field-name']),
         ]);
     }
 

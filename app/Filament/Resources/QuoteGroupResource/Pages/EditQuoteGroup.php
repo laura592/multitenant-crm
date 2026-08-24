@@ -18,6 +18,7 @@ class EditQuoteGroup extends EditRecord
                 ->label('Aggiungi preventivo')
                 ->icon('heroicon-o-plus')
                 ->color('gray')
+                ->extraAttributes(['data-tour' => 'quote-groups-new-quote'])
                 ->url(fn () => QuoteResource::getUrl('create').'?group='.$this->record->getKey()),
             // "success" come QuoteGroupResource::sendEmailTableAction(): stessa
             // azione, stesso colore, sia da tabella che da qui.
@@ -25,6 +26,7 @@ class EditQuoteGroup extends EditRecord
                 ->label('Invia gruppo')
                 ->icon('heroicon-o-paper-airplane')
                 ->color('success')
+                ->extraAttributes(['data-tour' => 'quote-groups-send'])
                 ->form(fn () => QuoteGroupResource::sendEmailFormSchema())
                 ->action(fn (array $data) => QuoteGroupResource::sendGroupEmail($this->record, $data)),
             Actions\DeleteAction::make(),

@@ -17,11 +17,20 @@ namespace App\Support\HelpGuide;
  * i passi il cui selettore non esiste nel DOM in quel momento, cosi' un
  * elemento nascosto per il ruolo dell'utente o non ancora renderizzato non
  * blocca l'intero tour.
+ *
+ * 'waitFor' => true su un passo serve SOLO per un campo dentro la modale di
+ * una risorsa Filament "ManageRecords" (es. Materiali, Marchi: il form si
+ * apre in una modale sulla stessa pagina, non su una /create dedicata) —
+ * dice al JS di aspettare che l'elemento compaia dopo che l'utente clicca il
+ * vero pulsante "+ Crea" del passo precedente, invece di scartarlo subito.
+ * Non aggiungerlo altrove: rallenta inutilmente ogni passo condizionale
+ * (es. i campi lavaggio-only quando il tipo e' manutenzione) che invece deve
+ * restare scartato all'istante.
  */
 class TourRegistry
 {
     /**
-     * @return array<string, array<int, array{element?: string, title: string, text: string}>>
+     * @return array<string, array<int, array{element?: string, waitFor?: bool, title: string, text: string}>>
      */
     public static function entries(): array
     {
@@ -151,8 +160,22 @@ class TourRegistry
                 ],
                 [
                     'element' => '[data-tour="information-requests-create"]',
-                    'title' => 'Registra una richiesta',
-                    'text' => 'Aggiungi una nuova richiesta informazioni da qui.',
+                    'title' => 'Passo 1 — Registra la richiesta',
+                    'text' => 'Clicca qui per aprire il form di una nuova richiesta.',
+                ],
+                [
+                    'element' => '[data-tour="information-requests-field-customer"]',
+                    'title' => 'Passo 2 — Cliente (obbligatorio)',
+                    'text' => 'Anche se non è ancora un cliente vero e proprio, va comunque collegato a un\'anagrafica: se non esiste, creala al volo con il "+" accanto al campo. Sotto compaiono subito i suoi contatti salvati.',
+                ],
+                [
+                    'element' => '[data-tour="information-requests-field-details"]',
+                    'title' => 'Passo 3 — Dettagli richiesta',
+                    'text' => 'Cosa vuole sapere/vedere: aiuta chiunque riprenda la richiesta in seguito a capire subito il contesto senza dover richiamare.',
+                ],
+                [
+                    'title' => 'Fatto',
+                    'text' => 'Imposta un appuntamento nella sezione sotto se ne fissi uno, e aggiorna lo Stato man mano che la richiesta avanza fino a chiusa.',
                 ],
             ],
 
@@ -215,8 +238,22 @@ class TourRegistry
                 ],
                 [
                     'element' => '[data-tour="material-orders-create"]',
-                    'title' => 'Nuovo ordine',
-                    'text' => 'Crea un nuovo ordine materiali da qui.',
+                    'title' => 'Passo 1 — Crea l\'ordine',
+                    'text' => 'Clicca qui per aprire il form di un nuovo ordine.',
+                ],
+                [
+                    'element' => '[data-tour="material-orders-field-supplier"]',
+                    'title' => 'Passo 2 — Fornitore',
+                    'text' => 'Facoltativo, ma compare nel PDF come destinatario dell\'ordine: senza, il PDF resta generico.',
+                ],
+                [
+                    'element' => '[data-tour="material-orders-add-materials"]',
+                    'title' => 'Passo 3 — Aggiungi materiali',
+                    'text' => 'Dopo il primo salvataggio, usa questo pulsante per aggiungere le righe dal catalogo Materiali (o crearne uno nuovo al volo se non è a catalogo).',
+                ],
+                [
+                    'title' => 'Fatto',
+                    'text' => 'Genera PDF o Excel dell\'ordine dai pulsanti in alto, pronti da inviare al fornitore.',
                 ],
             ],
 
@@ -227,8 +264,27 @@ class TourRegistry
                 ],
                 [
                     'element' => '[data-tour="leave-requests-create"]',
-                    'title' => 'Richiedi ferie o permesso',
-                    'text' => 'Apri il form per una nuova richiesta da qui.',
+                    'title' => 'Passo 1 — Richiedi',
+                    'text' => 'Clicca qui per aprire il form di una nuova richiesta.',
+                ],
+                [
+                    'element' => '[data-tour="leave-requests-field-type"]',
+                    'title' => 'Passo 2 — Tipo (obbligatorio)',
+                    'text' => 'Ferie, permesso (un solo giorno, con orari) o malattia. La malattia si può registrare anche a posteriori; ferie e permesso no, solo per giorni futuri.',
+                ],
+                [
+                    'element' => '[data-tour="leave-requests-field-date"]',
+                    'title' => 'Passo 3 — Data (obbligatoria)',
+                    'text' => 'Il residuo ferie dell\'anno corrente compare come promemoria appena scegli il dipendente, sopra questo campo.',
+                ],
+                [
+                    'element' => '[data-tour="leave-requests-approve"]',
+                    'title' => 'Approvazione',
+                    'text' => 'Chi ha i permessi per approvare vede questo pulsante sulla richiesta: approvando o rifiutando, il dipendente riceve una notifica.',
+                ],
+                [
+                    'title' => 'Fatto',
+                    'text' => 'La richiesta resta "in attesa" finché non viene approvata o rifiutata da chi ne ha i permessi.',
                 ],
             ],
 
@@ -239,8 +295,27 @@ class TourRegistry
                 ],
                 [
                     'element' => '[data-tour="machine-units-create"]',
-                    'title' => 'Registra un macchinario',
-                    'text' => 'Aggiungi un nuovo macchinario da qui.',
+                    'title' => 'Passo 1 — Registra il macchinario',
+                    'text' => 'Clicca qui per aprire il form di un nuovo macchinario.',
+                ],
+                [
+                    'element' => '[data-tour="machine-units-field-serial"]',
+                    'title' => 'Passo 2 — Matricola (obbligatoria)',
+                    'text' => 'Deve essere univoca all\'interno di questa azienda.',
+                ],
+                [
+                    'element' => '[data-tour="machine-units-field-product"]',
+                    'title' => 'Passo 3 — Modello (da catalogo)',
+                    'text' => 'Se il modello è a catalogo Prodotti, collegalo qui. Se non lo è (macchina non a listino Alex), usa invece il campo "Modello (testo libero)" subito sotto.',
+                ],
+                [
+                    'element' => '[data-tour="machine-units-field-billing"]',
+                    'title' => 'Passo 4 — Fatturare a',
+                    'text' => 'Lascia vuoto se paga il cliente presso cui è installata: impostalo solo se a pagare è un altro cliente (es. comodato).',
+                ],
+                [
+                    'title' => 'Fatto',
+                    'text' => 'Il macchinario nasce "In magazzino": usa l\'azione "Sposta" sulla sua scheda per installarlo presso un cliente, mantenendo lo storico degli spostamenti.',
                 ],
             ],
 
@@ -251,8 +326,18 @@ class TourRegistry
                 ],
                 [
                     'element' => '[data-tour="clienti-vicini-locate"]',
-                    'title' => 'Attiva la posizione',
-                    'text' => 'Premi qui: il browser chiederà il permesso, poi scegli il raggio in km e la mappa/lista si aggiornano da sole.',
+                    'title' => 'Passo 1 — Attiva la posizione',
+                    'text' => 'Premi qui: il browser chiederà il permesso di geolocalizzazione.',
+                ],
+                [
+                    'element' => '[data-tour="clienti-vicini-radius"]',
+                    'title' => 'Passo 2 — Raggio',
+                    'text' => 'Regola il raggio in km (o usa i pulsanti rapidi 1/2/3 km accanto): mappa e lista sotto si aggiornano da sole, senza bisogno di un pulsante "Cerca".',
+                ],
+                [
+                    'element' => '[data-tour="clienti-vicini-open-report"]',
+                    'title' => 'Passo 3 — Apri rapportino',
+                    'text' => 'Da ogni cliente in lista, apri direttamente un nuovo rapportino già intestato a lui, o naviga verso il suo indirizzo con "Apri in Maps".',
                 ],
             ],
 
@@ -263,8 +348,30 @@ class TourRegistry
                 ],
                 [
                     'element' => '[data-tour="materials-create"]',
-                    'title' => 'Aggiungi un materiale',
-                    'text' => 'Registra un nuovo materiale a catalogo da qui.',
+                    'title' => 'Passo 1 — Aggiungi il materiale',
+                    'text' => 'Clicca qui per aprire il form di un nuovo materiale. Nella pagina "Sync Eureka" trovi anche l\'import/scansione automatica dal gestionale, prima di crearne uno a mano.',
+                ],
+                [
+                    'element' => '[data-tour="materials-field-code"]',
+                    'waitFor' => true,
+                    'title' => 'Passo 2 — Codice (obbligatorio)',
+                    'text' => 'Deve essere univoco: se corrisponde a un codice Eureka, il prezzo di listino potrà essere aggiornato automaticamente dal sync notturno.',
+                ],
+                [
+                    'element' => '[data-tour="materials-field-category"]',
+                    'waitFor' => true,
+                    'title' => 'Passo 3 — Categoria (obbligatoria)',
+                    'text' => 'Puoi scegliere una categoria esistente o crearne una nuova al volo.',
+                ],
+                [
+                    'element' => '[data-tour="materials-field-type"]',
+                    'waitFor' => true,
+                    'title' => 'Passo 4 — Tipo (obbligatorio)',
+                    'text' => 'Testo libero per specificare meglio il materiale (es. diametro, colore).',
+                ],
+                [
+                    'title' => 'Fatto',
+                    'text' => 'Il materiale è subito selezionabile nei rapportini e negli ordini materiali. Il prezzo di listino non viene mai usato per calcolare automaticamente i prezzi sui rapportini: è solo di consultazione.',
                 ],
             ],
 
@@ -275,20 +382,49 @@ class TourRegistry
                 ],
                 [
                     'element' => '[data-tour="time-entries-create"]',
-                    'title' => 'Aggiungi una voce',
+                    'title' => 'Passo 1 — Aggiungi una voce',
                     'text' => 'Registra manualmente una presenza da qui, se serve correggere lo storico.',
+                ],
+                [
+                    'element' => '[data-tour="time-entries-field-user"]',
+                    'title' => 'Passo 2 — Dipendente (obbligatorio)',
+                    'text' => 'Scegliendo "Mattina" o "Pomeriggio" sopra e poi il dipendente, Entrata/Uscita si precompilano da sole con il suo orario standard, se ne ha uno impostato.',
+                ],
+                [
+                    'element' => '[data-tour="time-entries-field-clock-in"]',
+                    'title' => 'Passo 3 — Entrata (obbligatoria)',
+                    'text' => 'Resta modificabile anche dopo la precompilazione automatica.',
+                ],
+                [
+                    'element' => '[data-tour="time-entries-field-clock-out"]',
+                    'title' => 'Passo 4 — Uscita',
+                    'text' => 'Facoltativa: lasciala vuota per un turno ancora in corso.',
+                ],
+                [
+                    'title' => 'Fatto',
+                    'text' => 'Il Riepilogo ore (nel menu Personale) somma queste voci per dipendente e periodo.',
                 ],
             ],
 
             'riepilogo-ore' => [
                 [
                     'title' => 'Riepilogo ore',
-                    'text' => 'Totale ore lavorate per dipendente per periodo, calcolato dalle timbrature. Scegli mese e anno per filtrare.',
+                    'text' => 'Totale ore lavorate per dipendente per periodo, calcolato dalle timbrature in Presenze.',
+                ],
+                [
+                    'element' => '[data-tour="riepilogo-ore-field-month"]',
+                    'title' => 'Passo 1 — Mese',
+                    'text' => 'Il riepilogo si aggiorna da solo appena cambi mese, senza bisogno di un pulsante "Applica".',
+                ],
+                [
+                    'element' => '[data-tour="riepilogo-ore-field-year"]',
+                    'title' => 'Passo 2 — Anno',
+                    'text' => 'Puoi risalire fino a due anni indietro.',
                 ],
                 [
                     'element' => '[data-tour="riepilogo-ore-export"]',
-                    'title' => 'Esporta il riepilogo',
-                    'text' => 'Scarica il riepilogo in Excel da qui, utile per il controllo mensile.',
+                    'title' => 'Passo 3 — Esporta',
+                    'text' => 'Scarica il riepilogo del periodo selezionato in Excel da qui, utile per il controllo mensile.',
                 ],
             ],
 
@@ -299,8 +435,22 @@ class TourRegistry
                 ],
                 [
                     'element' => '[data-tour="vehicles-create"]',
-                    'title' => 'Aggiungi un veicolo',
-                    'text' => 'Registra un nuovo veicolo da qui.',
+                    'title' => 'Passo 1 — Aggiungi il veicolo',
+                    'text' => 'Clicca qui per aprire il form di un nuovo veicolo.',
+                ],
+                [
+                    'element' => '[data-tour="vehicles-field-plate"]',
+                    'title' => 'Passo 2 — Targa (obbligatoria)',
+                    'text' => 'L\'unico campo obbligatorio. Marca, modello e anno sotto sono facoltativi.',
+                ],
+                [
+                    'element' => '[data-tour="vehicles-field-assigned"]',
+                    'title' => 'Passo 3 — Assegnato a',
+                    'text' => 'Facoltativo: il dipendente che usa abitualmente questo veicolo.',
+                ],
+                [
+                    'title' => 'Fatto',
+                    'text' => 'Per bollo/assicurazione/revisione, registrale nello Scadenzario collegandole a questo veicolo: compariranno anche nelle colonne Assicurazione/Revisione qui in tabella.',
                 ],
             ],
 
@@ -311,8 +461,22 @@ class TourRegistry
                 ],
                 [
                     'element' => '[data-tour="gestionale-sync-review-import"]',
-                    'title' => 'Forza un import',
-                    'text' => 'Se non vuoi aspettare il giro notturno, forza qui l\'import di rapportini/materiali da Eureka.',
+                    'title' => 'Importa rapportini da Eureka',
+                    'text' => 'Gira già ogni notte da solo sugli ultimi 7 giorni: usa questo pulsante solo se non vuoi aspettare fino a domani per un rapportino/materiale appena inserito su Eureka.',
+                ],
+                [
+                    'element' => '[data-tour="gestionale-sync-review-prices"]',
+                    'title' => 'Aggiorna prezzi materiali',
+                    'text' => 'Anche questo gira già ogni notte: forza qui un ricontrollo immediato dei prezzi di listino di tutti i materiali già a catalogo.',
+                ],
+                [
+                    'element' => '[data-tour="gestionale-sync-review-sweep"]',
+                    'title' => 'Scansiona catalogo materiali',
+                    'text' => 'Gira già ogni lunedì mattina: cerca su Eureka materiali mai referenziati in un rapportino e li crea a catalogo. Può richiedere qualche minuto.',
+                ],
+                [
+                    'title' => 'Fatto',
+                    'text' => 'Le tabelle sopra elencano collegamenti clienti/prodotti/macchinari proposti dal sync e i clienti segnalati da controllare: conferma, scarta o segna come controllato riga per riga — nulla viene scritto su Eureka o assegnato da solo.',
                 ],
             ],
 
@@ -323,8 +487,27 @@ class TourRegistry
                 ],
                 [
                     'element' => '[data-tour="products-create"]',
-                    'title' => 'Aggiungi un prodotto',
-                    'text' => 'Registra un nuovo prodotto a catalogo da qui.',
+                    'title' => 'Passo 1 — Aggiungi il prodotto',
+                    'text' => 'Clicca qui per aprire il form di un nuovo prodotto.',
+                ],
+                [
+                    'element' => '[data-tour="products-field-type"]',
+                    'title' => 'Passo 2 — Tipo (obbligatorio)',
+                    'text' => 'Macchina, unità ausiliaria, opzione, accessorio o servizio/licenza. Scegliendo "Macchina" compare anche il campo Famiglia macchina sotto.',
+                ],
+                [
+                    'element' => '[data-tour="products-field-sku"]',
+                    'title' => 'Passo 3 — SKU (obbligatorio)',
+                    'text' => 'Codice univoco del prodotto: non può ripetersi nel catalogo.',
+                ],
+                [
+                    'element' => '[data-tour="products-field-name"]',
+                    'title' => 'Passo 4 — Nome (obbligatorio)',
+                    'text' => 'Come comparirà nei preventivi e nel catalogo.',
+                ],
+                [
+                    'title' => 'Fatto',
+                    'text' => 'Categoria e Brand sono facoltativi ma aiutano a filtrare il catalogo. Il prezzo corrente arriva dal Listino attivo più recente, non si imposta qui sul prodotto.',
                 ],
             ],
 
@@ -335,8 +518,18 @@ class TourRegistry
                 ],
                 [
                     'element' => '[data-tour="brands-create"]',
-                    'title' => 'Aggiungi un marchio',
-                    'text' => 'Registra un nuovo marchio da qui.',
+                    'title' => 'Passo 1 — Crea il marchio',
+                    'text' => 'Clicca qui per aprire il form di un nuovo marchio.',
+                ],
+                [
+                    'element' => '[data-tour="brands-field-name"]',
+                    'waitFor' => true,
+                    'title' => 'Passo 2 — Nome (obbligatorio)',
+                    'text' => 'Deve essere univoco: non puoi registrare due marchi con lo stesso nome.',
+                ],
+                [
+                    'title' => 'Fatto',
+                    'text' => 'Il marchio è subito selezionabile nel form dei Prodotti.',
                 ],
             ],
 
@@ -347,8 +540,24 @@ class TourRegistry
                 ],
                 [
                     'element' => '[data-tour="categories-create"]',
-                    'title' => 'Aggiungi una categoria',
-                    'text' => 'Registra una nuova categoria da qui.',
+                    'title' => 'Passo 1 — Crea la categoria',
+                    'text' => 'Clicca qui per aprire il form di una nuova categoria.',
+                ],
+                [
+                    'element' => '[data-tour="categories-field-name"]',
+                    'waitFor' => true,
+                    'title' => 'Passo 2 — Nome (obbligatorio)',
+                    'text' => 'Il nome della categoria come comparirà nei filtri.',
+                ],
+                [
+                    'element' => '[data-tour="categories-field-parent"]',
+                    'waitFor' => true,
+                    'title' => 'Passo 3 — Categoria padre',
+                    'text' => 'Facoltativa: impostala solo se questa è una sottocategoria (es. "Macchine da caffè" sotto "Macchine"). L\'elenco si raggruppa da solo per gerarchia.',
+                ],
+                [
+                    'title' => 'Fatto',
+                    'text' => 'La categoria è subito selezionabile nel form dei Prodotti.',
                 ],
             ],
 
@@ -359,8 +568,18 @@ class TourRegistry
                 ],
                 [
                     'element' => '[data-tour="product-families-create"]',
-                    'title' => 'Aggiungi una famiglia',
-                    'text' => 'Registra una nuova famiglia prodotto da qui.',
+                    'title' => 'Passo 1 — Crea la famiglia',
+                    'text' => 'Clicca qui per aprire il form di una nuova famiglia.',
+                ],
+                [
+                    'element' => '[data-tour="product-families-field-name"]',
+                    'waitFor' => true,
+                    'title' => 'Passo 2 — Nome (obbligatorio)',
+                    'text' => 'Es. "A300": il nome che raggrupperà tutte le varianti di questa famiglia. Ordine, descrizione e immagine sotto sono facoltativi, usati per l\'aspetto nel catalogo.',
+                ],
+                [
+                    'title' => 'Fatto',
+                    'text' => 'La famiglia è subito selezionabile nel form dei Prodotti.',
                 ],
             ],
 
@@ -371,8 +590,30 @@ class TourRegistry
                 ],
                 [
                     'element' => '[data-tour="price-lists-create"]',
-                    'title' => 'Aggiungi un listino',
-                    'text' => 'Registra un nuovo listino da qui.',
+                    'title' => 'Passo 1 — Crea il listino',
+                    'text' => 'Clicca qui per aprire il form di un nuovo listino.',
+                ],
+                [
+                    'element' => '[data-tour="price-lists-field-name"]',
+                    'waitFor' => true,
+                    'title' => 'Passo 2 — Nome (obbligatorio)',
+                    'text' => 'Un nome che ti aiuti a riconoscerlo (es. fornitore + anno).',
+                ],
+                [
+                    'element' => '[data-tour="price-lists-field-supplier"]',
+                    'waitFor' => true,
+                    'title' => 'Passo 3 — Fornitore',
+                    'text' => 'Facoltativo, ma collegarlo aiuta a trovare rapidamente tutti i listini di un fornitore.',
+                ],
+                [
+                    'element' => '[data-tour="price-lists-field-file"]',
+                    'waitFor' => true,
+                    'title' => 'Passo 4 — File PDF',
+                    'text' => 'Carica qui il PDF del listino. Per sostituirlo in futuro carica un nuovo file: non è possibile rimuoverlo senza sostituirlo, e viene ottimizzato automaticamente se troppo pesante.',
+                ],
+                [
+                    'title' => 'Fatto',
+                    'text' => 'Imposta "Valido dal"/"Valido fino al" per tracciare il periodo di validità: lascia vuoto "fino al" se non ha una scadenza nota.',
                 ],
             ],
 
@@ -383,8 +624,18 @@ class TourRegistry
                 ],
                 [
                     'element' => '[data-tour="suppliers-create"]',
-                    'title' => 'Aggiungi un fornitore',
-                    'text' => 'Registra un nuovo fornitore da qui.',
+                    'title' => 'Passo 1 — Crea il fornitore',
+                    'text' => 'Clicca qui per aprire il form di un nuovo fornitore.',
+                ],
+                [
+                    'element' => '[data-tour="suppliers-field-name"]',
+                    'waitFor' => true,
+                    'title' => 'Passo 2 — Ragione sociale (obbligatoria)',
+                    'text' => 'L\'unico campo obbligatorio. Sotto puoi aggiungere anche indirizzo, telefono, email e note: tutti facoltativi.',
+                ],
+                [
+                    'title' => 'Fatto',
+                    'text' => 'Il fornitore è subito selezionabile nel form di Materiali, Listini e Ordini materiali.',
                 ],
             ],
 
@@ -395,27 +646,57 @@ class TourRegistry
                 ],
                 [
                     'element' => '[data-tour="payment-methods-create"]',
-                    'title' => 'Aggiungi un metodo',
-                    'text' => 'Registra un nuovo metodo di pagamento da qui.',
+                    'title' => 'Passo 1 — Crea il metodo',
+                    'text' => 'Clicca qui per aprire il form di un nuovo metodo.',
+                ],
+                [
+                    'element' => '[data-tour="payment-methods-field-name"]',
+                    'waitFor' => true,
+                    'title' => 'Passo 2 — Nome (obbligatorio)',
+                    'text' => 'Lo slug sotto si genera da solo dal nome digitato, ma resta modificabile.',
+                ],
+                [
+                    'element' => '[data-tour="payment-methods-field-active"]',
+                    'waitFor' => true,
+                    'title' => 'Passo 3 — Attivo',
+                    'text' => 'Solo i metodi attivi compaiono come opzione selezionabile nei preventivi: disattiva qui quelli che non usi più senza doverli eliminare.',
+                ],
+                [
+                    'title' => 'Fatto',
+                    'text' => 'Il campo "Ordine" nel form (numero più basso prima) decide la sequenza con cui compaiono nel menu a tendina dei preventivi.',
                 ],
             ],
 
             'quote-groups' => [
                 [
                     'title' => 'Offerte globali',
-                    'text' => 'Un\'offerta globale raggruppa più preventivi dello stesso cliente in un unico invio/PDF — utile per proporre più righe insieme invece di preventivi separati.',
+                    'text' => 'Un\'offerta globale raggruppa più preventivi dello stesso cliente in un unico invio/PDF — utile per proporre più soluzioni alternative insieme invece di preventivi separati.',
                 ],
                 [
                     'element' => '[data-tour="quote-groups-create"]',
-                    'title' => 'Crea un\'offerta globale',
-                    'text' => 'Raggruppa preventivi esistenti in una nuova offerta da qui.',
+                    'title' => 'Passo 1 — Crea l\'offerta',
+                    'text' => 'Clicca qui per aprire il form di una nuova offerta globale.',
+                ],
+                [
+                    'element' => '[data-tour="quote-groups-new-quote"]',
+                    'title' => 'Passo 2 — Aggiungi preventivo',
+                    'text' => 'Dopo il primo salvataggio, usa questo pulsante per creare un nuovo preventivo già agganciato a questa offerta: puoi aggiungerne più di uno come soluzioni alternative per lo stesso cliente.',
+                ],
+                [
+                    'element' => '[data-tour="quote-groups-send"]',
+                    'title' => 'Passo 3 — Invia gruppo',
+                    'text' => 'Invia tutti i preventivi dell\'offerta insieme in un\'unica email al cliente.',
+                ],
+                [
+                    'title' => 'Fatto',
+                    'text' => 'Quando il cliente sceglie una soluzione, aggiorna lo Stato di quel preventivo su "Accettato" dalla sua pagina: comparirà da solo come "Soluzione scelta" nel riepilogo qui in alto.',
                 ],
             ],
 
             'audit-logs' => [
                 [
                     'title' => 'Log modifiche',
-                    'text' => 'Cronologia di sola lettura delle modifiche fatte nel sistema: chi ha cambiato cosa e quando. Utile per capire "chi ha toccato questo record" — non modificabile da qui.',
+                    'text' => 'Cronologia di sola lettura delle modifiche fatte nel sistema: chi ha cambiato cosa e quando. Utile per capire "chi ha toccato questo record" — non modificabile da qui. Usa i filtri in alto alla tabella (Modello, Utente, Intervallo date) per restringere la ricerca a un periodo o una persona specifica.',
                 ],
             ],
 
@@ -426,8 +707,27 @@ class TourRegistry
                 ],
                 [
                     'element' => '[data-tour="users-create"]',
-                    'title' => 'Aggiungi un utente',
-                    'text' => 'Crea un nuovo account e assegna il ruolo da qui.',
+                    'title' => 'Passo 1 — Crea l\'utente',
+                    'text' => 'Clicca qui per aprire il form di un nuovo account.',
+                ],
+                [
+                    'element' => '[data-tour="users-field-email"]',
+                    'title' => 'Passo 2 — Email (obbligatoria)',
+                    'text' => 'Deve essere univoca: è anche la credenziale di accesso al pannello.',
+                ],
+                [
+                    'element' => '[data-tour="users-field-password"]',
+                    'title' => 'Passo 3 — Password (obbligatoria alla creazione)',
+                    'text' => 'In modifica lasciala vuota per non cambiarla.',
+                ],
+                [
+                    'element' => '[data-tour="users-field-role"]',
+                    'title' => 'Passo 4 — Ruolo (obbligatorio)',
+                    'text' => 'Ogni utente ha un solo ruolo, ed è quello a determinare cosa può vedere e fare nel pannello: assegnalo con attenzione.',
+                ],
+                [
+                    'title' => 'Fatto',
+                    'text' => 'Ore giornaliere/settimanali e giorni ferie annui più sotto servono per calcolare correttamente Presenze e ferie residue di questo dipendente.',
                 ],
             ],
 
@@ -438,20 +738,39 @@ class TourRegistry
                 ],
                 [
                     'element' => '[data-tour="tenants-create"]',
-                    'title' => 'Aggiungi un\'azienda',
-                    'text' => 'Registra una nuova azienda da qui.',
+                    'title' => 'Passo 1 — Aggiungi l\'azienda',
+                    'text' => 'Clicca qui per aprire il form di una nuova azienda.',
+                ],
+                [
+                    'element' => '[data-tour="tenants-field-name"]',
+                    'title' => 'Passo 2 — Nome (obbligatorio)',
+                    'text' => 'Lo slug sotto (l\'indirizzo del pannello, es. /admin/nome-azienda) si genera da solo dal nome, ma resta modificabile.',
+                ],
+                [
+                    'element' => '[data-tour="tenants-field-active"]',
+                    'title' => 'Passo 3 — Attivo',
+                    'text' => 'Un\'azienda disattivata non è più accessibile ai suoi utenti.',
+                ],
+                [
+                    'title' => 'Fatto',
+                    'text' => 'Ragione sociale, P.IVA e IBAN sotto compaiono nei documenti generati (PDF preventivi/rapportini) di questa azienda; logo e colore nella sezione "Branding" personalizzano l\'aspetto dei suoi documenti.',
                 ],
             ],
 
             'notification-settings' => [
                 [
                     'title' => 'Notifiche',
-                    'text' => 'Per ogni categoria (rapportini, scadenze, richieste, preventivi, ferie, sync Eureka...) scegli quali indirizzi email ricevono l\'avviso.',
+                    'text' => 'Per ogni categoria (rapportini, scadenze, richieste, preventivi, ferie, sync Eureka...) scegli quali indirizzi email ricevono l\'avviso, per questa azienda.',
+                ],
+                [
+                    'element' => '[data-tour="notification-settings-field-first"]',
+                    'title' => 'Passo 1 — Aggiungi un indirizzo',
+                    'text' => 'Digita l\'email e premi virgola o Tab per aggiungerla come tag: puoi inserirne più di una per categoria. Stesso meccanismo per ogni categoria sotto — una per ogni tipo di evento.',
                 ],
                 [
                     'element' => '[data-tour="notification-settings-save"]',
-                    'title' => 'Salva',
-                    'text' => 'Ricordati di salvare dopo ogni modifica agli indirizzi.',
+                    'title' => 'Passo 2 — Salva',
+                    'text' => 'Ricordati di salvare dopo ogni modifica agli indirizzi: senza salvare, le modifiche si perdono.',
                 ],
             ],
         ];

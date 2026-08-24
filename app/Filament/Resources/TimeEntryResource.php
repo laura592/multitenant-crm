@@ -68,15 +68,18 @@ class TimeEntryResource extends Resource
                                 static::applyShiftDefaults($set, $state, $get('shift_preset'));
                             }
                         })
-                        ->required(),
+                        ->required()
+                        ->extraAttributes(['data-tour' => 'time-entries-field-user']),
                     Forms\Components\DateTimePicker::make('clock_in')
                         ->label('Entrata')
                         ->default(fn (Forms\Get $get) => static::shiftDefault($get('user_id'), $get('shift_preset'), 'clock_in'))
-                        ->required(),
+                        ->required()
+                        ->extraAttributes(['data-tour' => 'time-entries-field-clock-in']),
                     Forms\Components\DateTimePicker::make('clock_out')
                         ->label('Uscita')
                         ->default(fn (Forms\Get $get) => static::shiftDefault($get('user_id'), $get('shift_preset'), 'clock_out'))
-                        ->after('clock_in'),
+                        ->after('clock_in')
+                        ->extraAttributes(['data-tour' => 'time-entries-field-clock-out']),
                     Forms\Components\Select::make('source')
                         ->label('Origine')
                         ->options(['app' => 'App (tempo reale)', 'manuale' => 'Inserimento manuale'])

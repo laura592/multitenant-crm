@@ -41,12 +41,14 @@ class PriceListResource extends Resource
                         ->label('Nome')
                         ->required()
                         ->maxLength(255)
-                        ->columnSpanFull(),
+                        ->columnSpanFull()
+                        ->extraAttributes(['data-tour' => 'price-lists-field-name']),
                     Forms\Components\Select::make('supplier_id')
                         ->label('Fornitore')
                         ->relationship('supplier', 'name')
                         ->searchable()
-                        ->preload(),
+                        ->preload()
+                        ->extraAttributes(['data-tour' => 'price-lists-field-supplier']),
                     Forms\Components\FileUpload::make('file_path')
                         ->label('File PDF')
                         ->directory('price-lists')
@@ -55,7 +57,8 @@ class PriceListResource extends Resource
                         ->openable()
                         ->downloadable()
                         ->deletable(false)
-                        ->helperText('Per sostituire il PDF, caricane uno nuovo: non è possibile rimuoverlo senza sostituirlo. Il file viene ottimizzato automaticamente dopo il salvataggio se troppo pesante.'),
+                        ->helperText('Per sostituire il PDF, caricane uno nuovo: non è possibile rimuoverlo senza sostituirlo. Il file viene ottimizzato automaticamente dopo il salvataggio se troppo pesante.')
+                        ->extraAttributes(['data-tour' => 'price-lists-field-file']),
                     Forms\Components\DatePicker::make('valid_from')->label('Valido dal'),
                     Forms\Components\DatePicker::make('valid_to')
                         ->label('Valido fino al')

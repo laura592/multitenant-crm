@@ -44,7 +44,8 @@ class PaymentMethodResource extends Resource
                         ->required()
                         ->maxLength(255)
                         ->live(onBlur: true)
-                        ->afterStateUpdated(fn (string $state, Forms\Set $set) => $set('slug', Str::slug($state))),
+                        ->afterStateUpdated(fn (string $state, Forms\Set $set) => $set('slug', Str::slug($state)))
+                        ->extraAttributes(['data-tour' => 'payment-methods-field-name']),
                     Forms\Components\TextInput::make('slug')
                         ->label('Slug')
                         ->required()
@@ -52,7 +53,8 @@ class PaymentMethodResource extends Resource
                         ->maxLength(255),
                     Forms\Components\Toggle::make('is_active')
                         ->label('Attivo')
-                        ->default(true),
+                        ->default(true)
+                        ->extraAttributes(['data-tour' => 'payment-methods-field-active']),
                     Forms\Components\TextInput::make('sort_order')
                         ->label('Ordine')
                         ->numeric()

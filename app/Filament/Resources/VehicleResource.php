@@ -90,7 +90,8 @@ class VehicleResource extends Resource
             Forms\Components\Section::make('Identificazione')
                 ->columns(2)
                 ->schema([
-                    Forms\Components\TextInput::make('plate')->label('Targa')->required()->maxLength(255),
+                    Forms\Components\TextInput::make('plate')->label('Targa')->required()->maxLength(255)
+                        ->extraAttributes(['data-tour' => 'vehicles-field-plate']),
                     Forms\Components\TextInput::make('brand')->label('Marca')->maxLength(255),
                     Forms\Components\TextInput::make('model')->label('Modello')->maxLength(255),
                     Forms\Components\TextInput::make('year')->label('Anno')->numeric(),
@@ -101,7 +102,8 @@ class VehicleResource extends Resource
                         ->label('Assegnato a')
                         ->relationship('assignedUser', 'name')
                         ->searchable()
-                        ->preload(),
+                        ->preload()
+                        ->extraAttributes(['data-tour' => 'vehicles-field-assigned']),
                     Forms\Components\Textarea::make('notes')->label('Note')->columnSpanFull(),
                 ]),
         ]);

@@ -54,11 +54,13 @@ class RiepilogoOre extends Page implements HasForms
             Select::make('month')
                 ->label('Mese')
                 ->options(collect(range(1, 12))->mapWithKeys(fn ($m) => [$m => Carbon::create(null, $m)->translatedFormat('F')]))
-                ->live(),
+                ->live()
+                ->extraAttributes(['data-tour' => 'riepilogo-ore-field-month']),
             Select::make('year')
                 ->label('Anno')
                 ->options(collect(range(now()->year - 2, now()->year))->mapWithKeys(fn ($y) => [$y => $y]))
-                ->live(),
+                ->live()
+                ->extraAttributes(['data-tour' => 'riepilogo-ore-field-year']),
         ];
     }
 

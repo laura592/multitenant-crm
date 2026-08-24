@@ -62,7 +62,8 @@ class UserResource extends Resource
                 ->columns(2)
                 ->schema([
                     Forms\Components\TextInput::make('name')->label('Nome')->required()->maxLength(255),
-                    Forms\Components\TextInput::make('email')->label('Email')->email()->required()->maxLength(255)->unique(ignoreRecord: true),
+                    Forms\Components\TextInput::make('email')->label('Email')->email()->required()->maxLength(255)->unique(ignoreRecord: true)
+                        ->extraAttributes(['data-tour' => 'users-field-email']),
                     Forms\Components\TextInput::make('password')
                         ->label('Password')
                         ->password()
@@ -71,7 +72,8 @@ class UserResource extends Resource
                         ->dehydrated(fn (?string $state) => filled($state))
                         ->dehydrateStateUsing(fn (string $state) => bcrypt($state))
                         ->maxLength(255)
-                        ->helperText('Lascia vuoto per non modificarla.'),
+                        ->helperText('Lascia vuoto per non modificarla.')
+                        ->extraAttributes(['data-tour' => 'users-field-password']),
                     Forms\Components\Select::make('role_id')
                         ->label('Ruolo')
                         ->options(function () {
@@ -85,7 +87,8 @@ class UserResource extends Resource
                         ->preload()
                         ->searchable()
                         ->required()
-                        ->helperText('Ogni utente ha un solo ruolo applicativo.'),
+                        ->helperText('Ogni utente ha un solo ruolo applicativo.')
+                        ->extraAttributes(['data-tour' => 'users-field-role']),
                     Forms\Components\Hidden::make('tenant_id')
                         ->default(fn () => Filament::getTenant()?->id)
                         ->dehydrated(fn () => ! (bool) auth()->user()?->is_super_admin)

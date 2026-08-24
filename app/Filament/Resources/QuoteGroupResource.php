@@ -77,7 +77,8 @@ class QuoteGroupResource extends Resource
                         ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::titleCase($record->full_name))
                         ->searchable(['company_name', 'first_name', 'last_name'])
                         ->preload()
-                        ->required(),
+                        ->required()
+                        ->extraAttributes(['data-tour' => 'quote-groups-field-customer']),
                     Forms\Components\Select::make('status')
                         ->label('Stato')
                         ->options(static::statusLabels())

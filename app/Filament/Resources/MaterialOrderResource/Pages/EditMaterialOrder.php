@@ -42,6 +42,7 @@ class EditMaterialOrder extends EditRecord
         return Actions\Action::make('addMaterials')
             ->label('Aggiungi materiali')
             ->icon('heroicon-o-plus-circle')
+            ->extraAttributes(['data-tour' => 'material-orders-add-materials'])
             ->modalWidth('4xl')
             ->modalHeading('Aggiungi materiali all\'ordine')
             ->modalSubmitAction(false)

@@ -90,7 +90,8 @@ class MaterialResource extends Resource
                     table: Material::class,
                     ignorable: fn (?Model $record) => $record instanceof Material ? $record : null,
                 )
-                ->maxLength(255),
+                ->maxLength(255)
+                ->extraAttributes(['data-tour' => 'materials-field-code']),
             Forms\Components\Select::make('supplier_id')
                 ->label('Fornitore')
                 ->relationship('supplier', 'name')
@@ -113,11 +114,13 @@ class MaterialResource extends Resource
                     Forms\Components\TextInput::make('category')->label('Nuova categoria')->required(),
                 ])
                 ->createOptionUsing(fn (array $data) => $data['category'])
-                ->required(),
+                ->required()
+                ->extraAttributes(['data-tour' => 'materials-field-category']),
             Forms\Components\TextInput::make('type')
                 ->label('Tipo')
                 ->required()
-                ->maxLength(255),
+                ->maxLength(255)
+                ->extraAttributes(['data-tour' => 'materials-field-type']),
             Forms\Components\TextInput::make('variant')
                 ->label('Variante')
                 ->maxLength(255),

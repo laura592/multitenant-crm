@@ -123,6 +123,7 @@ class GestionaleSyncReview extends Page
                 ->label('Aggiorna prezzi materiali')
                 ->icon('heroicon-o-currency-euro')
                 ->color('gray')
+                ->extraAttributes(['data-tour' => 'gestionale-sync-review-prices'])
                 ->requiresConfirmation()
                 ->modalDescription('Ricontrolla ogni materiale gia\' a catalogo su Eureka (una chiamata per materiale) e aggiorna il prezzo di listino se cambiato. Puo\' richiedere qualche minuto.')
                 ->action(function () {
@@ -141,6 +142,7 @@ class GestionaleSyncReview extends Page
                 ->label('Scansiona catalogo materiali')
                 ->icon('heroicon-o-magnifying-glass')
                 ->color('gray')
+                ->extraAttributes(['data-tour' => 'gestionale-sync-review-sweep'])
                 ->requiresConfirmation()
                 ->modalDescription('Cerca su Eureka con tutte le combinazioni a 2 cifre (100 ricerche) per scoprire materiali mai referenziati in un rapportino, e li crea a catalogo. Puo\' richiedere qualche minuto.')
                 ->action(function () {

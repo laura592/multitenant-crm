@@ -54,7 +54,8 @@ class TenantResource extends Resource
                         ->required()
                         ->maxLength(255)
                         ->live(onBlur: true)
-                        ->afterStateUpdated(fn (string $state, Forms\Set $set) => $set('slug', Str::slug($state))),
+                        ->afterStateUpdated(fn (string $state, Forms\Set $set) => $set('slug', Str::slug($state)))
+                        ->extraAttributes(['data-tour' => 'tenants-field-name']),
                     Forms\Components\TextInput::make('slug')
                         ->label('Slug (URL pannello)')
                         ->required()
@@ -69,7 +70,8 @@ class TenantResource extends Resource
                     Forms\Components\TextInput::make('phone')->label('Telefono')->tel()->maxLength(255),
                     Forms\Components\TextInput::make('fax')->label('Fax')->tel()->maxLength(255),
                     Forms\Components\Toggle::make('is_master')->label('Tenant master (Alex)'),
-                    Forms\Components\Toggle::make('is_active')->label('Attivo')->default(true),
+                    Forms\Components\Toggle::make('is_active')->label('Attivo')->default(true)
+                        ->extraAttributes(['data-tour' => 'tenants-field-active']),
                 ]),
             Forms\Components\Section::make('Indirizzo')
                 ->columns(3)

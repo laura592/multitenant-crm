@@ -60,7 +60,8 @@ class MachineUnitResource extends Resource
                         ->unique(
                             table: MachineUnit::class,
                             ignorable: fn (?MachineUnit $record) => $record,
-                        ),
+                        )
+                        ->extraAttributes(['data-tour' => 'machine-units-field-serial']),
                     Forms\Components\Select::make('product_id')
                         ->label('Modello (da catalogo)')
                         ->relationship('product', 'name', modifyQueryUsing: fn ($query) => $query->where('type', Product::TYPE_MACHINE))
@@ -76,7 +77,8 @@ class MachineUnitResource extends Resource
                         // esplicito, senza il filtro sul tipo, solo per l'etichetta.
                         ->getOptionLabelUsing(fn ($value) => Product::find($value)?->name)
                         ->searchable()
-                        ->preload(),
+                        ->preload()
+                        ->extraAttributes(['data-tour' => 'machine-units-field-product']),
                     Forms\Components\TextInput::make('model_name')
                         ->label('Modello (testo libero)')
                         ->helperText('Solo se non e\' a catalogo (es. macchina non a listino Alex).')
@@ -91,7 +93,8 @@ class MachineUnitResource extends Resource
                         ->getOptionLabelFromRecordUsing(fn (Customer $record) => DisplayName::titleCase($record->full_name))
                         ->searchable(['company_name', 'first_name', 'last_name'])
                         ->preload()
-                        ->helperText('Lascia vuoto se paga il cliente presso cui è installata questa macchina.'),
+                        ->helperText('Lascia vuoto se paga il cliente presso cui è installata questa macchina.')
+                        ->extraAttributes(['data-tour' => 'machine-units-field-billing']),
                     Forms\Components\Select::make('status')
                         ->label('Stato')
                         ->options([

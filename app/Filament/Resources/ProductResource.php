@@ -51,7 +51,8 @@ class ProductResource extends Resource
                             Product::TYPE_SERVICE => 'Servizio/licenza',
                         ])
                         ->required()
-                        ->live(),
+                        ->live()
+                        ->extraAttributes(['data-tour' => 'products-field-type']),
                     Forms\Components\Select::make('product_family_id')
                         ->label('Famiglia macchina')
                         ->relationship('family', 'name')
@@ -62,11 +63,13 @@ class ProductResource extends Resource
                         ->label('SKU')
                         ->required()
                         ->unique(ignoreRecord: true)
-                        ->maxLength(255),
+                        ->maxLength(255)
+                        ->extraAttributes(['data-tour' => 'products-field-sku']),
                     Forms\Components\TextInput::make('name')
                         ->label('Nome')
                         ->required()
-                        ->maxLength(255),
+                        ->maxLength(255)
+                        ->extraAttributes(['data-tour' => 'products-field-name']),
                     Forms\Components\Select::make('category_id')
                         ->label('Categoria')
                         ->relationship('category', 'name')

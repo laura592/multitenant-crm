@@ -57,7 +57,8 @@ class MaterialOrderResource extends Resource
                             Forms\Components\TextInput::make('name')->label('Ragione sociale')->required(),
                         ])
                         ->createOptionUsing(fn (array $data) => Supplier::create($data)->id)
-                        ->helperText('Compare nel PDF come destinatario dell\'ordine.'),
+                        ->helperText('Compare nel PDF come destinatario dell\'ordine.')
+                        ->extraAttributes(['data-tour' => 'material-orders-field-supplier']),
                     Forms\Components\Textarea::make('notes')
                         ->label('Note per il fornitore')
                         ->rows(2)

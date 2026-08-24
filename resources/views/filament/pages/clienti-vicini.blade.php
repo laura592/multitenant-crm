@@ -45,6 +45,7 @@
                         max="100"
                         step="1"
                         wire:model.live="maxDistanceKm"
+                        data-tour="clienti-vicini-radius"
                         class="fi-input block w-20 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-primary-500 focus:ring-primary-500 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
                     >
                 </label>
@@ -180,7 +181,7 @@
                                 </p>
 
                                 <div class="mt-3 flex flex-wrap gap-2 text-sm">
-                                    <a href="{{ $this->serviceReportUrlFor($row['customer']) }}" class="inline-flex items-center rounded-lg bg-primary-600 px-3 py-1.5 font-medium text-white hover:bg-primary-500">
+                                    <a href="{{ $this->serviceReportUrlFor($row['customer']) }}" data-tour="clienti-vicini-open-report" class="inline-flex items-center rounded-lg bg-primary-600 px-3 py-1.5 font-medium text-white hover:bg-primary-500">
                                         Apri rapportino
                                     </a>
                                     <a href="{{ $this->mapsUrlFor($row['customer']) }}" target="_blank" rel="noopener" class="inline-flex items-center rounded-lg border border-gray-300 px-3 py-1.5 font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900">

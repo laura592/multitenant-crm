@@ -36,7 +36,8 @@ class ProductFamilyResource extends Resource
                     Forms\Components\TextInput::make('name')
                         ->label('Nome (es. A300)')
                         ->required()
-                        ->maxLength(255),
+                        ->maxLength(255)
+                        ->extraAttributes(['data-tour' => 'product-families-field-name']),
                     Forms\Components\TextInput::make('sort_order')
                         ->label('Ordine')
                         ->numeric()

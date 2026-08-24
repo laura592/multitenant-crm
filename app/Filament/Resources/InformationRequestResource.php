@@ -72,6 +72,7 @@ class InformationRequestResource extends Resource
                         ->searchable(['company_name', 'first_name', 'last_name'])
                         ->preload()
                         ->required()
+                        ->extraAttributes(['data-tour' => 'information-requests-field-customer'])
                         // Serve al placeholder "Contatti cliente" sotto, che deve
                         // aggiornarsi subito quando si cambia/crea/modifica il cliente.
                         ->live()
@@ -127,7 +128,8 @@ class InformationRequestResource extends Resource
                     Forms\Components\Textarea::make('request_details')
                         ->label('Dettagli richiesta')
                         ->rows(3)
-                        ->columnSpanFull(),
+                        ->columnSpanFull()
+                        ->extraAttributes(['data-tour' => 'information-requests-field-details']),
                 ]),
             Forms\Components\Section::make('Appuntamento')
                 ->columns(2)
