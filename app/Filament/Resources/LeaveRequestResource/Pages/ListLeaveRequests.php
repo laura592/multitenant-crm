@@ -13,7 +13,8 @@ class ListLeaveRequests extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            Actions\CreateAction::make(),
+            Actions\CreateAction::make()
+                ->extraAttributes(['data-tour' => 'leave-requests-create']),
         ];
     }
 }

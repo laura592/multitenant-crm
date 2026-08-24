@@ -85,6 +85,7 @@ class GestionaleSyncReview extends Page
                 ->label('Importa rapportini da Eureka')
                 ->icon('heroicon-o-arrow-down-tray')
                 ->color('gray')
+                ->extraAttributes(['data-tour' => 'gestionale-sync-review-import'])
                 ->form([
                     Forms\Components\DatePicker::make('from')
                         ->label('Dal')

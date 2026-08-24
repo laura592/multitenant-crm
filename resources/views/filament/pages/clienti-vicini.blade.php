@@ -9,6 +9,7 @@
             <div class="flex flex-wrap items-center gap-3">
                 <button
                     type="button"
+                    data-tour="clienti-vicini-locate"
                     x-on:click="
                         navigator.geolocation.getCurrentPosition(
                             (pos) => {

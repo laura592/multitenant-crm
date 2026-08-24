@@ -13,7 +13,8 @@ class ManageCategories extends ManageRecords
     protected function getHeaderActions(): array
     {
         return [
-            Actions\CreateAction::make(),
+            Actions\CreateAction::make()
+                ->extraAttributes(['data-tour' => 'categories-create']),
         ];
     }
 }

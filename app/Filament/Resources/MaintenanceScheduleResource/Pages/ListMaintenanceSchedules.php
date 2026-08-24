@@ -14,7 +14,8 @@ class ListMaintenanceSchedules extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            Actions\CreateAction::make(),
+            Actions\CreateAction::make()
+                ->extraAttributes(['data-tour' => 'maintenance-schedules-create']),
         ];
     }
 

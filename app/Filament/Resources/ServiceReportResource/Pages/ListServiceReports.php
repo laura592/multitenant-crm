@@ -19,7 +19,8 @@ class ListServiceReports extends ListRecords
                 ->icon('heroicon-o-map-pin')
                 ->color('gray')
                 ->url(fn () => ClientiVicini::getUrl()),
-            Actions\CreateAction::make(),
+            Actions\CreateAction::make()
+                ->extraAttributes(['data-tour' => 'service-reports-create']),
         ];
     }
 }

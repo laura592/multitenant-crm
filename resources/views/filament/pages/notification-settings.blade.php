@@ -76,7 +76,7 @@
                     </p>
                 @endif
 
-                <x-filament::button type="submit" icon="heroicon-o-check">
+                <x-filament::button type="submit" icon="heroicon-o-check" data-tour="notification-settings-save">
                     Salva
                 </x-filament::button>
             </div>

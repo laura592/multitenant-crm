@@ -28,6 +28,55 @@
 }
 
 /*
+ * Tour guidato (icona accanto alla campana notifiche, vedi App\Livewire\
+ * TourGuide): ridipinge il popover di driver.js (tema di default bianco
+ * fisso, non risponde da solo al dark mode dell'app) con gli stessi colori
+ * del resto del pannello admin. Stesso motivo del blocco .fi-quick-overview
+ * qui sopra per le regole .dark: le utility dark: di Tailwind qui
+ * risultavano compilate SENZA alcun selettore condizionale (thread
+ * 2026-08-24), quindi CSS scritto a mano invece delle classi dark: dirette.
+ */
+.driver-popover {
+    border-radius: 0.75rem;
+}
+.dark .driver-popover {
+    background-color: var(--color-gray-900);
+    color: var(--color-gray-100);
+}
+.dark .driver-popover-title,
+.dark .driver-popover-description {
+    color: var(--color-gray-100);
+}
+.dark .driver-popover-arrow {
+    /* Base per tutti i lati: ciascuna .driver-popover-arrow-side-* azzera
+       gia' da sola 3 dei 4 lati (vedi driver.css), quindi basta ridefinire
+       qui il colore di base perche' il lato visibile (la punta) lo erediti. */
+    border-color: var(--color-gray-900);
+}
+.dark .driver-popover-footer-btn {
+    background-color: var(--color-gray-800);
+    color: var(--color-gray-100);
+    border-color: var(--color-gray-700);
+}
+.dark .driver-popover-footer-btn:hover,
+.dark .driver-popover-footer-btn:focus {
+    background-color: var(--color-gray-700);
+}
+.dark .fi-tour-guide-btn {
+    color: var(--color-gray-400);
+}
+.dark .fi-tour-guide-btn:hover {
+    background-color: rgb(255 255 255 / 0.05);
+    color: var(--color-gray-200);
+}
+.dark .driver-popover-close-btn {
+    color: var(--color-gray-400);
+}
+.dark .driver-popover-progress-text {
+    color: var(--color-gray-400);
+}
+
+/*
  * Filament's StatsOverviewWidget applica Stat::color() solo alla riga di
  * descrizione: l'icona resta sempre grigia (vedi il template del pacchetto),
  * quindi ogni card della dashboard sembrava identica anche quando il colore

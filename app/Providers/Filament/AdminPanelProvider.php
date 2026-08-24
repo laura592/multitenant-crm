@@ -81,6 +81,13 @@ class AdminPanelProvider extends PanelProvider
                 // caricato.
                 fn (): string => Blade::render("@vite(['resources/css/app.css', 'resources/js/app.js'])")
             )
+            ->renderHook(
+                'panels::topbar.end',
+                // Tour guidato interattivo, accanto alla campana notifiche
+                // (che Filament posiziona qui di default): vedi App\Livewire\
+                // TourGuide e App\Support\HelpGuide\TourRegistry.
+                fn (): string => Blade::render("@livewire('tour-guide')")
+            )
             // Palette brand Alex: blu preso dall'accento nella cornice del logo
             // Alex come primario (niente rosso: quello resta solo sul badge
             // "Franke Approved Partner", per non dare l'idea che il pannello

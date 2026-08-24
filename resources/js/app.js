@@ -1,4 +1,6 @@
 import './bootstrap';
+import { driver } from 'driver.js';
+import 'driver.js/dist/driver.css';
 
 // Uniforma il feedback di tutti i pulsanti "Salva"/"Crea" delle pagine
 // risorsa Filament (Clienti, Preventivi, Rapportini, ecc.): di suo Filament
@@ -340,3 +342,55 @@ if (document.body) {
 		subtree: true,
 	});
 }
+
+// Tour guidato (icona accanto alla campana notifiche, vedi App\Livewire\
+// TourGuide): App\Support\HelpGuide\TourRegistry definisce gli step lato
+// server (selettore CSS + testo), qui si costruisce/avvia driver.js.
+// Ogni step il cui selettore non esiste ancora nel DOM (es. una colonna
+// nascosta su mobile, o non ancora renderizzata da Livewire) viene scartato
+// invece di far fallire l'intero tour su un `element not found`.
+function runAppTour(steps, onFinish) {
+	const validSteps = steps
+		.filter((step) => !step.element || document.querySelector(step.element))
+		.map((step) => ({
+			element: step.element || undefined,
+			popover: {
+				title: step.title,
+				description: step.text,
+			},
+		}));
+
+	if (validSteps.length === 0) {
+		onFinish?.();
+
+		return;
+	}
+
+	const tour = driver({
+		showProgress: true,
+		allowClose: true,
+		nextBtnText: 'Avanti',
+		prevBtnText: 'Indietro',
+		doneBtnText: 'Fatto',
+		progressText: '{{current}} di {{total}}',
+		steps: validSteps,
+		onDestroyed: () => onFinish?.(),
+	});
+
+	tour.drive();
+}
+
+document.addEventListener('livewire:init', () => {
+	window.Livewire.on('start-tour', (payload) => {
+		// Livewire non impacchetta sempre gli argomenti dispatch() nudi allo
+		// stesso modo (dipende da versione/contesto): normalizzato qui
+		// invece di assumere una forma fissa, un [data] destructuring su un
+		// oggetto semplice (non un array) e' un "not iterable" fatale lato
+		// JS — successo davvero, vedi thread 2026-08-24.
+		const data = Array.isArray(payload) ? payload[0] : payload;
+
+		runAppTour(data.steps, () => {
+			window.Livewire.dispatch('tour-finished', { slug: data.slug });
+		});
+	});
+});

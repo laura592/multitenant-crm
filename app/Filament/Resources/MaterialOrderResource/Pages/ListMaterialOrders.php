@@ -21,6 +21,7 @@ class ListMaterialOrders extends ListRecords
             Actions\Action::make('create')
                 ->label('Nuovo ordine materiali')
                 ->icon('heroicon-o-plus')
+                ->extraAttributes(['data-tour' => 'material-orders-create'])
                 ->action(function () {
                     // Il numero viene assegnato da MaterialOrder::booted() se non
                     // passato esplicitamente.

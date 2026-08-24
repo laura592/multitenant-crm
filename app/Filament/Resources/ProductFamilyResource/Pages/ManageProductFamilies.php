@@ -13,7 +13,8 @@ class ManageProductFamilies extends ManageRecords
     protected function getHeaderActions(): array
     {
         return [
-            Actions\CreateAction::make(),
+            Actions\CreateAction::make()
+                ->extraAttributes(['data-tour' => 'product-families-create']),
         ];
     }
 }

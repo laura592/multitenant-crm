@@ -250,6 +250,7 @@ class RiepilogoOre extends Page implements HasForms
             Action::make('exportExcel')
                 ->label('Esporta Excel (riepilogo)')
                 ->icon('heroicon-o-table-cells')
+                ->extraAttributes(['data-tour' => 'riepilogo-ore-export'])
                 ->action(fn () => Excel::download(
                     new MonthlyTimeSummaryExport($this->getRows()),
                     "riepilogo-ore-{$this->year}-{$this->month}.xlsx"
