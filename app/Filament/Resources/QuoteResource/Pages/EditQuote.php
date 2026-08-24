@@ -25,6 +25,7 @@ class EditQuote extends EditRecord
                 ->label('Ricalcola totali')
                 ->icon('heroicon-o-arrow-path')
                 ->color('gray')
+                ->extraAttributes(['data-tour' => 'quotes-recalculate'])
                 ->action(function () {
                     $this->record->updateTotal();
                     // I campi Totali nel form leggono $record: senza rifillare
@@ -37,6 +38,7 @@ class EditQuote extends EditRecord
                 ->label('PDF')
                 ->icon('heroicon-o-document-arrow-down')
                 ->color('gray')
+                ->extraAttributes(['data-tour' => 'quotes-pdf'])
                 ->url(fn () => route('quotes.pdf', $this->record))
                 ->openUrlInNewTab(),
             Actions\Action::make('duplicateAsAlternative')

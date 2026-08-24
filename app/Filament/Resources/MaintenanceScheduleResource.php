@@ -243,7 +243,8 @@ class MaintenanceScheduleResource extends Resource
                         ->searchable(['company_name', 'first_name', 'last_name'])
                         ->preload()
                         ->live()
-                        ->required(),
+                        ->required()
+                        ->extraAttributes(['data-tour' => 'maintenance-schedules-field-customer']),
                     Forms\Components\Select::make('machine_unit_id')
                         ->label('Macchina')
                         ->relationship(
@@ -257,7 +258,8 @@ class MaintenanceScheduleResource extends Resource
                         ->preload()
                         ->live()
                         ->disabled(fn (Forms\Get $get) => blank($get('customer_id')))
-                        ->helperText('Qui compaiono solo i macchinari attualmente installati presso il cliente selezionato, in comodato o meno.'),
+                        ->helperText('Qui compaiono solo i macchinari attualmente installati presso il cliente selezionato, in comodato o meno.')
+                        ->extraAttributes(['data-tour' => 'maintenance-schedules-field-machine']),
                     Forms\Components\Placeholder::make('impianti_info')
                         ->label('Impianti installati')
                         ->content(fn (Forms\Get $get) => static::equipmentSummary($get('customer_id'), $get('machine_unit_id')))
@@ -279,7 +281,8 @@ class MaintenanceScheduleResource extends Resource
                         ->options(static::typeLabels())
                         ->default(MaintenanceSchedule::TYPE_MANUTENZIONE)
                         ->live()
-                        ->required(),
+                        ->required()
+                        ->extraAttributes(['data-tour' => 'maintenance-schedules-field-type']),
                     Forms\Components\Select::make('status')
                         ->label('Stato')
                         ->options(static::statusLabels())
@@ -303,7 +306,8 @@ class MaintenanceScheduleResource extends Resource
                         // chiamata"): sovrascrive esplicitamente anche un
                         // valore lasciato da un beverage_type precedente.
                         ->afterStateUpdated(fn (?string $state, Forms\Set $set) => $set('frequency_days', MaintenanceSchedule::STANDARD_FREQUENCY_DAYS[$state] ?? null))
-                        ->visible(fn (Forms\Get $get) => $get('type') === MaintenanceSchedule::TYPE_LAVAGGIO),
+                        ->visible(fn (Forms\Get $get) => $get('type') === MaintenanceSchedule::TYPE_LAVAGGIO)
+                        ->extraAttributes(['data-tour' => 'maintenance-schedules-field-beverage']),
                     Forms\Components\TextInput::make('lines_count')
                         ->label('Numero vie')
                         ->numeric()
@@ -321,7 +325,8 @@ class MaintenanceScheduleResource extends Resource
                         // filtro) che senza un lavaggio marcato "filtro
                         // sostituito" lasciava la scadenza sempre vuota.
                         ->helperText('Es. 20 o 30 (per l\'acqua tipicamente 120). Ogni nuovo lavaggio registrato sposta in automatico la prossima scadenza di questi giorni. Lascia vuoto per un piano "a chiamata", senza cadenza fissa.')
-                        ->visible(fn (Forms\Get $get) => $get('type') === MaintenanceSchedule::TYPE_LAVAGGIO),
+                        ->visible(fn (Forms\Get $get) => $get('type') === MaintenanceSchedule::TYPE_LAVAGGIO)
+                        ->extraAttributes(['data-tour' => 'maintenance-schedules-field-frequency']),
                     Forms\Components\TextInput::make('filter_validity_days')
                         ->label('Validita\' filtro (giorni)')
                         ->numeric()
@@ -338,7 +343,8 @@ class MaintenanceScheduleResource extends Resource
                             ? 'Piano a chiamata: nessuna scadenza automatica.'
                             : null)
                         ->required(fn (Forms\Get $get) => $get('type') === MaintenanceSchedule::TYPE_MANUTENZIONE || filled($get('frequency_days')))
-                        ->default(fn (Forms\Get $get) => $get('type') === MaintenanceSchedule::TYPE_MANUTENZIONE ? now()->addMonth() : null),
+                        ->default(fn (Forms\Get $get) => $get('type') === MaintenanceSchedule::TYPE_MANUTENZIONE ? now()->addMonth() : null)
+                        ->extraAttributes(['data-tour' => 'maintenance-schedules-field-due-date']),
                     Forms\Components\Textarea::make('notes')->label('Note')->columnSpanFull(),
                 ]),
         ]);

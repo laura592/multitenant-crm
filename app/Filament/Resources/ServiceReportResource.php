@@ -338,6 +338,7 @@ class ServiceReportResource extends Resource
                         ->visibleOn('edit'),
                     Forms\Components\Select::make('customer_id')
                         ->label('Cliente')
+                        ->extraAttributes(['data-tour' => 'service-reports-field-customer'])
                         ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
                         ->getOptionLabelFromRecordUsing(fn ($record) => $record->city
                             ? DisplayName::titleCase($record->full_name)." ({$record->city})"
@@ -389,6 +390,7 @@ class ServiceReportResource extends Resource
                         ->required(),
                     Forms\Components\Select::make('intervention_type')
                         ->label('Tipo intervento')
+                        ->extraAttributes(['data-tour' => 'service-reports-field-type'])
                         ->options([
                             ServiceReport::TYPE_INSTALLAZIONE => 'Installazione',
                             ServiceReport::TYPE_MANUTENZIONE_ORDINARIA => 'Manutenzione ordinaria',
@@ -615,10 +617,12 @@ class ServiceReportResource extends Resource
             Forms\Components\Section::make('Descrizione')
                 ->schema([
                     Forms\Components\Textarea::make('problem_description')->label('Problema riscontrato')->rows(2),
-                    Forms\Components\Textarea::make('work_performed')->label('Lavoro svolto')->rows(3)->required(),
+                    Forms\Components\Textarea::make('work_performed')->label('Lavoro svolto')->rows(3)->required()
+                        ->extraAttributes(['data-tour' => 'service-reports-field-work']),
                     Forms\Components\Textarea::make('notes')->label('Note')->rows(2),
                 ]),
             Forms\Components\Section::make('Ricambi/materiali utilizzati')
+                ->extraAttributes(['data-tour' => 'service-reports-field-materials'])
                 ->schema([
                     // Le 3 Hidden e i 2 Toggle sotto sono tutti "di comodo"
                     // (dehydrated(false), nessuna colonna reale): su un rapportino
@@ -773,6 +777,7 @@ class ServiceReportResource extends Resource
                         ->reorderable(false),
                 ]),
             Forms\Components\Section::make('Firma cliente')
+                ->extraAttributes(['data-tour' => 'service-reports-field-signature'])
                 ->schema([
                     Forms\Components\TextInput::make('customer_signature_name')
                         ->label('Nome e cognome (stampatello)')

@@ -299,6 +299,7 @@ class QuoteResource extends Resource
                             : request()->query('customer_id'))
                         ->disabled(fn () => $isCreating && filled(request()->query('group')))
                         ->dehydrated()
+                        ->extraAttributes(['data-tour' => 'quotes-field-customer'])
                         ->createOptionForm([
                             Forms\Components\TextInput::make('company_name')->label('Ragione sociale'),
                             Forms\Components\TextInput::make('first_name')->label('Nome'),
@@ -319,7 +320,8 @@ class QuoteResource extends Resource
                     Forms\Components\Select::make('payment_method')
                         ->label('Metodo di pagamento')
                         ->options(fn () => PaymentMethod::query()->where('is_active', true)->pluck('name', 'slug'))
-                        ->live(),
+                        ->live()
+                        ->extraAttributes(['data-tour' => 'quotes-field-payment']),
                     MoneyInput::make('rental_monthly_fee')
                         ->label('Canone mensile noleggio (€)')
                         ->visible(fn (Get $get) => $get('payment_method') === 'noleggio-operativo'),

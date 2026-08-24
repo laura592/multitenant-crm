@@ -43,6 +43,7 @@ class CustomerResource extends Resource
         return $form->schema([
             Forms\Components\Section::make('Anagrafica')
                 ->columns(2)
+                ->extraAttributes(['data-tour' => 'customers-field-anagrafica'])
                 ->schema([
                     // Nessuno dei due era obbligatorio: si poteva salvare un
                     // cliente senza alcun nome/ragione sociale, pur essendo la
@@ -62,6 +63,7 @@ class CustomerResource extends Resource
                 ]),
             Forms\Components\Section::make('Indirizzo')
                 ->columns(3)
+                ->extraAttributes(['data-tour' => 'customers-field-address'])
                 ->schema(ItalianAddressFields::schema(withGeocoding: true)),
             Forms\Components\Hidden::make('latitude'),
             Forms\Components\Hidden::make('longitude'),
@@ -87,7 +89,8 @@ class CustomerResource extends Resource
                         ->searchable(['company_name', 'first_name', 'last_name'])
                         ->preload()
                         ->columnSpanFull()
-                        ->helperText('Lascia vuoto se il cliente paga per se stesso. Imposta un altro cliente se qualcun altro paga al posto suo (es. un gestore che ha messo una macchina in comodato presso questo cliente): preventivi e rapportini restano su questo cliente, ma verranno intestati/inviati al cliente scelto qui.'),
+                        ->helperText('Lascia vuoto se il cliente paga per se stesso. Imposta un altro cliente se qualcun altro paga al posto suo (es. un gestore che ha messo una macchina in comodato presso questo cliente): preventivi e rapportini restano su questo cliente, ma verranno intestati/inviati al cliente scelto qui.')
+                        ->extraAttributes(['data-tour' => 'customers-field-billing']),
                 ]),
         ]);
     }
