@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Support\HelpGuide\TourRegistry;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use Tests\Concerns\AssignsPermissionRoles;
 use Tests\TestCase;
 
@@ -83,5 +84,37 @@ class TourGuideTest extends TestCase
             1,
             TourView::where('user_id', $user->id)->where('page_slug', 'service-reports')->count(),
         );
+    }
+
+    /**
+     * Successo davvero in produzione 2026-08-25: un account super-admin ha
+     * tenant_id NULL sul proprio User per design (vedi UserResource, Hidden
+     * 'tenant_id' non dehydrated per is_super_admin) — markAsSeen() usava
+     * Auth::user()->tenant_id per tour_views.tenant_id (NOT NULL, niente
+     * default), quindi falliva con una violazione di integrita' ad ogni
+     * chiusura del tour, su ogni pagina, per qualunque super-admin.
+     */
+    public function test_super_admin_closing_a_tour_does_not_violate_tenant_id_not_null(): void
+    {
+        $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);
+        $superAdmin = User::create([
+            'tenant_id' => null,
+            'is_super_admin' => true,
+            'name' => 'Staff',
+            'email' => 'staff@gifar.it',
+            'password' => bcrypt('password'),
+        ]);
+
+        $this->actingAs($superAdmin);
+        Filament::setTenant($tenant);
+
+        Livewire::test(TourGuide::class)
+            ->set('slug', 'service-reports')
+            ->call('markAsSeen', 'service-reports');
+
+        $view = TourView::where('user_id', $superAdmin->id)->where('page_slug', 'service-reports')->first();
+
+        $this->assertNotNull($view);
+        $this->assertSame($tenant->id, $view->tenant_id);
     }
 }

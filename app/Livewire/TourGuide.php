@@ -4,6 +4,7 @@ namespace App\Livewire;
 
 use App\Models\TourView;
 use App\Support\HelpGuide\TourRegistry;
+use Filament\Facades\Filament;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -52,9 +53,16 @@ class TourGuide extends Component
             return;
         }
 
+        // Filament::getTenant() (il tenant del pannello attivo), non
+        // Auth::user()->tenant_id: un account super-admin ha tenant_id NULL
+        // sul proprio utente per design (puo' entrare in qualsiasi tenant,
+        // vedi UserResource — Hidden::make('tenant_id')->dehydrated(fn () =>
+        // ! is_super_admin)), quindi con l'utente falliva qui con una
+        // violazione NOT NULL su tour_views.tenant_id ad ogni chiusura del
+        // tour, su ogni pagina — successo davvero in produzione 2026-08-25.
         TourView::firstOrCreate(
             ['user_id' => Auth::id(), 'page_slug' => $slug],
-            ['tenant_id' => Auth::user()?->tenant_id, 'viewed_at' => now()],
+            ['tenant_id' => Filament::getTenant()?->id, 'viewed_at' => now()],
         );
     }
 
