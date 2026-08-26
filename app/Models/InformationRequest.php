@@ -22,10 +22,15 @@ class InformationRequest extends Model
         'appointment_at',
         'appointment_notes',
         'handled_by_user_id',
+        'source',
+        'origin_url',
+        'raw_payload',
+        'external_id',
     ];
 
     protected $casts = [
         'appointment_at' => 'datetime',
+        'raw_payload' => 'array',
     ];
 
     protected static function booted(): void

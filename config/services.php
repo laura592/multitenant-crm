@@ -42,6 +42,13 @@ return [
         'user_agent' => env('NOMINATIM_USER_AGENT', config('app.name').' CRM (lauragrb.1990@gmail.com)'),
     ],
 
+    'lead_intake' => [
+        // Segreto condiviso col sito alexcaffe.com per firmare le richieste
+        // di /api/v1/lead. Se manca, l'endpoint risponde 503 invece di
+        // accettare chiamate non firmate.
+        'secret' => env('LEAD_INTAKE_SECRET'),
+    ],
+
     'eureka' => [
         'base_url' => env('EUREKA_BASE_URL', ''),
         'username' => env('EUREKA_USERNAME', ''),
