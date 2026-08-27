@@ -663,7 +663,7 @@ class QuoteResource extends Resource
         $recipient = $record->customer?->invoiceRecipient();
         $customerName = DisplayName::titleCase($recipient?->company_name) ?: (DisplayName::titleCase($recipient?->full_name) ?? 'Cliente');
         $total = '€ '.number_format((float) $record->subtotal, 2, ',', '.').' + IVA';
-        $signatureName = Auth::user()?->name ?: ($record->tenant?->name ?? config('app.name'));
+        $signatureName = static::emailSignatureName($record);
 
         return implode('', [
             '<p>Gentile '.e($customerName).',</p>',
@@ -674,6 +674,18 @@ class QuoteResource extends Resource
             '<p>Restiamo a disposizione per qualsiasi chiarimento.</p>',
             '<p>Grazie,<br>'.e($signatureName).'</p>',
         ]);
+    }
+
+    /**
+     * Le mail al cliente le firma sempre l'azienda, mai l'utente collegato:
+     * il nome dell'account non deve arrivare al destinatario (gli account di
+     * servizio si chiamano "Super Admin") e la firma resta uguale a chiunque
+     * prema il pulsante.
+     */
+    protected static function emailSignatureName(Quote $record): string
+    {
+        return $record->tenant?->legal_name
+            ?: ($record->tenant?->name ?: config('app.name'));
     }
 
     public static function sendQuoteEmail(Quote $record, array $data): void

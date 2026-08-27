@@ -203,7 +203,8 @@ class QuoteGroupResource extends Resource
 
     protected static function commercialSignatureLines(?\App\Models\Tenant $tenant): array
     {
-        $contact = Auth::user()?->name ?: ($tenant?->name ?? config('app.name'));
+        // firma sempre l'azienda, mai il nome dell'utente collegato
+        $contact = $tenant?->legal_name ?: ($tenant?->name ?: config('app.name'));
 
         $contacts = array_values(array_filter([
             $tenant?->phone ? 'Tel. '.$tenant->phone : null,
