@@ -37,6 +37,7 @@ class MachineUnit extends Model
         'tenant_id',
         'source',
         'product_id',
+        'material_id',
         'current_customer_id',
         'billing_customer_id',
         'serial_number',
@@ -69,6 +70,16 @@ class MachineUnit extends Model
         return $this->belongsTo(Product::class);
     }
 
+    /**
+     * L'articolo Eureka da cui nasce questa matricola: e' la stessa anagrafica
+     * che il rapportino referenzia in machine_material_id. product() resta per
+     * le macchine a listino, quelle che vendiamo e configuriamo a preventivo.
+     */
+    public function material(): BelongsTo
+    {
+        return $this->belongsTo(Material::class);
+    }
+
     public function currentCustomer(): BelongsTo
     {
         return $this->belongsTo(Customer::class, 'current_customer_id');
@@ -86,7 +97,10 @@ class MachineUnit extends Model
 
     public function getDisplayNameAttribute(): string
     {
-        return $this->product?->name ?? $this->model_name ?? 'Macchina senza modello';
+        return $this->product?->name
+            ?? $this->material?->display_label
+            ?? $this->model_name
+            ?? 'Macchina senza modello';
     }
 
     /**

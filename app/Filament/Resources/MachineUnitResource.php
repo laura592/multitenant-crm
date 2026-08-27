@@ -6,6 +6,7 @@ use App\Filament\Resources\MachineUnitResource\Pages;
 use App\Filament\Resources\MachineUnitResource\RelationManagers\PlacementsRelationManager;
 use App\Models\Customer;
 use App\Models\MachineUnit;
+use App\Models\Material;
 use App\Models\Product;
 use App\Support\DisplayName;
 use App\Support\Gestionale\EurekaClient;
@@ -79,9 +80,19 @@ class MachineUnitResource extends Resource
                         ->searchable()
                         ->preload()
                         ->extraAttributes(['data-tour' => 'machine-units-field-product']),
+                    // L'articolo di gestionale: e' da qui che nasce una
+                    // matricola importata da Eureka (le macchine del parco
+                    // installato non sono a listino e non compaiono nel
+                    // selettore sopra, che filtra i prodotti tipo "machine").
+                    Forms\Components\Select::make('material_id')
+                        ->label('Articolo gestionale (Eureka)')
+                        ->relationship('material', 'code')
+                        ->getOptionLabelFromRecordUsing(fn (Material $record) => $record->display_label.' — '.$record->code)
+                        ->searchable(['code', 'type', 'variant'])
+                        ->helperText('Il codice articolo con cui questa macchina e\' registrata su Eureka.'),
                     Forms\Components\TextInput::make('model_name')
                         ->label('Modello (testo libero)')
-                        ->helperText('Solo se non e\' a catalogo (es. macchina non a listino Alex).')
+                        ->helperText('Solo se non e\' a catalogo ne\' a gestionale.')
                         ->maxLength(255),
                     Forms\Components\Select::make('type')
                         ->label('Categoria impianto')
@@ -127,6 +138,7 @@ class MachineUnitResource extends Resource
                 ->schema([
                     TextEntry::make('serial_number')->label('Matricola'),
                     TextEntry::make('product.name')->label('Modello (da catalogo)')->placeholder('—'),
+                    TextEntry::make('material.display_label')->label('Articolo gestionale (Eureka)')->placeholder('—'),
                     TextEntry::make('model_name')->label('Modello (testo libero)')->placeholder('—'),
                     TextEntry::make('type')
                         ->label('Categoria impianto')
@@ -155,7 +167,10 @@ class MachineUnitResource extends Resource
                     ->searchable(
                         query: fn ($query, string $search) => $query
                             ->where('model_name', 'like', "%{$search}%")
-                            ->orWhereHas('product', fn ($q) => $q->where('name', 'like', "%{$search}%")),
+                            ->orWhereHas('product', fn ($q) => $q->where('name', 'like', "%{$search}%"))
+                            ->orWhereHas('material', fn ($q) => $q
+                                ->where('type', 'like', "%{$search}%")
+                                ->orWhere('code', 'like', "%{$search}%")),
                     ),
                 Tables\Columns\TextColumn::make('currentCustomer.company_name')->label('Presso')->placeholder('In magazzino')->searchable()
                     ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
@@ -169,7 +184,7 @@ class MachineUnitResource extends Resource
                     ->trueIcon('heroicon-o-check-circle')
                     ->falseIcon('heroicon-o-x-circle')
                     ->tooltip('Se la macchina (matricola) o il suo modello sono collegati a Eureka. Indipendente dal collegamento del modello: una macchina puo essere importata da Eureka anche se il suo modello non e ancora agganciato a un articolo.')
-                    ->getStateUsing(fn (MachineUnit $record) => filled($record->gestionale_code) || $record->source === MachineUnit::SOURCE_EUREKA || filled($record->product?->gestionale_code)),
+                    ->getStateUsing(fn (MachineUnit $record) => filled($record->gestionale_code) || $record->source === MachineUnit::SOURCE_EUREKA || filled($record->product?->gestionale_code) || filled($record->material?->gestionale_code)),
                 Tables\Columns\TextColumn::make('status')
                     ->label('Stato')
                     ->badge()

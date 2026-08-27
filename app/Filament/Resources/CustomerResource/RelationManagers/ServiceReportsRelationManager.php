@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\CustomerResource\RelationManagers;
 
 use App\Filament\Resources\ServiceReportResource;
-use App\Models\Customer;
 use App\Models\ServiceReport;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
@@ -40,7 +39,7 @@ class ServiceReportsRelationManager extends RelationManager
                 Tables\Columns\TextColumn::make('intervention_date')->label('Data')->date()->sortable(),
                 Tables\Columns\TextColumn::make('macchina')
                     ->label('Macchina')
-                    ->state(fn (ServiceReport $record) => $record->machineUnit?->display_name ?? $record->machineProduct?->name)
+                    ->state(fn (ServiceReport $record) => $record->machineUnit?->display_name ?? $record->machine_model_name)
                     ->placeholder('—')
                     ->wrap(),
                 Tables\Columns\TextColumn::make('work_performed')->label('Descrizione')->placeholder('—')->wrap(),

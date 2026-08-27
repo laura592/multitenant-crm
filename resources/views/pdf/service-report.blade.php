@@ -188,7 +188,7 @@
             <div class="intervento-block">
                 <div class="intervento-label">Macchina</div>
                 <table>
-                    @php($machineModel = $report->machineProduct?->name ?? $report->machineUnit?->product?->name ?? $report->machineUnit?->model_name)
+                    @php($machineModel = $report->machine_model_name)
                     @if($machineModel)
                         <tr><td class="label">Modello:</td><td>{{ $machineModel }}</td></tr>
                     @endif

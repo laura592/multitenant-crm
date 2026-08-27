@@ -16,12 +16,15 @@ match esatto. Risposta tipo:
 }
 ```
 
-`id_eureka` è il valore da salvare in `Product.gestionale_code` per collegare
-un prodotto del nostro catalogo all'articolo Eureka (serve per `sl_articolo`
-nelle schede lavoro).
+`id_eureka` è il valore da salvare in `gestionale_code` per collegare un
+record del CRM all'articolo Eureka (serve per `sl_articolo` nelle schede
+lavoro). Il campo esiste sia su `Product` (macchine a listino) sia su
+`Material` (anagrafica articoli) — vedi la sezione "Dove vivono gli articoli"
+qui sotto per capire quale dei due usare.
 
 **Bug reale trovato e corretto il 2026-08-06**: quando
-`ImportEurekaServiceReports::resolveOrCreateProduct()` trovava un prodotto
+`ImportEurekaServiceReports::resolveOrCreateProduct()` (oggi
+`resolveExistingProduct()`) trovava un prodotto
 già esistente a catalogo (il caso comune, es. matchato per SKU dal dump di
 produzione), riusava il record **senza mai scrivergli `gestionale_code`**
 — solo i prodotti creati ex-novo lo ricevevano. Risultato: su 407 prodotti a
@@ -111,3 +114,44 @@ Esiste anche `GET /articoli/ricerca?rql=...` con filtri sui campi anagrafici
 dell'articolo (inclusa la famiglia), ma è utilizzabile solo se si concorda
 con Eureka una classificazione per famiglie che separi davvero ricambi e
 materiali — non ancora fatto.
+
+## Dove vivono gli articoli: Materiali, non Prodotti (2026-08-27)
+
+Su Eureka gli articoli sono **una tabella sola** (`sl_articolo`): macchine,
+ricambi, manodopera e lavaggi stanno tutti lì, senza una classificazione
+usabile (vedi la sezione qui sopra). Nel CRM quella stessa anagrafica è
+**Materiali**, non Prodotti:
+
+| | Cos'è | Chi la riempie |
+|---|---|---|
+| **Materiali** (`materials`) | l'anagrafica articoli di Eureka: macchine, ricambi, manodopera, lavaggi | `eureka:sweep-materials-catalog` e gli import rapportini |
+| **Prodotti** (`products`) | il catalogo commerciale a listino: famiglie, opzioni, slot di configurazione, prezzi | inserimento a mano dai PDF in Listini |
+| **Macchinari** (`machine_units`) | la matricola fisica installata | import Eureka o inserimento a mano |
+
+Una macchina che vendiamo noi è **entrambe le cose**: un `Product` per
+configurarla a preventivo e un `Material` per assisterla e fatturarla. Il
+ponte fra i due è `gestionale_code`, che vale lo stesso id articolo su
+entrambi.
+
+Fino al 2026-08-27 non era così: `ImportEurekaServiceReports` materializzava
+`sl_articolo` come `Product` con `type = service`, e il catalogo preventivi si
+era riempito di 189 macchine del parco installato (Faema, Cimbali, impianti
+alla spina, addolcitori) mai state a listino — 66 delle quali già presenti in
+Materiali con lo stesso codice. Oggi:
+
+- l'import **non crea più prodotti**: `resolveExistingProduct()` cerca soltanto
+  a catalogo (utile per le macchine che vendiamo davvero), mentre l'articolo
+  passa da `resolveOrCreateMaterial()` come i ricambi del `dettaglio[]`;
+- il rapportino referenzia l'articolo in `service_reports.machine_material_id`
+  (`machine_product_id` resta per i rapportini agganciati a una macchina a
+  listino); chi legge l'articolo usa `ServiceReport::gestionaleArticle()`, mai
+  un campo da solo;
+- il macchinario referenzia l'articolo in `machine_units.material_id`, valorizzato
+  dall'import quando Eureka passa matricola e articolo insieme;
+- `eureka:migrate-machine-articles` (idempotente, con `--dry-run`) fa la
+  migrazione dei dati storici: sposta i prodotti-articolo in Materiali,
+  riaggancia i rapportini, collega i macchinari e cancella i doppioni.
+
+Per `toGestionalePayload()` non cambia nulla: `sl_articolo.id_eureka` e
+`dettaglio[].id_articolo` sono sempre stati lo stesso identificatore, ora
+vengono solo letti dalla stessa tabella.

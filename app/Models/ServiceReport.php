@@ -88,6 +88,7 @@ class ServiceReport extends Model
         'machine_unit_id',
         'quote_id',
         'machine_product_id',
+        'machine_material_id',
         'machine_serial_number',
         'technician_id',
         'intervention_type',
@@ -411,6 +412,44 @@ class ServiceReport extends Model
         return $this->belongsTo(Product::class, 'machine_product_id');
     }
 
+    /**
+     * L'articolo Eureka (sl_articolo) del bene su cui si e' intervenuto, ora
+     * tracciato in Materiali insieme ai ricambi invece che duplicato nel
+     * catalogo preventivi — vedi la migrazione
+     * add_machine_material_id_to_service_reports_table. I rapportini storici
+     * hanno ancora solo machine_product_id: leggerli passa sempre da
+     * gestionaleArticle()/machine_model_name, mai da uno dei due campi da solo.
+     */
+    public function machineMaterial(): BelongsTo
+    {
+        return $this->belongsTo(Material::class, 'machine_material_id');
+    }
+
+    /**
+     * Il bene su cui si e' intervenuto, qualunque tabella lo ospiti: Product
+     * (rapportini storici e macchine a listino), Material (articolo Eureka,
+     * dai nuovi import) o il modello della matricola. L'ordine ricalca quello
+     * che c'era prima, con il materiale inserito in mezzo: un rapportino gia'
+     * agganciato a un Product continua a comportarsi esattamente come prima.
+     */
+    public function gestionaleArticle(): Product|Material|null
+    {
+        return $this->machineProduct ?? $this->machineMaterial ?? $this->machineUnit?->product;
+    }
+
+    /**
+     * Nome leggibile del bene, per infolist/PDF/tabelle. Material non ha un
+     * campo nome libero (nato per i raccordi): per gli articoli Eureka la
+     * descrizione sta in `type` e display_label la ricompone.
+     */
+    public function getMachineModelNameAttribute(): ?string
+    {
+        return $this->machineProduct?->name
+            ?? $this->machineMaterial?->display_label
+            ?? $this->machineUnit?->product?->name
+            ?? $this->machineUnit?->model_name;
+    }
+
     public function technician(): BelongsTo
     {
         return $this->belongsTo(User::class, 'technician_id');
@@ -503,8 +542,7 @@ class ServiceReport extends Model
             $errors[] = "Il cliente \"{$this->customer->full_name}\" non ha un codice gestionale (Eureka).";
         }
 
-        $articleProduct = $this->machineProduct ?? $this->machineUnit?->product;
-        if (blank($articleProduct?->gestionale_code)) {
+        if (blank($this->gestionaleArticle()?->gestionale_code)) {
             $errors[] = 'Il prodotto macchina di questo intervento non ha un codice Eureka collegato.';
         }
 
@@ -522,20 +560,22 @@ class ServiceReport extends Model
 
     /**
      * Body per POST /schedelavoro/ di Eureka. Richiede customer, machineProduct,
-     * machineUnit.product, machineUnit.billingCustomer, customer.billingCustomer,
-     * materialsUsed.material gia' caricati. Chiamare gestionaleValidationErrors()
-     * prima: qui non si ripetono quei controlli.
+     * machineMaterial, machineUnit.product, machineUnit.billingCustomer,
+     * customer.billingCustomer, materialsUsed.material gia' caricati. Chiamare
+     * gestionaleValidationErrors() prima: qui non si ripetono quei controlli.
      *
      * @return array<string, mixed>
      */
     public function toGestionalePayload(): array
     {
-        $articleProduct = $this->machineProduct ?? $this->machineUnit?->product;
         $recipient = $this->invoiceRecipient();
 
         $payload = [
             'intestatario' => ['id_eureka' => $this->customer->gestionale_code],
-            'sl_articolo' => ['id_eureka' => $articleProduct?->gestionale_code],
+            // Stesso identificatore del dettaglio ricambi qui sotto (l'id
+            // articolo di Eureka): che il bene arrivi da Prodotti o da
+            // Materiali, per loro e' la stessa anagrafica.
+            'sl_articolo' => ['id_eureka' => $this->gestionaleArticle()?->gestionale_code],
             // Da doc fornitore: usare sempre id=2 ("FISSA"). In produzione l'id 2
             // e' pero' "MAN"/MANODOPERA STD (nessuna tariffa "FISSA" esiste
             // davvero) — confermato dal fornitore (2026-08-06) che e' solo una

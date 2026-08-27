@@ -139,7 +139,7 @@ class ServiceReportResource extends Resource
             InfolistSection::make('Macchina')
                 ->columns(3)
                 ->schema([
-                    TextEntry::make('machineProduct.name')->label('Modello macchina')->placeholder('—'),
+                    TextEntry::make('machine_model_name')->label('Modello macchina')->placeholder('—'),
                     TextEntry::make('machine_serial_number')->label('Matricola')->placeholder('—'),
                     TextEntry::make('machine_unit_display_name')->label('Macchina (matricola tracciata)')->placeholder('—'),
                     TextEntry::make('invoice_recipient')
@@ -450,6 +450,10 @@ class ServiceReportResource extends Resource
 
                             $machineUnit = MachineUnit::find($state);
                             $set('machine_product_id', $machineUnit?->product_id);
+                            // L'articolo di gestionale della matricola: e' quello
+                            // che finisce in sl_articolo all'invio a Eureka
+                            // quando la macchina non e' a listino.
+                            $set('machine_material_id', $machineUnit?->material_id);
                             $set('machine_serial_number', $machineUnit?->serial_number);
 
                             if ($machineUnit?->current_customer_id) {
@@ -473,9 +477,15 @@ class ServiceReportResource extends Resource
                                 ->relationship('product', 'name', modifyQueryUsing: fn ($query) => $query->where('type', Product::TYPE_MACHINE))
                                 ->searchable()
                                 ->preload(),
+                            Forms\Components\Select::make('material_id')
+                                ->label('Articolo gestionale (Eureka)')
+                                ->relationship('material', 'code')
+                                ->getOptionLabelFromRecordUsing(fn (Material $record) => $record->display_label.' — '.$record->code)
+                                ->searchable(['code', 'type', 'variant'])
+                                ->helperText('Per le macchine non a listino: e\' il codice con cui Eureka la conosce.'),
                             Forms\Components\TextInput::make('model_name')
                                 ->label('Modello (testo libero)')
-                                ->helperText('Solo se non e\' a catalogo (es. macchina non a listino Alex).')
+                                ->helperText('Solo se non e\' a catalogo ne\' a gestionale.')
                                 ->maxLength(255),
                         ])
                         ->createOptionUsing(function (array $data, Forms\Get $get) {
@@ -483,6 +493,7 @@ class ServiceReportResource extends Resource
                                 'source' => MachineUnit::SOURCE_MANUALE,
                                 'serial_number' => self::resolveUniqueMachineSerialNumber($data['serial_number'] ?? null),
                                 'product_id' => $data['product_id'] ?? null,
+                                'material_id' => $data['material_id'] ?? null,
                                 'model_name' => $data['model_name'] ?? null,
                             ]);
 
@@ -600,13 +611,19 @@ class ServiceReportResource extends Resource
                             }
 
                             // Rapportino senza matricola tracciata collegata (es.
-                            // dato storico pre-esistente): mostra comunque quanto
-                            // gia' salvato, invece di sparire.
-                            return $get('machine_product_id')
-                                ? (Product::find($get('machine_product_id'))?->name ?? '—')
-                                : '— (seleziona la macchina/matricola)';
+                            // dato storico pre-esistente, o importato da Eureka
+                            // con il solo articolo): mostra comunque quanto gia'
+                            // salvato, invece di sparire.
+                            $article = $get('machine_product_id')
+                                ? Product::find($get('machine_product_id'))?->name
+                                : ($get('machine_material_id')
+                                    ? Material::find($get('machine_material_id'))?->display_label
+                                    : null);
+
+                            return $article ?: '— (seleziona la macchina/matricola)';
                         }),
                     Forms\Components\Hidden::make('machine_product_id'),
+                    Forms\Components\Hidden::make('machine_material_id'),
                     // Stesso motivo del modello sopra: la matricola si ricava
                     // dalla macchina tracciata, non si digita piu' a mano.
                     Forms\Components\Placeholder::make('machine_serial_display')
@@ -1227,7 +1244,7 @@ class ServiceReportResource extends Resource
                         ->icon('heroicon-o-paper-airplane')
                         ->form(fn (ServiceReport $record) => static::sendEmailFormSchema($record))
                         ->action(function (array $data, ServiceReport $record) {
-                            $record->load(['customer', 'technician', 'machineProduct', 'machineUnit.product', 'machineUnit.billingCustomer', 'partsUsed.product', 'materialsUsed.material', 'tenant']);
+                            $record->load(['customer', 'technician', 'machineProduct', 'machineMaterial', 'machineUnit.product', 'machineUnit.billingCustomer', 'partsUsed.product', 'materialsUsed.material', 'tenant']);
 
                             // Vedi App\Support\OutsideLivewireRender: senza,
                             // il PDF e la parte testo dell'email mostrano
@@ -1277,7 +1294,7 @@ class ServiceReportResource extends Resource
                         ->requiresConfirmation()
                         ->modalDescription('Invia questo rapportino a Eureka come scheda lavoro. Non è possibile cancellare un documento una volta creato, nemmeno in ambiente di test.')
                         ->action(function (ServiceReport $record) {
-                            $record->load(['customer.billingCustomer', 'machineProduct', 'machineUnit.product', 'machineUnit.billingCustomer', 'materialsUsed.material', 'tenant']);
+                            $record->load(['customer.billingCustomer', 'machineProduct', 'machineMaterial', 'machineUnit.product', 'machineUnit.billingCustomer', 'materialsUsed.material', 'tenant']);
 
                             // Validato subito per un errore istantaneo (dati
                             // mancanti non richiedono di aspettare la coda);

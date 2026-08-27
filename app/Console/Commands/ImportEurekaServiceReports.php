@@ -22,7 +22,10 @@ use Illuminate\Support\Facades\DB;
  * Comportamento:
  * - Scarica la lista di rapportini per periodo con una sola chiamata HTTP.
  * - Usa eureka_service_report_id come chiave di idempotenza.
- * - Crea automaticamente clienti e prodotti mancanti quando Eureka li fornisce.
+ * - Crea automaticamente clienti e articoli mancanti quando Eureka li fornisce.
+ *   Gli articoli (sia il bene di sl_articolo sia i ricambi del dettaglio)
+ *   finiscono in Materiali: su Eureka sono un'anagrafica sola, e il catalogo
+ *   Prodotti resta quello commerciale a listino, usato per i preventivi.
  * - Prefers il tecnico Alessandro Signorato come fallback se non viene passato
  *   un tecnico esplicito.
  * - Con --with-detail fa anche GET /schedelavoro/(id) per ogni record, per
@@ -171,7 +174,7 @@ class ImportEurekaServiceReports extends Command
         }
 
         // Cache in memoria per prodotti/materiali risolti in questo ciclo:
-        // resolveOrCreateProduct/resolveOrCreateMaterial altrimenti ri-
+        // resolveExistingProduct/resolveOrCreateMaterial altrimenti ri-
         // interrogano il DB per ogni riga anche quando la chiave e' identica
         // a una gia' vista poco prima (es. stessa macchina su piu' rapportini).
         $productCache = [];
@@ -203,14 +206,25 @@ class ImportEurekaServiceReports extends Command
                 continue;
             }
 
-            // Risolve prodotto macchina: prima dal detail (ha 'sl_articolo'), poi dal summary
+            // Risolve l'articolo del bene: prima dal detail (ha 'sl_articolo'), poi dal summary.
+            //
+            // Il bene di sl_articolo e' un articolo Eureka come i ricambi del
+            // dettaglio, quindi la sua casa e' Materiali: creare qui un Product
+            // per ogni macchina incontrata riempiva il catalogo preventivi di
+            // apparecchi del parco installato che a listino non esistono (e che
+            // eureka:sweep-materials-catalog aveva spesso gia' importato in
+            // Materiali, con lo stesso codice). Un Product gia' a catalogo lo
+            // riusiamo comunque, se il codice combacia: e' il caso delle
+            // macchine che vendiamo davvero (Franke, Dalla Corte, Bianchi).
             $articleId = (int) (($detail['sl_articolo']['id_eureka'] ?? null) ?: ($summary['id_articolo_m10'] ?? 0));
-            $machineProduct = $this->resolveOrCreateProduct($tenant, [
+            $articleData = [
                 'id_eureka' => $articleId,
                 'codice' => (($detail['sl_articolo']['codice'] ?? null) ?: ($summary['codice_articolo'] ?? null)),
                 'descr1' => (($detail['sl_articolo']['descr1'] ?? null) ?: ($summary['descr_articolo_1'] ?? null)),
                 'descrizione' => (($detail['sl_articolo']['descr1'] ?? null) ?: ($summary['descr_articolo_1'] ?? null)),
-            ], $productCache, $dryRun);
+            ];
+            $machineProduct = $this->resolveExistingProduct($tenant, $articleData, $productCache, $dryRun);
+            $machineMaterial = $this->resolveOrCreateMaterial($tenant, $articleData, $materialCache, $dryRun);
 
             $machineSerial = $this->normalizeText(
                 ($detail ? ($detail['sl_matricola'] ?? null) : null)
@@ -222,6 +236,15 @@ class ImportEurekaServiceReports extends Command
                     ->whereRaw('LOWER(serial_number) = LOWER(?)', [$machineSerial])
                     ->first()
                 : null;
+
+            // La matricola nasce da un articolo: questo e' l'unico punto in cui
+            // Eureka ci passa i due dati insieme (sl_matricola + sl_articolo),
+            // quindi e' qui che si aggancia il macchinario al suo articolo. Solo
+            // se manca: un collegamento gia' messo (a mano o da un import
+            // precedente) non va sovrascritto.
+            if ($machineUnit && $machineMaterial && blank($machineUnit->material_id) && ! $dryRun) {
+                $machineUnit->update(['material_id' => $machineMaterial->id]);
+            }
 
             // Eureka distingue "data" (data del documento, spesso quando la
             // scheda e' stata archiviata in ufficio) da
@@ -272,6 +295,7 @@ class ImportEurekaServiceReports extends Command
                     : null,
                 'customer_id' => $localCustomerId,
                 'machine_product_id' => $machineProduct?->id,
+                'machine_material_id' => $machineMaterial?->id,
                 'machine_unit_id' => $machineUnit?->id,
                 'machine_serial_number' => $machineSerial,
                 'technician_id' => $technician?->id,
@@ -537,12 +561,20 @@ class ImportEurekaServiceReports extends Command
         ];
     }
 
-    private function resolveOrCreateProduct(Tenant $tenant, array $data, array &$productCache, bool $dryRun = false): ?Product
+    /**
+     * Cerca a catalogo il Product che corrisponde a sl_articolo, senza mai
+     * crearlo: le macchine sconosciute nascono in Materiali
+     * (resolveOrCreateMaterial), non nel catalogo preventivi — vedi il doc
+     * comment della classe. Il match resta utile per le macchine che vendiamo
+     * davvero (Franke, Dalla Corte, Bianchi): quelle sono a listino, e un
+     * rapportino su una di esse deve agganciarsi a quel Product invece di
+     * ignorarlo.
+     *
+     * @param  array<string, mixed>  $data
+     * @param  array<string, Product|null>  $productCache
+     */
+    private function resolveExistingProduct(Tenant $tenant, array $data, array &$productCache, bool $dryRun = false): ?Product
     {
-        if (! is_array($data)) {
-            return null;
-        }
-
         $articleId = (int) ($data['id_eureka'] ?? 0);
         $code = $this->normalizeText($data['codice'] ?? null);
         $name = $this->normalizeText($data['descr1'] ?? $data['descrizione'] ?? null) ?: 'Prodotto Eureka';
@@ -554,14 +586,19 @@ class ImportEurekaServiceReports extends Command
 
         // Stessa macchina spesso vista su piu' rapportini nello stesso
         // import: senza cache, ogni riga ri-interroga il DB per un prodotto
-        // gia' risolto poco prima nello stesso ciclo.
+        // gia' risolto poco prima nello stesso ciclo. array_key_exists e non
+        // isset: ora la maggior parte degli articoli NON e' a catalogo, e un
+        // null va ricordato come una qualsiasi altra risposta.
         $cacheKey = $articleId.'|'.($code ?? '');
-        if (isset($productCache[$cacheKey])) {
+        if (array_key_exists($cacheKey, $productCache)) {
             return $productCache[$cacheKey];
         }
 
+        // Il catalogo commerciale e' quasi tutto condiviso (tenant_id NULL,
+        // vedi SharedAcrossTenants): filtrare sul solo tenant non avrebbe mai
+        // trovato una macchina a listino.
         $existing = Product::query()
-            ->where('tenant_id', $tenant->id)
+            ->where(fn ($q) => $q->where('tenant_id', $tenant->id)->orWhereNull('tenant_id'))
             ->when($articleId > 0, fn ($q) => $q->where('eureka_article_id', $articleId))
             ->when($code !== null, fn ($q) => $q->where('sku', $code))
             ->first();
@@ -570,28 +607,15 @@ class ImportEurekaServiceReports extends Command
             return $productCache[$cacheKey] = $this->backfillProductEurekaCode($existing, $articleId, $name, $description, $dryRun);
         }
 
-        $sku = $code ?: 'eureka-'.$articleId;
-        $existingBySku = Product::query()->where('sku', $sku)->first();
+        $existingBySku = $code
+            ? Product::query()->where('sku', $code)->first()
+            : null;
+
         if ($existingBySku) {
             return $productCache[$cacheKey] = $this->backfillProductEurekaCode($existingBySku, $articleId, $name, $description, $dryRun);
         }
 
-        if ($dryRun) {
-            $this->line("  <comment>[DRY RUN] Prodotto macchina NON creato: {$name} (sku {$sku})</comment>");
-
-            return null;
-        }
-
-        return $productCache[$cacheKey] = Product::create([
-            'tenant_id' => $tenant->id,
-            'sku' => $sku,
-            'type' => 'service',
-            'name' => $name,
-            'description' => $description,
-            'eureka_article_id' => $articleId > 0 ? $articleId : null,
-            'gestionale_code' => $articleId > 0 ? $articleId : null,
-            'source' => 'terzo',
-        ]);
+        return $productCache[$cacheKey] = null;
     }
 
     /**
@@ -808,16 +832,16 @@ class ImportEurekaServiceReports extends Command
     }
 
     /**
-     * Come resolveOrCreateProduct() ma su Materiali: i ricambi/articoli usati
-     * in una scheda lavoro (dettaglio[]) non vanno nel catalogo preventivi
-     * (Product) — finirebbero anche li' nel selettore, mescolati al listino
-     * ufficiale. sl_articolo (bene/macchina principale) resta invece su
-     * Product tramite resolveOrCreateProduct(), non lo tocca questo metodo.
+     * L'anagrafica articoli di Eureka: sia i ricambi del dettaglio[] sia il
+     * bene principale di sl_articolo passano di qui. Nessuno dei due va nel
+     * catalogo preventivi (Product), dove finirebbe nel selettore mescolato
+     * al listino ufficiale — vedi resolveExistingProduct(), che a catalogo
+     * cerca soltanto.
      *
      * @param  array<string, mixed>  $data
      * @param  array<string, Material>  $materialCache
      */
-    private function resolveOrCreateMaterial(Tenant $tenant, array $data, array &$materialCache): ?Material
+    private function resolveOrCreateMaterial(Tenant $tenant, array $data, array &$materialCache, bool $dryRun = false): ?Material
     {
         $articleId = (int) ($data['id_eureka'] ?? 0);
         $code = $this->normalizeText($data['codice'] ?? null);
@@ -828,16 +852,20 @@ class ImportEurekaServiceReports extends Command
         }
 
         // Stesso ricambio spesso ripetuto su piu' rapportini/righe nello
-        // stesso import: vedi la stessa cache su resolveOrCreateProduct().
+        // stesso import: vedi la stessa cache su resolveExistingProduct().
         $cacheKey = $articleId.'|'.($code ?? '');
         if (isset($materialCache[$cacheKey])) {
             return $materialCache[$cacheKey];
         }
 
+        // L'or va raggruppato: senza le parentesi la condizione diventava
+        // "(tenant AND gestionale_code) OR code", cioe' un codice uguale
+        // faceva match anche su un materiale di un altro tenant.
         $existing = Material::query()
             ->where('tenant_id', $tenant->id)
-            ->when($articleId > 0, fn ($q) => $q->where('gestionale_code', $articleId))
-            ->when($code !== null, fn ($q) => $q->orWhere('code', $code))
+            ->where(fn ($q) => $q
+                ->when($articleId > 0, fn ($q) => $q->where('gestionale_code', $articleId))
+                ->when($code !== null, fn ($q) => $q->orWhere('code', $code)))
             ->first();
 
         if ($existing) {
@@ -848,6 +876,12 @@ class ImportEurekaServiceReports extends Command
         $existingByCode = Material::query()->where('code', $materialCode)->first();
         if ($existingByCode) {
             return $materialCache[$cacheKey] = $existingByCode;
+        }
+
+        if ($dryRun) {
+            $this->line("  <comment>[DRY RUN] Materiale NON creato: {$type} (codice {$materialCode})</comment>");
+
+            return null;
         }
 
         return $materialCache[$cacheKey] = Material::create([

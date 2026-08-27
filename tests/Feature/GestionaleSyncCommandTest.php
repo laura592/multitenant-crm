@@ -221,11 +221,15 @@ class GestionaleSyncCommandTest extends TestCase
         $unique = Product::create(['sku' => 'UNIQUEMODEL', 'type' => Product::TYPE_MACHINE, 'name' => 'UniqueModelXYZ']);
         $ambiguous = Product::create(['sku' => 'XTCLASSIC-2G', 'type' => Product::TYPE_MACHINE, 'name' => 'XTClassic Due Gruppi']);
 
+        // La ricerca articoli parte dallo SKU, non dal nome (vedi
+        // GestionaleSyncRunner::proposeProductLinks(): nomi diversi possono
+        // condividere la prima parola, i codici no) — le fake vanno quindi
+        // agganciate al codice.
         Http::fake([
-            '*articoli/lista/UniqueModelXYZ*' => Http::response([[
+            '*articoli/lista/UNIQUEMODEL*' => Http::response([[
                 'id_eureka' => 555, 'codice' => 'UNIQUEMODEL', 'descr1' => 'MACCHINA UNICA',
             ]], 200),
-            '*articoli/lista/XTClassic*' => Http::response([
+            '*articoli/lista/XTCLASSIC-2G*' => Http::response([
                 ['id_eureka' => 111, 'codice' => 'XTCLASSIC', 'descr1' => 'MACCHINA DALLA CORTE XT CLASSIC'],
                 ['id_eureka' => 222, 'codice' => 'XTCLASSIC2', 'descr1' => 'ALTRA VARIANTE XT CLASSIC'],
             ], 200),

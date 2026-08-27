@@ -65,6 +65,9 @@ class CustomerLavaggiRelationManagerTest extends TestCase
             'pageClass' => ViewCustomer::class,
         ])
             ->assertSee('5 Vie + Apertura')
-            ->assertSee('Pagante SRL');
+            // Il nome del pagante passa da DisplayName::titleCase() nella
+            // colonna "Fatturare a" (anagrafiche storiche tutte maiuscole),
+            // quindi "Pagante SRL" arriva a video come "Pagante Srl".
+            ->assertSee('Pagante Srl');
     }
 }

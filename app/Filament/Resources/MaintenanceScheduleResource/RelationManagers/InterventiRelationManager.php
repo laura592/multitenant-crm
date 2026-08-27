@@ -96,7 +96,7 @@ class InterventiRelationManager extends RelationManager
                                         // senza, e' facile ripetere lo stesso errore trovato
                                         // sui Lavaggio storici (collegamento scelto alla cieca
                                         // su un cliente con piu' impianti).
-                                        $currentMachine = $report->machineUnit?->display_name ?? ($report->machine_product_id ? $report->machineProduct?->name : null);
+                                        $currentMachine = $report->machineUnit?->display_name ?? $report->machine_model_name;
 
                                         return [
                                             $report->id => $report->number.' — '.$report->intervention_date?->format('d/m/Y')
