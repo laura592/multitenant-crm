@@ -16,9 +16,24 @@ use Filament\Support\RawJs;
  */
 class MoneyInput
 {
+    /**
+     * Da valore di database (300.00, con il punto decimale) a formato
+     * italiano (300,00). Senza questo passaggio la maschera $money legge
+     * il punto come separatore delle migliaia e 300.00 diventa 30.000.
+     */
+    public static function format(mixed $value): mixed
+    {
+        if ($value === null || $value === '') {
+            return $value;
+        }
+
+        return number_format((float) $value, 2, ',', '.');
+    }
+
     public static function make(string $name): TextInput
     {
         return TextInput::make($name)
+            ->formatStateUsing(fn (mixed $state) => self::format($state))
             ->numeric()
             ->type('text')
             ->mask(RawJs::make(<<<'JS'

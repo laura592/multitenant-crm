@@ -79,7 +79,9 @@ class QuoteProductsRelationManager extends RelationManager
                 // modificabile dopo la precompilazione.
                 ->afterStateUpdated(function (?string $state, Forms\Set $set) {
                     if ($state) {
-                        $set('price', Product::find($state)?->getCurrentPrice()?->price);
+                        // formattato all'italiana: il valore grezzo del database
+                        // (300.00) verrebbe letto dalla maschera come 30.000
+                        $set('price', MoneyInput::format(Product::find($state)?->getCurrentPrice()?->price));
                     }
                 })
                 ->required(),
