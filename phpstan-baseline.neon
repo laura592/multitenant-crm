@@ -595,28 +595,10 @@ parameters:
 			path: app/Models/Product.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\ProductCompatibility\:\:\$constraint_type\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Models/ProductCompatibility.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 2
 			path: app/Models/ProductFamily.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\ProductOptionGroup\:\:\$selection_type\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Models/ProductOptionGroup.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Models/ProductOptionGroup.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
