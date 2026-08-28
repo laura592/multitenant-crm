@@ -107,6 +107,35 @@ class ConfiguraConteggioTest extends TestCase
         $this->assertSame(['560.0597.990'], $suAC125, 'Il foro e\' sagomato sull\'alloggiamento, non solo sul lettore.');
     }
 
+    public function test_the_su03_accounting_brings_its_cooling_unit_along(): void
+    {
+        $su03ec = $this->prodotto('SU03-EC', 'SU03 EC - Unità di raffreddamento 3l (a sinistra)', 1170);
+        $conteggio = Product::query()->where('sku', '560.0678.327')->firstOrFail();
+
+        Livewire::test(EditQuote::class, ['record' => $this->quote->getRouteKey()])
+            ->callAction('configuraConteggio', data: [
+                'alloggiamento' => 'SU03 CL',
+                'con_lettore' => 'no',
+                'conteggio_product_id' => $conteggio->id,
+                'aggiungi_su03' => true,
+            ])
+            ->assertHasNoActionErrors();
+
+        $righe = $this->quote->fresh()->quoteProducts;
+
+        // 680 e' un supplemento, non il prezzo del sistema: da solo in
+        // preventivo mancherebbero i 1.170 della SU03 EC.
+        $this->assertCount(2, $righe);
+        $this->assertTrue($righe->contains('product_id', $su03ec->id));
+        $this->assertSame('2257.00', $this->quote->fresh()->total, '(680 + 1170) + 22%');
+
+        $this->assertStringContainsString(
+            'Supplemento sull\'unita\' di raffreddamento SU03 EC',
+            $conteggio->fresh()->description,
+            'La nota del listino va anche sul prodotto, non solo nel wizard.',
+        );
+    }
+
     public function test_it_adds_one_real_listino_line_plus_the_options(): void
     {
         $sistema = Product::query()->where('sku', '560.0543.637')->firstOrFail();

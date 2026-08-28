@@ -72,6 +72,23 @@ class FrankeAccountingHousingsSeeder extends Seeder
         'AC125-VIP1' => 'Alloggiamento conteggio AC125 (VIP-1)',
     ];
 
+    /**
+     * Il conteggio "SU03 CL" non e' un alloggiamento a se': sta DENTRO
+     * l'unita' di raffreddamento SU03 EC, e il listino lo dice in nota —
+     * "Prezzo in aggiunta al prezzo dell'unita' di raffreddamento SU03 EC,
+     * il sistema di conteggio e' parte dell'unita' di raffreddamento".
+     * Quei 325/680/818 sono quindi supplementi sui 1.170 della SU03 EC: a
+     * catalogo non lo diceva niente, e un preventivo con la sola riga di
+     * conteggio sarebbe sbagliato di 1.170 euro.
+     */
+    private const NOTA_SU03 = 'Supplemento sull\'unita\' di raffreddamento SU03 EC (1.170 €): il sistema di conteggio e\' integrato nella SU03 EC, non e\' un alloggiamento separato.';
+
+    /** @var array<int, string> */
+    private const SKU_SU03 = [
+        '560.0678.355', '560.0678.327', '560.0678.325', '560.0685.324',
+        '560.0678.943', '560.0678.326', '560.0678.331', '560.0677.883',
+    ];
+
     public function run(): void
     {
         $category = Category::query()->where('name', 'Accessori Franke')->first();
@@ -107,5 +124,10 @@ class FrankeAccountingHousingsSeeder extends Seeder
         foreach (self::RINOMINE as $sku => $name) {
             Product::withoutGlobalScopes()->where('sku', $sku)->update(['name' => $name]);
         }
+
+        Product::withoutGlobalScopes()
+            ->whereIn('sku', self::SKU_SU03)
+            ->whereNull('description')
+            ->update(['description' => self::NOTA_SU03]);
     }
 }

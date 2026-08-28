@@ -41,6 +41,8 @@ class ConfiguraConteggioAction
 
     protected const SKU_GETTONI = 'OPT-GETTONI-100';
 
+    protected const SKU_SU03_EC = 'SU03-EC';
+
     public static function make(): Action
     {
         return Action::make('configuraConteggio')
@@ -68,6 +70,13 @@ class ConfiguraConteggioAction
                     Forms\Components\Radio::make('alloggiamento')
                         ->label('Alloggiamento')
                         ->options(self::ALLOGGIAMENTI)
+                        // "Non possibile per A300" e' una nota del listino, non
+                        // un consiglio: se il preventivo contiene gia' una A300
+                        // l'AC200 non si puo' proprio scegliere.
+                        ->disableOptionWhen(fn (string $value, ?Quote $record) => $value === 'AC200' && static::haUnaA300($record))
+                        ->helperText(fn (?Quote $record) => static::haUnaA300($record)
+                            ? 'Questo preventivo contiene una A300: il listino esclude l\'alloggiamento AC200 su quel modello, restano AC125 e SU03 CL.'
+                            : null)
                         ->required()
                         ->live()
                         ->afterStateUpdated(fn (Forms\Set $set) => $set('conteggio_product_id', null)),
@@ -105,6 +114,15 @@ class ConfiguraConteggioAction
             Step::make('Opzioni')
                 ->description('Voci a parte nel listino')
                 ->schema([
+                    // Il conteggio SU03 CL e' integrato nell'unita' di
+                    // raffreddamento e il suo prezzo e' un supplemento: senza
+                    // la SU03 EC in preventivo mancano 1.170 euro.
+                    Forms\Components\Toggle::make('aggiungi_su03')
+                        ->label('Aggiungi anche l\'unità di raffreddamento SU03 EC')
+                        ->default(true)
+                        ->visible(fn (Forms\Get $get) => static::eIntegratoNellaSu03($get('conteggio_product_id')))
+                        ->helperText(fn () => 'Il conteggio SU03 CL vive dentro la SU03 EC e il suo prezzo e\' un supplemento. '
+                            .(static::prezzoDi(self::SKU_SU03_EC) ?? '')),
                     Forms\Components\Toggle::make('interruttore_chiave')
                         ->label('Interruttore a chiave (vendita libera e di prova)')
                         ->helperText(fn () => static::prezzoDi(self::SKU_INTERRUTTORE)),
@@ -166,6 +184,19 @@ class ConfiguraConteggioAction
             .' ('.$product->sku.')';
     }
 
+    /** Il preventivo contiene gia' una macchina della famiglia A300? */
+    protected static function haUnaA300(?Quote $quote): bool
+    {
+        return (bool) $quote?->quoteProducts()
+            ->whereHas('product.family', fn (Builder $q) => $q->where('name', 'A300'))
+            ->exists();
+    }
+
+    protected static function eIntegratoNellaSu03(?string $productId): bool
+    {
+        return str_contains(Product::find($productId)?->name ?? '', 'SU03 CL');
+    }
+
     protected static function prezzoDi(string $sku): ?string
     {
         $prezzo = Product::query()->where('sku', $sku)->first()?->getCurrentPrice()?->price;
@@ -194,6 +225,12 @@ class ConfiguraConteggioAction
         // Le opzioni restano appese alla riga del sistema (come le opzioni
         // macchina al loro apparecchio base): spostare o cancellare il
         // sistema si porta dietro anche loro.
+        // La SU03 EC come riga a se': non e' un'opzione del conteggio, e' il
+        // contrario — e' il conteggio a stare dentro di lei.
+        if (($data['aggiungi_su03'] ?? false) && static::eIntegratoNellaSu03($sistema->id)) {
+            static::aggiungiOpzione($quote, null, self::SKU_SU03_EC, 1);
+        }
+
         if ($data['interruttore_chiave'] ?? false) {
             static::aggiungiOpzione($quote, $riga->id, self::SKU_INTERRUTTORE, 1);
         }
@@ -208,7 +245,7 @@ class ConfiguraConteggioAction
         Notification::make()->title('Sistema di conteggio aggiunto al preventivo')->success()->send();
     }
 
-    protected static function aggiungiOpzione(Quote $quote, string $parentId, string $sku, int $quantity): void
+    protected static function aggiungiOpzione(Quote $quote, ?string $parentId, string $sku, int $quantity): void
     {
         $product = Product::query()->where('sku', $sku)->first();
 
