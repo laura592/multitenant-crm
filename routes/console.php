@@ -33,10 +33,19 @@ Schedule::command('eureka:apply-machine-billing-payer', ['--tenant' => 'alex'])-
 // stessa finestra. --with-detail e' necessario: senza, i ricambi
 // (dettaglio[]) non vengono nemmeno letti, quindi i materiali mancanti
 // come NR621216 non si creerebbero da soli (vedi thread 2026-08-20).
+//
+// --with-detail e' un flag booleano e va passato come VALORE dell'array, non
+// come "'--with-detail' => true": con la chiave Laravel costruisce
+// "--with-detail='1'" e Symfony rifiuta l'intera invocazione ("The
+// \"--with-detail\" option does not accept a value"). L'import notturno e'
+// morto cosi' ogni notte dal 2026-08-21 al 2026-08-28, senza che nessuno se
+// ne accorgesse: fallisce prima ancora di partire, quindi non lascia
+// nemmeno un import parziale. Vedi il test ScheduledCommandsTest, che
+// ribinda ogni comando schedulato alla sua definizione.
 Schedule::command('eureka:import-service-reports', [
     '--tenant' => 'alex',
     '--from' => now()->subDays(7)->toDateString(),
-    '--with-detail' => true,
+    '--with-detail',
 ])->dailyAt('04:00');
 
 // 877 chiamate (una per materiale gia' a catalogo, pooled a concorrenza 15)

@@ -72,7 +72,12 @@ class InformationRequest extends Model
 
     public function products(): BelongsToMany
     {
-        return $this->belongsToMany(Product::class, 'information_request_product');
+        // ->using() non e' cosmetico: senza, sync()/attach() inseriscono con
+        // il query builder e la chiave `id` della pivot resta vuota (vedi
+        // InformationRequestProduct).
+        return $this->belongsToMany(Product::class, 'information_request_product')
+            ->using(InformationRequestProduct::class)
+            ->withTimestamps();
     }
 
     public function handledByUser(): BelongsTo

@@ -5,10 +5,12 @@ namespace Tests\Feature;
 use App\Filament\Resources\InformationRequestResource\Pages\EditInformationRequest;
 use App\Models\Customer;
 use App\Models\InformationRequest;
+use App\Models\Product;
 use App\Models\Tenant;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -58,6 +60,49 @@ class InformationRequestResourceTest extends TestCase
 
         $this->assertSame('Portare listino', $request->fresh()->appointment_notes);
         $this->assertNotNull($request->fresh()->appointment_at);
+    }
+
+    /**
+     * In produzione salvare una richiesta con dei prodotti moriva con
+     * "Field 'id' doesn't have a default value" (log del 2026-08-28): la pivot
+     * ha una chiave uuid che sync() non valorizzava, mancando ->using().
+     */
+    public function test_products_of_interest_can_be_saved(): void
+    {
+        $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);
+        $user = User::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Test Admin',
+            'email' => 'admin-prodotti@gifar.it',
+            'password' => bcrypt('password'),
+            'is_super_admin' => true,
+        ]);
+        $customer = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Bar Centrale']);
+        $request = InformationRequest::create([
+            'tenant_id' => $tenant->id,
+            'customer_id' => $customer->id,
+            'request_details' => 'Interessati a una macchina',
+            'status' => 'nuova',
+        ]);
+        $product = Product::create([
+            'sku' => 'A600-FM',
+            'type' => Product::TYPE_MACHINE,
+            'name' => 'Franke A600 FM',
+        ]);
+
+        $this->actingAs($user);
+        Filament::setTenant($tenant);
+
+        Livewire::test(EditInformationRequest::class, ['record' => $request->id])
+            ->fillForm(['products' => [$product->id]])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertTrue($request->fresh()->products->contains($product));
+        $this->assertNotNull(
+            DB::table('information_request_product')->where('product_id', $product->id)->value('id'),
+            'La pivot deve ricevere un id uuid, non restare vuota.',
+        );
     }
 
     public function test_can_log_a_dated_note_from_the_edit_form_and_from_the_quick_table_action(): void
