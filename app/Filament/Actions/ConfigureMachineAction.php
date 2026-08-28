@@ -115,8 +115,20 @@ class ConfigureMachineAction
                             ->get()
                             ->mapWithKeys(fn (Product $p) => [$p->id => static::formatOptionLabel($p)]))
                         ->live()
-                        ->required()
+                        // Scegliendo la famiglia "Sistemi di conteggio" non
+                        // c'e' un apparecchio base da scegliere qui: la
+                        // variante si sceglie nello step dedicato, guidata.
+                        // Senza questa eccezione un sistema di conteggio da
+                        // solo (cliente che ha gia' la macchina) non era
+                        // raggiungibile: il wizard chiedeva comunque una
+                        // macchina per andare avanti.
+                        ->hidden(fn (Forms\Get $get) => ConteggioConfigurator::eLaFamigliaConteggio($get))
+                        ->required(fn (Forms\Get $get) => ! ConteggioConfigurator::eLaFamigliaConteggio($get))
                         ->disabled(fn (Forms\Get $get) => blank($get('product_family_id'))),
+                    Forms\Components\Placeholder::make('conteggio_hint')
+                        ->hiddenLabel()
+                        ->visible(fn (Forms\Get $get) => ConteggioConfigurator::eLaFamigliaConteggio($get))
+                        ->content('La variante si sceglie nel passo "Sistema di conteggio": alloggiamento, lettore e gestione contanti.'),
                 ]),
             Step::make('Incluse automaticamente')
                 ->visible(fn (Forms\Get $get) => static::autoIncludedSlots($get)->isNotEmpty())
@@ -192,7 +204,13 @@ class ConfigureMachineAction
         $machine = static::currentMachine($get);
 
         if (! $machine) {
-            return new \Illuminate\Support\HtmlString('<p class="text-sm text-gray-500">Nessuna macchina selezionata.</p>');
+            $soloConteggio = ConteggioConfigurator::righeRiepilogo($get);
+
+            if ($soloConteggio->isEmpty()) {
+                return new \Illuminate\Support\HtmlString('<p class="text-sm text-gray-500">Nessuna macchina selezionata.</p>');
+            }
+
+            return static::renderSummaryRows($soloConteggio, $get);
         }
 
         $resolved = static::resolveSelection($machine, fn (string $key) => $get($key));
@@ -211,6 +229,14 @@ class ConfigureMachineAction
 
         $rows = $rows->concat(ConteggioConfigurator::righeRiepilogo($get));
 
+        return static::renderSummaryRows($rows, $get);
+    }
+
+    /**
+     * @param  Collection<int, array{label: string, price: float}>  $rows
+     */
+    protected static function renderSummaryRows(Collection $rows, Forms\Get $get): \Illuminate\Support\HtmlString
+    {
         $subtotal = $rows->sum('price');
         $discount = min(100, max(0, (float) ($get('configuration_discount') ?? 0)));
 
@@ -418,9 +444,21 @@ class ConfigureMachineAction
     protected static function createQuoteProducts(Quote $quote, array $data): void
     {
         $machine = Product::find($data['machine_product_id'] ?? null);
+        $configurationDiscount = min(100, max(0, (float) ($data['configuration_discount'] ?? 0)));
 
+        // Solo sistema di conteggio, senza macchina: e' il caso del cliente
+        // che la macchina ce l'ha gia' e aggiunge il pagamento.
         if (! $machine) {
-            Notification::make()->title('Nessuna macchina selezionata')->danger()->send();
+            if (blank($data['conteggio_product_id'] ?? null)) {
+                Notification::make()->title('Nessuna macchina selezionata')->danger()->send();
+
+                return;
+            }
+
+            ConteggioConfigurator::creaRighe($quote, $data, $configurationDiscount);
+            $quote->updateTotal();
+
+            Notification::make()->title('Sistema di conteggio aggiunto al preventivo')->success()->send();
 
             return;
         }
@@ -430,8 +468,6 @@ class ConfigureMachineAction
         if ($selectedIds === null) {
             return;
         }
-
-        $configurationDiscount = min(100, max(0, (float) ($data['configuration_discount'] ?? 0)));
 
         $baseLine = $quote->quoteProducts()->create([
             'product_id' => $machine->id,

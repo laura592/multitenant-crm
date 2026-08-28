@@ -112,6 +112,11 @@ class ConfiguraConteggioTest extends TestCase
         $proposti = $this->candidati('AC200', conLettore: true);
 
         $this->assertSame(['560.0568.239'], $proposti);
+        $this->assertSame(
+            'Alloggiamento conteggio AC200 per lettore Coges [COGES ENGINE] (VIP-1)',
+            Product::query()->where('sku', '560.0568.239')->value('name'),
+            'Il nome deve dire che quel prodotto E\' l\'alloggiamento, non un pezzo da aggiungere a un AC200 comprato a parte.',
+        );
 
         $suAC125 = $this->candidati('AC125', conLettore: true);
         $this->assertSame(['560.0597.990'], $suAC125, 'Il foro e\' sagomato sull\'alloggiamento, non solo sul lettore.');
@@ -146,6 +151,38 @@ class ConfiguraConteggioTest extends TestCase
             'Supplemento sull\'unita\' di raffreddamento SU03 EC',
             $conteggio->fresh()->description,
             'La nota del listino va anche sul prodotto, non solo nel wizard.',
+        );
+    }
+
+    public function test_an_accounting_system_can_be_quoted_without_any_machine(): void
+    {
+        $sistema = Product::query()->where('sku', '560.0543.637')->firstOrFail();
+        $famiglia = ProductFamily::query()->where('name', 'Sistemi di conteggio')->firstOrFail();
+
+        // Il cliente la macchina ce l'ha gia': si quota il solo pagamento.
+        Livewire::test(EditQuote::class, ['record' => $this->quote->getRouteKey()])
+            ->callAction('configureMachine', data: [
+                'product_family_id' => $famiglia->id,
+                'alloggiamento' => 'AC200',
+                'con_lettore' => 'no',
+                'conteggio_product_id' => $sistema->id,
+            ])
+            ->assertHasNoActionErrors();
+
+        $righe = $this->quote->fresh()->quoteProducts;
+
+        $this->assertCount(1, $righe, 'Nessuna riga macchina: non ne e\' stata scelta una.');
+        $this->assertSame($sistema->id, $righe->first()->product_id);
+    }
+
+    public function test_the_accounting_products_are_a_family_of_their_own(): void
+    {
+        $famiglia = ProductFamily::query()->where('name', 'Sistemi di conteggio')->first();
+
+        $this->assertNotNull($famiglia, 'Senza famiglia non si raggiungono dal primo passo del wizard.');
+        $this->assertSame(
+            $famiglia->id,
+            Product::query()->where('sku', '560.0543.637')->value('product_family_id'),
         );
     }
 

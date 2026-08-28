@@ -3,7 +3,9 @@
 namespace App\Filament\Actions;
 
 use App\Models\Product;
+use App\Models\ProductFamily;
 use App\Models\Quote;
+use Database\Seeders\FrankeAccountingHousingsSeeder;
 use Filament\Forms;
 use Filament\Forms\Components\Wizard\Step;
 use Filament\Notifications\Notification;
@@ -71,9 +73,12 @@ class ConteggioConfigurator
                     // quindici le righe che li citano hanno "-" su AC125 e
                     // SU03 CL. Su A300, dove l'AC200 non e' possibile, si
                     // possono quindi fare solo le carte.
-                    ->helperText(fn (Forms\Get $get) => static::eUnaA300($get)
-                        ? 'Su A300 il listino esclude l\'AC200: restano AC125 e SU03 CL. Gettoniera e cambiamonete esistono solo su AC200, quindi qui si possono fare solo i pagamenti con carta.'
-                        : 'Lascia vuoto se questa macchina non ha un sistema di conteggio.')
+                    ->helperText(fn (Forms\Get $get) => match (true) {
+                        static::eUnaA300($get) => 'Su A300 il listino esclude l\'AC200: restano AC125 e SU03 CL. Gettoniera e cambiamonete esistono solo su AC200, quindi qui si possono fare solo i pagamenti con carta.',
+                        static::eLaFamigliaConteggio($get) => 'Stai quotando un sistema di conteggio da solo, senza macchina.',
+                        default => 'Lascia vuoto se questa macchina non ha un sistema di conteggio.',
+                    })
+                    ->required(fn (Forms\Get $get) => static::eLaFamigliaConteggio($get))
                     ->live()
                     ->afterStateUpdated(fn (Forms\Set $set) => $set('conteggio_product_id', null)),
                 Forms\Components\Radio::make('con_lettore')
@@ -140,21 +145,20 @@ class ConteggioConfigurator
                 // Con lettore: le righe per marca/modello, che il listino
                 // elenca una per ogni lettore supportato. L'alloggiamento e'
                 // in coda fra parentesi: "Nayax [Onyx] con VIP-1 (AC200)".
+                // "per lettore" e' il discriminante: sono gli stessi
+                // alloggiamenti, ma col foro frontale sagomato su un modello
+                // di lettore preciso (+138 nel listino).
                 fn (Builder $q) => $q
-                    ->where('name', 'not like', 'Alloggiamento conteggio%')
-                    ->where('name', 'like', '%('.$alloggiamento.')%')
-                    // Il codice d'ordine Franke tiene fuori tutto il resto
-                    // del catalogo; i "PM kit" lo condividono ma non sono
-                    // sistemi di conteggio.
-                    ->where('sku', 'like', '560.%')
-                    ->where('name', 'not like', 'PM kit%'),
+                    ->where('name', 'like', 'Alloggiamento conteggio '.$alloggiamento.' per lettore%'),
                 // Senza lettore: gli alloggiamenti nudi, dove la sigla viene
                 // subito dopo "Alloggiamento conteggio". Qui il filtro NON
                 // puo' essere sul codice: quattro di questi sono a catalogo
                 // da prima, con uno sku nostro (AC200-VIP1) invece del numero
                 // d'ordine Franke. FrankeAccountingHousingsSeeder uniforma i
                 // nomi proprio perche' questo filtro regga.
-                fn (Builder $q) => $q->where('name', 'like', 'Alloggiamento conteggio '.$alloggiamento.'%'),
+                fn (Builder $q) => $q
+                    ->where('name', 'like', 'Alloggiamento conteggio '.$alloggiamento.'%')
+                    ->where('name', 'not like', '%per lettore%'),
             )
             ->orderBy('name')
             ->get();
@@ -167,6 +171,19 @@ class ConteggioConfigurator
         return $product->name
             .($prezzo ? ' — '.number_format((float) $prezzo, 2, ',', '.').' €' : '')
             .' ('.$product->sku.')';
+    }
+
+    /**
+     * Nel primo passo del wizard e' stata scelta la famiglia "Sistemi di
+     * conteggio" invece di una famiglia di macchine? In quel caso non c'e'
+     * un apparecchio base da scegliere: la variante la sceglie questo step.
+     */
+    public static function eLaFamigliaConteggio(Forms\Get $get): bool
+    {
+        $famiglia = $get('product_family_id');
+
+        return filled($famiglia)
+            && ProductFamily::find($famiglia)?->name === FrankeAccountingHousingsSeeder::FAMIGLIA;
     }
 
     /** La macchina scelta nel wizard e' della famiglia A300? */

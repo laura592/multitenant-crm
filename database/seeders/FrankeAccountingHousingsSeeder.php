@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\ProductFamily;
 use App\Models\ProductPrice;
 use Illuminate\Database\Seeder;
 
@@ -81,6 +82,8 @@ class FrankeAccountingHousingsSeeder extends Seeder
      * catalogo non lo diceva niente, e un preventivo con la sola riga di
      * conteggio sarebbe sbagliato di 1.170 euro.
      */
+    public const FAMIGLIA = 'Sistemi di conteggio';
+
     private const NOTA_SU03 = 'Supplemento sull\'unita\' di raffreddamento SU03 EC (1.170 €): il sistema di conteggio e\' integrato nella SU03 EC, non e\' un alloggiamento separato.';
 
     /** @var array<int, string> */
@@ -129,5 +132,63 @@ class FrankeAccountingHousingsSeeder extends Seeder
             ->whereIn('sku', self::SKU_SU03)
             ->whereNull('description')
             ->update(['description' => self::NOTA_SU03]);
+
+        $this->rinominaPerLettore();
+        $this->raggruppaInFamiglia();
+    }
+
+    /**
+     * I sistemi di conteggio diventano una famiglia come le macchine, cosi'
+     * si raggiungono dal primo passo di "Configura macchina": senza, ci si
+     * arrivava solo configurando una macchina nuova, e un cliente che vuole
+     * aggiungere il pagamento a una macchina che ha gia' restava fuori.
+     */
+    private function raggruppaInFamiglia(): void
+    {
+        $famiglia = ProductFamily::firstOrCreate(['name' => self::FAMIGLIA]);
+
+        Product::withoutGlobalScopes()
+            ->where('name', 'like', 'Alloggiamento conteggio%')
+            ->whereNull('product_family_id')
+            ->update(['product_family_id' => $famiglia->id]);
+    }
+
+    /**
+     * "Microtronic Mifare [meiPay-MBH] con VIP-1 (AC125)" non diceva la cosa
+     * piu' importante: che quel prodotto E' l'alloggiamento AC125, non un
+     * pezzo da aggiungere a un AC125 comprato a parte. Domanda arrivata
+     * dall'utente in questa forma esatta ("+ ac125?"), e il rischio e'
+     * concreto: mettere in preventivo due volte lo stesso alloggiamento.
+     *
+     * Diventano "Alloggiamento conteggio AC125 per lettore Microtronic
+     * Mifare [meiPay-MBH] (VIP-1)", cioe' la stessa forma delle altre
+     * quattordici righe della famiglia.
+     */
+    private function rinominaPerLettore(): void
+    {
+        $contanti = ['G13' => 'con gettoniera G13', 'GRY' => 'con cambiamonete CPI Gryphon'];
+
+        Product::withoutGlobalScopes()
+            ->where('sku', 'like', '560.%')
+            // Non '%con VIP-1 (%': le righe con gettoniera o cambiamonete
+            // hanno "con VIP-1 e G13 (AC200)", e restavano fuori.
+            ->where('name', 'like', '%con VIP-1%')
+            ->get()
+            ->each(function (Product $product) use ($contanti) {
+                if (! preg_match('/^(.+) con VIP-1(?: e (G13|GRY))? \((AC200|AC125|SU03 CL)\)$/u', $product->name, $m)) {
+                    return;
+                }
+
+                [, $lettore, $contante, $alloggiamento] = $m + [3 => ''];
+
+                $product->update([
+                    'name' => trim(implode(' ', array_filter([
+                        "Alloggiamento conteggio {$alloggiamento}",
+                        "per lettore {$lettore}",
+                        $contante ? $contanti[$contante] : null,
+                        '(VIP-1)',
+                    ]))),
+                ]);
+            });
     }
 }
