@@ -61,6 +61,15 @@ class FrankeAccountingHousingsSeeder extends Seeder
     private const RINOMINE = [
         '560.0543.637' => 'Alloggiamento conteggio AC200 con gettoniera G13 (VIP-1)',
         '560.0514.908' => 'Alloggiamento conteggio AC200 con cambiamonete CPI Gryphon (VIP-1)',
+        // E i quattro alloggiamenti nudi che c'erano gia': si chiamavano
+        // "standard"/"compatto" (la parola del listino) mentre le altre dieci
+        // righe della famiglia dicono la sigla e poi l'interfaccia fra
+        // parentesi. Uniformarli non e' cosmesi: e' cosi' che
+        // ConfiguraConteggioAction riconosce la famiglia.
+        'AC200-STANDARD' => 'Alloggiamento conteggio AC200 (senza interfaccia)',
+        'AC200-VIP1' => 'Alloggiamento conteggio AC200 (VIP-1)',
+        'AC125-COMPACT' => 'Alloggiamento conteggio AC125 (senza interfaccia)',
+        'AC125-VIP1' => 'Alloggiamento conteggio AC125 (VIP-1)',
     ];
 
     public function run(): void

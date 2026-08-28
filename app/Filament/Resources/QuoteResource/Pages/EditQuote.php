@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\QuoteResource\Pages;
 
+use App\Filament\Actions\ConfiguraConteggioAction;
 use App\Filament\Actions\ConfigureMachineAction;
 use App\Filament\Concerns\RedirectsCancelToView;
 use App\Filament\Resources\QuoteResource;
@@ -21,6 +22,12 @@ class EditQuote extends EditRecord
             // principale di questa pagina. Le altre sono di supporto, quindi
             // gray - stesso criterio applicato in QuoteResource::table()/ViewQuote.
             ConfigureMachineAction::make(),
+            // Stessa idea del wizard macchina applicata ai sistemi di
+            // conteggio: sono 83 articoli a catalogo e sceglierne uno a mano
+            // dal selettore prodotti significa conoscere a memoria la
+            // differenza fra alloggiamento con VIP-1, senza, e predisposto
+            // per il lettore.
+            ConfiguraConteggioAction::make(),
             Actions\Action::make('recalculate')
                 ->label('Ricalcola totali')
                 ->icon('heroicon-o-arrow-path')
