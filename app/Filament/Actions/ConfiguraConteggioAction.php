@@ -74,8 +74,14 @@ class ConfiguraConteggioAction
                         // un consiglio: se il preventivo contiene gia' una A300
                         // l'AC200 non si puo' proprio scegliere.
                         ->disableOptionWhen(fn (string $value, ?Quote $record) => $value === 'AC200' && static::haUnaA300($record))
+                        // Il contante (gettoniera G13 e cambiamonete Gryphon)
+                        // nel listino ha un prezzo SOLO nella colonna AC200:
+                        // tutte e quindici le righe che li citano hanno "-"
+                        // su AC125 e SU03 CL. Su una A300, dove l'AC200 non
+                        // e' possibile, si possono quindi fare solo le carte:
+                        // meglio dirlo qui che scoprirlo all'ordine.
                         ->helperText(fn (?Quote $record) => static::haUnaA300($record)
-                            ? 'Questo preventivo contiene una A300: il listino esclude l\'alloggiamento AC200 su quel modello, restano AC125 e SU03 CL.'
+                            ? 'Questo preventivo contiene una A300: il listino esclude l\'AC200 su quel modello, restano AC125 e SU03 CL. Attenzione: gettoniera e cambiamonete esistono solo su AC200, quindi su A300 si possono fare solo i pagamenti con carta.'
                             : null)
                         ->required()
                         ->live()
