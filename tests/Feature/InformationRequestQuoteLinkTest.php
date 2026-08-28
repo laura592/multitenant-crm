@@ -186,6 +186,42 @@ class InformationRequestQuoteLinkTest extends TestCase
         $this->assertNotNull(Quote::find($existing->id));
     }
 
+    public function test_the_select_proposes_the_customer_quotes_that_are_still_free(): void
+    {
+        $free = Quote::create([
+            'tenant_id' => $this->tenant->id, 'customer_id' => $this->customer->id,
+            'date' => now(), 'status' => 'inviato', 'discount' => 0, 'total' => 6900,
+        ]);
+        // Gia' collegato a un'altra richiesta: proporlo significherebbe
+        // staccarlo da quella senza dirlo a nessuno.
+        Quote::create([
+            'tenant_id' => $this->tenant->id, 'customer_id' => $this->customer->id,
+            'information_request_id' => InformationRequest::create([
+                'tenant_id' => $this->tenant->id, 'customer_id' => $this->customer->id,
+                'request_details' => 'Altra richiesta', 'status' => 'nuova',
+            ])->id,
+            'date' => now(), 'status' => 'bozza', 'discount' => 0,
+        ]);
+        // Di un altro cliente.
+        Quote::create([
+            'tenant_id' => $this->tenant->id,
+            'customer_id' => Customer::create(['tenant_id' => $this->tenant->id, 'company_name' => 'Altro Bar'])->id,
+            'date' => now(), 'status' => 'bozza', 'discount' => 0,
+        ]);
+
+        $proposti = QuotesRelationManager::collegabili(Quote::query(), $this->request)->get();
+
+        $this->assertCount(1, $proposti);
+        $this->assertSame($free->id, $proposti->first()->id);
+
+        // L'etichetta e' quella che si legge nella select: il solo numero non
+        // basta a riconoscere il preventivo giusto.
+        $etichetta = QuotesRelationManager::etichetta($free->fresh());
+        $this->assertStringContainsString($free->number, $etichetta);
+        $this->assertStringContainsString('Inviato', $etichetta);
+        $this->assertStringContainsString('6.900,00 €', $etichetta);
+    }
+
     public function test_a_quote_created_on_its_own_has_no_request_attached(): void
     {
         Livewire::test(CreateQuote::class)

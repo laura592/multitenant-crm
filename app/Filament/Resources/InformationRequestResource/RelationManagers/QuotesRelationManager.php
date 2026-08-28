@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\InformationRequestResource\RelationManagers;
 
 use App\Filament\Resources\QuoteResource;
+use App\Models\InformationRequest;
 use App\Models\Quote;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
@@ -22,6 +23,34 @@ class QuotesRelationManager extends RelationManager
     protected static ?string $title = 'Preventivi';
 
     protected static ?string $modelLabel = 'Preventivo';
+
+    /**
+     * I preventivi proponibili: stesso cliente della richiesta e non ancora
+     * collegati a nessuna richiesta. Metodo a parte perche' e' la regola che
+     * decide cosa si vede nella select, ed e' l'unica cosa che vale la pena
+     * verificare con un test.
+     */
+    public static function collegabili(Builder $query, InformationRequest $request): Builder
+    {
+        return $query
+            ->where('customer_id', $request->customer_id)
+            ->whereNull('information_request_id')
+            ->orderByDesc('date');
+    }
+
+    /**
+     * Il solo numero non basta a riconoscere il preventivo giusto quando un
+     * cliente ne ha piu' d'uno: data, stato e totale sono quello che si guarda.
+     */
+    public static function etichetta(Quote $quote): string
+    {
+        return implode(' · ', array_filter([
+            $quote->number,
+            $quote->date?->format('d/m/Y'),
+            QuoteResource::statusLabels()[$quote->status] ?? $quote->status,
+            $quote->total ? number_format((float) $quote->total, 2, ',', '.').' €' : null,
+        ]));
+    }
 
     public function table(Table $table): Table
     {
@@ -46,12 +75,17 @@ class QuotesRelationManager extends RelationManager
                     ->label('Collega preventivo esistente')
                     ->icon('heroicon-o-link')
                     ->color('gray')
-                    ->recordSelectOptionsQuery(fn (Builder $query) => $query
-                        ->where('customer_id', $this->getOwnerRecord()->customer_id)
-                        ->whereNull('information_request_id')
-                        ->latest('date'))
-                    ->recordSelectSearchColumns(['number'])
+                    ->recordSelectOptionsQuery(fn (Builder $query) => static::collegabili($query, $this->getOwnerRecord()))
+                    // Senza preload la select di Filament e' solo cercabile e
+                    // parte VUOTA: si vedeva un elenco senza risultati finche'
+                    // non si digitava il numero del preventivo — che e'
+                    // esattamente quello che non si ricorda a memoria. I
+                    // preventivi di un singolo cliente sono pochi, tanto vale
+                    // mostrarli tutti.
+                    ->preloadRecordSelect()
+                    ->recordTitle(fn (Quote $record) => static::etichetta($record))
                     ->modalHeading('Collega un preventivo gia\' esistente')
+                    ->modalDescription('Vengono proposti i preventivi di questo cliente non ancora collegati a una richiesta.')
                     ->successNotificationTitle('Preventivo collegato alla richiesta'),
             ])
             ->columns([
