@@ -144,6 +144,48 @@ class InformationRequestQuoteLinkTest extends TestCase
             ->assertSee('Inviato');
     }
 
+    public function test_an_existing_quote_can_be_attached_and_detached_afterwards(): void
+    {
+        $existing = Quote::create([
+            'tenant_id' => $this->tenant->id,
+            'customer_id' => $this->customer->id,
+            'date' => now(),
+            'status' => 'inviato',
+            'discount' => 0,
+        ]);
+
+        // Preventivo di un altro cliente: non deve nemmeno comparire fra le
+        // scelte, agganciarlo sarebbe sempre un errore.
+        $other = Quote::create([
+            'tenant_id' => $this->tenant->id,
+            'customer_id' => Customer::create(['tenant_id' => $this->tenant->id, 'company_name' => 'Altro Bar'])->id,
+            'date' => now(),
+            'status' => 'bozza',
+            'discount' => 0,
+        ]);
+
+        $component = Livewire::test(QuotesRelationManager::class, [
+            'ownerRecord' => $this->request,
+            'pageClass' => EditInformationRequest::class,
+        ]);
+
+        $component->callTableAction('associate', data: ['recordId' => $existing->id])
+            ->assertHasNoTableActionErrors();
+
+        $this->assertSame($this->request->id, $existing->fresh()->information_request_id);
+
+        // La select e' ristretta ai preventivi dello stesso cliente: provare a
+        // forzarne uno di un altro cliente non deve passare.
+        $component->callTableAction('associate', data: ['recordId' => $other->id]);
+        $this->assertNull($other->fresh()->information_request_id);
+
+        $component->callTableAction('dissociate', $existing)
+            ->assertHasNoTableActionErrors();
+
+        $this->assertNull($existing->fresh()->information_request_id, 'Scollegare non deve cancellare il preventivo.');
+        $this->assertNotNull(Quote::find($existing->id));
+    }
+
     public function test_a_quote_created_on_its_own_has_no_request_attached(): void
     {
         Livewire::test(CreateQuote::class)

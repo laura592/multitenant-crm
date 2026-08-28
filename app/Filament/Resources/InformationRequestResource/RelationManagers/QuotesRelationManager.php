@@ -7,6 +7,7 @@ use App\Models\Quote;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
  * I preventivi nati da questa richiesta. Sola lettura: un preventivo si
@@ -35,6 +36,23 @@ class QuotesRelationManager extends RelationManager
                         'customer_id' => $this->getOwnerRecord()->customer_id,
                         'information_request_id' => $this->getOwnerRecord()->id,
                     ], tenant: $this->getOwnerRecord()->tenant)),
+                // I preventivi fatti prima che esistesse questo collegamento
+                // (o partiti da Preventivi invece che da qui) si agganciano da
+                // qui. La scelta e' limitata ai preventivi dello STESSO cliente
+                // e non ancora collegati: agganciare il preventivo di un altro
+                // cliente sarebbe sempre un errore, e ricollegarne uno gia'
+                // agganciato lo staccherebbe in silenzio dalla sua richiesta.
+                Tables\Actions\AssociateAction::make()
+                    ->label('Collega preventivo esistente')
+                    ->icon('heroicon-o-link')
+                    ->color('gray')
+                    ->recordSelectOptionsQuery(fn (Builder $query) => $query
+                        ->where('customer_id', $this->getOwnerRecord()->customer_id)
+                        ->whereNull('information_request_id')
+                        ->latest('date'))
+                    ->recordSelectSearchColumns(['number'])
+                    ->modalHeading('Collega un preventivo gia\' esistente')
+                    ->successNotificationTitle('Preventivo collegato alla richiesta'),
             ])
             ->columns([
                 Tables\Columns\TextColumn::make('number')
@@ -52,6 +70,14 @@ class QuotesRelationManager extends RelationManager
                 // raggruppati: senza gruppo la colonna resta vuota, non e' un
                 // dato mancante.
                 Tables\Columns\TextColumn::make('quoteGroup.number')->label('Offerta')->placeholder('—'),
+            ])
+            ->actions([
+                // Scollega, non cancella: il preventivo resta dov'e', perde
+                // solo il filo con la richiesta.
+                Tables\Actions\DissociateAction::make()
+                    ->label('Scollega')
+                    ->modalHeading('Scollegare il preventivo dalla richiesta?')
+                    ->successNotificationTitle('Preventivo scollegato'),
             ])
             ->emptyStateHeading('Nessun preventivo da questa richiesta')
             ->emptyStateDescription('Usa "Nuovo preventivo": cliente e prodotti di interesse vengono portati dentro da soli.');
