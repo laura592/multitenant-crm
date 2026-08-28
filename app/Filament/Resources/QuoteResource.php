@@ -277,6 +277,12 @@ class QuoteResource extends Resource
                     // Quote nasce gia' agganciato al gruppo.
                     Forms\Components\Hidden::make('quote_group_id')
                         ->default(fn () => request()->query('group')),
+                    // Presente quando si arriva da "Crea preventivo" su una
+                    // richiesta informazioni: tiene il filo fra la richiesta e
+                    // i preventivi che ne nascono (vedi
+                    // InformationRequestResource::creaPreventivoAction()).
+                    Forms\Components\Hidden::make('information_request_id')
+                        ->default(fn () => request()->query('information_request_id')),
                     Forms\Components\TextInput::make('number')
                         ->label('Numero')
                         ->required()

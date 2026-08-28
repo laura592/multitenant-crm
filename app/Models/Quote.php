@@ -28,6 +28,7 @@ class Quote extends Model
     protected $fillable = [
         'tenant_id',
         'quote_group_id',
+        'information_request_id',
         'customer_id',
         'number',
         'date',
@@ -137,6 +138,16 @@ class Quote extends Model
     public function quoteGroup(): BelongsTo
     {
         return $this->belongsTo(QuoteGroup::class);
+    }
+
+    /**
+     * La richiesta informazioni da cui e' nato questo preventivo, quando c'e':
+     * il collegamento serve a leggere lo stato "preventivo inviato" dal lato
+     * richiesta senza doverlo copiare a mano (vedi la migration).
+     */
+    public function informationRequest(): BelongsTo
+    {
+        return $this->belongsTo(InformationRequest::class);
     }
 
     public function paymentMethodRelation(): BelongsTo

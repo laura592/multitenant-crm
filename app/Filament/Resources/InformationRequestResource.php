@@ -2,13 +2,17 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Concerns\StreamsPdfDownloads;
 use App\Filament\Forms\CustomerContactFields;
 use App\Filament\Forms\CustomerFiscalFields;
 use App\Filament\Forms\ItalianAddressFields;
 use App\Filament\Resources\InformationRequestResource\Pages;
+use App\Filament\Resources\InformationRequestResource\RelationManagers;
 use App\Models\Customer;
 use App\Models\InformationRequest;
 use App\Support\DisplayName;
+use App\Support\OutsideLivewireRender;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -16,10 +20,14 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\HtmlString;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class InformationRequestResource extends Resource
 {
+    use StreamsPdfDownloads;
+
     protected static ?string $model = InformationRequest::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-inbox-arrow-down';
@@ -232,6 +240,34 @@ class InformationRequestResource extends Resource
                     ->badge()
                     ->formatStateUsing(fn (string $state) => static::statusLabels()[$state] ?? ucfirst($state))
                     ->color(fn (string $state) => static::statusColors()[$state] ?? 'gray'),
+                // Lo stato "preventivo inviato" non e' un altro stato della
+                // richiesta da tenere aggiornato a mano: e' quello del
+                // preventivo collegato, letto da qui. Se i preventivi sono
+                // piu' d'uno si vedono tutti, con il numero dell'offerta
+                // quando sono stati raggruppati.
+                Tables\Columns\TextColumn::make('quotes.number')
+                    ->label('Preventivi')
+                    ->badge()
+                    ->color(fn (?string $state, InformationRequest $record) => QuoteResource::statusColors()[
+                        $record->quotes->firstWhere('number', $state)?->status
+                    ] ?? 'gray')
+                    ->formatStateUsing(function (?string $state, InformationRequest $record) {
+                        $quote = $record->quotes->firstWhere('number', $state);
+
+                        if (! $quote) {
+                            return $state;
+                        }
+
+                        $status = QuoteResource::statusLabels()[$quote->status] ?? $quote->status;
+
+                        return $quote->quoteGroup
+                            ? "{$state} · {$status} · {$quote->quoteGroup->number}"
+                            : "{$state} · {$status}";
+                    })
+                    ->placeholder('—')
+                    ->url(fn (InformationRequest $record) => $record->quotes->count() === 1
+                        ? QuoteResource::getUrl('edit', ['record' => $record->quotes->first()])
+                        : null),
                 Tables\Columns\TextColumn::make('appointment_at')
                     ->label('Appuntamento')
                     ->dateTime('d/m/Y H:i')
@@ -256,6 +292,33 @@ class InformationRequestResource extends Resource
                     ->toggleable(),
                 Tables\Columns\TextColumn::make('handledByUser.name')->label('Gestita da')->placeholder('—'),
                 Tables\Columns\TextColumn::make('created_at')->label('Ricevuta il')->dateTime('d/m/Y H:i')->sortable(),
+            ])
+            ->headerActions([
+                // Lista da stampare e portarsi in giro: gli appuntamenti presi
+                // sulle richieste, in ordine di giorno e ora, con riferimenti
+                // (numero richiesta, contatti) e zona (citta'/provincia) —
+                // gli stessi dati che altrimenti si ricopiano a mano su
+                // un'agenda prima di uscire.
+                Tables\Actions\Action::make('stampaAppuntamenti')
+                    ->label('Stampa appuntamenti')
+                    ->icon('heroicon-o-printer')
+                    ->color('gray')
+                    ->form([
+                        Forms\Components\DatePicker::make('from')
+                            ->label('Dal')
+                            ->native(false)
+                            ->displayFormat('d/m/Y')
+                            ->default(now()->startOfDay())
+                            ->required(),
+                        Forms\Components\DatePicker::make('to')
+                            ->label('Al')
+                            ->native(false)
+                            ->displayFormat('d/m/Y')
+                            ->default(now()->addDays(30))
+                            ->afterOrEqual('from')
+                            ->required(),
+                    ])
+                    ->action(fn (array $data) => static::stampaAppuntamenti($data)),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('status')
@@ -302,6 +365,17 @@ class InformationRequestResource extends Resource
                                 ->required(),
                         ])
                         ->action(fn (InformationRequest $record, array $data) => $record->notes()->create($data)),
+                    // Il preventivo nasce gia' agganciato alla richiesta e
+                    // con il cliente dentro; i prodotti di interesse
+                    // diventano le prime righe (CreateQuote::afterCreate()).
+                    Tables\Actions\Action::make('creaPreventivo')
+                        ->label('Crea preventivo')
+                        ->icon('heroicon-o-document-plus')
+                        ->visible(fn () => Auth::user()?->can('create_quote') ?? false)
+                        ->url(fn (InformationRequest $record) => QuoteResource::getUrl('create', [
+                            'customer_id' => $record->customer_id,
+                            'information_request_id' => $record->id,
+                        ])),
                     Tables\Actions\EditAction::make(),
                     Tables\Actions\DeleteAction::make(),
                 ]),
@@ -311,6 +385,42 @@ class InformationRequestResource extends Resource
                     Tables\Actions\DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    /**
+     * Il PDF si genera qui e si scarica dallo stream dell'azione: nessuna
+     * route dedicata, cosi' resta dietro l'autenticazione del pannello e
+     * dentro lo scope del tenant corrente (stesso approccio di
+     * RiepilogoOre/MaterialOrderResource).
+     */
+    protected static function stampaAppuntamenti(array $data): ?StreamedResponse
+    {
+        $from = Carbon::parse($data['from'])->startOfDay();
+        $to = Carbon::parse($data['to'])->endOfDay();
+
+        $requests = InformationRequest::query()
+            ->whereNotNull('appointment_at')
+            ->whereBetween('appointment_at', [$from, $to])
+            ->with(['customer', 'products'])
+            ->orderBy('appointment_at')
+            ->get();
+
+        return static::streamPdfDownload(
+            fn () => OutsideLivewireRender::run(fn () => Pdf::loadView('pdf.appuntamenti', [
+                'requests' => $requests,
+                'from' => $from,
+                'to' => $to,
+                'tenant' => Filament::getTenant(),
+            ])),
+            'appuntamenti-'.$from->format('Y-m-d').'-'.$to->format('Y-m-d').'.pdf',
+        );
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            RelationManagers\QuotesRelationManager::class,
+        ];
     }
 
     public static function getPages(): array

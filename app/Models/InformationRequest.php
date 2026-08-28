@@ -80,6 +80,15 @@ class InformationRequest extends Model
             ->withTimestamps();
     }
 
+    /**
+     * I preventivi nati da questa richiesta: possono essere piu' d'uno
+     * (varianti, rilanci) e, se raggruppati, appartenere a una stessa offerta.
+     */
+    public function quotes(): HasMany
+    {
+        return $this->hasMany(Quote::class)->latest('created_at');
+    }
+
     public function handledByUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'handled_by_user_id');

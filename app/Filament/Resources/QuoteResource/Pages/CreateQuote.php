@@ -11,7 +11,35 @@ class CreateQuote extends CreateRecord
 
     protected function afterCreate(): void
     {
+        $this->prefillFromInformationRequest();
+
         $this->record->updateTotal();
+    }
+
+    /**
+     * I "prodotti di interesse" della richiesta informazioni diventano le
+     * prime righe del preventivo: sono gli stessi che altrimenti si
+     * ridigitano a mano subito dopo. Prezzo dal listino corrente e IVA 22
+     * come fa ConfigureMachineAction; restano righe normali, modificabili o
+     * cancellabili come le altre.
+     */
+    private function prefillFromInformationRequest(): void
+    {
+        $request = $this->record->informationRequest;
+
+        if (! $request) {
+            return;
+        }
+
+        foreach ($request->products as $product) {
+            $this->record->quoteProducts()->create([
+                'product_id' => $product->id,
+                'quantity' => 1,
+                'price' => $product->getCurrentPrice()?->price ?? 0,
+                'discount' => 0,
+                'tax' => 22,
+            ]);
+        }
     }
 
     /**
