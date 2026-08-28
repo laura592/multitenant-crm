@@ -217,6 +217,10 @@ class InformationRequestResource extends Resource
                     ->placeholder('—'),
                 // Recapiti diretti in tabella: prima bisognava aprire il cliente per
                 // vedere email/telefono, ora sono a colpo d'occhio e copiabili.
+                // Delle due resta accesa la sola colonna telefono: una richiesta
+                // informazioni si richiama, non si scrive, e con undici colonne
+                // l'elenco era diventato illeggibile. L'email si riaccende dal
+                // menu delle colonne quando serve.
                 Tables\Columns\TextColumn::make('customer_email')
                     ->label('Email')
                     ->getStateUsing(fn (InformationRequest $record) => $record->customer?->primaryEmail())
@@ -224,7 +228,7 @@ class InformationRequestResource extends Resource
                     ->copyable()
                     ->copyMessage('Email copiata')
                     ->icon('heroicon-o-envelope')
-                    ->toggleable(),
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('customer_phone')
                     ->label('Telefono')
                     ->getStateUsing(fn (InformationRequest $record) => $record->customer?->primaryPhone())
@@ -287,9 +291,13 @@ class InformationRequestResource extends Resource
                     })
                     ->limit(40)
                     ->placeholder('—')
-                    ->toggleable(),
-                Tables\Columns\TextColumn::make('handledByUser.name')->label('Gestita da')->placeholder('—'),
-                Tables\Columns\TextColumn::make('created_at')->label('Ricevuta il')->dateTime('d/m/Y H:i')->sortable(),
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('handledByUser.name')->label('Gestita da')->placeholder('—')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                // Fuori di default anche questa: il numero RI- e' gia' cronologico
+                // e l'ordinamento della tabella resta su created_at comunque.
+                Tables\Columns\TextColumn::make('created_at')->label('Ricevuta il')->dateTime('d/m/Y H:i')->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->headerActions([
                 // Lista da stampare e portarsi in giro: gli appuntamenti presi
