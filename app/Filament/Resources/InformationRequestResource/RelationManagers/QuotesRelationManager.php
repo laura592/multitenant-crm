@@ -2,9 +2,13 @@
 
 namespace App\Filament\Resources\InformationRequestResource\RelationManagers;
 
+use App\Filament\Resources\QuoteGroupResource;
 use App\Filament\Resources\QuoteResource;
 use App\Models\InformationRequest;
 use App\Models\Quote;
+use App\Models\QuoteGroup;
+use Filament\Forms;
+use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -36,6 +40,37 @@ class QuotesRelationManager extends RelationManager
             ->where('customer_id', $request->customer_id)
             ->whereNull('information_request_id')
             ->orderByDesc('date');
+    }
+
+    /**
+     * Le offerte proponibili: quelle del cliente della richiesta che hanno
+     * almeno un preventivo ancora libero. Un'offerta i cui preventivi sono
+     * gia' tutti agganciati altrove non ha senso proporla.
+     */
+    public static function offerteCollegabili(InformationRequest $request): Builder
+    {
+        return QuoteGroup::query()
+            ->where('customer_id', $request->customer_id)
+            ->whereHas('quotes', fn (Builder $query) => $query->whereNull('information_request_id'))
+            ->withCount(['quotes as collegabili_count' => fn (Builder $query) => $query->whereNull('information_request_id')])
+            ->orderByDesc('created_at');
+    }
+
+    /**
+     * Quanti preventivi di quell'offerta finirebbero collegati: e' l'unico
+     * numero che conta al momento di scegliere, perche' quelli gia' agganciati
+     * a un'altra richiesta restano dove sono.
+     */
+    public static function etichettaOfferta(QuoteGroup $group): string
+    {
+        $collegabili = $group->collegabili_count ?? $group->quotes()->whereNull('information_request_id')->count();
+
+        return implode(' · ', array_filter([
+            $group->number,
+            $collegabili.' '.($collegabili === 1 ? 'preventivo' : 'preventivi'),
+            QuoteGroupResource::statusLabels()[$group->status] ?? $group->status,
+            $group->sent_at?->format('d/m/Y'),
+        ]));
     }
 
     /**
@@ -87,6 +122,40 @@ class QuotesRelationManager extends RelationManager
                     ->modalHeading('Collega un preventivo gia\' esistente')
                     ->modalDescription('Vengono proposti i preventivi di questo cliente non ancora collegati a una richiesta.')
                     ->successNotificationTitle('Preventivo collegato alla richiesta'),
+                // Quando i preventivi sono gia' raggruppati in un'offerta si
+                // collega quella, non tre preventivi uno per uno: il
+                // collegamento resta comunque sui singoli preventivi (e' li'
+                // che vive la colonna), l'offerta e' solo il modo di
+                // selezionarli tutti insieme.
+                Tables\Actions\Action::make('collegaOfferta')
+                    ->label('Collega offerta esistente')
+                    ->icon('heroicon-o-rectangle-stack')
+                    ->color('gray')
+                    ->visible(fn () => static::offerteCollegabili($this->getOwnerRecord())->exists())
+                    ->modalHeading('Collega un\'offerta gia\' esistente')
+                    ->modalDescription('Collega in un colpo solo tutti i preventivi dell\'offerta che non sono gia\' legati a un\'altra richiesta.')
+                    ->form([
+                        Forms\Components\Select::make('quote_group_id')
+                            ->label('Offerta')
+                            ->options(fn () => static::offerteCollegabili($this->getOwnerRecord())
+                                ->get()
+                                ->mapWithKeys(fn (QuoteGroup $group) => [$group->id => static::etichettaOfferta($group)]))
+                            ->required(),
+                    ])
+                    ->action(function (array $data) {
+                        $collegati = Quote::query()
+                            ->where('quote_group_id', $data['quote_group_id'])
+                            ->where('customer_id', $this->getOwnerRecord()->customer_id)
+                            ->whereNull('information_request_id')
+                            ->update(['information_request_id' => $this->getOwnerRecord()->id]);
+
+                        Notification::make()
+                            ->success()
+                            ->title($collegati === 1
+                                ? '1 preventivo collegato alla richiesta'
+                                : "{$collegati} preventivi collegati alla richiesta")
+                            ->send();
+                    }),
             ])
             ->columns([
                 Tables\Columns\TextColumn::make('number')

@@ -222,6 +222,73 @@ class InformationRequestQuoteLinkTest extends TestCase
         $this->assertStringContainsString('6.900,00 €', $etichetta);
     }
 
+    public function test_an_offer_can_be_attached_in_one_go(): void
+    {
+        $group = QuoteGroup::create([
+            'tenant_id' => $this->tenant->id,
+            'customer_id' => $this->customer->id,
+            'status' => 'inviato',
+            'sent_at' => now(),
+        ]);
+
+        $primo = Quote::create([
+            'tenant_id' => $this->tenant->id, 'customer_id' => $this->customer->id,
+            'quote_group_id' => $group->id, 'date' => now(), 'status' => 'inviato', 'discount' => 0,
+        ]);
+        $secondo = Quote::create([
+            'tenant_id' => $this->tenant->id, 'customer_id' => $this->customer->id,
+            'quote_group_id' => $group->id, 'date' => now(), 'status' => 'bozza', 'discount' => 0,
+        ]);
+        // Terzo preventivo della stessa offerta, ma gia' legato a un'altra
+        // richiesta: non deve essere strappato via.
+        $altraRichiesta = InformationRequest::create([
+            'tenant_id' => $this->tenant->id, 'customer_id' => $this->customer->id,
+            'request_details' => 'Altra richiesta', 'status' => 'nuova',
+        ]);
+        $giaLegato = Quote::create([
+            'tenant_id' => $this->tenant->id, 'customer_id' => $this->customer->id,
+            'quote_group_id' => $group->id, 'information_request_id' => $altraRichiesta->id,
+            'date' => now(), 'status' => 'bozza', 'discount' => 0,
+        ]);
+
+        Livewire::test(QuotesRelationManager::class, [
+            'ownerRecord' => $this->request,
+            'pageClass' => EditInformationRequest::class,
+        ])
+            ->callTableAction('collegaOfferta', data: ['quote_group_id' => $group->id])
+            ->assertHasNoTableActionErrors();
+
+        $this->assertSame($this->request->id, $primo->fresh()->information_request_id);
+        $this->assertSame($this->request->id, $secondo->fresh()->information_request_id);
+        $this->assertSame($altraRichiesta->id, $giaLegato->fresh()->information_request_id);
+    }
+
+    public function test_an_offer_with_nothing_left_to_attach_is_not_proposed(): void
+    {
+        $group = QuoteGroup::create([
+            'tenant_id' => $this->tenant->id, 'customer_id' => $this->customer->id, 'status' => 'inviato',
+        ]);
+        Quote::create([
+            'tenant_id' => $this->tenant->id, 'customer_id' => $this->customer->id,
+            'quote_group_id' => $group->id, 'information_request_id' => $this->request->id,
+            'date' => now(), 'status' => 'bozza', 'discount' => 0,
+        ]);
+
+        $this->assertCount(0, QuotesRelationManager::offerteCollegabili($this->request)->get());
+
+        // Con un preventivo libero invece si propone, e l'etichetta dice
+        // quanti ne verrebbero collegati davvero.
+        $libero = Quote::create([
+            'tenant_id' => $this->tenant->id, 'customer_id' => $this->customer->id,
+            'quote_group_id' => $group->id, 'date' => now(), 'status' => 'bozza', 'discount' => 0,
+        ]);
+
+        $proposte = QuotesRelationManager::offerteCollegabili($this->request)->get();
+        $this->assertCount(1, $proposte);
+        $this->assertStringContainsString('1 preventivo', QuotesRelationManager::etichettaOfferta($proposte->first()));
+        $this->assertNotNull($libero->id);
+    }
+
     public function test_a_quote_created_on_its_own_has_no_request_attached(): void
     {
         Livewire::test(CreateQuote::class)
