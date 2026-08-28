@@ -200,7 +200,7 @@ class InformationRequestResource extends Resource
             ->defaultSort('created_at', 'desc')
             // customer/notes gia' usati da piu' colonne sotto (email, telefono,
             // ultima nota): senza eager load sarebbe una query per riga.
-            ->modifyQueryUsing(fn ($query) => $query->with(['customer', 'notes']))
+            ->modifyQueryUsing(fn ($query) => $query->with(['customer', 'notes', 'quotes.quoteGroup']))
             ->columns([
                 Tables\Columns\TextColumn::make('number')->label('Numero')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->searchable()->sortable()
@@ -244,29 +244,28 @@ class InformationRequestResource extends Resource
                     ->color(fn (string $state) => static::statusColors()[$state] ?? 'gray'),
                 // Lo stato "preventivo inviato" non e' un altro stato della
                 // richiesta da tenere aggiornato a mano: e' quello del
-                // preventivo collegato, letto da qui. Se i preventivi sono
-                // piu' d'uno si vedono tutti, con il numero dell'offerta
-                // quando sono stati raggruppati.
-                Tables\Columns\TextColumn::make('quotes.number')
-                    ->label('Preventivi')
-                    ->badge()
-                    ->color(fn (?string $state, InformationRequest $record) => QuoteResource::statusColors()[
-                        $record->quotes->firstWhere('number', $state)?->status
-                    ] ?? 'gray')
-                    ->formatStateUsing(function (?string $state, InformationRequest $record) {
-                        $quote = $record->quotes->firstWhere('number', $state);
+                // preventivo collegato, letto da qui. In elenco pero' basta
+                // il si'/no, come per le colonne Eureka: numeri, stati e
+                // offerta stanno nel tooltip e a un clic di distanza.
+                Tables\Columns\IconColumn::make('has_quote')
+                    ->label('Prev.')
+                    ->alignCenter()
+                    ->state(fn (InformationRequest $record) => $record->quotes->isNotEmpty())
+                    ->icon(fn (bool $state) => $state ? 'heroicon-o-check-circle' : 'heroicon-o-x-circle')
+                    // Grigio e non rosso quando manca: le richieste senza
+                    // preventivo sono la maggioranza (una richiesta appena
+                    // arrivata non ne ha), un elenco tutto rosso non
+                    // segnalerebbe niente.
+                    ->color(fn (bool $state) => $state ? 'success' : 'gray')
+                    ->tooltip(fn (InformationRequest $record) => $record->quotes->isEmpty()
+                        ? 'Nessun preventivo collegato'
+                        : $record->quotes->map(function ($quote) {
+                            $status = QuoteResource::statusLabels()[$quote->status] ?? $quote->status;
 
-                        if (! $quote) {
-                            return $state;
-                        }
-
-                        $status = QuoteResource::statusLabels()[$quote->status] ?? $quote->status;
-
-                        return $quote->quoteGroup
-                            ? "{$state} · {$status} · {$quote->quoteGroup->number}"
-                            : "{$state} · {$status}";
-                    })
-                    ->placeholder('—')
+                            return $quote->quoteGroup
+                                ? "{$quote->number} · {$status} · {$quote->quoteGroup->number}"
+                                : "{$quote->number} · {$status}";
+                        })->implode(' | '))
                     ->url(fn (InformationRequest $record) => $record->quotes->count() === 1
                         ? QuoteResource::getUrl('edit', ['record' => $record->quotes->first()])
                         : null),
@@ -282,16 +281,33 @@ class InformationRequestResource extends Resource
                         && ! in_array($record->status, ['gestita', 'chiusa'], true)
                             ? 'danger'
                             : null),
+                // Le note sono il "cosa e' successo finora" della richiesta
+                // (richiamato il 20/08, mandata mail...): nascoste dietro il
+                // menu delle colonne non le leggeva nessuno. Ora si vedono
+                // quando ci sono — l'ultima in chiaro, le precedenti contate
+                // e per intero nel tooltip.
                 Tables\Columns\TextColumn::make('latest_note')
-                    ->label('Ultima nota')
+                    ->label('Note')
                     ->getStateUsing(function (InformationRequest $record) {
                         $note = $record->notes->first();
 
-                        return $note ? $note->logged_at->format('d/m/Y').' — '.$note->body : null;
+                        if (! $note) {
+                            return null;
+                        }
+
+                        $altre = $record->notes->count() - 1;
+
+                        return $note->logged_at->format('d/m/Y').' — '.$note->body
+                            .($altre > 0 ? " (+{$altre})" : '');
                     })
-                    ->limit(40)
+                    ->limit(60)
+                    ->tooltip(fn (InformationRequest $record) => $record->notes->isEmpty()
+                        ? null
+                        : $record->notes
+                            ->map(fn ($note) => $note->logged_at->format('d/m/Y').' — '.$note->body)
+                            ->implode(' | '))
                     ->placeholder('—')
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->toggleable(),
                 Tables\Columns\TextColumn::make('handledByUser.name')->label('Gestita da')->placeholder('—')
                     ->toggleable(isToggledHiddenByDefault: true),
                 // Fuori di default anche questa: il numero RI- e' gia' cronologico

@@ -3,9 +3,11 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\InformationRequestResource\Pages\EditInformationRequest;
+use App\Filament\Resources\InformationRequestResource\Pages\ListInformationRequests;
 use App\Models\Customer;
 use App\Models\InformationRequest;
 use App\Models\Product;
+use App\Models\Quote;
 use App\Models\Tenant;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -146,5 +148,58 @@ class InformationRequestResourceTest extends TestCase
         $this->assertSame(2, $request->notes()->count());
         // notes() è ordinata per logged_at desc: l'ultima aggiunta ha data più recente.
         $this->assertSame('Chiamato, non risponde', $request->notes()->first()->body);
+    }
+
+    /**
+     * In elenco il preventivo e' un si'/no (come le colonne Eureka) e le note
+     * si vedono senza doverle riaccendere dal menu delle colonne.
+     */
+    public function test_list_shows_a_quote_tick_and_the_notes(): void
+    {
+        $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);
+        $user = User::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Test Admin',
+            'email' => 'admin-elenco@gifar.it',
+            'password' => bcrypt('password'),
+            'is_super_admin' => true,
+        ]);
+        $customer = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Bar Centrale']);
+
+        $conPreventivo = InformationRequest::create([
+            'tenant_id' => $tenant->id,
+            'customer_id' => $customer->id,
+            'request_details' => 'Interessati a una macchina',
+            'status' => 'nuova',
+        ]);
+        Quote::create([
+            'tenant_id' => $tenant->id,
+            'customer_id' => $customer->id,
+            'information_request_id' => $conPreventivo->id,
+            'date' => now(),
+            'status' => 'inviato',
+            'discount' => 0,
+        ]);
+
+        $senzaPreventivo = InformationRequest::create([
+            'tenant_id' => $tenant->id,
+            'customer_id' => $customer->id,
+            'request_details' => 'Chiede informazioni sulle cialde',
+            'status' => 'nuova',
+        ]);
+        $this->actingAs($user);
+        Filament::setTenant($tenant);
+
+        $senzaPreventivo->notes()->create(['logged_at' => '2026-08-20', 'body' => 'Richiamato, richiama lui lunedi']);
+
+        Livewire::test(ListInformationRequests::class)
+            ->assertOk()
+            // La nota si legge direttamente in tabella, con la sua data.
+            ->assertSee('20/08/2026 — Richiamato, richiama lui lunedi')
+            // Il numero del preventivo non occupa piu' una colonna a se':
+            // resta raggiungibile dal tooltip del tick.
+            ->assertSee($conPreventivo->quotes->first()->number)
+            ->assertTableColumnStateSet('has_quote', true, $conPreventivo)
+            ->assertTableColumnStateSet('has_quote', false, $senzaPreventivo);
     }
 }
