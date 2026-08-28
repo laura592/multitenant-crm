@@ -111,7 +111,9 @@ class InformationRequestResource extends Resource
                             return new HtmlString(collect([
                                 $customer->primaryEmail() ? "✉️ {$customer->primaryEmail()}" : null,
                                 $customer->primaryPhone() ? "📞 {$customer->primaryPhone()}" : null,
-                                $customer->city ?: null,
+                                $customer->city
+                                    ? trim($customer->city.($customer->province ? " ({$customer->province})" : ''))
+                                    : ($customer->province ?: null),
                             ])->filter()->implode('&emsp;') ?: '— (nessun contatto salvato)');
                         }),
                     Forms\Components\Select::make('status')
@@ -197,6 +199,16 @@ class InformationRequestResource extends Resource
                 Tables\Columns\TextColumn::make('number')->label('Numero')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->searchable()->sortable()
                     ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
+                // Provincia in tabella: le richieste arrivano da tutto il
+                // Veneto e oltre, e capire "dov'e'" senza aprire il cliente
+                // e' il primo filtro mentale quando si decide chi richiamare.
+                Tables\Columns\TextColumn::make('customer.province')
+                    ->label('Prov.')
+                    ->badge()
+                    ->color('gray')
+                    ->searchable()
+                    ->sortable()
+                    ->placeholder('—'),
                 // Recapiti diretti in tabella: prima bisognava aprire il cliente per
                 // vedere email/telefono, ora sono a colpo d'occhio e copiabili.
                 Tables\Columns\TextColumn::make('customer_email')
