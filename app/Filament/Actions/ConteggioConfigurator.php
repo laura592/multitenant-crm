@@ -116,13 +116,19 @@ class ConteggioConfigurator
                     ->label('Interruttore a chiave (vendita libera e di prova)')
                     ->visible(fn (Forms\Get $get) => filled($get('conteggio_product_id')))
                     ->helperText(fn () => static::prezzoDi(self::SKU_INTERRUTTORE)),
+                // I gettoni sono le monete finte che si usano al posto dei
+                // contanti veri (mensa aziendale, hotel): servono solo dove
+                // c'e' una gettoniera o un cambiamonete, e infatti il listino
+                // li prezza nella sola colonna AC200 — l'unica dove quei
+                // dispositivi esistono.
                 Forms\Components\TextInput::make('gettoni')
                     ->label('Confezioni di gettoni da 100 pz.')
                     ->numeric()
                     ->minValue(0)
                     ->default(0)
-                    ->visible(fn (Forms\Get $get) => filled($get('conteggio_product_id')))
-                    ->helperText(fn () => static::prezzoDi(self::SKU_GETTONI)),
+                    ->visible(fn (Forms\Get $get) => static::accettaContanti($get('conteggio_product_id')))
+                    ->helperText(fn () => 'Monete da usare al posto dei contanti nella gettoniera o nel cambiamonete. '
+                        .(static::prezzoDi(self::SKU_GETTONI) ?? '')),
             ]);
     }
 
@@ -192,6 +198,14 @@ class ConteggioConfigurator
         $machine = Product::with('family')->find($get('machine_product_id'));
 
         return $machine?->family?->name === 'A300';
+    }
+
+    /** Il sistema scelto ha una gettoniera o un cambiamonete? */
+    protected static function accettaContanti(?string $productId): bool
+    {
+        $nome = Product::find($productId)?->name ?? '';
+
+        return str_contains($nome, 'gettoniera') || str_contains($nome, 'cambiamonete');
     }
 
     protected static function eIntegratoNellaSu03(?string $productId): bool
