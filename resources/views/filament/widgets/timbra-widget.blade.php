@@ -1,6 +1,9 @@
 <x-filament-widgets::widget>
     <x-filament::section>
-        <div class="flex items-center justify-between">
+        {{-- Su mobile i tre bottoni non stanno in riga col testo: schiacciavano
+             "Timbratura" contro "Entrata" e spezzavano "Non sei in servizio" su
+             tre righe. Sotto sm: testo sopra, bottoni sotto. --}}
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
                 <h2 class="text-base font-semibold">Timbratura</h2>
                 @php
@@ -15,7 +18,7 @@
                     <p class="text-sm text-gray-500">Non sei in servizio</p>
                 @endif
             </div>
-            <div class="flex gap-2">
+            <div class="flex flex-wrap gap-2">
                 <x-filament::button color="success" wire:click="clockIn" :disabled="(bool) $open">
                     Entrata
                 </x-filament::button>

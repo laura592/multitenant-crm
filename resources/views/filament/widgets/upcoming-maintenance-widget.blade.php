@@ -15,7 +15,10 @@
             <div class="grid grid-cols-1 md:grid-cols-2">
                 @foreach($columns as $i => $column)
                     @if($column->isNotEmpty())
-                        <div @class(['md:border-l md:border-gray-200 md:pl-6 md:dark:border-white/10' => $i === 1, 'md:pr-6' => $i === 0])>
+                        {{-- overflow-x-auto: su mobile un nome cliente lungo
+                             spingeva fuori la colonna Scadenza, che veniva
+                             tagliata invece di poter scorrere. --}}
+                        <div @class(['overflow-x-auto', 'md:border-l md:border-gray-200 md:pl-6 md:dark:border-white/10' => $i === 1, 'md:pr-6' => $i === 0])>
                             <table class="w-full text-sm">
                                 <thead>
                                     <tr class="border-b border-gray-200 dark:border-white/10">
