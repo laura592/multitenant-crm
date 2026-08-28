@@ -292,7 +292,7 @@ class QuoteResource extends Resource
                     Forms\Components\Select::make('customer_id')
                         ->label('Cliente')
                         ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
-                        ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::titleCase($record->full_name))
+                        ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::customerOption($record))
                         ->searchable(['company_name', 'first_name', 'last_name'])
                         ->preload()
                         ->required()
@@ -368,7 +368,7 @@ class QuoteResource extends Resource
                                     Forms\Components\Select::make('customer_id')
                                         ->label('Cliente')
                                         ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
-                                        ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::titleCase($record->full_name))
+                                        ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::customerOption($record))
                                         ->searchable(['company_name', 'first_name', 'last_name'])
                                         ->preload()
                                         ->required()
@@ -477,6 +477,15 @@ class QuoteResource extends Resource
                 Tables\Columns\TextColumn::make('number')->label('Numero')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->searchable()->sortable()
                     ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
+                // Come in Richieste Informazioni: la zona e' il primo filtro
+                // mentale quando si scorre un elenco di clienti.
+                Tables\Columns\TextColumn::make('customer.province')
+                    ->label('Prov.')
+                    ->badge()
+                    ->color('gray')
+                    ->searchable()
+                    ->sortable()
+                    ->placeholder('—'),
                 Tables\Columns\TextColumn::make('date')->label('Data')->date()->sortable(),
                 Tables\Columns\TextColumn::make('status')
                     ->label('Stato')
@@ -492,7 +501,7 @@ class QuoteResource extends Resource
                 Tables\Filters\SelectFilter::make('customer_id')
                     ->label('Cliente')
                     ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
-                    ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::titleCase($record->full_name))
+                    ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::customerOption($record))
                     ->searchable()
                     ->preload(),
                 Tables\Filters\Filter::make('date')

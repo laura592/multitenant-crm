@@ -340,9 +340,7 @@ class ServiceReportResource extends Resource
                         ->label('Cliente')
                         ->extraAttributes(['data-tour' => 'service-reports-field-customer'])
                         ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
-                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->city
-                            ? DisplayName::titleCase($record->full_name)." ({$record->city})"
-                            : DisplayName::titleCase($record->full_name))
+                        ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::customerOption($record))
                         ->searchable(['company_name', 'first_name', 'last_name', 'city'])
                         ->preload()
                         ->required()

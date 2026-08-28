@@ -32,6 +32,24 @@ class DisplayName
         ));
     }
 
+    /**
+     * Etichetta di un cliente in una select: ragione sociale normalizzata piu'
+     * il paese fra parentesi. Tante ragioni sociali sono identiche fra clienti
+     * diversi (catene e franchising con piu' punti vendita) e senza il paese
+     * nell'elenco si vedono tutte uguali. Stessa forma ovunque: preventivi,
+     * rapportini, richieste informazioni.
+     */
+    public static function customerOption(?object $customer): ?string
+    {
+        if (! $customer) {
+            return null;
+        }
+
+        $name = self::titleCase($customer->full_name);
+
+        return $customer->city ? "{$name} ({$customer->city})" : $name;
+    }
+
     private static function capitalizeWord(string $word, bool $isFirst): string
     {
         if (! $isFirst && in_array(mb_strtolower($word), self::LOWERCASE_PARTICLES, true)) {

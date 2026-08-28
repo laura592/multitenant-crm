@@ -74,9 +74,7 @@ class InformationRequestResource extends Resource
                         // Tante ragioni sociali identiche tra clienti diversi (catene/
                         // franchising con più punti vendita): la città in coda aiuta a
                         // distinguerli nell'elenco invece di vederli tutti uguali.
-                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->city
-                            ? DisplayName::titleCase($record->full_name)." ({$record->city})"
-                            : DisplayName::titleCase($record->full_name))
+                        ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::customerOption($record))
                         ->searchable(['company_name', 'first_name', 'last_name'])
                         ->preload()
                         ->required()
