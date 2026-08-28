@@ -2,11 +2,12 @@
 
 namespace Tests\Feature;
 
-use App\Filament\Actions\ConfiguraConteggioAction;
+use App\Filament\Actions\ConteggioConfigurator;
 use App\Filament\Resources\QuoteResource\Pages\EditQuote;
 use App\Models\Category;
 use App\Models\Customer;
 use App\Models\Product;
+use App\Models\ProductFamily;
 use App\Models\ProductPrice;
 use App\Models\Quote;
 use App\Models\Tenant;
@@ -35,6 +36,8 @@ class ConfiguraConteggioTest extends TestCase
 
     private Quote $quote;
 
+    private Product $macchina;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -61,6 +64,13 @@ class ConfiguraConteggioTest extends TestCase
 
         $this->seed(FrankeAccountingHousingsSeeder::class);
 
+        $famiglia = ProductFamily::create(['name' => 'A600']);
+        $this->macchina = Product::create([
+            'sku' => 'A600-1G-H1', 'type' => Product::TYPE_MACHINE, 'name' => 'A600 1G H1',
+            'product_family_id' => $famiglia->id, 'source' => Product::SOURCE_FRANKE,
+        ]);
+        ProductPrice::create(['product_id' => $this->macchina->id, 'price' => 8255, 'valid_from' => '2026-01-01']);
+
         $customer = Customer::create(['tenant_id' => $this->tenant->id, 'company_name' => 'Bar Centrale']);
         $this->quote = Quote::create([
             'tenant_id' => $this->tenant->id, 'customer_id' => $customer->id,
@@ -83,7 +93,7 @@ class ConfiguraConteggioTest extends TestCase
 
     private function candidati(string $alloggiamento, bool $conLettore): array
     {
-        return ConfiguraConteggioAction::candidati($alloggiamento, $conLettore)->pluck('sku')->all();
+        return ConteggioConfigurator::candidati($alloggiamento, $conLettore)->pluck('sku')->all();
     }
 
     public function test_without_a_reader_it_proposes_only_the_housings_of_that_size(): void
@@ -113,7 +123,9 @@ class ConfiguraConteggioTest extends TestCase
         $conteggio = Product::query()->where('sku', '560.0678.327')->firstOrFail();
 
         Livewire::test(EditQuote::class, ['record' => $this->quote->getRouteKey()])
-            ->callAction('configuraConteggio', data: [
+            ->callAction('configureMachine', data: [
+                'product_family_id' => $this->macchina->product_family_id,
+                'machine_product_id' => $this->macchina->id,
                 'alloggiamento' => 'SU03 CL',
                 'con_lettore' => 'no',
                 'conteggio_product_id' => $conteggio->id,
@@ -124,10 +136,11 @@ class ConfiguraConteggioTest extends TestCase
         $righe = $this->quote->fresh()->quoteProducts;
 
         // 680 e' un supplemento, non il prezzo del sistema: da solo in
-        // preventivo mancherebbero i 1.170 della SU03 EC.
-        $this->assertCount(2, $righe);
+        // preventivo mancherebbero i 1.170 della SU03 EC. Piu' la macchina,
+        // che ora arriva dallo stesso wizard.
+        $this->assertCount(3, $righe);
         $this->assertTrue($righe->contains('product_id', $su03ec->id));
-        $this->assertSame('2257.00', $this->quote->fresh()->total, '(680 + 1170) + 22%');
+        $this->assertSame('12328.10', $this->quote->fresh()->total, '(8255 + 680 + 1170) + 22%');
 
         $this->assertStringContainsString(
             'Supplemento sull\'unita\' di raffreddamento SU03 EC',
@@ -136,12 +149,38 @@ class ConfiguraConteggioTest extends TestCase
         );
     }
 
+    public function test_the_configuration_discount_reaches_the_accounting_lines_too(): void
+    {
+        $sistema = Product::query()->where('sku', '560.0543.637')->firstOrFail();
+
+        Livewire::test(EditQuote::class, ['record' => $this->quote->getRouteKey()])
+            ->callAction('configureMachine', data: [
+                'product_family_id' => $this->macchina->product_family_id,
+                'machine_product_id' => $this->macchina->id,
+                'configuration_discount' => 10,
+                'alloggiamento' => 'AC200',
+                'con_lettore' => 'no',
+                'conteggio_product_id' => $sistema->id,
+            ])
+            ->assertHasNoActionErrors();
+
+        $righe = $this->quote->fresh()->quoteProducts;
+
+        // Lo sconto configurazione vale su tutto quello che il wizard ha
+        // messo dentro, altrimenti il riepilogo mostrerebbe un totale che il
+        // preventivo poi non ha.
+        $this->assertSame(10, $righe->firstWhere('product_id', $sistema->id)->discount);
+        $this->assertSame(10, $righe->firstWhere('product_id', $this->macchina->id)->discount);
+    }
+
     public function test_it_adds_one_real_listino_line_plus_the_options(): void
     {
         $sistema = Product::query()->where('sku', '560.0543.637')->firstOrFail();
 
         Livewire::test(EditQuote::class, ['record' => $this->quote->getRouteKey()])
-            ->callAction('configuraConteggio', data: [
+            ->callAction('configureMachine', data: [
+                'product_family_id' => $this->macchina->product_family_id,
+                'machine_product_id' => $this->macchina->id,
                 'alloggiamento' => 'AC200',
                 'con_lettore' => 'no',
                 'conteggio_product_id' => $sistema->id,
@@ -152,7 +191,7 @@ class ConfiguraConteggioTest extends TestCase
 
         $righe = $this->quote->fresh()->quoteProducts;
 
-        $this->assertCount(3, $righe);
+        $this->assertCount(4, $righe, 'macchina + sistema + interruttore + gettoni');
 
         $riga = $righe->firstWhere('product_id', $sistema->id);
         $this->assertSame('2532.00', $riga->price, 'Prezzo di listino, non una somma di supplementi.');
@@ -165,7 +204,7 @@ class ConfiguraConteggioTest extends TestCase
         $gettoni = $righe->first(fn ($r) => $r->product->sku === 'OPT-GETTONI-100');
         $this->assertSame('2.00', $gettoni->quantity);
 
-        // 2532 + 245 + 250 = 3027 imponibile, + 22% IVA
-        $this->assertSame('3692.94', $this->quote->fresh()->total);
+        // 8255 + 2532 + 245 + 250 = 11282 imponibile, + 22% IVA
+        $this->assertSame('13764.04', $this->quote->fresh()->total);
     }
 }

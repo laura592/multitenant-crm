@@ -85,7 +85,7 @@ class ConfigureMachineAction
             ->icon('heroicon-o-pencil-square')
             ->modalWidth('3xl')
             ->modalHeading('Modifica configurazione macchina')
-            ->steps(static::buildSteps())
+            ->steps(static::buildSteps(conConteggio: false))
             ->visible(fn (QuoteProduct $record) => $record->isBase() && $record->product?->isMachine())
             ->fillForm(fn (QuoteProduct $record) => static::fillFormForEdit($record))
             ->action(function (array $data, QuoteProduct $record) {
@@ -96,7 +96,7 @@ class ConfigureMachineAction
     /**
      * @return array<int, Step>
      */
-    protected static function buildSteps(): array
+    protected static function buildSteps(bool $conConteggio = true): array
     {
         $steps = [
             Step::make('Macchina')
@@ -140,6 +140,16 @@ class ConfigureMachineAction
         $steps[] = Step::make('Altre opzioni')
             ->visible(fn (Forms\Get $get) => static::choosableSlots($get, null)->isNotEmpty())
             ->schema(fn (Forms\Get $get) => static::slotStepSchema($get, null));
+
+        // Il sistema di conteggio si vende insieme alla macchina, e qui si sa
+        // gia' QUALE macchina: e' cosi' che "AC200 non possibile per A300"
+        // diventa un'opzione disabilitata invece di una nota da ricordare.
+        // Fuori da "Modifica configurazione" pero': le sue righe sono di primo
+        // livello e updateQuoteProducts() cancella solo le opzioni della
+        // macchina, quindi ricomparirebbe lo step senza niente da modificare.
+        if ($conConteggio) {
+            $steps[] = ConteggioConfigurator::step();
+        }
 
         // Bug reale segnalato: il riepilogo era un testo fisso, senza
         // elencare cosa si sta per aggiungere ne' un totale - si confermava
@@ -198,6 +208,8 @@ class ConfigureMachineAction
                 'label' => $options->get($id)?->name ?? '—',
                 'price' => (float) ($options->get($id)?->getCurrentPrice()?->price ?? 0),
             ]));
+
+        $rows = $rows->concat(ConteggioConfigurator::righeRiepilogo($get));
 
         $subtotal = $rows->sum('price');
         $discount = min(100, max(0, (float) ($get('configuration_discount') ?? 0)));
@@ -439,6 +451,8 @@ class ConfigureMachineAction
                 'tax' => 22,
             ]);
         });
+
+        ConteggioConfigurator::creaRighe($quote, $data, $configurationDiscount);
 
         $quote->updateTotal();
 
