@@ -195,6 +195,10 @@
                     @if($report->machine_serial_number || $report->machineUnit?->serial_number)
                         <tr><td class="label">Matricola:</td><td>{{ $report->machine_serial_number ?: $report->machineUnit?->serial_number }}</td></tr>
                     @endif
+                    @php($vieLavate = $report->countsAsLavaggio() ? $report->totalLinesWashed() : null)
+                    @if($vieLavate !== null)
+                        <tr><td class="label">Vie lavate:</td><td>{{ $vieLavate }}</td></tr>
+                    @endif
                     @if($report->quote)
                         <tr><td class="label">Preventivo:</td><td>{{ $report->quote->number }}</td></tr>
                     @endif

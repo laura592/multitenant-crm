@@ -295,22 +295,26 @@ class ServiceReport extends Model
      * Un rapportino non e' piu' modificabile da CRM quando:
      * - e' arrivato da Eureka (SOURCE_EUREKA, vedi ImportEurekaServiceReports), o
      * - e' gia' stato inviato con successo a Eureka (gestionale_sync_status=sent,
-     *   vedi SendServiceReportToGestionaleJob) — in entrambi i casi Eureka e'
-     *   ormai (anche) la fonte autorevole per questo documento, e una modifica
-     *   lato CRM andrebbe fuori sincrono col gestionale senza che nessuno se ne
-     *   accorga; oppure
-     * - e' segnato "completato" (passato in amministrazione): per ora e' un
-     *   flag impostato a mano, ma segna comunque il rapportino come chiuso e
-     *   non piu' da toccare — in futuro questo stato coincidera' con l'invio
-     *   vero a Eureka (vedi gestionale_sync_status=sent sopra), diventando
-     *   modificabile solo da li'.
+     *   vedi SendServiceReportToGestionaleJob).
+     *
+     * In entrambi i casi Eureka e' ormai (anche) la fonte autorevole per quel
+     * documento, e una modifica lato CRM andrebbe fuori sincrono col gestionale
+     * senza che nessuno se ne accorga.
+     *
+     * "Completato" NON blocca piu' (2026-08-31). Era un flag impostato a mano,
+     * e trattarlo come irreversibile significava che un errore di battitura
+     * accorto dopo aver spuntato la casella non si poteva piu' correggere:
+     * l'unica via era cancellare e rifare. Il blocco resta legato all'unico
+     * fatto che lo giustifica davvero, cioe' che il documento sia gia' passato
+     * in Eureka — che e' anche cio' che questo stato diventera' quando l'invio
+     * sara' automatico.
+     *
      * Usato da ServiceReportPolicy::update().
      */
     public function isLocked(): bool
     {
         return $this->source === self::SOURCE_EUREKA
-            || $this->gestionale_sync_status === 'sent'
-            || $this->status === 'completato';
+            || $this->gestionale_sync_status === 'sent';
     }
 
     /**
@@ -475,6 +479,28 @@ class ServiceReport extends Model
     public function emails(): HasMany
     {
         return $this->hasMany(ServiceReportEmail::class)->latest();
+    }
+
+    /**
+     * I lavaggi generati da questo rapportino: uno per impianto coperto dalla
+     * visita (una sanificazione ne tocca spesso piu' d'uno).
+     */
+    public function lavaggi(): HasMany
+    {
+        return $this->hasMany(Lavaggio::class);
+    }
+
+    /**
+     * Vie lavate in tutto il rapportino, sommate su tutti gli impianti.
+     * null quando il tecnico non le ha indicate: in quel caso il dato non si
+     * stampa, invece di mostrare uno zero che sembrerebbe "nessuna via lavata".
+     */
+    public function totalLinesWashed(): ?int
+    {
+        $righe = $this->relationLoaded('lavaggi') ? $this->lavaggi : $this->lavaggi()->get();
+        $valorizzate = $righe->whereNotNull('lines_washed');
+
+        return $valorizzate->isEmpty() ? null : (int) $valorizzate->sum('lines_washed');
     }
 
     public function isSigned(): bool

@@ -93,11 +93,9 @@ class ServiceReportResource extends Resource
                 ->hiddenLabel()
                 ->columnSpanFull()
                 ->visible(fn (ServiceReport $record) => $record->isLocked())
-                ->state(fn (ServiceReport $record) => match (true) {
-                    $record->source === ServiceReport::SOURCE_EUREKA => 'Rapportino arrivato da Eureka: non è modificabile da qui.',
-                    $record->gestionale_sync_status === 'sent' => 'Rapportino già inviato a Eureka: non è più modificabile.',
-                    default => 'Rapportino segnato come completato: non è più modificabile.',
-                })
+                ->state(fn (ServiceReport $record) => $record->source === ServiceReport::SOURCE_EUREKA
+                    ? 'Rapportino arrivato da Eureka: non è modificabile da qui.'
+                    : 'Rapportino già inviato a Eureka: non è più modificabile.')
                 ->extraAttributes([
                     'class' => 'rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200',
                 ]),
@@ -141,6 +139,14 @@ class ServiceReportResource extends Resource
                 ->schema([
                     TextEntry::make('machine_model_name')->label('Modello macchina')->placeholder('—'),
                     TextEntry::make('machine_serial_number')->label('Matricola')->placeholder('—'),
+                    // Sui lavaggi la matricola da sola non basta: quante vie sono
+                    // state lavate e' il dato che il cliente verifica in fattura.
+                    TextEntry::make('vie_lavate')
+                        ->label('Vie lavate')
+                        ->state(fn (ServiceReport $record) => $record->totalLinesWashed())
+                        ->visible(fn (ServiceReport $record) => $record->countsAsLavaggio()
+                            && $record->totalLinesWashed() !== null)
+                        ->placeholder('—'),
                     TextEntry::make('machine_unit_display_name')->label('Macchina (matricola tracciata)')->placeholder('—'),
                     TextEntry::make('invoice_recipient')
                         ->label('Fatturare a')
