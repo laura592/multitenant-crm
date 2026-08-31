@@ -161,7 +161,7 @@ class MachineUnit extends Model
 
         $this->update([
             'source' => self::SOURCE_EUREKA,
-            'product_id' => $product?->id ?? $this->product_id,
+            'product_id' => $product->id ?? $this->product_id,
             'gestionale_suggested_code' => null,
             'gestionale_suggested_label' => null,
         ]);

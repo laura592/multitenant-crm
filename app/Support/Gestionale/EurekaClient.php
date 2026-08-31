@@ -201,12 +201,12 @@ class EurekaClient
      */
     public function cercaClienti(string $query): array
     {
-        try {
-            $url = rtrim($this->baseUrl, '/').'/anagrafica/cerca?'.http_build_query([
-                'nome' => $query,
-                'like' => 'true',
-            ]);
+        $url = rtrim($this->baseUrl, '/').'/anagrafica/cerca?'.http_build_query([
+            'nome' => $query,
+            'like' => 'true',
+        ]);
 
+        try {
             $response = Http::withBasicAuth(
                 $this->username,
                 $this->password,
@@ -236,11 +236,11 @@ class EurekaClient
      */
     public function cercaClientePerPiva(string $piva): array
     {
-        try {
-            $url = rtrim($this->baseUrl, '/').'/anagrafica/cerca?'.http_build_query([
-                'piva' => $piva,
-            ]);
+        $url = rtrim($this->baseUrl, '/').'/anagrafica/cerca?'.http_build_query([
+            'piva' => $piva,
+        ]);
 
+        try {
             $response = Http::withBasicAuth(
                 $this->username,
                 $this->password,
@@ -270,11 +270,11 @@ class EurekaClient
      */
     public function articoliInstallati(int $customerCode): array
     {
-        try {
-            $url = rtrim($this->baseUrl, '/').'/show/q/art_installati?'.http_build_query([
-                'q' => $customerCode,
-            ]);
+        $url = rtrim($this->baseUrl, '/').'/show/q/art_installati?'.http_build_query([
+            'q' => $customerCode,
+        ]);
 
+        try {
             $response = Http::withBasicAuth(
                 $this->username,
                 $this->password,
@@ -402,9 +402,9 @@ class EurekaClient
      */
     public function cercaArticoli(string $query): array
     {
-        try {
-            $url = rtrim($this->baseUrl, '/').'/articoli/lista/'.rawurlencode($query);
+        $url = rtrim($this->baseUrl, '/').'/articoli/lista/'.rawurlencode($query);
 
+        try {
             $response = Http::withBasicAuth(
                 $this->username,
                 $this->password,
@@ -442,13 +442,13 @@ class EurekaClient
      */
     public function cercaMatricole(int $idArticoloM10, string $query = ''): array
     {
-        try {
-            $url = rtrim($this->baseUrl, '/').'/crm_api/m14/search?'.http_build_query(array_filter([
-                'id_articolo_m10' => $idArticoloM10,
-                'q' => $query,
-                'per_page' => 25,
-            ]));
+        $url = rtrim($this->baseUrl, '/').'/crm_api/m14/search?'.http_build_query(array_filter([
+            'id_articolo_m10' => $idArticoloM10,
+            'q' => $query,
+            'per_page' => 25,
+        ]));
 
+        try {
             $response = Http::withBasicAuth(
                 $this->username,
                 $this->password,
