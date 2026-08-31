@@ -19,6 +19,7 @@ use App\Models\Product;
 use App\Models\ServiceReport;
 use App\Support\DisplayName;
 use App\Support\OutsideLivewireRender;
+use App\Support\TariffeIntervento;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Facades\Filament;
 use Illuminate\Support\Arr;
@@ -600,9 +601,46 @@ class ServiceReportResource extends Resource
                                     : '⚠️ Questa macchina ha più piani di manutenzione attivi collegati: verranno aggiornati tutti. Controlla che non sia un doppione.')
                                 .'</div>'
                         )),
-                    Forms\Components\Placeholder::make('fatturare_a')
+                    /*
+                     | Chi paga QUESTO intervento.
+                     |
+                     | Di default e' il pagante abituale — quello della
+                     | macchina, o quello del cliente — e nella stragrande
+                     | maggioranza dei casi non si tocca.
+                     |
+                     | Ma serve poterlo cambiare sul singolo rapportino: se il
+                     | guasto e' colpa del cliente, quell'intervento si fattura
+                     | a lui e non al torrefattore che paga il resto. Prima
+                     | questo campo era un Placeholder in sola lettura e
+                     | l'unica via era cambiare il pagante del cliente, cioe'
+                     | spostare anche tutto il resto.
+                     |
+                     | Quello che si sceglie qui resta scritto sul documento e
+                     | non cambia piu' (ServiceReport::freezeInvoiceRecipient()).
+                     */
+                    Forms\Components\Select::make('billing_customer_id')
                         ->label('Fatturare a')
-                        ->content(fn (Forms\Get $get) => DisplayName::titleCase(self::resolvePayer($get)?->full_name) ?? '—'),
+                        ->helperText(fn (Forms\Get $get) => filled($get('billing_customer_id'))
+                            ? 'Scelta per questo rapportino. Svuota il campo per tornare al pagante abituale.'
+                            : 'Vuoto = pagante abituale: '.(DisplayName::titleCase(self::resolvePayer($get)?->full_name) ?? '—'))
+                        ->placeholder(fn (Forms\Get $get) => DisplayName::titleCase(self::resolvePayer($get)?->full_name) ?? '—')
+                        ->relationship('billingCustomer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
+                        ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::customerOption($record))
+                        ->searchable(['company_name', 'first_name', 'last_name', 'city'])
+                        ->preload()
+                        ->live()
+                        // Scorciatoia per il caso che ha fatto nascere il
+                        // campo: il guasto e' colpa del cliente, si fattura a
+                        // lui. Come hintAction accanto all'etichetta, non come
+                        // icona dentro il campo: si vede, e si capisce che fa.
+                        ->hintAction(
+                            Forms\Components\Actions\Action::make('fattura_al_cliente')
+                                ->label('Fattura al cliente')
+                                ->icon('heroicon-m-user')
+                                ->visible(fn (Forms\Get $get) => filled($get('customer_id'))
+                                    && $get('billing_customer_id') !== $get('customer_id'))
+                                ->action(fn (Forms\Set $set, Forms\Get $get) => $set('billing_customer_id', $get('customer_id')))
+                        ),
                     // Non piu' una scelta manuale: il modello si ricava dalla
                     // macchina/matricola selezionata sopra (afterStateUpdated
                     // su machine_unit_id valorizza gia' l'Hidden sotto), cosi'
@@ -681,13 +719,22 @@ class ServiceReportResource extends Resource
                     // oltre la seconda.
                     Forms\Components\Grid::make(3)
                         ->schema([
+                            // Il festivo lo dichiara chi compila: non si deduce dalla
+                            // data, perche' un intervento fatto di sabato puo' essere
+                            // fatturato feriale e viceversa.
+                            Forms\Components\Toggle::make('_intervento_festivo')
+                                ->label('Intervento festivo')
+                                ->live()
+                                ->dehydrated(false)
+                                ->helperText('Cambia chiamata e manodopera nelle voci festive, prima di aggiungerle.')
+                                ->columnSpanFull(),
                             Forms\Components\Toggle::make('add_chiamata_material')
                                 ->label('Chiamata')
                                 ->live()
                                 ->dehydrated(false)
                                 ->default(fn (?ServiceReport $record) => self::resolveLavaggioShortcutDefaults($record)['chiamata_key'] !== null)
                                 ->disabled(fn (Forms\Get $get) => blank($get('customer_id')))
-                                ->helperText('Aggiunge da sola CHIVE (Venezia) o CHIORD (altrove). Seleziona prima il cliente.')
+                                ->helperText(fn (Forms\Get $get) => self::descrizioneTariffa($get, 'chiamata'))
                                 ->afterStateUpdated(function (bool $state, Forms\Set $set, Forms\Get $get) {
                                     $materialsUsed = $get('materialsUsed') ?? [];
                                     $addedKey = $get('_chiamata_material_key');
@@ -706,8 +753,11 @@ class ServiceReportResource extends Resource
                                     }
 
                                     $customer = Customer::find($get('customer_id'));
-                                    $code = $customer?->city === 'Venezia' ? 'CHIVE' : 'CHIORD';
-                                    $material = Material::where('code', $code)->first();
+                                    // Il codice dipende dal pagante (Martellozzo, Goppion,
+                                    // Spigola… hanno il loro listino, vedi config/tariffe.php)
+                                    // e solo in mancanza di listino dalla citta'.
+                                    $code = TariffeIntervento::per($customer, (bool) $get('_intervento_festivo'))['chiamata'];
+                                    $material = $code ? Material::where('code', $code)->first() : null;
 
                                     if (! $material) {
                                         return;
@@ -735,7 +785,7 @@ class ServiceReportResource extends Resource
                                 ->live()
                                 ->dehydrated(false)
                                 ->default(fn (?ServiceReport $record) => self::resolveLavaggioShortcutDefaults($record)['manodopera_key'] !== null)
-                                ->helperText('Aggiunge da sola la riga ore lavorate (ORE): segna poi la quantita\' come ore.')
+                                ->helperText(fn (Forms\Get $get) => self::descrizioneTariffa($get, 'manodopera'))
                                 ->afterStateUpdated(fn (bool $state, Forms\Set $set, Forms\Get $get) => self::syncManodoperaMaterial($state, $set, $get)),
                             Forms\Components\Toggle::make('_lavaggio_vie_eseguito')
                                 ->label('Lavaggio eseguito')
@@ -917,6 +967,56 @@ class ServiceReportResource extends Resource
      * sola per qualsiasi tipo diverso da manutenzione ordinaria, caricando un
      * costo senza che nessuno l'avesse chiesto).
      */
+    /**
+     * Testo sotto le scorciatoie: mostra il codice che verra' inserito davvero,
+     * cosi' chi compila vede subito se sta applicando il listino del pagante o
+     * quello standard.
+     */
+    /**
+     * Tutti i codici che valgono come una certa voce: quello standard, la sua
+     * variante festiva e le varianti dei paganti con listino proprio.
+     *
+     * @return array<int, string>
+     */
+    private static function codiciTariffa(string $voce): array
+    {
+        $standard = config('tariffe.standard');
+        $codici = array_filter([
+            $standard[$voce] ?? null,
+            $standard[$voce.'_festiva'] ?? null,
+            $voce === 'chiamata' ? ($standard['chiamata_venezia'] ?? null) : null,
+        ]);
+
+        foreach (config('tariffe.paganti') as $listino) {
+            $codici[] = $listino[$voce] ?? null;
+            $codici[] = $listino[$voce.'_festiva'] ?? null;
+        }
+
+        return array_values(array_unique(array_filter($codici)));
+    }
+
+    private static function descrizioneTariffa(Forms\Get $get, string $voce): string
+    {
+        if (blank($get('customer_id'))) {
+            return 'Seleziona prima il cliente.';
+        }
+
+        $tariffe = TariffeIntervento::per(
+            Customer::find($get('customer_id')),
+            (bool) $get('_intervento_festivo')
+        );
+
+        $codice = $tariffe[$voce] ?? null;
+
+        if (! $codice) {
+            return 'Nessun codice configurato.';
+        }
+
+        return $tariffe['pagante']
+            ? "Aggiunge {$codice} (listino {$tariffe['pagante']})."
+            : "Aggiunge {$codice}.";
+    }
+
     private static function syncManodoperaMaterial(bool $enabled, Forms\Set $set, Forms\Get $get): void
     {
         $materialsUsed = $get('materialsUsed') ?? [];
@@ -937,7 +1037,12 @@ class ServiceReportResource extends Resource
             return;
         }
 
-        $manodoperaId = Material::query()->where('code', self::MANODOPERA_MATERIAL_CODE)->value('id');
+        $codice = TariffeIntervento::per(
+            Customer::find($get('customer_id')),
+            (bool) $get('_intervento_festivo')
+        )['manodopera'] ?? self::MANODOPERA_MATERIAL_CODE;
+
+        $manodoperaId = Material::query()->where('code', $codice)->value('id');
 
         if (! $manodoperaId) {
             return;
@@ -1050,10 +1155,14 @@ class ServiceReportResource extends Resource
 
         $rows = $record->materialsUsed()->with('material')->get();
 
-        $chiamataRow = $rows->first(fn ($row) => in_array($row->material?->code, ['CHIVE', 'CHIORD'], true));
-        $manodoperaRow = $rows->first(fn ($row) => $row->material?->code === self::MANODOPERA_MATERIAL_CODE);
-        $baseRow = $rows->first(fn ($row) => $row->material?->code === self::LAVAGGIO_VIE_BASE_MATERIAL_CODE);
-        $ultRow = $rows->first(fn ($row) => $row->material?->code === self::LAVAGGIO_VIE_ULTERIORE_MATERIAL_CODE);
+        // Riconosce sia i codici standard sia quelli dei paganti con listino
+        // proprio: un rapportino con CHIMART deve accendere il toggle
+        // "Chiamata" come uno con CHIORD. Solo lettura: le righe gia' salvate
+        // non vengono mai riscritte.
+        $chiamataRow = $rows->first(fn ($row) => in_array($row->material?->code, self::codiciTariffa('chiamata'), true));
+        $manodoperaRow = $rows->first(fn ($row) => in_array($row->material?->code, self::codiciTariffa('manodopera'), true));
+        $baseRow = $rows->first(fn ($row) => in_array($row->material?->code, self::codiciTariffa('lavaggio'), true));
+        $ultRow = $rows->first(fn ($row) => in_array($row->material?->code, self::codiciTariffa('lavaggio_ulteriore_via'), true));
 
         return [
             // Prefisso "record-": il repeater ->relationship() tiene le righe
@@ -1103,8 +1212,9 @@ class ServiceReportResource extends Resource
             return;
         }
 
-        $baseMaterial = Material::where('code', self::LAVAGGIO_VIE_BASE_MATERIAL_CODE)->first();
-        $ultMaterial = Material::where('code', self::LAVAGGIO_VIE_ULTERIORE_MATERIAL_CODE)->first();
+        $tariffe = TariffeIntervento::per(Customer::find($get('customer_id')));
+        $baseMaterial = Material::where('code', $tariffe['lavaggio'] ?? self::LAVAGGIO_VIE_BASE_MATERIAL_CODE)->first();
+        $ultMaterial = Material::where('code', $tariffe['lavaggio_ulteriore_via'] ?? self::LAVAGGIO_VIE_ULTERIORE_MATERIAL_CODE)->first();
 
         $newBaseKey = null;
         $newUltKey = null;

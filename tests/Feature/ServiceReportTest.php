@@ -402,4 +402,57 @@ class ServiceReportTest extends TestCase
                 '_lavaggio_vie_count' => 4,
             ]);
     }
+
+    /**
+     * I paganti con listino proprio (Martellozzo, Spigola, Goppion…) hanno
+     * codici dedicati per chiamata, manodopera e lavaggio: prima le
+     * scorciatoie inserivano sempre quelli standard e chi compilava doveva
+     * ricordarsi di sostituirli, cosa che nei fatti non succedeva.
+     */
+    public function test_tariff_codes_follow_the_paying_customer(): void
+    {
+        $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);
+
+        $martellozzo = Customer::create([
+            'tenant_id' => $tenant->id, 'company_name' => 'Martellozzo Lorenzo & C. SAS',
+            'gestionale_code' => 1178,
+        ]);
+        $spigola = Customer::create([
+            'tenant_id' => $tenant->id, 'company_name' => 'Spigola SRL', 'gestionale_code' => 1629,
+        ]);
+
+        // cliente di Martellozzo, fuori Venezia: prima prendeva CHIORD
+        $bar = Customer::create([
+            'tenant_id' => $tenant->id, 'company_name' => 'Bar del Lido', 'city' => 'Jesolo',
+            'billing_customer_id' => $martellozzo->id,
+        ]);
+        $tariffe = \App\Support\TariffeIntervento::per($bar);
+        $this->assertSame('CHIMART', $tariffe['chiamata']);
+        $this->assertSame('OREMART', $tariffe['manodopera']);
+        $this->assertSame('LAV2MART', $tariffe['lavaggio']);
+        $this->assertSame('ULTVIAMART', $tariffe['lavaggio_ulteriore_via']);
+        $this->assertSame('CHIFEMART', \App\Support\TariffeIntervento::per($bar, true)['chiamata']);
+
+        // Spigola: chiamata CHIVE ovunque, anche senza citta' in anagrafica
+        $senzaCitta = Customer::create([
+            'tenant_id' => $tenant->id, 'company_name' => 'Hotel Senza Citta',
+            'billing_customer_id' => $spigola->id,
+        ]);
+        $this->assertSame('CHIVE', \App\Support\TariffeIntervento::per($senzaCitta)['chiamata']);
+        $this->assertSame('ORESPIGOLA', \App\Support\TariffeIntervento::per($senzaCitta)['manodopera']);
+
+        // nessun pagante: restano i codici di sempre, legati alla citta'
+        $diretto = Customer::create([
+            'tenant_id' => $tenant->id, 'company_name' => 'Caffe Diretto', 'city' => 'Venezia',
+        ]);
+        $this->assertSame('CHIVE', \App\Support\TariffeIntervento::per($diretto)['chiamata']);
+        $this->assertSame('ORE', \App\Support\TariffeIntervento::per($diretto)['manodopera']);
+        $this->assertSame('LAV2', \App\Support\TariffeIntervento::per($diretto)['lavaggio']);
+
+        $fuori = Customer::create([
+            'tenant_id' => $tenant->id, 'company_name' => 'Caffe Mestre', 'city' => 'Mestre-Venezia',
+        ]);
+        $this->assertSame('CHIORD', \App\Support\TariffeIntervento::per($fuori)['chiamata']);
+        $this->assertSame('OREFEST', \App\Support\TariffeIntervento::per($fuori, true)['manodopera']);
+    }
 }

@@ -83,6 +83,7 @@ class ServiceReport extends Model
         'tenant_id',
         'source',
         'customer_id',
+        'billing_customer_id',
         'number',
         'gestionale_number',
         'gestionale_document_date',
