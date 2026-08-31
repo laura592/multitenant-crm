@@ -243,7 +243,14 @@ class GestionaleSyncCommandTest extends TestCase
         $this->assertNull($ambiguous->fresh()->gestionale_suggested_code, 'piu\' di un risultato: nessuna proposta automatica');
     }
 
-    public function test_proposes_machine_unit_link_when_matricola_matches_on_eureka(): void
+    /**
+     * La proposta nasce da /show/q/art_installati (l'elenco installato presso
+     * il cliente della macchina), non piu' da /crm_api/m14/search: quella
+     * rotta risponde 403 dal 2026-08-27. gestionale_suggested_code porta
+     * quindi l'id ARTICOLO, non l'id matricola — vedi
+     * MachineUnit::confermaCollegamentoEureka().
+     */
+    public function test_proposes_machine_unit_link_when_matricola_is_installed_at_the_customer(): void
     {
         Mail::fake();
 
@@ -253,47 +260,99 @@ class GestionaleSyncCommandTest extends TestCase
             'sku' => 'A600FM', 'type' => Product::TYPE_MACHINE, 'name' => 'A600 FM', 'gestionale_code' => 19339,
         ]);
 
+        $customer = Customer::create([
+            'tenant_id' => $tenant->id, 'company_name' => 'Hotel Marco Polo', 'gestionale_code' => 3033,
+        ]);
+
         $matched = MachineUnit::create([
-            'tenant_id' => $tenant->id, 'product_id' => $product->id, 'serial_number' => '00113684',
+            'tenant_id' => $tenant->id, 'product_id' => $product->id,
+            'current_customer_id' => $customer->id, 'serial_number' => '00113684',
         ]);
 
         $notFound = MachineUnit::create([
-            'tenant_id' => $tenant->id, 'product_id' => $product->id, 'serial_number' => 'INESISTENTE-001',
+            'tenant_id' => $tenant->id, 'product_id' => $product->id,
+            'current_customer_id' => $customer->id, 'serial_number' => 'INESISTENTE-001',
         ]);
 
         Http::fake([
-            '*crm_api/m14/search*q=00113684*' => Http::response([
-                'items' => [['id' => 1157, 'matricola' => '00113684', 'id_articolo_m10' => 19339, 'note' => null]],
-                'total' => 1,
-            ], 200),
-            '*crm_api/m14/search*q=INESISTENTE-001*' => Http::response(['items' => [], 'total' => 0], 200),
+            '*art_installati*' => Http::response([[
+                'id_codice_f15' => 3033, 'id' => 19339, 'matricola' => '00113684',
+                'articolo' => 'A600FM', 'desc_articolo_1' => "MACCHINA PER CAFFE' FRANKE A600FM",
+            ]], 200),
+            '*' => Http::response([], 200),
         ]);
 
         $this->artisan('gestionale:sync')->assertExitCode(0);
 
-        $this->assertSame(1157, $matched->fresh()->gestionale_suggested_code);
+        $this->assertSame(19339, $matched->fresh()->gestionale_suggested_code);
         $this->assertSame('00113684', $matched->fresh()->gestionale_suggested_label);
         $this->assertNull($matched->fresh()->gestionale_code, 'la proposta non deve mai auto-assegnarsi');
         $this->assertNull($notFound->fresh()->gestionale_suggested_code);
     }
 
-    public function test_does_not_propose_machine_unit_link_when_product_is_not_linked_to_eureka(): void
+    /**
+     * La conferma marca source=eureka e lascia gestionale_code vuoto: quella
+     * colonna e' l'id matricola M14, che art_installati non espone e che non
+     * possiamo piu' leggere (modulo `crm` negato).
+     */
+    public function test_confirming_a_machine_link_marks_it_eureka_sourced_without_faking_a_matricola_id(): void
+    {
+        $tenant = $this->makeTenant();
+
+        $product = Product::create([
+            'sku' => 'A600FM', 'type' => Product::TYPE_MACHINE, 'name' => 'A600 FM', 'gestionale_code' => 19339,
+        ]);
+
+        $machineUnit = MachineUnit::create([
+            'tenant_id' => $tenant->id, 'serial_number' => '00113684',
+            'gestionale_suggested_code' => 19339, 'gestionale_suggested_label' => '00113684',
+        ]);
+
+        $machineUnit->confermaCollegamentoEureka();
+        $machineUnit->refresh();
+
+        $this->assertSame(MachineUnit::SOURCE_EUREKA, $machineUnit->source);
+        $this->assertNull($machineUnit->gestionale_code);
+        $this->assertNull($machineUnit->gestionale_suggested_code);
+        // La proposta porta l'articolo Eureka: utile per una macchina
+        // importata senza prodotto, ma non deve sovrascriverne uno gia' scelto.
+        $this->assertSame($product->id, $machineUnit->product_id);
+    }
+
+    /**
+     * Un prodotto non collegato non e' piu' un motivo per saltare la
+     * proposta (lo era solo perche' la vecchia ricerca m14 pretendeva
+     * id_articolo_m10): dentro l'elenco installato presso quel cliente la
+     * matricola basta da sola.
+     */
+    public function test_proposes_machine_unit_link_even_when_product_is_not_linked_to_eureka(): void
     {
         Mail::fake();
-        Http::fake(); // il prodotto senza gestionale_code fara' comunque una ricerca articoli: risposta vuota di default
 
         $tenant = $this->makeTenant();
 
         $product = Product::create(['sku' => 'NOLINK', 'type' => Product::TYPE_MACHINE, 'name' => 'Senza collegamento']);
 
+        $customer = Customer::create([
+            'tenant_id' => $tenant->id, 'company_name' => 'Hotel Marco Polo', 'gestionale_code' => 3033,
+        ]);
+
         $machineUnit = MachineUnit::create([
-            'tenant_id' => $tenant->id, 'product_id' => $product->id, 'serial_number' => 'SN-001',
+            'tenant_id' => $tenant->id, 'product_id' => $product->id,
+            'current_customer_id' => $customer->id, 'serial_number' => 'SN-001',
+        ]);
+
+        Http::fake([
+            '*art_installati*' => Http::response([[
+                'id_codice_f15' => 3033, 'id' => 40404, 'matricola' => 'SN-001', 'articolo' => 'IGNOTO',
+            ]], 200),
+            '*' => Http::response([], 200),
         ]);
 
         $this->artisan('gestionale:sync')->assertExitCode(0);
 
         Http::assertNotSent(fn ($request) => str_contains($request->url(), 'crm_api/m14/search'));
-        $this->assertNull($machineUnit->fresh()->gestionale_suggested_code);
+        $this->assertSame(40404, $machineUnit->fresh()->gestionale_suggested_code);
     }
 
     public function test_does_not_autofill_placeholder_looking_piva_or_codice_fiscale(): void
@@ -445,8 +504,10 @@ class GestionaleSyncCommandTest extends TestCase
         ]);
 
         Http::fake([
-            // Il modulo `crm` non e' abilitato sulle nostre credenziali.
-            '*crm_api/m14/search*' => Http::response('<html><body><h1>403: Forbidden</h1></body></html>', 403),
+            // Un endpoint negato mentre il resto risponde: e' la forma che
+            // ha avuto il 403 su /crm_api/m14/search del 2026-08-27, ora
+            // riprodotta sull'endpoint da cui dipendono le macchine.
+            '*art_installati*' => Http::response('<html><body><h1>403: Forbidden</h1></body></html>', 403),
             '*anagrafica/cerca*' => Http::response([[
                 'id' => 1,
                 'rag_sociale_1' => 'GDP ITALIA SRL',
@@ -455,11 +516,10 @@ class GestionaleSyncCommandTest extends TestCase
                 'sigla_prov' => 'VI',
                 'email' => 'info@gdpitalia.com',
             ]], 200),
-            '*art_installati*' => Http::response([], 200),
         ]);
 
         $this->artisan('gestionale:sync')
-            ->expectsOutputToContain('/crm_api/m14/*')
+            ->expectsOutputToContain('/show/q/*')
             ->assertExitCode(0);
 
         // Eureka risponde: non e' il caso "irraggiungibile", quindi deve
@@ -469,7 +529,7 @@ class GestionaleSyncCommandTest extends TestCase
             $issues = $mail->results['apiIssues'];
 
             return count($issues) === 1
-                && $issues[0]['endpoint'] === '/crm_api/m14/*'
+                && $issues[0]['endpoint'] === '/show/q/*'
                 && str_contains($issues[0]['statuses'], '403');
         });
     }
@@ -502,7 +562,7 @@ class GestionaleSyncCommandTest extends TestCase
         ]);
 
         Http::fake([
-            '*crm_api/m14/search*' => Http::response('', 403),
+            '*art_installati*' => Http::response('', 403),
             '*' => Http::response([], 200),
         ]);
 

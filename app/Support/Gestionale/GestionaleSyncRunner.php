@@ -27,6 +27,12 @@ class GestionaleSyncRunner
 {
     private EurekaClient $client;
 
+    /** @var array<string, array<int, array<string, mixed>>>|null */
+    private ?array $installedByCustomer = null;
+
+    /** @var \Illuminate\Support\Collection<int, Customer> */
+    private $linkedCustomers;
+
     public function __construct(private readonly Tenant $tenant)
     {
         $this->client = new EurekaClient($tenant);
@@ -303,50 +309,94 @@ class GestionaleSyncRunner
     {
         $proposals = [];
 
+        // Niente piu' filtro su product_id/prodotto collegato: serviva solo
+        // perche' la vecchia ricerca su /crm_api/m14/search voleva
+        // id_articolo_m10 per restringere il campo. Qui il confronto avviene
+        // dentro l'elenco installato presso IL cliente della macchina, che e'
+        // gia' un contesto stretto: una matricola che compare li' e' quella
+        // macchina, che il prodotto sia collegato o no.
         $candidates = MachineUnit::query()
             ->where('tenant_id', $this->tenant->id)
             ->whereNotNull('serial_number')
-            ->whereNotNull('product_id')
+            ->whereNotNull('current_customer_id')
+            ->where('source', '!=', MachineUnit::SOURCE_EUREKA)
             ->whereNull('gestionale_code')
             ->whereNull('gestionale_suggested_code')
-            ->whereHas('product', fn ($q) => $q->whereNotNull('gestionale_code'))
-            ->with('product')
             ->get();
 
-        // Stesso principio delle altre proposeXLinks(): una ricerca
-        // matricola per macchina, tutte in gruppi concorrenti. cercaMatricole()
-        // usa /crm_api/m14/search (query string), quindi pooledGet(); a
-        // differenza delle altre chiamate pooled pero' la risposta e'
-        // paginata ({"items": [...], "total": N}), va estratto "items".
-        $searchParams = $candidates->mapWithKeys(fn (MachineUnit $machineUnit) => [
-            $machineUnit->id => array_filter([
-                'id_articolo_m10' => $machineUnit->product->gestionale_code,
-                'q' => $machineUnit->serial_number,
-                'per_page' => 25,
-            ]),
-        ])->all();
-
-        $searchResults = $this->client->pooledGet('/crm_api/m14/search', $searchParams);
+        $installedByCustomer = $this->installedMachinesByCustomer();
 
         foreach ($candidates as $machineUnit) {
-            $results = $searchResults[$machineUnit->id]['items'] ?? [];
+            $rows = $installedByCustomer[$machineUnit->current_customer_id] ?? [];
+            $serial = mb_strtolower(trim((string) $machineUnit->serial_number));
 
             $matches = array_values(array_filter(
-                $results,
-                fn (array $item) => mb_strtolower(trim($item['matricola'] ?? '')) === mb_strtolower(trim($machineUnit->serial_number)),
+                $rows,
+                fn (array $row) => mb_strtolower(trim((string) ($row['matricola'] ?? ''))) === $serial,
             ));
 
             if (count($matches) !== 1) {
                 continue;
             }
 
-            $match = $matches[0];
-            $label = $match['matricola'];
-            $machineUnit->update(['gestionale_suggested_code' => $match['id'], 'gestionale_suggested_label' => $label]);
-            $proposals[] = ['machineUnit' => $machineUnit, 'label' => $label, 'id' => $match['id']];
+            $articleId = (int) ($matches[0]['id'] ?? 0);
+
+            if ($articleId <= 0) {
+                continue;
+            }
+
+            $label = trim((string) $matches[0]['matricola']);
+
+            // gestionale_suggested_code porta l'id ARTICOLO (M10), non l'id
+            // matricola (M14) che portava la proposta da /crm_api/m14/search:
+            // art_installati non espone l'id M14 e non abbiamo altro modo di
+            // leggerlo finche' il modulo `crm` resta negato (403). Per questo
+            // la conferma NON scrive gestionale_code — che la migration
+            // definisce "id m14 (matricola) su Eureka" — ma marca la macchina
+            // come proveniente da Eureka: e' quel campo, non gestionale_code,
+            // a decidere l'invio di sl_matricola nel rapportino
+            // (ServiceReport::toGestionalePayload()) e le due letture
+            // esistenti trattano gia' i due segnali come equivalenti
+            // (MachineUnitResource::table(), ServiceReportResource::isMachineUnitLinkedToEureka()).
+            // Vedi MachineUnit::confermaCollegamentoEureka().
+            $machineUnit->update([
+                'gestionale_suggested_code' => $articleId,
+                'gestionale_suggested_label' => $label,
+            ]);
+
+            $proposals[] = ['machineUnit' => $machineUnit, 'label' => $label, 'id' => $articleId];
         }
 
         return $proposals;
+    }
+
+    /**
+     * Macchine che Eureka dice installate presso ciascun cliente collegato,
+     * indicizzate per id cliente CRM. Una chiamata per cliente, in gruppi
+     * concorrenti (vedi reverifyLinkedCustomers()), ma fatta UNA volta sola
+     * per esecuzione: la usano sia proposeMachineUnitLinks() sia
+     * importInstalledMachines(), e ripeterla significherebbe raddoppiare le
+     * chiamate all'endpoint piu' pesante del sync.
+     *
+     * @return array<string, array<int, array<string, mixed>>>
+     */
+    private function installedMachinesByCustomer(): array
+    {
+        if ($this->installedByCustomer !== null) {
+            return $this->installedByCustomer;
+        }
+
+        $customers = Customer::query()
+            ->where('tenant_id', $this->tenant->id)
+            ->whereNotNull('gestionale_code')
+            ->get();
+
+        $this->linkedCustomers = $customers;
+
+        return $this->installedByCustomer = $this->client->pooledGet(
+            '/show/q/art_installati',
+            $customers->mapWithKeys(fn (Customer $customer) => [$customer->id => ['q' => (int) $customer->gestionale_code]])->all(),
+        );
     }
 
     /**
@@ -382,17 +432,8 @@ class GestionaleSyncRunner
             ->keyBy(fn (MachineUnit $m) => mb_strtolower(trim($m->serial_number)));
         $knownSerials = $knownMachineUnits->map(fn () => true)->all();
 
-        $customers = Customer::query()
-            ->where('tenant_id', $this->tenant->id)
-            ->whereNotNull('gestionale_code')
-            ->get();
-
-        // Vedi reverifyLinkedCustomers(): stesso principio, una chiamata per
-        // cliente ma tutte in gruppi concorrenti invece che in sequenza.
-        $installedByCustomer = $this->client->pooledGet(
-            '/show/q/art_installati',
-            $customers->mapWithKeys(fn (Customer $customer) => [$customer->id => ['q' => (int) $customer->gestionale_code]])->all(),
-        );
+        $installedByCustomer = $this->installedMachinesByCustomer();
+        $customers = $this->linkedCustomers;
 
         foreach ($customers as $customer) {
             $installed = $installedByCustomer[$customer->id] ?? [];

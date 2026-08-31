@@ -425,6 +425,15 @@ class EurekaClient
     }
 
     /**
+     * NON UTILIZZATA dal 2026-08-31: /crm_api/* risponde 403 da quando il
+     * fornitore ha introdotto i diritti per modulo (il modulo `crm` non e'
+     * abilitato sulle nostre credenziali, vedi GET /utente/permessi), e la
+     * rotta non compare nemmeno nel manuale rev. 1.2. Le proposte di
+     * collegamento macchinari passano ora da /show/q/art_installati (vedi
+     * GestionaleSyncRunner::proposeMachineUnitLinks()). Tenuta qui perche'
+     * torna utile identica il giorno in cui il modulo venisse abilitato: e'
+     * l'unico modo di leggere l'id matricola M14.
+     *
      * Ricerca matricole di un articolo (bene) gia' collegato a Eureka.
      * Risposta paginata (a differenza degli altri endpoint di ricerca):
      * `{"items": [...], "total": N}` — ritorniamo solo `items`.

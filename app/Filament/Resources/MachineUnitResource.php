@@ -263,11 +263,7 @@ class MachineUnitResource extends Resource
             ->requiresConfirmation()
             ->modalDescription('Il sync automatico ha trovato questa matricola su Eureka. Confermi?')
             ->action(function (MachineUnit $record) {
-                $record->update([
-                    'gestionale_code' => $record->gestionale_suggested_code,
-                    'gestionale_suggested_code' => null,
-                    'gestionale_suggested_label' => null,
-                ]);
+                $record->confermaCollegamentoEureka();
                 Notification::make()->title('Collegamento confermato')->success()->send();
             });
     }

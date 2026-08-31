@@ -38,7 +38,10 @@ class GestionaleCollegamentiMacchinariWidget extends BaseWidget
                 Tables\Columns\TextColumn::make('display_name')->label('Modello'),
                 Tables\Columns\TextColumn::make('gestionale_suggested_label')
                     ->label('Trovata su Eureka')
-                    ->description(fn (MachineUnit $record) => "id {$record->gestionale_suggested_code}")
+                    // L'id e' quello dell'ARTICOLO Eureka, non della matricola:
+                    // la proposta viene da art_installati (vedi
+                    // MachineUnit::confermaCollegamentoEureka()).
+                    ->description(fn (MachineUnit $record) => "articolo Eureka id {$record->gestionale_suggested_code}")
                     ->placeholder('—'),
             ])
             ->actions([
@@ -49,11 +52,7 @@ class GestionaleCollegamentiMacchinariWidget extends BaseWidget
                     ->requiresConfirmation()
                     ->modalDescription('Il sync automatico ha trovato questa matricola su Eureka. Confermi?')
                     ->action(function (MachineUnit $record) {
-                        $record->update([
-                            'gestionale_code' => $record->gestionale_suggested_code,
-                            'gestionale_suggested_code' => null,
-                            'gestionale_suggested_label' => null,
-                        ]);
+                        $record->confermaCollegamentoEureka();
                         Notification::make()->title('Collegamento confermato')->success()->send();
                     }),
                 Tables\Actions\Action::make('scarta_collegamento_gestionale')

@@ -130,4 +130,40 @@ class MachineUnit extends Model
             'status' => $customer ? self::STATUS_INSTALLATA : self::STATUS_IN_MAGAZZINO,
         ]);
     }
+
+    /**
+     * Accetta la proposta di collegamento trovata dal sync
+     * (GestionaleSyncRunner::proposeMachineUnitLinks()).
+     *
+     * Marca la macchina come proveniente da Eureka invece di scrivere
+     * gestionale_code: la proposta nasce da /show/q/art_installati, che
+     * espone l'id dell'ARTICOLO e non l'id matricola (M14) che quella colonna
+     * contiene ("id m14 (matricola) su Eureka", vedi la migration). L'id
+     * matricola si leggeva da /crm_api/m14/search, che dal 2026-08-27
+     * risponde 403 perche' il modulo `crm` non e' abilitato sulle nostre
+     * credenziali. Scriverci dentro l'id articolo sarebbe un dato sbagliato
+     * in una colonna dal significato preciso.
+     *
+     * source=eureka e' comunque il segnale che conta davvero: e' quello a
+     * decidere l'invio di sl_matricola (ServiceReport::toGestionalePayload())
+     * e chi legge gestionale_code lo tratta gia' come equivalente
+     * (MachineUnitResource::table(), ServiceReportResource::isMachineUnitLinkedToEureka()).
+     *
+     * Il prodotto si collega solo se non ce n'e' gia' uno: la proposta porta
+     * l'articolo Eureka della matricola, utile per le macchine importate
+     * senza prodotto, ma non deve sovrascrivere una scelta gia' fatta a mano.
+     */
+    public function confermaCollegamentoEureka(): void
+    {
+        $product = $this->product_id === null && $this->gestionale_suggested_code !== null
+            ? Product::query()->where('gestionale_code', $this->gestionale_suggested_code)->first()
+            : null;
+
+        $this->update([
+            'source' => self::SOURCE_EUREKA,
+            'product_id' => $product?->id ?? $this->product_id,
+            'gestionale_suggested_code' => null,
+            'gestionale_suggested_label' => null,
+        ]);
+    }
 }
