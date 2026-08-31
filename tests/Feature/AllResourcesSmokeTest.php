@@ -20,13 +20,22 @@ class AllResourcesSmokeTest extends TestCase
 {
     use RefreshDatabase, AssignsPermissionRoles;
 
-    private const CATALOG_PATHS = ['categories', 'product-families', 'brands', 'products'];
+    // price-lists e' qui e non fra le back-office perche' un partner ci
+    // accede davvero: gli servono i prezzi per fare un preventivo. Verificato
+    // 2026-08-31 — se un giorno si decidesse che non deve vederli, il test
+    // qui sotto diventa rosso ed e' esattamente quello che deve fare.
+    private const CATALOG_PATHS = ['categories', 'product-families', 'brands', 'products', 'price-lists'];
 
-    private const SALES_PATHS = ['customers', 'quotes'];
+    private const SALES_PATHS = ['customers', 'quotes', 'quote-groups'];
 
     private const BACK_OFFICE_PATHS = [
         'payment-methods', 'service-reports', 'vehicles', 'maintenance-schedules',
         'deadlines', 'time-entries', 'leave-requests', 'riepilogo-ore',
+        // Aggiunte 2026-08-31: erano le uniche risorse che nessun test
+        // apriva mai. machine-units in particolare e' quella attorno a cui
+        // gira la storia di una matricola, e ci abbiamo appena cambiato
+        // dentro la risoluzione del pagante.
+        'machine-units', 'materials', 'material-orders', 'suppliers',
     ];
 
     public function test_admin_role_can_access_every_tenant_resource_except_tenant_management(): void

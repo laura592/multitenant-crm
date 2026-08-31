@@ -58,7 +58,11 @@ class EditServiceReport extends EditRecord
             'add_manodopera_material' => $defaults['manodopera_key'] !== null,
             '_manodopera_material_key' => $defaults['manodopera_key'],
             '_lavaggio_vie_eseguito' => $defaults['lavaggio_base_key'] !== null,
-            '_lavaggio_vie_count' => $defaults['vie_count'],
+            // Colonna vera, gia' presente in $data: la si sovrascrive lo
+            // stesso perche' resolveLavaggioShortcutDefaults() la ritorna
+            // tale e quale quando c'e', e col ripiego calcolato dalle righe
+            // quando e' vuota (rapportini vecchi o importati da Eureka).
+            'lavaggio_vie_count' => $defaults['vie_count'],
             '_lavaggio_base_material_key' => $defaults['lavaggio_base_key'],
             '_lavaggio_ult_material_key' => $defaults['lavaggio_ult_key'],
             'lavaggio_impianti' => ServiceReportResource::resolveLavaggioImpiantiDefaults($this->getRecord()),

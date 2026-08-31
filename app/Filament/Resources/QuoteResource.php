@@ -50,6 +50,23 @@ class QuoteResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Preventivi';
 
+
+    /**
+     * Precarica le relazioni che l'elenco legge per ogni riga.
+     *
+     * Senza, Filament fa una query per riga per ciascuna relazione: sui
+     * rapportini erano 56 query per 25 righe invece di 8, e il conto cresce
+     * con la paginazione.
+     *
+     * customer e' una colonna dell'elenco; i due billingCustomer servono a
+     * invoiceRecipient(), che senza eager loading interroga il database una
+     * volta per riga.
+     */
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->with(['customer.billingCustomer', 'billingCustomer']);
+    }
+
     public static function infolist(Infolist $infolist): Infolist
     {
         return $infolist->schema([

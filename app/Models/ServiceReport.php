@@ -99,6 +99,7 @@ class ServiceReport extends Model
         'departure_at',
         'problem_description',
         'work_performed',
+        'lavaggio_vie_count',
         'status',
         'customer_signature_path',
         'customer_signature_name',
@@ -122,6 +123,7 @@ class ServiceReport extends Model
 
     protected $casts = [
         'intervention_date' => 'date',
+        'lavaggio_vie_count' => 'integer',
         'gestionale_document_date' => 'date',
         'arrival_at' => 'datetime',
         'departure_at' => 'datetime',

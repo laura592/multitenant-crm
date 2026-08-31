@@ -19,4 +19,9 @@ parameters:
         - app/Console/Commands/*
         - database/data/*
 
-    tmpDir: storage/phpstan
+    # Fuori dal progetto di proposito: con Docker su macOS la cartella e' un
+    # bind mount, e i processi paralleli di PHPStan si pestano i piedi
+    # rinominando i file di cache ("rename(): No such file or directory").
+    # Il risultato era un [ERROR] Found 1 error e l'analisi che non girava
+    # piu' — cioe' phpstan spento senza che nessuno se ne accorgesse.
+    tmpDir: /tmp/phpstan

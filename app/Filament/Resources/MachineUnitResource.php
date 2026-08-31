@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources;
 
+use Illuminate\Database\Eloquent\Builder;
 use App\Filament\Resources\MachineUnitResource\Pages;
 use App\Filament\Resources\MachineUnitResource\RelationManagers\PlacementsRelationManager;
 use App\Models\Customer;
@@ -43,6 +44,22 @@ class MachineUnitResource extends Resource
     protected static ?string $modelLabel = 'Macchinario';
 
     protected static ?string $pluralModelLabel = 'Macchinari';
+
+
+    /**
+     * Precarica le relazioni che l'elenco legge per ogni riga.
+     *
+     * Senza, Filament fa una query per riga per ciascuna relazione: sui
+     * rapportini erano 56 query per 25 righe invece di 8, e il conto cresce
+     * con la paginazione.
+     *
+     * currentCustomer e' una colonna dell'elenco; billingCustomer e product
+     * vengono letti dalle azioni e dalla scheda.
+     */
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->with(['currentCustomer', 'billingCustomer', 'product']);
+    }
 
     public static function form(Form $form): Form
     {

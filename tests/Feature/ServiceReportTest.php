@@ -306,7 +306,7 @@ class ServiceReportTest extends TestCase
                 'work_performed' => 'Lavaggio impianto 4 vie',
             ])
             ->set('data._lavaggio_vie_eseguito', true)
-            ->set('data._lavaggio_vie_count', 4);
+            ->set('data.lavaggio_vie_count', 4);
 
         $materialsUsed = collect($livewire->get('data.materialsUsed'));
 
@@ -315,10 +315,63 @@ class ServiceReportTest extends TestCase
         $this->assertSame(2, (int) $materialsUsed->firstWhere('material_id', $ultVia->id)['quantity']);
 
         // Riducendo a 2 vie, la riga "ulteriore via" deve sparire da sola.
-        $livewire->set('data._lavaggio_vie_count', 2);
+        $livewire->set('data.lavaggio_vie_count', 2);
         $materialsUsed = collect($livewire->get('data.materialsUsed'));
         $this->assertCount(1, $materialsUsed);
         $this->assertSame(1, (int) $materialsUsed->firstWhere('material_id', $lav2->id)['quantity']);
+    }
+
+    /**
+     * Lavando una sola via il rapportino genera esattamente le stesse righe
+     * di due vie (solo LAV2, nessun ULTVIA: la tariffa minima e' comunque
+     * quella): riaprendolo, "Numero vie lavate" deve pero' rileggere 1, il
+     * numero che il tecnico ha digitato, non 2 ricavato all'indietro dalle
+     * righe. Per questo il campo e' una colonna vera
+     * (service_reports.lavaggio_vie_count) e non un campo di comodo come i
+     * toggle accanto.
+     */
+    public function test_lavaggio_vie_count_di_una_via_sopravvive_al_salvataggio(): void
+    {
+        $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);
+        $tech = User::create([
+            'tenant_id' => $tenant->id, 'name' => 'Tecnico Sette', 'email' => 'tech7@gifar.it', 'password' => bcrypt('password'),
+        ]);
+        $this->giveRole($tech, $tenant, 'dipendente');
+        $customer = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Bar Centrale']);
+        $lav2 = Material::create(['tenant_id' => $tenant->id, 'code' => 'LAV2', 'category' => 'Eureka', 'type' => 'LAVAGGIO 2 VIE']);
+        Material::create(['tenant_id' => $tenant->id, 'code' => 'ULTVIA', 'category' => 'Eureka', 'type' => 'ULTERIORE VIA LAVATA']);
+
+        $this->actingAs($tech);
+        Filament::setTenant($tenant);
+
+        Livewire::test(CreateServiceReport::class)
+            ->fillForm([
+                'customer_id' => $customer->id,
+                'technician_id' => $tech->id,
+                'intervention_type' => ServiceReport::TYPE_MANUTENZIONE_ORDINARIA,
+                'intervention_date' => now(),
+                'work_performed' => 'Lavaggio impianto 1 via',
+            ])
+            ->set('data._lavaggio_vie_eseguito', true)
+            ->set('data.lavaggio_vie_count', 1)
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $report = ServiceReport::where('customer_id', $customer->id)->latest()->first();
+
+        $this->assertSame(1, $report->lavaggio_vie_count);
+
+        // Le righe materiali (e quindi il prezzo) restano quelle di sempre:
+        // un solo LAVAGGIO 2 VIE, niente ULTERIORE VIA LAVATA.
+        $righe = $report->materialsUsed()->get();
+        $this->assertCount(1, $righe);
+        $this->assertSame($lav2->id, $righe->first()->material_id);
+
+        Livewire::test(EditServiceReport::class, ['record' => $report->getRouteKey()])
+            ->assertFormSet([
+                '_lavaggio_vie_eseguito' => true,
+                'lavaggio_vie_count' => 1,
+            ]);
     }
 
     /**
@@ -326,10 +379,14 @@ class ServiceReportTest extends TestCase
      * LAV2 (lavaggio, senza ULTVIA) in elenco — es. importato da Eureka — i
      * due toggle "Chiamata"/"Lavaggio eseguito" devono partire gia' accesi,
      * non spenti: altrimenti sembrano "rotti" pur essendo le righe li'.
-     * "Numero vie lavate" deve leggere 2 (il valore nominale della tariffa
-     * LAV2), non 1: da LAV2 da solo non si puo' distinguere "1 via con
-     * tariffa minima agevolata" da "2 vie", e 2 e' quello che il codice
-     * materiale dichiara letteralmente. Vedi
+     * Qui service_reports.lavaggio_vie_count e' vuota (rapportino nato prima
+     * di quella colonna), quindi scatta il ripiego calcolato dalle righe:
+     * "Numero vie lavate" legge 2 (il valore nominale della tariffa LAV2),
+     * non 1, perche' da LAV2 da solo non si puo' distinguere "1 via con
+     * tariffa minima agevolata" da "2 vie" e 2 e' quello che il codice
+     * materiale dichiara letteralmente. Su un rapportino salvato dal form,
+     * invece, vince sempre il numero digitato — vedi il test
+     * test_lavaggio_vie_count_di_una_via_sopravvive_al_salvataggio. Vedi
      * ServiceReportResource::resolveLavaggioShortcutDefaults().
      */
     public function test_edit_page_prefills_lavaggio_and_chiamata_toggles_from_existing_materials(): void
@@ -361,7 +418,7 @@ class ServiceReportTest extends TestCase
             ->assertFormSet([
                 'add_chiamata_material' => true,
                 '_lavaggio_vie_eseguito' => true,
-                '_lavaggio_vie_count' => 2,
+                'lavaggio_vie_count' => 2,
             ]);
     }
 
@@ -399,7 +456,7 @@ class ServiceReportTest extends TestCase
         Livewire::test(EditServiceReport::class, ['record' => $report->getRouteKey()])
             ->assertFormSet([
                 '_lavaggio_vie_eseguito' => true,
-                '_lavaggio_vie_count' => 4,
+                'lavaggio_vie_count' => 4,
             ]);
     }
 

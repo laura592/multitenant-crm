@@ -85,6 +85,24 @@ class ServiceReportResource extends Resource
      */
     private const MACHINE_UNIT_NO_SERIAL_PLACEHOLDER = '0000000';
 
+
+    /**
+     * Precarica le relazioni che l'elenco legge per ogni riga.
+     *
+     * Senza, Filament fa una query per riga per ciascuna relazione: sui
+     * rapportini erano 56 query per 25 righe invece di 8, e il conto cresce
+     * con la paginazione.
+     *
+     * customer e technician sono colonne dell'elenco. Le altre tre servono a
+     * invoiceRecipient(), che risale al pagante congelato sul documento, poi a
+     * quello della macchina, poi a quello del cliente: senza precaricarle,
+     * la colonna "Fatturare a" da sola fa tre query per riga.
+     */
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->with(['customer.billingCustomer', 'technician', 'machineUnit.billingCustomer', 'billingCustomer']);
+    }
+
     public static function infolist(Infolist $infolist): Infolist
     {
         return $infolist->schema([
@@ -795,12 +813,24 @@ class ServiceReportResource extends Resource
                                 ->default(fn (?ServiceReport $record) => self::resolveLavaggioShortcutDefaults($record)['lavaggio_base_key'] !== null)
                                 ->helperText('Aggiunge da sola LAVAGGIO 2 VIE (sempre) + ULTERIORE VIA LAVATA per le vie oltre la seconda.')
                                 ->afterStateUpdated(fn (Forms\Set $set, Forms\Get $get) => self::syncLavaggioViaMaterials($set, $get)),
-                            Forms\Components\TextInput::make('_lavaggio_vie_count')
+                            // Unico campo della sezione che e' una colonna
+                            // vera (service_reports.lavaggio_vie_count), non
+                            // di comodo come i toggle qui sopra: le righe
+                            // materiali da sole non bastano a ricordarlo,
+                            // perche' 1 via e 2 vie generano lo stesso identico
+                            // LAV2 e la lettura all'indietro tornava sempre 2
+                            // (vedi resolveLavaggioShortcutDefaults()).
+                            // ->dehydratedWhenHidden() perche' quando
+                            // "Lavaggio eseguito" e' spento il campo sparisce,
+                            // e un campo nascosto per default non viene
+                            // salvato: senza, in DB resterebbe il conteggio
+                            // del lavaggio appena tolto.
+                            Forms\Components\TextInput::make('lavaggio_vie_count')
                                 ->label('Numero vie lavate')
                                 ->numeric()
                                 ->minValue(1)
                                 ->live()
-                                ->dehydrated(false)
+                                ->dehydratedWhenHidden()
                                 ->default(fn (?ServiceReport $record) => self::resolveLavaggioShortcutDefaults($record)['vie_count'])
                                 ->visible(fn (Forms\Get $get) => (bool) $get('_lavaggio_vie_eseguito'))
                                 ->afterStateUpdated(fn (Forms\Set $set, Forms\Get $get) => self::syncLavaggioViaMaterials($set, $get)),
@@ -1175,12 +1205,17 @@ class ServiceReportResource extends Resource
             'manodopera_key' => $manodoperaRow ? "record-{$manodoperaRow->id}" : null,
             'lavaggio_base_key' => $baseRow ? "record-{$baseRow->id}" : null,
             'lavaggio_ult_key' => $ultRow ? "record-{$ultRow->id}" : null,
-            // Inverso esatto di syncLavaggioViaMaterials() (ULTVIA qty =
-            // vieCount - 2): LAV2 da solo, senza ULTVIA, non permette di
-            // distinguere "1 via lavata con la tariffa minima agevolata" da
-            // "2 vie lavate" (stessa riga in entrambi i casi) — si assume 2,
-            // il valore nominale della tariffa stessa, non 1.
-            'vie_count' => $baseRow ? 2 + (int) ($ultRow?->quantity ?? 0) : null,
+            // Vince sempre il numero digitato dal tecnico, ora che c'e' una
+            // colonna che lo conserva: le righe materiali non bastano a
+            // ricostruirlo, perche' 1 via e 2 vie generano entrambe il solo
+            // LAV2 e il calcolo qui sotto rileggerebbe 2 anche dopo aver
+            // scritto 1. Il calcolo resta come ripiego per i rapportini in
+            // cui la colonna e' vuota (quelli salvati prima di questa
+            // colonna e i 200+ importati da Eureka): li' l'unico dato
+            // disponibile sono le righe, ULTVIA qty = vie - 2 al contrario,
+            // e 2 e' quello che il codice materiale dichiara letteralmente.
+            'vie_count' => $record->lavaggio_vie_count
+                ?? ($baseRow ? 2 + (int) ($ultRow?->quantity ?? 0) : null),
         ];
     }
 
@@ -1203,12 +1238,16 @@ class ServiceReportResource extends Resource
         }
 
         $eseguito = (bool) $get('_lavaggio_vie_eseguito');
-        $vieCount = (int) $get('_lavaggio_vie_count');
+        $vieCount = (int) $get('lavaggio_vie_count');
 
         if (! $eseguito || $vieCount < 1) {
             $set('materialsUsed', $materialsUsed);
             $set('_lavaggio_base_material_key', null);
             $set('_lavaggio_ult_material_key', null);
+            // Spegnere il toggle azzera anche il conteggio: il campo e' una
+            // colonna vera, senza questo resterebbe in DB il numero di vie
+            // del lavaggio appena tolto dal rapportino.
+            $set('lavaggio_vie_count', null);
 
             return;
         }

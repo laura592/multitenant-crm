@@ -136,13 +136,175 @@ parameters:
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 2
+			path: app/Filament/Actions/ConteggioConfigurator.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Filament/Actions/ConteggioConfigurator.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Filament/Actions/ConteggioConfigurator.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>price" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 3
+			path: app/Filament/Actions/ConteggioConfigurator.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 2
 			path: app/Filament/Pages/ClientiVicini.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:hasGestionaleEurekaCredentials\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Filament/Pages/GestionaleSyncReview.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of job class App\\Jobs\\ImportEurekaServiceReportsJob constructor expects App\\Models\\Tenant in App\\Jobs\\ImportEurekaServiceReportsJob\:\:dispatch\(\), Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Filament/Pages/GestionaleSyncReview.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of job class App\\Jobs\\RefreshMaterialPricesFromEurekaJob constructor expects App\\Models\\Tenant in App\\Jobs\\RefreshMaterialPricesFromEurekaJob\:\:dispatch\(\), Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Filament/Pages/GestionaleSyncReview.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of job class App\\Jobs\\SweepEurekaMaterialsCatalogJob constructor expects App\\Models\\Tenant in App\\Jobs\\SweepEurekaMaterialsCatalogJob\:\:dispatch\(\), Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Filament/Pages/GestionaleSyncReview.php
+
+		-
+			message: '#^Static method Filament\\Pages\\Page\:\:shouldRegisterNavigation\(\) invoked with 1 parameter, 0 required\.$#'
+			identifier: arguments.count
+			count: 1
+			path: app/Filament/Pages/GestionaleSyncReview.php
+
+		-
+			message: '#^Access to an undefined property App\\Filament\\Pages\\NotificationSettings\:\:\$form\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Filament/Pages/NotificationSettings.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:notificationRecipients\(\)\.$#'
+			identifier: method.notFound
+			count: 9
+			path: app/Filament/Pages/NotificationSettings.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<mixed\>\) to function array_filter does not contain falsy values, the array will always stay the same\.$#'
+			identifier: arrayFilter.same
+			count: 1
+			path: app/Filament/Pages/NotificationSettings.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Filament/Pages/RiepilogoOre.php
+
+		-
+			message: '#^Method App\\Filament\\Pages\\RiepilogoOre\:\:bulkApprovedLeaveRequests\(\) should return Illuminate\\Support\\Collection\<string, Illuminate\\Support\\Collection\<int, App\\Models\\LeaveRequest\>\> but returns Illuminate\\Database\\Eloquent\\Collection\<\(int\|string\), Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\LeaveRequest\>\>\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Filament/Pages/RiepilogoOre.php
+
+		-
+			message: '#^Method App\\Filament\\Pages\\RiepilogoOre\:\:bulkDailyWorkedHours\(\) should return Illuminate\\Support\\Collection\<string, Illuminate\\Support\\Collection\<string, float\>\> but returns Illuminate\\Support\\Collection\<\(int\|string\), Illuminate\\Support\\Collection\<\(int\|string\), float\>\>\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Filament/Pages/RiepilogoOre.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Filament/Pages/RiepilogoOre.php
+			path: app/Filament/Resources/AuditLogResource.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:hasGestionaleEurekaCredentials\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Filament/Resources/CustomerResource.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<\(int\|string\),Illuminate\\Database\\Eloquent\\Model\>\:\:filter\(\) expects \(callable\(Illuminate\\Database\\Eloquent\\Model, int\|string\)\: bool\)\|null, Closure\(App\\Models\\Customer\)\: bool given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Filament/Resources/CustomerResource.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of class App\\Support\\Gestionale\\EurekaClient constructor expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Filament/Resources/CustomerResource.php
+
+		-
+			message: '#^Cannot call method notifyGestionaleReviewIfLinked\(\) on Illuminate\\Database\\Eloquent\\Model\|int\|string\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: app/Filament/Resources/CustomerResource/Pages/EditCustomer.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Filament/Resources/CustomerResource/RelationManagers/LavaggiRelationManager.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:installedMachineUnits\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Filament/Resources/CustomerResource/RelationManagers/MacchinariRelationManager.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Filament/Resources/CustomerResource/RelationManagers/QuotesRelationManager.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$tenant\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Filament/Resources/CustomerResource/RelationManagers/QuotesRelationManager.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Filament/Resources/CustomerResource/RelationManagers/ServiceReportsRelationManager.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Filament/Resources/CustomerResource/RelationManagers/ServiceReportsRelationManager.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$tenant\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Filament/Resources/CustomerResource/RelationManagers/ServiceReportsRelationManager.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>display_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Filament/Resources/CustomerResource/RelationManagers/ServiceReportsRelationManager.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
@@ -151,10 +313,328 @@ parameters:
 			path: app/Filament/Resources/DeadlineResource.php
 
 		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$body\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Filament/Resources/InformationRequestResource.php
+
+		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Filament/Resources/InformationRequestResource.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$logged_at\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Filament/Resources/InformationRequestResource.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$number\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Filament/Resources/InformationRequestResource.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$quoteGroup\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Filament/Resources/InformationRequestResource.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$status\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Filament/Resources/InformationRequestResource.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:notifyGestionaleReviewIfLinked\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Filament/Resources/InformationRequestResource.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:primaryEmail\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Filament/Resources/InformationRequestResource.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:primaryPhone\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Filament/Resources/InformationRequestResource.php
+
+		-
+			message: '#^Parameter \#1 \$informationRequest of class App\\Mail\\NewInformationRequestMail constructor expects App\\Models\\InformationRequest, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Filament/Resources/InformationRequestResource/Pages/CreateInformationRequest.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$customer_id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Filament/Resources/InformationRequestResource/RelationManagers/QuotesRelationManager.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Filament/Resources/InformationRequestResource/RelationManagers/QuotesRelationManager.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$tenant\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Filament/Resources/InformationRequestResource/RelationManagers/QuotesRelationManager.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:mapWithKeys\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: array\<string, string\>, Closure\(App\\Models\\QuoteGroup\)\: non\-empty\-array\<string, string\> given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Filament/Resources/InformationRequestResource/RelationManagers/QuotesRelationManager.php
+
+		-
+			message: '#^Parameter \#1 \$request of static method App\\Filament\\Resources\\InformationRequestResource\\RelationManagers\\QuotesRelationManager\:\:offerteCollegabili\(\) expects App\\Models\\InformationRequest, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Filament/Resources/InformationRequestResource/RelationManagers/QuotesRelationManager.php
+
+		-
+			message: '#^Parameter \#2 \$request of static method App\\Filament\\Resources\\InformationRequestResource\\RelationManagers\\QuotesRelationManager\:\:collegabili\(\) expects App\\Models\\InformationRequest, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Filament/Resources/InformationRequestResource/RelationManagers/QuotesRelationManager.php
+
+		-
+			message: '#^Using nullsafe method call on non\-nullable type Carbon\\Carbon\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Filament/Resources/InformationRequestResource/RelationManagers/QuotesRelationManager.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Filament/Resources/LeaveRequestResource.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:notificationRecipients\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Filament/Resources/LeaveRequestResource.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Filament/Resources/LeaveRequestResource/Pages/CreateLeaveRequest.php
+
+		-
+			message: '#^Parameter \#1 \$leaveRequest of class App\\Mail\\NewLeaveRequestMail constructor expects App\\Models\\LeaveRequest, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Filament/Resources/LeaveRequestResource/Pages/CreateLeaveRequest.php
+
+		-
+			message: '#^Cannot access property \$user_id on Illuminate\\Database\\Eloquent\\Model\|int\|string\.$#'
+			identifier: property.nonObject
+			count: 1
+			path: app/Filament/Resources/LeaveRequestResource/Pages/EditLeaveRequest.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Filament/Resources/LeaveRequestResource/Pages/ViewLeaveRequest.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$gestionale_code\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Filament/Resources/MachineUnitResource.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Filament/Resources/MachineUnitResource.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:hasGestionaleEurekaCredentials\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Filament/Resources/MachineUnitResource.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of class App\\Support\\Gestionale\\EurekaClient constructor expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Filament/Resources/MachineUnitResource.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Filament/Resources/MachineUnitResource.php
+
+		-
+			message: '#^Method App\\Filament\\Resources\\MachineUnitResource\\Pages\\EditMachineUnit\:\:getHeaderActions\(\) should return array\<Filament\\Actions\\Action\|Filament\\Actions\\ActionGroup\> but returns array\{Filament\\Actions\\MountableAction, Filament\\Actions\\MountableAction, Filament\\Actions\\MountableAction, Filament\\Actions\\MountableAction, Filament\\Actions\\MountableAction, Filament\\Actions\\DeleteAction\}\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Filament/Resources/MachineUnitResource/Pages/EditMachineUnit.php
+
+		-
+			message: '#^Method App\\Filament\\Resources\\MachineUnitResource\\Pages\\ViewMachineUnit\:\:getHeaderActions\(\) should return array\<Filament\\Actions\\Action\|Filament\\Actions\\ActionGroup\> but returns array\{Filament\\Actions\\MountableAction, Filament\\Actions\\MountableAction, Filament\\Actions\\MountableAction, Filament\\Actions\\MountableAction, Filament\\Actions\\MountableAction, Filament\\Actions\\EditAction\}\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Filament/Resources/MachineUnitResource/Pages/ViewMachineUnit.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$data\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Filament/Resources/MaintenanceScheduleResource.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$full_name\.$#'
+			identifier: property.notFound
+			count: 4
+			path: app/Filament/Resources/MaintenanceScheduleResource.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$intervention_date\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Filament/Resources/MaintenanceScheduleResource.php
+
+		-
+			message: '#^Unsafe access to private property App\\Filament\\Resources\\MaintenanceScheduleResource\:\:\$customerCache through static\:\:\.$#'
+			identifier: staticClassAccess.privateProperty
+			count: 1
+			path: app/Filament/Resources/MaintenanceScheduleResource.php
+
+		-
+			message: '#^Unsafe access to private property App\\Filament\\Resources\\MaintenanceScheduleResource\:\:\$machineUnitsCache through static\:\:\.$#'
+			identifier: staticClassAccess.privateProperty
+			count: 1
+			path: app/Filament/Resources/MaintenanceScheduleResource.php
+
+		-
+			message: '#^Unsafe call to private method App\\Filament\\Resources\\MaintenanceScheduleResource\:\:billingSummary\(\) through static\:\:\.$#'
+			identifier: staticClassAccess.privateMethod
+			count: 3
+			path: app/Filament/Resources/MaintenanceScheduleResource.php
+
+		-
+			message: '#^Unsafe call to private method App\\Filament\\Resources\\MaintenanceScheduleResource\:\:customerFor\(\) through static\:\:\.$#'
+			identifier: staticClassAccess.privateMethod
+			count: 2
+			path: app/Filament/Resources/MaintenanceScheduleResource.php
+
+		-
+			message: '#^Unsafe call to private method App\\Filament\\Resources\\MaintenanceScheduleResource\:\:equipmentSummary\(\) through static\:\:\.$#'
+			identifier: staticClassAccess.privateMethod
+			count: 3
+			path: app/Filament/Resources/MaintenanceScheduleResource.php
+
+		-
+			message: '#^Unsafe call to private method App\\Filament\\Resources\\MaintenanceScheduleResource\:\:machineUnitsFor\(\) through static\:\:\.$#'
+			identifier: staticClassAccess.privateMethod
+			count: 2
+			path: app/Filament/Resources/MaintenanceScheduleResource.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>display_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Filament/Resources/MaintenanceScheduleResource.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$customer_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Filament/Resources/MaintenanceScheduleResource/RelationManagers/InterventiRelationManager.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Filament/Resources/MaintenanceScheduleResource/RelationManagers/InterventiRelationManager.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$machine_unit_id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Filament/Resources/MaintenanceScheduleResource/RelationManagers/InterventiRelationManager.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$type\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Filament/Resources/MaintenanceScheduleResource/RelationManagers/InterventiRelationManager.php
+
+		-
+			message: '#^Parameter \#1 \$schedule of static method App\\Filament\\Resources\\MaintenanceScheduleResource\\RelationManagers\\InterventiRelationManager\:\:serviceReportCreateUrl\(\) expects App\\Models\\MaintenanceSchedule, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Filament/Resources/MaintenanceScheduleResource/RelationManagers/InterventiRelationManager.php
+
+		-
+			message: '#^Using nullsafe method call on non\-nullable type Carbon\\Carbon\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Filament/Resources/MaintenanceScheduleResource/RelationManagers/InterventiRelationManager.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>display_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Filament/Resources/MaintenanceScheduleResource/RelationManagers/InterventiRelationManager.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$beverage_type\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Filament/Resources/MaintenanceScheduleResource/RelationManagers/LavaggiRelationManager.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$customer\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Filament/Resources/MaintenanceScheduleResource/RelationManagers/LavaggiRelationManager.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$customer_id\.$#'
+			identifier: property.notFound
+			count: 4
+			path: app/Filament/Resources/MaintenanceScheduleResource/RelationManagers/LavaggiRelationManager.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Filament/Resources/MaintenanceScheduleResource/RelationManagers/LavaggiRelationManager.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$lines_count\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Filament/Resources/MaintenanceScheduleResource/RelationManagers/LavaggiRelationManager.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$type\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Filament/Resources/MaintenanceScheduleResource/RelationManagers/LavaggiRelationManager.php
+
+		-
+			message: '#^Using nullsafe method call on non\-nullable type Carbon\\Carbon\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 3
+			path: app/Filament/Resources/MaintenanceScheduleResource/RelationManagers/LavaggiRelationManager.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$material\.$#'
@@ -217,15 +697,45 @@ parameters:
 			path: app/Filament/Resources/MaterialOrderResource/RelationManagers/ItemsRelationManager.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
-			identifier: property.notFound
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:hasGestionaleEurekaCredentials\(\)\.$#'
+			identifier: method.notFound
 			count: 1
+			path: app/Filament/Resources/ProductResource.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of class App\\Support\\Gestionale\\EurekaClient constructor expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Filament/Resources/ProductResource.php
+
+		-
+			message: '#^Method App\\Filament\\Resources\\ProductResource\\Pages\\EditProduct\:\:getHeaderActions\(\) should return array\<Filament\\Actions\\Action\|Filament\\Actions\\ActionGroup\> but returns array\{Filament\\Actions\\MountableAction, Filament\\Actions\\MountableAction, Filament\\Actions\\MountableAction, Filament\\Actions\\DeleteAction\}\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Filament/Resources/ProductResource/Pages/EditProduct.php
+
+		-
+			message: '#^Method App\\Filament\\Resources\\ProductResource\\Pages\\ViewProduct\:\:getHeaderActions\(\) should return array\<Filament\\Actions\\Action\|Filament\\Actions\\ActionGroup\> but returns array\{Filament\\Actions\\MountableAction, Filament\\Actions\\MountableAction, Filament\\Actions\\MountableAction, Filament\\Actions\\EditAction\}\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Filament/Resources/ProductResource/Pages/ViewProduct.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Filament/Resources/ProductResource/RelationManagers/SlotsRelationManager.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$company_name\.$#'
+			identifier: property.notFound
+			count: 2
 			path: app/Filament/Resources/QuoteGroupResource.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$full_name\.$#'
 			identifier: property.notFound
-			count: 1
+			count: 2
 			path: app/Filament/Resources/QuoteGroupResource.php
 
 		-
@@ -235,9 +745,57 @@ parameters:
 			path: app/Filament/Resources/QuoteGroupResource.php
 
 		-
-			message: '#^Parameter \#1 \$record of static method App\\Filament\\Resources\\QuoteResource\:\:buildPdf\(\) expects App\\Models\\Quote, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$number\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Filament/Resources/QuoteGroupResource.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$payment_method\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Filament/Resources/QuoteGroupResource.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$rental_monthly_fee\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Filament/Resources/QuoteGroupResource.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$subtotal\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Filament/Resources/QuoteGroupResource.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$tenant\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Filament/Resources/QuoteGroupResource.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:invoiceRecipient\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Filament/Resources/QuoteGroupResource.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:notificationRecipients\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Filament/Resources/QuoteGroupResource.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:each\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: mixed, Closure\(App\\Models\\Quote\)\: void given\.$#'
 			identifier: argument.type
 			count: 1
+			path: app/Filament/Resources/QuoteGroupResource.php
+
+		-
+			message: '#^Parameter \#1 \$record of static method App\\Filament\\Resources\\QuoteResource\:\:buildPdf\(\) expects App\\Models\\Quote, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 2
 			path: app/Filament/Resources/QuoteGroupResource.php
 
 		-
@@ -247,15 +805,9 @@ parameters:
 			path: app/Filament/Resources/QuoteGroupResource.php
 
 		-
-			message: '#^Using nullsafe property access "\?\-\>full_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Filament/Resources/QuoteGroupResource.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>number" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 2
+			count: 1
 			path: app/Filament/Resources/QuoteGroupResource.php
 
 		-
@@ -265,19 +817,25 @@ parameters:
 			path: app/Filament/Resources/QuoteGroupResource/Pages/EditQuoteGroup.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$default_commission_scenario\.$#'
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$customer_id\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Filament/Resources/QuoteResource.php
+			path: app/Filament/Resources/QuoteGroupResource/RelationManagers/QuotesRelationManager.php
+
+		-
+			message: '#^Parameter \#1 \$num of function number_format expects float, string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Filament/Resources/QuoteGroupResource/RelationManagers/QuotesRelationManager.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between numeric\-string and null will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: app/Filament/Resources/QuoteGroupResource/RelationManagers/QuotesRelationManager.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$discount\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Filament/Resources/QuoteResource.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Filament/Resources/QuoteResource.php
@@ -291,13 +849,25 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
-			count: 5
+			count: 4
+			path: app/Filament/Resources/QuoteResource.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$legal_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Filament/Resources/QuoteResource.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
 			path: app/Filament/Resources/QuoteResource.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$number\.$#'
 			identifier: property.notFound
-			count: 2
+			count: 1
 			path: app/Filament/Resources/QuoteResource.php
 
 		-
@@ -331,6 +901,18 @@ parameters:
 			path: app/Filament/Resources/QuoteResource.php
 
 		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:invoiceRecipient\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: app/Filament/Resources/QuoteResource.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:notificationRecipients\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Filament/Resources/QuoteResource.php
+
+		-
 			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:quotes\(\)\.$#'
 			identifier: method.notFound
 			count: 1
@@ -349,26 +931,32 @@ parameters:
 			path: app/Filament/Resources/QuoteResource.php
 
 		-
-			message: '#^Using nullsafe property access "\?\-\>full_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Filament/Resources/QuoteResource.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>is_super_admin" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Filament/Resources/QuoteResource.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>number" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Filament/Resources/QuoteResource.php
 
 		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$informationRequest\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Filament/Resources/QuoteResource/Pages/CreateQuote.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:quoteProducts\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Filament/Resources/QuoteResource/Pages/CreateQuote.php
+
+		-
 			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:updateTotal\(\)\.$#'
 			identifier: method.notFound
+			count: 1
+			path: app/Filament/Resources/QuoteResource/Pages/CreateQuote.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>price" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Filament/Resources/QuoteResource/Pages/CreateQuote.php
 
@@ -380,12 +968,6 @@ parameters:
 
 		-
 			message: '#^Parameter \#1 \$record of static method App\\Filament\\Resources\\QuoteResource\:\:duplicateAsAlternative\(\) expects App\\Models\\Quote, Illuminate\\Database\\Eloquent\\Model\|int\|string\|null given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Filament/Resources/QuoteResource/Pages/EditQuote.php
-
-		-
-			message: '#^Parameter \#1 \$record of static method App\\Filament\\Resources\\QuoteResource\:\:streamPdf\(\) expects App\\Models\\Quote, Illuminate\\Database\\Eloquent\\Model\|int\|string\|null given\.$#'
 			identifier: argument.type
 			count: 1
 			path: app/Filament/Resources/QuoteResource/Pages/EditQuote.php
@@ -427,16 +1009,16 @@ parameters:
 			path: app/Filament/Resources/QuoteResource/Pages/ViewQuote.php
 
 		-
-			message: '#^Parameter \#1 \$record of static method App\\Filament\\Resources\\QuoteResource\:\:streamPdf\(\) expects App\\Models\\Quote, Illuminate\\Database\\Eloquent\\Model\|int\|string\|null given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Filament/Resources/QuoteResource/Pages/ViewQuote.php
-
-		-
 			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:updateTotal\(\)\.$#'
 			identifier: method.notFound
-			count: 4
+			count: 1
 			path: app/Filament/Resources/QuoteResource/RelationManagers/QuoteProductsRelationManager.php
+
+		-
+			message: '#^Call to an undefined method Filament\\Forms\\Components\\Component\:\:disableOptionWhen\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Filament/Resources/RoleResource.php
 
 		-
 			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:syncPermissions\(\)\.$#'
@@ -451,13 +1033,181 @@ parameters:
 			path: app/Filament/Resources/RoleResource/Pages/EditRole.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$company_name\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Filament/Resources/ServiceReportResource.php
 
 		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$emails\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Filament/Resources/ServiceReportResource.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$full_name\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Filament/Resources/ServiceReportResource.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$gestionale_code\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Filament/Resources/ServiceReportResource.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 5
+			path: app/Filament/Resources/ServiceReportResource.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$material\.$#'
+			identifier: property.notFound
+			count: 4
+			path: app/Filament/Resources/ServiceReportResource.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Filament/Resources/ServiceReportResource.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$quantity\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Filament/Resources/ServiceReportResource.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:hasGestionaleEurekaCredentials\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Filament/Resources/ServiceReportResource.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:notificationRecipients\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Filament/Resources/ServiceReportResource.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:notifyGestionaleReviewIfLinked\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Filament/Resources/ServiceReportResource.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:primaryEmail\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Filament/Resources/ServiceReportResource.php
+
+		-
+			message: '#^Match arm comparison between null and ''sanificazione'' is always false\.$#'
+			identifier: match.alwaysFalse
+			count: 1
+			path: app/Filament/Resources/ServiceReportResource.php
+
+		-
+			message: '#^Method App\\Filament\\Resources\\ServiceReportResource\:\:resolvePayer\(\) should return App\\Models\\Customer\|null but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Filament/Resources/ServiceReportResource.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: array\{maintenance_schedule_id\: string, lines_washed\: mixed\}, Closure\(App\\Models\\MaintenanceSchedule\)\: array\{maintenance_schedule_id\: string, lines_washed\: mixed\} given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Filament/Resources/ServiceReportResource.php
+
+		-
+			message: '#^Using nullsafe method call on non\-nullable type Carbon\\Carbon\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Filament/Resources/ServiceReportResource.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>emails" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Filament/Resources/ServiceReportResource.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Filament/Resources/ServiceReportResource.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>number" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Filament/Resources/ServiceReportResource.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>quantity" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Filament/Resources/ServiceReportResource.php
+
+		-
+			message: '#^Parameter \#1 \$record of static method App\\Filament\\Resources\\ServiceReportResource\:\:syncLavaggioImpianti\(\) expects App\\Models\\ServiceReport, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Filament/Resources/ServiceReportResource/Pages/CreateServiceReport.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:isLocked\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Filament/Resources/ServiceReportResource/Pages/EditServiceReport.php
+
+		-
+			message: '#^Parameter \#1 \$record of static method App\\Filament\\Resources\\ServiceReportResource\:\:resolveLavaggioImpiantiDefaults\(\) expects App\\Models\\ServiceReport\|null, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Filament/Resources/ServiceReportResource/Pages/EditServiceReport.php
+
+		-
+			message: '#^Parameter \#1 \$record of static method App\\Filament\\Resources\\ServiceReportResource\:\:resolveLavaggioShortcutDefaults\(\) expects App\\Models\\ServiceReport\|null, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Filament/Resources/ServiceReportResource/Pages/EditServiceReport.php
+
+		-
+			message: '#^Parameter \#1 \$record of static method App\\Filament\\Resources\\ServiceReportResource\:\:syncLavaggioImpianti\(\) expects App\\Models\\ServiceReport, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Filament/Resources/ServiceReportResource/Pages/EditServiceReport.php
+
+		-
+			message: '#^Cannot call method isLocked\(\) on Illuminate\\Database\\Eloquent\\Model\|int\|string\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: app/Filament/Resources/ServiceReportResource/Pages/ViewServiceReport.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<\(int\|string\),Illuminate\\Database\\Eloquent\\Model\>\:\:filter\(\) expects \(callable\(Illuminate\\Database\\Eloquent\\Model, int\|string\)\: bool\)\|null, Closure\(App\\Models\\Tenant\)\: bool given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Filament/Resources/TenantResource.php
+
+		-
 			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<\(int\|string\),Illuminate\\Database\\Eloquent\\Model\>\:\:reject\(\) expects bool\|\(callable\(Illuminate\\Database\\Eloquent\\Model, int\|string\)\: bool\)\|Illuminate\\Database\\Eloquent\\Model, Closure\(App\\Models\\Tenant\)\: bool given\.$#'
+			identifier: argument.type
+			count: 2
+			path: app/Filament/Resources/TenantResource.php
+
+		-
+			message: '#^Parameter \#1 \$height of method Filament\\Forms\\Components\\FileUpload\:\:imageResizeTargetHeight\(\) expects Closure\|string\|null, 600 given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Filament/Resources/TenantResource.php
+
+		-
+			message: '#^Parameter \#1 \$width of method Filament\\Forms\\Components\\FileUpload\:\:imageResizeTargetWidth\(\) expects Closure\|string\|null, 600 given\.$#'
 			identifier: argument.type
 			count: 1
 			path: app/Filament/Resources/TenantResource.php
@@ -469,9 +1219,15 @@ parameters:
 			path: app/Filament/Resources/TenantResource/Pages/EditTenant.php
 
 		-
+			message: '#^Using nullsafe method call on non\-nullable type Carbon\\Carbon\|string\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Filament/Resources/TimeEntryResource.php
+
+		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
-			count: 1
+			count: 3
 			path: app/Filament/Resources/UserResource.php
 
 		-
@@ -487,16 +1243,130 @@ parameters:
 			path: app/Filament/Resources/UserResource.php
 
 		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Filament/Resources/UserResource/Pages/CreateUser.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:roles\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Filament/Resources/UserResource/Pages/CreateUser.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Filament/Resources/UserResource/Pages/EditUser.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:roles\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: app/Filament/Resources/UserResource/Pages/EditUser.php
+
+		-
 			message: '#^Cannot access property \$id on Illuminate\\Database\\Eloquent\\Model\|int\|string\.$#'
 			identifier: property.nonObject
 			count: 1
 			path: app/Filament/Resources/UserResource/Pages/EditUser.php
 
 		-
+			message: '#^Cannot call method roles\(\) on Illuminate\\Database\\Eloquent\\Model\|int\|string\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: app/Filament/Resources/UserResource/Pages/EditUser.php
+
+		-
+			message: '#^Unsafe call to private method App\\Filament\\Widgets\\Gestionale\\GestionaleCollegamentiClientiWidget\:\:baseQuery\(\) through static\:\:\.$#'
+			identifier: staticClassAccess.privateMethod
+			count: 2
+			path: app/Filament/Widgets/Gestionale/GestionaleCollegamentiClientiWidget.php
+
+		-
+			message: '#^Unsafe call to private method App\\Filament\\Widgets\\Gestionale\\GestionaleCollegamentiMacchinariWidget\:\:baseQuery\(\) through static\:\:\.$#'
+			identifier: staticClassAccess.privateMethod
+			count: 2
+			path: app/Filament/Widgets/Gestionale/GestionaleCollegamentiMacchinariWidget.php
+
+		-
+			message: '#^Unsafe call to private method App\\Filament\\Widgets\\Gestionale\\GestionaleCollegamentiProdottiWidget\:\:baseQuery\(\) through static\:\:\.$#'
+			identifier: staticClassAccess.privateMethod
+			count: 2
+			path: app/Filament/Widgets/Gestionale/GestionaleCollegamentiProdottiWidget.php
+
+		-
+			message: '#^Unsafe call to private method App\\Filament\\Widgets\\Gestionale\\GestionaleDaRivedereWidget\:\:baseQuery\(\) through static\:\:\.$#'
+			identifier: staticClassAccess.privateMethod
+			count: 2
+			path: app/Filament/Widgets/Gestionale/GestionaleDaRivedereWidget.php
+
+		-
+			message: '#^Unsafe call to private method App\\Filament\\Widgets\\Gestionale\\GestionaleMacchineImportateWidget\:\:baseQuery\(\) through static\:\:\.$#'
+			identifier: staticClassAccess.privateMethod
+			count: 2
+			path: app/Filament/Widgets/Gestionale/GestionaleMacchineImportateWidget.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$company_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/LeadIntakeController.php
+
+		-
+			message: '#^Parameter \#1 \$array \(array\{0\?\: mixed\}\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: app/Http/Controllers/LeadIntakeController.php
+
+		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Middleware/SetPermissionsTeamId.php
+
+		-
+			message: '#^Parameter \#1 \$tenant of class App\\Support\\Gestionale\\EurekaClient constructor expects App\\Models\\Tenant, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Jobs/SendServiceReportToGestionaleJob.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Livewire/TourGuide.php
+
+		-
+			message: '#^Match arm comparison between ''malattia'' and ''malattia'' is always true\.$#'
+			identifier: match.alwaysTrue
+			count: 1
+			path: app/Mail/LeaveRequestDecisionMail.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Mail/NewLeaveRequestMail.php
+
+		-
+			message: '#^Match arm comparison between ''malattia'' and ''malattia'' is always true\.$#'
+			identifier: match.alwaysTrue
+			count: 1
+			path: app/Mail/NewLeaveRequestMail.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Models/AuditLog.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$tenant_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/AuditLog.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
@@ -511,9 +1381,27 @@ parameters:
 			path: app/Models/Customer.php
 
 		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:notificationRecipients\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Models/Customer.php
+
+		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 2
+			path: app/Models/Deadline.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/Deadline.php
+
+		-
+			message: '#^Method App\\Models\\Deadline\:\:suggestedRenewalDate\(\) should return Illuminate\\Support\\Carbon but returns Carbon\\Carbon\.$#'
+			identifier: return.type
+			count: 1
 			path: app/Models/Deadline.php
 
 		-
@@ -521,6 +1409,60 @@ parameters:
 			identifier: property.notFound
 			count: 2
 			path: app/Models/InformationRequest.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Models/InformationRequestNote.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$billingCustomer\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/Lavaggio.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$eureka_destinazione_label\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/Lavaggio.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$full_name\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Models/Lavaggio.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Models/Lavaggio.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$machineUnit\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Models/Lavaggio.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$serial_number\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/Lavaggio.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:invoiceRecipient\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Models/Lavaggio.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>billingCustomer" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Models/Lavaggio.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
@@ -535,6 +1477,12 @@ parameters:
 			path: app/Models/LeaveRequest.php
 
 		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_label\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/MachineUnit.php
+
+		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 2
@@ -543,6 +1491,12 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
 			identifier: property.notFound
+			count: 1
+			path: app/Models/MachineUnit.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>display_label" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Models/MachineUnit.php
 
@@ -559,14 +1513,20 @@ parameters:
 			path: app/Models/MachineUnitPlacement.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$data\.$#'
 			identifier: property.notFound
-			count: 2
+			count: 1
 			path: app/Models/MaintenanceSchedule.php
 
 		-
-			message: '#^Offset ''annuale''\|''mensile''\|''semestrale''\|''trimestrale'' on array\{mensile\: 1, trimestrale\: 3, semestrale\: 6, annuale\: 12\} on left side of \?\? always exists and is not nullable\.$#'
-			identifier: nullCoalesce.offset
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 4
+			path: app/Models/MaintenanceSchedule.php
+
+		-
+			message: '#^Method App\\Models\\MaintenanceSchedule\:\:serviceReports\(\) should return Illuminate\\Database\\Eloquent\\Relations\\HasMany but returns Illuminate\\Database\\Eloquent\\Builder\<App\\Models\\ServiceReport\>\.$#'
+			identifier: return.type
 			count: 1
 			path: app/Models/MaintenanceSchedule.php
 
@@ -581,6 +1541,12 @@ parameters:
 			identifier: property.notFound
 			count: 2
 			path: app/Models/MaterialOrder.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Models/PriceList.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
@@ -601,38 +1567,44 @@ parameters:
 			path: app/Models/ProductFamily.php
 
 		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$approved_for_gestionale_at\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Models/Quote.php
+
+		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 2
 			path: app/Models/Quote.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$is_master\.$#'
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$status\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Models/Quote.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$scenario_a_commission_percent\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Models/Quote.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$scenario_b_installation_fee\.$#'
-			identifier: property.notFound
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:invoiceRecipient\(\)\.$#'
+			identifier: method.notFound
 			count: 1
 			path: app/Models/Quote.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$scenario_c_preinstallation_fee\.$#'
-			identifier: property.notFound
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:markApprovedForGestionale\(\)\.$#'
+			identifier: method.notFound
 			count: 1
 			path: app/Models/Quote.php
 
 		-
-			message: '#^Match arm comparison between ''C'' and ''C'' is always true\.$#'
-			identifier: match.alwaysTrue
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:notificationRecipients\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Models/Quote.php
+
+		-
+			message: '#^Parameter \#1 \$customer of class App\\Mail\\CustomerGestionaleReviewMail constructor expects App\\Models\\Customer, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
 			count: 1
 			path: app/Models/Quote.php
 
@@ -649,8 +1621,140 @@ parameters:
 			path: app/Models/QuoteGroup.php
 
 		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$billingCustomer\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Models/ServiceReport.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$code\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/ServiceReport.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_label\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Models/ServiceReport.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/ServiceReport.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$full_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/ServiceReport.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$gestionale_code\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Models/ServiceReport.php
+
+		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
+			count: 2
+			path: app/Models/ServiceReport.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$model_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/ServiceReport.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/ServiceReport.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$product\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Models/ServiceReport.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$serial_number\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Models/ServiceReport.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$source\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/ServiceReport.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:invoiceRecipient\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: app/Models/ServiceReport.php
+
+		-
+			message: '#^Method App\\Models\\ServiceReport\:\:invoiceRecipient\(\) should return App\\Models\\Customer but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Models/ServiceReport.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 1
+			path: app/Models/ServiceReport.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: array\{id_articolo\: mixed, descrizione\: mixed, um\: ''NR'', quantita\: float\}, Closure\(App\\Models\\ServiceReportMaterial\)\: array\{id_articolo\: mixed, descrizione\: mixed, um\: ''NR'', quantita\: float\} given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Models/ServiceReport.php
+
+		-
+			message: '#^Parameter \#1 \$key of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:contains\(\) expects \(callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: bool\)\|Illuminate\\Database\\Eloquent\\Model\|int\|string, Closure\(App\\Models\\ServiceReportMaterial\)\: bool given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Models/ServiceReport.php
+
+		-
+			message: '#^Parameter \#1 \$lavaggioSchedules of method App\\Models\\ServiceReport\:\:syncGeneratedLavaggi\(\) expects Illuminate\\Support\\Collection\<int, App\\Models\\MaintenanceSchedule\>, Illuminate\\Database\\Eloquent\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\> given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Models/ServiceReport.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between ''bozza''\|''completato''\|''firmato''\|''inviato'' and ''in_gestionale'' will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: app/Models/ServiceReport.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>billingCustomer" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Models/ServiceReport.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>display_label" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Models/ServiceReport.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>gestionale_code" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Models/ServiceReport.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
 			count: 2
 			path: app/Models/ServiceReport.php
 
@@ -665,6 +1769,24 @@ parameters:
 			identifier: property.notFound
 			count: 2
 			path: app/Models/TimeEntry.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Models/TourView.php
+
+		-
+			message: '#^Cannot access property \$hour on string\.$#'
+			identifier: property.nonObject
+			count: 2
+			path: app/Models/User.php
+
+		-
+			message: '#^Cannot access property \$minute on string\.$#'
+			identifier: property.nonObject
+			count: 2
+			path: app/Models/User.php
 
 		-
 			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:sum\(\) expects \(callable\(Illuminate\\Database\\Eloquent\\Model\)\: int\)\|string\|null, Closure\(App\\Models\\LeaveRequest\)\: int given\.$#'
@@ -685,10 +1807,58 @@ parameters:
 			path: app/Models/Vehicle.php
 
 		-
+			message: '#^Access to an undefined property Spatie\\Activitylog\\Contracts\\Activity\:\:\$subject\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Providers/AuditLogServiceProvider.php
+
+		-
+			message: '#^Access to an undefined property Spatie\\Activitylog\\Contracts\\Activity\:\:\$tenant_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Providers/AuditLogServiceProvider.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between int\|string and null will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: app/Support/EurekaClient.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$gestionale_code\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Support/Gestionale/GestionaleSyncRunner.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Models\\MachineUnit\>\:\:mapWithKeys\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 1
+			path: app/Support/Gestionale/GestionaleSyncRunner.php
+
+		-
+			message: '#^Parameter \#1 \$array \(array\{0\?\: mixed\}\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 2
+			path: database/migrations/2026_07_23_090000_add_multi_contact_fields_to_customers_table.php
+
+		-
+			message: '#^Anonymous function has an unused use \$table\.$#'
+			identifier: closure.unusedUse
+			count: 1
+			path: database/migrations/2026_08_11_101628_drop_unused_legacy_and_eureka_columns.php
+
+		-
 			message: '#^Using nullsafe method call on non\-nullable type Illuminate\\Console\\Command\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
 			path: database/seeders/DemoOperationalDataSeeder.php
+
+		-
+			message: '#^PHPDoc tag @var for constant Database\\Seeders\\FrankeAccountingHousingsSeeder\:\:ALLOGGIAMENTI with type array\<int, array\{sku\: string, name\: string, price\: float\}\> is incompatible with value array\{array\{sku\: ''560\.0678\.355'', name\: ''Alloggiamento…'', price\: 325\}, array\{sku\: ''560\.0543\.638'', name\: ''Alloggiamento…'', price\: 1642\}, array\{sku\: ''560\.0550\.061'', name\: ''Alloggiamento…'', price\: 2177\}, array\{sku\: ''560\.0506\.523'', name\: ''Alloggiamento…'', price\: 2390\}, array\{sku\: ''560\.0550\.062'', name\: ''Alloggiamento…'', price\: 3775\}, array\{sku\: ''560\.0678\.327'', name\: ''Alloggiamento…'', price\: 680\}, array\{sku\: ''560\.0506\.528'', name\: ''Alloggiamento…'', price\: 1997\}, array\{sku\: ''560\.0543\.634'', name\: ''Alloggiamento…'', price\: 2745\}\}\.$#'
+			identifier: classConstant.phpDocType
+			count: 1
+			path: database/seeders/FrankeAccountingHousingsSeeder.php
 
 		-
 			message: '#^Using nullsafe method call on non\-nullable type Illuminate\\Console\\Command\. Use \-\> instead\.$#'

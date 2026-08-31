@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources;
 
+use Illuminate\Database\Eloquent\Builder;
 use App\Filament\Forms\CustomerContactFields;
 use App\Filament\Forms\CustomerFiscalFields;
 use App\Filament\Forms\ItalianAddressFields;
@@ -37,6 +38,22 @@ class CustomerResource extends Resource
     protected static ?string $modelLabel = 'Cliente';
 
     protected static ?string $pluralModelLabel = 'Clienti';
+
+
+    /**
+     * Precarica le relazioni che l'elenco legge per ogni riga.
+     *
+     * Senza, Filament fa una query per riga per ciascuna relazione: sui
+     * rapportini erano 56 query per 25 righe invece di 8, e il conto cresce
+     * con la paginazione.
+     *
+     * billingCustomer serve a invoiceRecipient(), usato dove si mostra chi
+     * paga per questo cliente.
+     */
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->with(['billingCustomer']);
+    }
 
     public static function form(Form $form): Form
     {
