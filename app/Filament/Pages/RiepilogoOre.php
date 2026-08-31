@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Exports\DailyTimeDetailExport;
 use App\Exports\MonthlyTimeSummaryExport;
 use App\Filament\Concerns\StreamsPdfDownloads;
+use App\Filament\Resources\TimeEntryResource;
 use App\Models\LeaveRequest;
 use App\Models\TimeEntry;
 use App\Models\User;
@@ -101,13 +102,38 @@ class RiepilogoOre extends Page implements HasForms
             ->groupBy('user_id');
     }
 
+    /**
+     * Utenti visibili nel riepilogo. Un dipendente vede SOLO la propria riga:
+     * la pagina e' nel suo perimetro (page_RiepilogoOre in RolePermissions)
+     * perche' deve poter controllare le proprie ore, ma le ore/ferie/malattie
+     * dei colleghi sono dati altrui e non deve ne' vederle a schermo ne'
+     * scaricarle nei PDF/Excel. Stessa regola di visibilita' di
+     * ScopesToOwnUserUnlessResponsabile (usata da TimeEntryResource e
+     * LeaveRequestResource): tutto il tenant per responsabile
+     * (is_super_admin/admin) e per "amministrazione", che il riepilogo lo
+     * compila per il commercialista.
+     *
+     * @return Collection<int, User>
+     */
+    protected function visibleUsers(): Collection
+    {
+        $tenant = Filament::getTenant();
+        $query = User::query()->where('tenant_id', $tenant?->id);
+        $user = auth()->user();
+
+        if ($user && ! TimeEntryResource::isResponsabile($user) && ! $user->hasRole('amministrazione')) {
+            $query->whereKey($user->id);
+        }
+
+        return $query->get();
+    }
+
     public function getRows(): Collection
     {
         $start = Carbon::create($this->year, $this->month, 1)->startOfMonth();
         $end = $start->copy()->endOfMonth();
-        $tenant = Filament::getTenant();
 
-        $users = User::query()->where('tenant_id', $tenant?->id)->get();
+        $users = $this->visibleUsers();
         $workedByUser = $this->bulkDailyWorkedHours($users, $start, $end);
         $leaveByUser = $this->bulkApprovedLeaveRequests($users, $start, $end);
 
@@ -202,9 +228,8 @@ class RiepilogoOre extends Page implements HasForms
     {
         $start = Carbon::create($this->year, $this->month, 1)->startOfMonth();
         $end = $start->copy()->endOfMonth();
-        $tenant = Filament::getTenant();
 
-        $users = User::query()->where('tenant_id', $tenant?->id)->get();
+        $users = $this->visibleUsers();
         $workedByUser = $this->bulkDailyWorkedHours($users, $start, $end);
         $leaveByUser = $this->bulkApprovedLeaveRequests($users, $start, $end);
 

@@ -343,4 +343,69 @@ class PresenzeTest extends TestCase
         $this->assertSame('rifiutato', $leave->fresh()->status);
         $this->assertTrue($admin->can('approve', $leave->fresh()));
     }
+
+    public function test_dipendente_sees_only_own_row_in_monthly_summary(): void
+    {
+        $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);
+        $employee = User::create([
+            'tenant_id' => $tenant->id, 'name' => 'Mario Rossi', 'email' => 'mario@gifar.it',
+            'password' => bcrypt('password'), 'daily_contract_hours' => 8,
+        ]);
+        $colleague = User::create([
+            'tenant_id' => $tenant->id, 'name' => 'Luigi Bianchi', 'email' => 'luigi@gifar.it',
+            'password' => bcrypt('password'), 'daily_contract_hours' => 8,
+        ]);
+        $this->giveRole($employee, $tenant, 'dipendente');
+
+        $day = now()->startOfMonth()->addDays(5);
+        foreach ([$employee, $colleague] as $u) {
+            TimeEntry::create([
+                'tenant_id' => $tenant->id, 'user_id' => $u->id,
+                'clock_in' => $day->copy()->setTime(8, 0), 'clock_out' => $day->copy()->setTime(16, 0),
+            ]);
+        }
+
+        $this->actingAs($employee);
+        Filament::setTenant($tenant);
+
+        $page = new RiepilogoOre();
+        $page->mount();
+        $page->month = $day->month;
+        $page->year = $day->year;
+
+        // Ne' a schermo/riepilogo ne' nel dettaglio giorni (che finisce negli
+        // export PDF/Excel) deve comparire il collega.
+        $this->assertSame(['Mario Rossi'], $page->getRows()->pluck('user')->all());
+        $this->assertSame(['Mario Rossi'], $page->getDailyDetailRows()->pluck('user')->unique()->values()->all());
+    }
+
+    public function test_amministrazione_and_admin_still_see_the_whole_tenant(): void
+    {
+        $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);
+        $employee = User::create([
+            'tenant_id' => $tenant->id, 'name' => 'Mario Rossi', 'email' => 'mario@gifar.it', 'password' => bcrypt('password'),
+        ]);
+        $ufficio = User::create([
+            'tenant_id' => $tenant->id, 'name' => 'Cristina', 'email' => 'cristina@gifar.it', 'password' => bcrypt('password'),
+        ]);
+        $admin = User::create([
+            'tenant_id' => $tenant->id, 'name' => 'Admin', 'email' => 'admin@gifar.it', 'password' => bcrypt('password'),
+        ]);
+        $this->giveRole($ufficio, $tenant, 'amministrazione');
+        $this->giveRole($admin, $tenant, 'admin');
+
+        foreach ([$ufficio, $admin] as $viewer) {
+            $this->actingAs($viewer);
+            Filament::setTenant($tenant);
+
+            $page = new RiepilogoOre();
+            $page->mount();
+
+            $this->assertEqualsCanonicalizing(
+                ['Mario Rossi', 'Cristina', 'Admin'],
+                $page->getRows()->pluck('user')->all(),
+                "{$viewer->name} deve vedere tutto il tenant"
+            );
+        }
+    }
 }
