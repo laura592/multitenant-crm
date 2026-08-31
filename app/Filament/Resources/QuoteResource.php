@@ -315,47 +315,6 @@ class QuoteResource extends Resource
                             ...CustomerFiscalFields::schema(),
                             ...ItalianAddressFields::schema(),
                         ]),
-                    /*
-                     | Chi paga QUESTO preventivo.
-                     |
-                     | Vuoto significa "come al solito", cioe' il pagante del
-                     | cliente — ed e' il caso normale, non si tocca. Serve
-                     | quando il preventivo va intestato E fatturato alla
-                     | stessa persona a cui l'hai fatto, anche se di norma
-                     | paga il torrefattore.
-                     |
-                     | Il PDF stampa la riga "Fatturato a" solo se il pagante
-                     | e' davvero diverso dall'intestatario.
-                     */
-                    Forms\Components\Select::make('billing_customer_id')
-                        ->label('Fatturare a')
-                        ->helperText(function (Forms\Get $get) {
-                            if (filled($get('billing_customer_id'))) {
-                                return 'Scelta per questo preventivo. Svuota per tornare al pagante abituale.';
-                            }
-
-                            $abituale = Customer::find($get('customer_id'))?->invoiceRecipient();
-
-                            return $abituale
-                                ? 'Vuoto = pagante abituale: '.DisplayName::titleCase($abituale->full_name)
-                                : 'Vuoto = lo stesso cliente.';
-                        })
-                        ->placeholder(fn (Forms\Get $get) => DisplayName::titleCase(
-                            Customer::find($get('customer_id'))?->invoiceRecipient()?->full_name
-                        ) ?? '—')
-                        ->relationship('billingCustomer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
-                        ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::customerOption($record))
-                        ->searchable(['company_name', 'first_name', 'last_name', 'city'])
-                        ->preload()
-                        ->live()
-                        ->hintAction(
-                            Forms\Components\Actions\Action::make('fattura_al_cliente')
-                                ->label('Fattura al cliente')
-                                ->icon('heroicon-m-user')
-                                ->visible(fn (Forms\Get $get) => filled($get('customer_id'))
-                                    && $get('billing_customer_id') !== $get('customer_id'))
-                                ->action(fn (Forms\Set $set, Forms\Get $get) => $set('billing_customer_id', $get('customer_id')))
-                        ),
                     Forms\Components\DatePicker::make('date')
                         ->label('Data')
                         ->required()
@@ -429,6 +388,47 @@ class QuoteResource extends Resource
                                             ...CustomerContactFields::schema(),
                                             ...ItalianAddressFields::schema(),
                                         ]),
+                                    /*
+                                     | Chi paga QUESTO preventivo.
+                                     |
+                                     | Vuoto significa "come al solito", cioe' il pagante del
+                                     | cliente — ed e' il caso normale, non si tocca. Serve
+                                     | quando il preventivo va intestato E fatturato alla
+                                     | stessa persona a cui l'hai fatto, anche se di norma
+                                     | paga il torrefattore.
+                                     |
+                                     | Il PDF stampa la riga "Fatturato a" solo se il pagante
+                                     | e' davvero diverso dall'intestatario.
+                                     */
+                                    Forms\Components\Select::make('billing_customer_id')
+                                        ->label('Fatturare a')
+                                        ->helperText(function (Forms\Get $get) {
+                                            if (filled($get('billing_customer_id'))) {
+                                                return 'Scelta per questo preventivo. Svuota per tornare al pagante abituale.';
+                                            }
+
+                                            $abituale = Customer::find($get('customer_id'))?->invoiceRecipient();
+
+                                            return $abituale
+                                                ? 'Vuoto = pagante abituale: '.DisplayName::titleCase($abituale->full_name)
+                                                : 'Vuoto = lo stesso cliente.';
+                                        })
+                                        ->placeholder(fn (Forms\Get $get) => DisplayName::titleCase(
+                                            Customer::find($get('customer_id'))?->invoiceRecipient()?->full_name
+                                        ) ?? '—')
+                                        ->relationship('billingCustomer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
+                                        ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::customerOption($record))
+                                        ->searchable(['company_name', 'first_name', 'last_name', 'city'])
+                                        ->preload()
+                                        ->live()
+                                        ->hintAction(
+                                            Forms\Components\Actions\Action::make('fattura_al_cliente')
+                                                ->label('Fattura al cliente')
+                                                ->icon('heroicon-m-user')
+                                                ->visible(fn (Forms\Get $get) => filled($get('customer_id'))
+                                                    && $get('billing_customer_id') !== $get('customer_id'))
+                                                ->action(fn (Forms\Set $set, Forms\Get $get) => $set('billing_customer_id', $get('customer_id')))
+                                        ),
                                     Forms\Components\DatePicker::make('date')
                                         ->label('Data')
                                         ->required()
