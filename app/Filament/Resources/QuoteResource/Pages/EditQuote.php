@@ -7,12 +7,25 @@ use App\Filament\Concerns\RedirectsCancelToView;
 use App\Filament\Resources\QuoteResource;
 use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
+use Livewire\Attributes\On;
 
 class EditQuote extends EditRecord
 {
     use RedirectsCancelToView;
 
     protected static string $resource = QuoteResource::class;
+
+    /**
+     * Le righe del preventivo vivono in un RelationManager, che e' un
+     * componente Livewire a se': quando cambia una riga, questa pagina non
+     * se ne accorge da sola e i Totali restano quelli di prima.
+     */
+    #[On('totaliPreventivoAggiornati')]
+    public function aggiornaTotali(): void
+    {
+        $this->record->refresh();
+        $this->fillForm();
+    }
 
     protected function getHeaderActions(): array
     {

@@ -85,11 +85,57 @@ class QuoteProductsRelationManager extends RelationManager
                     }
                 })
                 ->required(),
-            Forms\Components\TextInput::make('quantity')->label('Quantità')->numeric()->default(1)->required(),
-            MoneyInput::make('price')->label('Prezzo (€)')->prefix('€')->required(),
-            Forms\Components\TextInput::make('discount')->label('Sconto (%)')->numeric()->default(0),
-            Forms\Components\TextInput::make('tax')->label('IVA (%)')->numeric()->default(22),
+            /*
+             | quantity, price, discount e tax sono NOT NULL a database.
+             |
+             | Svuotare il campo mandava NULL, l'insert falliva e l'utente
+             | vedeva solo "Qualcosa e' andato storto" senza sapere cosa.
+             | Un campo sconto vuoto vuol dire "nessuno sconto", non "errore":
+             | lo si normalizza a zero invece di rifiutare il salvataggio.
+             */
+            Forms\Components\TextInput::make('quantity')
+                ->label('Quantità')
+                ->numeric()
+                ->minValue(0)
+                ->default(1)
+                ->required()
+                ->dehydrateStateUsing(fn ($state) => blank($state) ? 1 : $state),
+            MoneyInput::make('price')
+                ->label('Prezzo (€)')
+                ->prefix('€')
+                ->required()
+                ->dehydrateStateUsing(fn ($state) => blank($state) ? 0 : $state),
+            Forms\Components\TextInput::make('discount')
+                ->label('Sconto (%)')
+                ->numeric()
+                ->minValue(0)
+                ->maxValue(100)
+                ->default(0)
+                ->placeholder('0')
+                ->helperText('Vuoto = nessuno sconto.')
+                ->dehydrateStateUsing(fn ($state) => blank($state) ? 0 : $state),
+            Forms\Components\TextInput::make('tax')
+                ->label('IVA (%)')
+                ->numeric()
+                ->minValue(0)
+                ->maxValue(100)
+                ->default(22)
+                ->dehydrateStateUsing(fn ($state) => blank($state) ? 0 : $state),
         ]);
+    }
+
+    /**
+     * Ricalcola i totali e avvisa la pagina del preventivo.
+     *
+     * Senza l'evento, il riquadro Totali e la Panoramica rapida restavano
+     * fermi ai numeri di prima finche' non si premeva "Ricalcola totali" o
+     * non si ricaricava la pagina: cambiavi un prezzo e l'imponibile non si
+     * muoveva, il che fa sembrare che la modifica non sia stata presa.
+     */
+    private function ricalcolaEAvvisa(RelationManager $livewire): void
+    {
+        $livewire->getOwnerRecord()->updateTotal();
+        $livewire->dispatch('totaliPreventivoAggiornati');
     }
 
     public function table(Table $table): Table
@@ -116,21 +162,21 @@ class QuoteProductsRelationManager extends RelationManager
             ])
             ->headerActions([
                 Tables\Actions\CreateAction::make()
-                    ->after(fn (RelationManager $livewire) => $livewire->getOwnerRecord()->updateTotal()),
+                    ->after(fn (RelationManager $livewire) => $this->ricalcolaEAvvisa($livewire)),
             ])
             ->actions([
                 ConfigureMachineAction::makeEdit(),
                 Tables\Actions\ActionGroup::make([
                     Tables\Actions\EditAction::make()
-                        ->after(fn (RelationManager $livewire) => $livewire->getOwnerRecord()->updateTotal()),
+                        ->after(fn (RelationManager $livewire) => $this->ricalcolaEAvvisa($livewire)),
                     Tables\Actions\DeleteAction::make()
-                        ->after(fn (RelationManager $livewire) => $livewire->getOwnerRecord()->updateTotal()),
+                        ->after(fn (RelationManager $livewire) => $this->ricalcolaEAvvisa($livewire)),
                 ]),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make()
-                        ->after(fn (RelationManager $livewire) => $livewire->getOwnerRecord()->updateTotal()),
+                        ->after(fn (RelationManager $livewire) => $this->ricalcolaEAvvisa($livewire)),
                 ]),
             ]);
     }
