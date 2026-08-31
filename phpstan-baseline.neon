@@ -213,7 +213,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
-			count: 2
+			count: 1
 			path: app/Filament/Pages/RiepilogoOre.php
 
 		-
@@ -1059,23 +1059,11 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
-			count: 5
-			path: app/Filament/Resources/ServiceReportResource.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$material\.$#'
-			identifier: property.notFound
-			count: 4
-			path: app/Filament/Resources/ServiceReportResource.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
-			identifier: property.notFound
 			count: 1
 			path: app/Filament/Resources/ServiceReportResource.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$quantity\.$#'
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Filament/Resources/ServiceReportResource.php
@@ -1117,12 +1105,6 @@ parameters:
 			path: app/Filament/Resources/ServiceReportResource.php
 
 		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: array\{maintenance_schedule_id\: string, lines_washed\: mixed\}, Closure\(App\\Models\\MaintenanceSchedule\)\: array\{maintenance_schedule_id\: string, lines_washed\: mixed\} given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Filament/Resources/ServiceReportResource.php
-
-		-
 			message: '#^Using nullsafe method call on non\-nullable type Carbon\\Carbon\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
@@ -1147,13 +1129,7 @@ parameters:
 			path: app/Filament/Resources/ServiceReportResource.php
 
 		-
-			message: '#^Using nullsafe property access "\?\-\>quantity" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Filament/Resources/ServiceReportResource.php
-
-		-
-			message: '#^Parameter \#1 \$record of static method App\\Filament\\Resources\\ServiceReportResource\:\:syncLavaggioImpianti\(\) expects App\\Models\\ServiceReport, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
+			message: '#^Parameter \#1 \$record of static method App\\Support\\Rapportini\\LavaggioFields\:\:syncLavaggioImpianti\(\) expects App\\Models\\ServiceReport, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
 			identifier: argument.type
 			count: 1
 			path: app/Filament/Resources/ServiceReportResource/Pages/CreateServiceReport.php
@@ -1165,19 +1141,19 @@ parameters:
 			path: app/Filament/Resources/ServiceReportResource/Pages/EditServiceReport.php
 
 		-
-			message: '#^Parameter \#1 \$record of static method App\\Filament\\Resources\\ServiceReportResource\:\:resolveLavaggioImpiantiDefaults\(\) expects App\\Models\\ServiceReport\|null, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			message: '#^Parameter \#1 \$record of static method App\\Support\\Rapportini\\LavaggioFields\:\:resolveLavaggioImpiantiDefaults\(\) expects App\\Models\\ServiceReport\|null, Illuminate\\Database\\Eloquent\\Model given\.$#'
 			identifier: argument.type
 			count: 1
 			path: app/Filament/Resources/ServiceReportResource/Pages/EditServiceReport.php
 
 		-
-			message: '#^Parameter \#1 \$record of static method App\\Filament\\Resources\\ServiceReportResource\:\:resolveLavaggioShortcutDefaults\(\) expects App\\Models\\ServiceReport\|null, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			message: '#^Parameter \#1 \$record of static method App\\Support\\Rapportini\\LavaggioFields\:\:resolveLavaggioShortcutDefaults\(\) expects App\\Models\\ServiceReport\|null, Illuminate\\Database\\Eloquent\\Model given\.$#'
 			identifier: argument.type
 			count: 1
 			path: app/Filament/Resources/ServiceReportResource/Pages/EditServiceReport.php
 
 		-
-			message: '#^Parameter \#1 \$record of static method App\\Filament\\Resources\\ServiceReportResource\:\:syncLavaggioImpianti\(\) expects App\\Models\\ServiceReport, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			message: '#^Parameter \#1 \$record of static method App\\Support\\Rapportini\\LavaggioFields\:\:syncLavaggioImpianti\(\) expects App\\Models\\ServiceReport, Illuminate\\Database\\Eloquent\\Model given\.$#'
 			identifier: argument.type
 			count: 1
 			path: app/Filament/Resources/ServiceReportResource/Pages/EditServiceReport.php
@@ -1825,16 +1801,34 @@ parameters:
 			path: app/Support/EurekaClient.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$gestionale_code\.$#'
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
-			count: 1
-			path: app/Support/Gestionale/GestionaleSyncRunner.php
+			count: 4
+			path: app/Support/Rapportini/LavaggioFields.php
 
 		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Models\\MachineUnit\>\:\:mapWithKeys\(\) contains unresolvable type\.$#'
-			identifier: argument.unresolvableType
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$material\.$#'
+			identifier: property.notFound
+			count: 4
+			path: app/Support/Rapportini/LavaggioFields.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$quantity\.$#'
+			identifier: property.notFound
 			count: 1
-			path: app/Support/Gestionale/GestionaleSyncRunner.php
+			path: app/Support/Rapportini/LavaggioFields.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: array\{maintenance_schedule_id\: string, lines_washed\: mixed\}, Closure\(App\\Models\\MaintenanceSchedule\)\: array\{maintenance_schedule_id\: string, lines_washed\: mixed\} given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Support/Rapportini/LavaggioFields.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>quantity" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Support/Rapportini/LavaggioFields.php
 
 		-
 			message: '#^Parameter \#1 \$array \(array\{0\?\: mixed\}\) of array_values is already a list, call has no effect\.$#'

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ServiceReportResource\Pages;
 
+use App\Support\Rapportini\LavaggioFields;
 use App\Filament\Concerns\RedirectsCancelToView;
 use App\Filament\Resources\ServiceReportResource;
 use Filament\Actions;
@@ -49,7 +50,7 @@ class EditServiceReport extends EditRecord
      */
     protected function mutateFormDataBeforeFill(array $data): array
     {
-        $defaults = ServiceReportResource::resolveLavaggioShortcutDefaults($this->getRecord());
+        $defaults = LavaggioFields::resolveLavaggioShortcutDefaults($this->getRecord());
 
         return [
             ...$data,
@@ -65,7 +66,7 @@ class EditServiceReport extends EditRecord
             'lavaggio_vie_count' => $defaults['vie_count'],
             '_lavaggio_base_material_key' => $defaults['lavaggio_base_key'],
             '_lavaggio_ult_material_key' => $defaults['lavaggio_ult_key'],
-            'lavaggio_impianti' => ServiceReportResource::resolveLavaggioImpiantiDefaults($this->getRecord()),
+            'lavaggio_impianti' => LavaggioFields::resolveLavaggioImpiantiDefaults($this->getRecord()),
         ];
     }
 
@@ -91,7 +92,7 @@ class EditServiceReport extends EditRecord
      */
     protected function afterSave(): void
     {
-        ServiceReportResource::syncLavaggioImpianti($this->getRecord(), $this->lavaggioImpianti);
+        LavaggioFields::syncLavaggioImpianti($this->getRecord(), $this->lavaggioImpianti);
     }
 
     /**

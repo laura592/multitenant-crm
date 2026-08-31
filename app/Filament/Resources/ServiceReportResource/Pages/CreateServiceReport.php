@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ServiceReportResource\Pages;
 
+use App\Support\Rapportini\LavaggioFields;
 use App\Filament\Resources\ServiceReportResource;
 use App\Models\Lavaggio;
 use Filament\Notifications\Notification;
@@ -95,7 +96,7 @@ class CreateServiceReport extends CreateRecord
      * Filament), ma a quel punto il campo "Impianti e vie lavate" (Repeater,
      * non ->relationship()) non e' ancora stato applicato: Filament non lo
      * salva da solo (vedi mutateFormDataBeforeCreate() sopra). Senza questo
-     * ri-lancio (dentro ServiceReportResource::syncLavaggioImpianti()), il
+     * ri-lancio (dentro LavaggioFields::syncLavaggioImpianti()), il
      * primo salvataggio di una sanificazione multi-impianto genererebbe
      * ancora i lavaggi con la regola implicita vecchia (tutti i piani/quello
      * di machine_unit_id) invece che sulla selezione esplicita appena fatta
@@ -105,7 +106,7 @@ class CreateServiceReport extends CreateRecord
     {
         $record = $this->getRecord();
 
-        ServiceReportResource::syncLavaggioImpianti($record, $this->lavaggioImpianti);
+        LavaggioFields::syncLavaggioImpianti($record, $this->lavaggioImpianti);
 
         $this->linkSourceLavaggio($record);
     }
