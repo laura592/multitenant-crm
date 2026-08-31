@@ -42,11 +42,18 @@ Schedule::command('eureka:apply-machine-billing-payer', ['--tenant' => 'alex'])-
 // ne accorgesse: fallisce prima ancora di partire, quindi non lascia
 // nemmeno un import parziale. Vedi il test ScheduledCommandsTest, che
 // ribinda ogni comando schedulato alla sua definizione.
+//
+// appendOutputTo: senza, dell'errore del 2026-08-30 alle 04:00 restava solo
+// "failed with exit code [1]" nel log Laravel, con lo stack trace dello
+// scheduler e zero traccia del motivo vero — il messaggio del comando
+// ("Errore ricerca rapportini per periodo: HTTP 500") finiva nell'output del
+// processo, che nessuno raccoglieva. Il file cresce di poche righe a notte
+// (intestazione + una riga per rapportino creato/aggiornato).
 Schedule::command('eureka:import-service-reports', [
     '--tenant' => 'alex',
     '--from' => now()->subDays(7)->toDateString(),
     '--with-detail',
-])->dailyAt('04:00');
+])->dailyAt('04:00')->appendOutputTo(storage_path('logs/eureka-import.log'));
 
 // 877 chiamate (una per materiale gia' a catalogo, pooled a concorrenza 15)
 // ogni notte: l'utente ha scelto esplicitamente "ogni notte" pur avvisati

@@ -2,8 +2,10 @@
 
 namespace App\Support;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Pool;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -287,6 +289,42 @@ class EurekaClient
             ->withBasicAuth($this->username, $this->password)
             ->acceptJson()
             ->connectTimeout(5)
-            ->timeout(30);
+            ->timeout(30)
+            // L'API del fornitore restituisce 500 a intermittenza sulle stesse
+            // identiche query: /schedelavoro/ sul periodo 2026-07-01 → 2026-07-10
+            // alterna 500 e 200 con 28 risultati da una chiamata all'altra
+            // (verificato dal vivo il 2026-08-31). Senza ritentare, un singolo
+            // 500 di passaggio uccide l'intero import notturno — e' quello che
+            // e' successo il 2026-08-30 alle 04:00: la ricerca per periodo e'
+            // l'unica chiamata non ridondante del comando, quindi se cade lei
+            // non viene importato NIENTE, nemmeno parzialmente (i dettagli,
+            // in pool, tollerano gia' i buchi da soli).
+            //
+            // Attese lunghe e distanziate (5s, 15s, 45s: ~65 secondi in tutto),
+            // non un ribattere stretto: i 500 arrivano a raffiche: durante la
+            // stessa sessione di verifica 4 tentativi ravvicinati sono caduti
+            // tutti, e venti chiamate identiche poco dopo hanno risposto 200
+            // venti volte su venti. Ritentare entro pochi secondi ricade dentro
+            // la stessa finestra storta; un import notturno non ha nessuna
+            // fretta e puo' permettersi di aspettare che passi.
+            //
+            // Ritentiamo solo cio' che ha senso ritentare: errori di
+            // connessione, 5xx e 429. Un 401/404 e' un problema di
+            // configurazione o di dato, ripeterlo servirebbe solo a
+            // martellare l'API del fornitore (gia' andata in disservizio il
+            // 2026-08-06 sotto carico).
+            ->retry([5_000, 15_000, 45_000], when: function (\Throwable $e) {
+                if ($e instanceof ConnectionException) {
+                    return true;
+                }
+
+                if (! $e instanceof RequestException) {
+                    return false;
+                }
+
+                $status = $e->response->status();
+
+                return $status >= 500 || $status === 429;
+            });
     }
 }
