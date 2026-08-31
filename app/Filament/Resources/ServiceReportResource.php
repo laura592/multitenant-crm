@@ -717,7 +717,9 @@ class ServiceReportResource extends Resource
                     // LAVAGGIO 2 VIE (tariffa minima agevolata, dovuta anche
                     // lavando una sola via) + ULTERIORE VIA LAVATA per le vie
                     // oltre la seconda.
-                    Forms\Components\Grid::make(3)
+                    // Quattro colonne: i quattro interruttori stanno su una riga
+                    // sola, il campo "Numero vie" compare sotto solo quando serve.
+                    Forms\Components\Grid::make(4)
                         ->schema([
                             // Il festivo lo dichiara chi compila: non si deduce dalla
                             // data, perche' un intervento fatto di sabato puo' essere
@@ -726,8 +728,7 @@ class ServiceReportResource extends Resource
                                 ->label('Intervento festivo')
                                 ->live()
                                 ->dehydrated(false)
-                                ->helperText('Cambia chiamata e manodopera nelle voci festive, prima di aggiungerle.')
-                                ->columnSpanFull(),
+                                ->helperText('Cambia chiamata e manodopera nelle voci festive, prima di aggiungerle.'),
                             Forms\Components\Toggle::make('add_chiamata_material')
                                 ->label('Chiamata')
                                 ->live()
