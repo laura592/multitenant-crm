@@ -21,6 +21,7 @@ use App\Support\DisplayName;
 use App\Support\OutsideLivewireRender;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Facades\Filament;
+use Illuminate\Support\Arr;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
@@ -95,7 +96,7 @@ class ServiceReportResource extends Resource
                 ->visible(fn (ServiceReport $record) => $record->isLocked())
                 ->state(fn (ServiceReport $record) => $record->source === ServiceReport::SOURCE_EUREKA
                     ? 'Rapportino arrivato da Eureka: non è modificabile da qui.'
-                    : 'Rapportino già inviato a Eureka: non è più modificabile.')
+                    : 'Rapportino passato in gestionale: da qui in poi si corregge in Eureka.')
                 ->extraAttributes([
                     'class' => 'rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200',
                 ]),
@@ -415,7 +416,9 @@ class ServiceReportResource extends Resource
                         ->required(),
                     Forms\Components\Select::make('status')
                         ->label('Stato')
-                        ->options(fn () => self::statusLabels())
+                        // "In gestionale" non e' scegliibile a mano: lo scrive
+                        // il job di invio quando Eureka accetta il documento.
+                        ->options(fn () => Arr::except(self::statusLabels(), ['in_gestionale']))
                         ->default('bozza')
                         ->required(),
                 ]),
@@ -1454,6 +1457,9 @@ class ServiceReportResource extends Resource
             'bozza' => 'Bozza',
             'inviato' => 'Inviato',
             'completato' => 'Completato',
+            // Impostato dal job di invio, non a mano: segna che il documento
+            // e' passato in Eureka ed e' li' che va corretto d'ora in poi.
+            'in_gestionale' => 'In gestionale',
             'rifiutato' => 'Rifiutato',
         ];
     }
@@ -1464,6 +1470,7 @@ class ServiceReportResource extends Resource
             'bozza' => 'gray',
             'inviato' => 'success',
             'completato' => 'info',
+            'in_gestionale' => 'warning',
             'rifiutato' => 'danger',
         ];
     }

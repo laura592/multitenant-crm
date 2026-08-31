@@ -85,6 +85,11 @@ class SendServiceReportToGestionaleJob implements ShouldQueue
                 'gestionale_sync_status' => 'sent',
                 'gestionale_sync_error' => null,
                 'gestionale_synced_at' => now(),
+                // Stato visibile in elenco e in scheda: da qui il rapportino
+                // non si tocca piu' dal CRM (ServiceReport::isLocked()), e la
+                // correzione si fa in Eureka. Tenuto separato da "inviato",
+                // che vuol dire tutt'altro: mandato al cliente.
+                'status' => 'in_gestionale',
             ]);
 
             Notification::make()

@@ -54,7 +54,8 @@ class ServiceReport extends Model
      * amministrazione, vedi ServiceReportResource::statusLabels()) conta
      * anche lui come chiuso, "rifiutato" no.
      */
-    public const CLOSED_STATUSES = ['inviato', 'completato'];
+    /** Anche "in_gestionale": il documento e' passato in Eureka, piu' chiuso di cosi'. */
+    public const CLOSED_STATUSES = ['inviato', 'completato', 'in_gestionale'];
 
     /**
      * Parole chiave usate da countsAsLavaggio() sullo storico importato da Eureka,
@@ -149,6 +150,13 @@ class ServiceReport extends Model
         // l'ultima visita. Anche su delete/soft-delete: se si cancella l'ultimo rapportino
         // che aveva chiuso il piano, la scadenza deve ricadere sul precedente (o sparire).
         static::saved(function (self $report) {
+            // Alla chiusura il pagante si fissa sul documento: da li' in poi
+            // il rapportino ricorda chi pagava quando e' stato fatto, e non
+            // cambia piu' se domani il cliente passa a un altro torrefattore.
+            if ($report->isClosed()) {
+                $report->freezeInvoiceRecipient();
+            }
+
             $report->syncMaintenanceSchedule();
         });
 
@@ -301,6 +309,10 @@ class ServiceReport extends Model
      * documento, e una modifica lato CRM andrebbe fuori sincrono col gestionale
      * senza che nessuno se ne accorga.
      *
+     * - oppure e' in stato "in_gestionale", che significa la stessa cosa detta
+     *   in modo visibile: lo scrive solo SendServiceReportToGestionaleJob
+     *   insieme a sync=sent, e non e' scegliibile a mano dal form.
+     *
      * "Completato" NON blocca piu' (2026-08-31). Era un flag impostato a mano,
      * e trattarlo come irreversibile significava che un errore di battitura
      * accorto dopo aver spuntato la casella non si poteva piu' correggere:
@@ -314,7 +326,8 @@ class ServiceReport extends Model
     public function isLocked(): bool
     {
         return $this->source === self::SOURCE_EUREKA
-            || $this->gestionale_sync_status === 'sent';
+            || $this->gestionale_sync_status === 'sent'
+            || $this->status === 'in_gestionale';
     }
 
     /**
@@ -528,17 +541,55 @@ class ServiceReport extends Model
     }
 
     /**
-     * Se l'intervento e' su una macchina con un pagatore diverso dal cliente
-     * (es. matricola in comodato pagata da un gestore terzo), fattura a
-     * quella macchina prevale sul billing_customer_id generico del cliente.
+     * Il pagante di QUESTO documento.
+     *
+     * Se e' stato congelato (billing_customer_id sul rapportino) vince
+     * sempre: e' chi paga per questo intervento, deciso quando l'intervento
+     * e' stato chiuso. Cambiare il pagante di un cliente o di una macchina
+     * oggi non deve riscrivere chi ha pagato due anni fa.
+     *
+     * Solo se manca si ricalcola come prima: la macchina (se ha un pagatore
+     * suo, es. matricola in comodato pagata da un gestore terzo) prevale sul
+     * billing_customer_id generico del cliente.
      */
     public function invoiceRecipient(): Customer
     {
+        if ($this->billingCustomer) {
+            return $this->billingCustomer;
+        }
+
         if (! $this->customer) {
             throw new \RuntimeException('Cliente collegato a questo rapportino non trovato (probabilmente eliminato).');
         }
 
         return $this->machineUnit?->billingCustomer ?? $this->customer->invoiceRecipient();
+    }
+
+    /**
+     * Il pagante congelato su questo documento. Nullo sui rapportini vecchi
+     * senza snapshot Eureka, dove invoiceRecipient() ricalcola.
+     */
+    public function billingCustomer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class, 'billing_customer_id');
+    }
+
+    /**
+     * Fissa il pagante sul documento, se non c'e' gia'.
+     *
+     * Chiamato alla chiusura: da li' in poi quel rapportino ricorda chi
+     * pagava quando e' stato fatto, e non cambia piu' se domani il cliente
+     * passa a un altro torrefattore.
+     */
+    public function freezeInvoiceRecipient(): void
+    {
+        if ($this->billing_customer_id || ! $this->customer) {
+            return;
+        }
+
+        $pagante = $this->machineUnit?->billingCustomer ?? $this->customer->invoiceRecipient();
+
+        $this->forceFill(['billing_customer_id' => $pagante->id])->saveQuietly();
     }
 
     public function getMachineUnitDisplayNameAttribute(): ?string
