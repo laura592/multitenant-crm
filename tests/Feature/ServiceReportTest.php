@@ -429,7 +429,7 @@ class ServiceReportTest extends TestCase
         $tariffe = \App\Support\TariffeIntervento::per($bar);
         $this->assertSame('CHIMART', $tariffe['chiamata']);
         $this->assertSame('OREMART', $tariffe['manodopera']);
-        $this->assertSame('LAV2MART', $tariffe['lavaggio']);
+        $this->assertSame('LAVMART', $tariffe['lavaggio']);
         $this->assertSame('ULTVIAMART', $tariffe['lavaggio_ulteriore_via']);
         $this->assertSame('CHIFEMART', \App\Support\TariffeIntervento::per($bar, true)['chiamata']);
 

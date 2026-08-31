@@ -29,11 +29,11 @@ return [
             'chiamata_festiva' => 'CHIFEMART',
             'manodopera' => 'OREMART',
             'manodopera_festiva' => 'OREFEMART',
-            // A catalogo ci sono due codici per la stessa cosa: LAV2MART (27,50,
-            // quello davvero usato, 215 volte) e LAVMART (28,00, quello che si
-            // chiama "Martellozzo", usato 12 volte). In attesa di conferma resta
-            // quello in uso: per cambiarlo basta questa riga.
-            'lavaggio' => 'LAV2MART',
+            // A catalogo ci sono due codici quasi uguali: LAVMART (28,00,
+            // "LAVAGGIO 2 VIE MARTELLOZZO") e LAV2MART (27,50, descritto solo
+            // come "LAVAGGIO 2 VIE"). Quello giusto e' LAVMART, confermato
+            // 2026-08-31, anche se lo storico usa piu' spesso l'altro.
+            'lavaggio' => 'LAVMART',
             'lavaggio_ulteriore_via' => 'ULTVIAMART',
         ],
 
