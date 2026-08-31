@@ -109,6 +109,8 @@ class QuoteResource extends Resource
                                         ->schema([
                                             TextEntry::make('paymentMethodRelation.name')->label('Metodo di pagamento')->placeholder('—'),
                                             TextEntry::make('discount')->label('Sconto generale')->suffix('%'),
+                                            TextEntry::make('extra_discount')->label('Sconto extra')->suffix('%')
+                                                ->visible(fn ($record) => (float) ($record->extra_discount ?? 0) > 0),
                                             TextEntry::make('notes')->label('Note')->placeholder('—')->html()->columnSpanFull(),
                                         ]),
                                     InfolistSection::make('Totali')
@@ -120,6 +122,8 @@ class QuoteResource extends Resource
                                         ->schema([
                                             TextEntry::make('subtotal')->label('Imponibile')->money('EUR'),
                                             TextEntry::make('discount')->label('Sconto generale')->suffix('%')->placeholder('—'),
+                                            TextEntry::make('extra_discount')->label('Sconto extra')->suffix('%')
+                                                ->visible(fn ($record) => (float) ($record->extra_discount ?? 0) > 0),
                                             TextEntry::make('tax_total')->label('IVA')->money('EUR'),
                                             TextEntry::make('total')
                                                 ->label('Totale')
@@ -342,6 +346,12 @@ class QuoteResource extends Resource
                         ->numeric()
                         ->suffix('%')
                         ->default(0),
+                    Forms\Components\TextInput::make('extra_discount')
+                        ->label('Sconto extra (%)')
+                        ->helperText('Si applica su quanto resta dopo lo sconto generale, come i listini "30+5".')
+                        ->numeric()
+                        ->suffix('%')
+                        ->default(0),
                     Forms\Components\RichEditor::make('notes')
                         ->label('Note')
                         ->toolbarButtons(['bold'])
@@ -457,6 +467,13 @@ class QuoteResource extends Resource
                                         ->visible(fn (Get $get) => $get('payment_method') === 'noleggio-operativo'),
                                     Forms\Components\TextInput::make('discount')
                                         ->label('Sconto generale (%)')
+                                        ->numeric()
+                                        ->suffix('%')
+                                        ->default(0)
+                                        ->columnSpan(4),
+                                    Forms\Components\TextInput::make('extra_discount')
+                                        ->label('Sconto extra (%)')
+                                        ->helperText('Si applica su quanto resta dopo lo sconto generale, come i listini \"30+5\".')
                                         ->numeric()
                                         ->suffix('%')
                                         ->default(0)

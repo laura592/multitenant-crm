@@ -19,6 +19,7 @@ class Quote extends Model
     protected $casts = [
         'date' => 'date',
         'discount' => 'decimal:2',
+        'extra_discount' => 'decimal:2',
         'subtotal' => 'decimal:2',
         'tax_total' => 'decimal:2',
         'total' => 'decimal:2',
@@ -35,6 +36,7 @@ class Quote extends Model
         'date',
         'status',
         'discount',
+        'extra_discount',
         'notes',
         'payment_method',
         'rental_monthly_fee',
@@ -46,6 +48,7 @@ class Quote extends Model
 
     protected $attributes = [
         'discount' => 0,
+        'extra_discount' => 0,
         'subtotal' => 0,
         'tax_total' => 0,
         'total' => 0,
@@ -230,16 +233,24 @@ class Quote extends Model
             $grandTaxTotal += $taxAmount;
         }
 
-        $generalDiscount = (float) ($this->discount ?? 0);
-        $discountOnSubtotal = $grandSubtotal * ($generalDiscount / 100);
-        $discountOnTax = $grandTaxTotal * ($generalDiscount / 100);
+        /*
+         | I due sconti sono a CASCATA, non sommati: l'extra si applica su
+         | quanto resta dopo il generale, come nei listini fornitore "30+5".
+         | Su 1.000 € con 30% + 5% restano 665 €, non 650 €.
+         |
+         | Entrambi valgono anche sull'IVA, altrimenti l'imposta resterebbe
+         | calcolata su un imponibile che nessuno paga piu'.
+         */
+        $residuo = (1 - ((float) ($this->discount ?? 0) / 100))
+            * (1 - ((float) ($this->extra_discount ?? 0) / 100));
 
-        $subtotal = round($grandSubtotal - $discountOnSubtotal, 2);
+        $subtotal = $grandSubtotal * $residuo;
+        $taxTotal = $grandTaxTotal * $residuo;
 
         $this->update([
-            'subtotal' => $subtotal,
-            'tax_total' => round($grandTaxTotal - $discountOnTax, 2),
-            'total' => round(($grandSubtotal - $discountOnSubtotal) + ($grandTaxTotal - $discountOnTax), 2),
+            'subtotal' => round($subtotal, 2),
+            'tax_total' => round($taxTotal, 2),
+            'total' => round($subtotal + $taxTotal, 2),
         ]);
     }
 }

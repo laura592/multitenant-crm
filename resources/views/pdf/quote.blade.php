@@ -168,6 +168,13 @@
         $productsGross = $quote->quoteProducts->sum(fn ($p) => $p->quantity * $p->price);
         $productsNet = $quote->quoteProducts->sum('total');
         $rowDiscountTotal = $productsGross - $productsNet;
+
+        // I due sconti sono a cascata: l'extra si applica su quanto resta
+        // dopo il generale. Vanno calcolati separatamente, non ricavati per
+        // differenza da subtotal — quella differenza li contiene entrambi.
+        $scontoGenerale = $productsNet * ((float) $quote->discount / 100);
+        $dopoGenerale = $productsNet - $scontoGenerale;
+        $scontoExtra = $dopoGenerale * ((float) ($quote->extra_discount ?? 0) / 100);
     @endphp
 
     <div class="clearfix">
@@ -181,7 +188,14 @@
                 <tr class="discount-row">
                     <th>Sconto generale</th>
                     <td>{{ number_format($quote->discount, 2, ',', '.') }}%</td>
-                    <td>-€ {{ number_format($productsNet - $quote->subtotal, 2, ',', '.') }}</td>
+                    <td>-€ {{ number_format($scontoGenerale, 2, ',', '.') }}</td>
+                </tr>
+            @endif
+            @if(($quote->extra_discount ?? 0) > 0)
+                <tr class="discount-row">
+                    <th>Sconto extra</th>
+                    <td>{{ number_format($quote->extra_discount, 2, ',', '.') }}%</td>
+                    <td>-€ {{ number_format($scontoExtra, 2, ',', '.') }}</td>
                 </tr>
             @endif
             <tr class="subtotal-row"><th>Imponibile</th><td colspan="2">€ {{ number_format($quote->subtotal, 2, ',', '.') }}</td></tr>
