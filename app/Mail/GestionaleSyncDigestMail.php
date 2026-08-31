@@ -14,7 +14,7 @@ class GestionaleSyncDigestMail extends Mailable
     use Queueable, SerializesModels;
 
     /**
-     * @param array{autofilled: array, diffs: array, customerLinks: array, productLinks: array, machineUnitLinks: array, newMachines: array} $results
+     * @param  array{autofilled: array, diffs: array, customerLinks: array, productLinks: array, machineUnitLinks: array, newMachines: array, apiIssues?: array}  $results
      */
     public function __construct(
         public Tenant $tenant,
@@ -26,6 +26,16 @@ class GestionaleSyncDigestMail extends Mailable
         $total = count($this->results['autofilled']) + count($this->results['diffs'])
             + count($this->results['customerLinks']) + count($this->results['productLinks'])
             + count($this->results['machineUnitLinks']) + count($this->results['newMachines']);
+
+        // Un endpoint di Eureka in errore va detto gia' nell'oggetto: il
+        // digest con "0 righe da controllare" si legge come una buona
+        // notizia, ed e' invece il sintomo che una parte del sync non ha
+        // potuto girare (vedi SyncGestionaleData).
+        if (! empty($this->results['apiIssues'])) {
+            return new Envelope(
+                subject: "Sync Eureka {$this->tenant->name}: attenzione, Eureka ha rifiutato alcune chiamate",
+            );
+        }
 
         return new Envelope(
             subject: "Sync Eureka {$this->tenant->name}: {$total} righe da controllare",
@@ -44,6 +54,7 @@ class GestionaleSyncDigestMail extends Mailable
                 'productLinks' => $this->results['productLinks'],
                 'machineUnitLinks' => $this->results['machineUnitLinks'],
                 'newMachines' => $this->results['newMachines'],
+                'apiIssues' => $this->results['apiIssues'] ?? [],
             ],
         );
     }

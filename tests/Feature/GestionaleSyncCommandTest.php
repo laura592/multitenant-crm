@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Mail\GestionaleSyncDigestMail;
+use App\Mail\GestionaleSyncFailedMail;
 use App\Models\Customer;
 use App\Models\MachineUnit;
 use App\Models\Product;
@@ -405,8 +406,146 @@ class GestionaleSyncCommandTest extends TestCase
 
         $this->artisan('gestionale:sync')->assertExitCode(0);
 
-        Mail::assertSent(\App\Mail\GestionaleSyncFailedMail::class, fn ($mail) => $mail->hasTo('ufficio@alexcaffe.it'));
+        Mail::assertSent(GestionaleSyncFailedMail::class, fn ($mail) => $mail->hasTo('ufficio@alexcaffe.it'));
         Mail::assertNotSent(GestionaleSyncDigestMail::class);
+    }
+
+    /**
+     * Il caso vero del 2026-08-27: il fornitore introduce i diritti per
+     * modulo e /crm_api/m14/search inizia a rispondere 403, mentre tutto il
+     * resto di Eureka continua a funzionare. Prima di questo controllo la
+     * ricerca matricole tornava semplicemente vuota e il sync riportava "0
+     * righe da controllare" — indistinguibile da una notte tranquilla.
+     */
+    public function test_reports_a_single_forbidden_endpoint_even_when_the_rest_of_eureka_works(): void
+    {
+        Mail::fake();
+
+        $tenant = $this->makeTenant();
+
+        $product = Product::create([
+            'sku' => 'A300', 'type' => Product::TYPE_MACHINE, 'name' => 'Franke A300', 'gestionale_code' => 19356,
+        ]);
+
+        $customer = Customer::create([
+            'tenant_id' => $tenant->id,
+            'company_name' => 'Gdp Italia SRL',
+            'gestionale_code' => 1,
+            'vat_number' => '00554810242',
+            'province' => 'VI',
+            'city' => 'SAN GIUSEPPE DI CASSOLA',
+            'email' => 'info@gdpitalia.com',
+        ]);
+
+        MachineUnit::create([
+            'tenant_id' => $tenant->id,
+            'current_customer_id' => $customer->id,
+            'product_id' => $product->id,
+            'serial_number' => '34000000335017',
+        ]);
+
+        Http::fake([
+            // Il modulo `crm` non e' abilitato sulle nostre credenziali.
+            '*crm_api/m14/search*' => Http::response('<html><body><h1>403: Forbidden</h1></body></html>', 403),
+            '*anagrafica/cerca*' => Http::response([[
+                'id' => 1,
+                'rag_sociale_1' => 'GDP ITALIA SRL',
+                'partita_iva' => '00554810242',
+                'citta' => 'SAN GIUSEPPE DI CASSOLA',
+                'sigla_prov' => 'VI',
+                'email' => 'info@gdpitalia.com',
+            ]], 200),
+            '*art_installati*' => Http::response([], 200),
+        ]);
+
+        $this->artisan('gestionale:sync')
+            ->expectsOutputToContain('/crm_api/m14/*')
+            ->assertExitCode(0);
+
+        // Eureka risponde: non e' il caso "irraggiungibile", quindi deve
+        // arrivare il digest normale (con il riquadro rosso), non l'alert.
+        Mail::assertNotSent(GestionaleSyncFailedMail::class);
+        Mail::assertSent(GestionaleSyncDigestMail::class, function (GestionaleSyncDigestMail $mail) {
+            $issues = $mail->results['apiIssues'];
+
+            return count($issues) === 1
+                && $issues[0]['endpoint'] === '/crm_api/m14/*'
+                && str_contains($issues[0]['statuses'], '403');
+        });
+    }
+
+    /**
+     * Il digest parte anche quando non c'e' nulla da rivedere, se una
+     * chiamata e' stata rifiutata: e' proprio il silenzio a ingannare.
+     */
+    public function test_sends_digest_with_nothing_to_review_when_an_endpoint_is_forbidden(): void
+    {
+        Mail::fake();
+
+        $tenant = $this->makeTenant();
+
+        $product = Product::create([
+            'sku' => 'A300', 'type' => Product::TYPE_MACHINE, 'name' => 'Franke A300', 'gestionale_code' => 19356,
+        ]);
+
+        $customer = Customer::create([
+            'tenant_id' => $tenant->id,
+            'company_name' => 'Gdp Italia SRL',
+            'gestionale_code' => 1,
+        ]);
+
+        MachineUnit::create([
+            'tenant_id' => $tenant->id,
+            'current_customer_id' => $customer->id,
+            'product_id' => $product->id,
+            'serial_number' => '34000000335017',
+        ]);
+
+        Http::fake([
+            '*crm_api/m14/search*' => Http::response('', 403),
+            '*' => Http::response([], 200),
+        ]);
+
+        $this->artisan('gestionale:sync')->assertExitCode(0);
+
+        Mail::assertSent(GestionaleSyncDigestMail::class);
+    }
+
+    /**
+     * Il rovescio della medaglia: un 500 di passaggio su una chiamata sola
+     * (il fornitore ne produce a raffica, vedi EurekaClient) non deve
+     * trasformare ogni sync in un allarme — le chiamate restano best-effort.
+     */
+    public function test_does_not_report_a_sporadic_server_error_among_successful_calls(): void
+    {
+        Mail::fake();
+
+        $tenant = $this->makeTenant();
+
+        foreach (['Gdp Italia SRL', 'Corrispettivi', 'Agora Park Hotel'] as $i => $name) {
+            Customer::create([
+                'tenant_id' => $tenant->id,
+                'company_name' => $name,
+                'gestionale_code' => $i + 1,
+            ]);
+        }
+
+        $calls = 0;
+
+        Http::fake([
+            '*anagrafica/cerca*' => function () use (&$calls) {
+                $calls++;
+
+                return $calls === 1
+                    ? Http::response('Internal Server Error', 500)
+                    : Http::response([], 200);
+            },
+            '*' => Http::response([], 200),
+        ]);
+
+        $this->artisan('gestionale:sync')->assertExitCode(0);
+
+        Mail::assertNothingSent();
     }
 
     /**

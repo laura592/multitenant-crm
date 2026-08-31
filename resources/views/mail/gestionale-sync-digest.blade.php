@@ -16,6 +16,22 @@
     ], fn ($row) => $row['count'] > 0);
 @endphp
 
+@if(count($apiIssues))
+## Eureka ha rifiutato alcune chiamate
+
+<x-mail.severity-panel color="red">
+Le funzioni che dipendono dagli endpoint qui sotto **non hanno prodotto risultati**: quello che manca in questo riepilogo potrebbe non essere "niente da segnalare", ma dati che non siamo riusciti a leggere. Un `403` significa che le nostre credenziali non hanno i diritti per quel modulo — va chiesto a chi gestisce Eureka.
+</x-mail.severity-panel>
+
+@component('mail::table')
+| Endpoint | Chiamate fallite | Risposte |
+| :--- | ---: | :--- |
+@foreach($apiIssues as $issue)
+| {{ $issue['endpoint'] }} | {{ $issue['failures'] }} / {{ $issue['attempts'] }} | {{ $issue['statuses'] }} |
+@endforeach
+@endcomponent
+@endif
+
 @if(count($summaryRows))
 @component('mail::table')
 | Cosa | Righe |
@@ -24,7 +40,7 @@
 | {{ $row['label'] }} | {{ $row['count'] }} |
 @endforeach
 @endcomponent
-@else
+@elseif(! count($apiIssues))
 Nessuna segnalazione questa volta: CRM ed Eureka sono allineati.
 @endif
 

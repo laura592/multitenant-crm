@@ -33,7 +33,7 @@ class GestionaleSyncRunner
     }
 
     /**
-     * @return array{autofilled: array, diffs: array, customerLinks: array, productLinks: array, machineUnitLinks: array, newMachines: array, eurekaUnreachable: bool}
+     * @return array{autofilled: array, diffs: array, customerLinks: array, productLinks: array, machineUnitLinks: array, newMachines: array, eurekaUnreachable: bool, apiIssues: array}
      */
     public function run(): array
     {
@@ -51,6 +51,13 @@ class GestionaleSyncRunner
             // by design) — indistinguibile da "niente da segnalare" senza
             // questo controllo separato. Vedi EurekaClient::hadCompleteFailure().
             'eurekaUnreachable' => $this->client->hadCompleteFailure(),
+            // Eureka in piedi ma un singolo endpoint che risponde sempre
+            // male (tipicamente 403 per diritti di modulo revocati lato
+            // fornitore): hadCompleteFailure() sopra non scatta, perche' il
+            // resto risponde, e la funzionalita' che dipende da
+            // quell'endpoint smette di produrre risultati senza dirlo.
+            // Vedi EurekaClient::failedEndpoints().
+            'apiIssues' => $this->client->failedEndpoints(),
         ];
     }
 

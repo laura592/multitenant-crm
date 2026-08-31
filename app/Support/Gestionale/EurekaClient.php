@@ -19,15 +19,24 @@ use Illuminate\Support\Facades\Http;
  */
 class EurekaClient
 {
-    // Conta i tentativi/fallimenti delle chiamate pooled (vedi
-    // pooledRequests()) per distinguere "Eureka irraggiungibile per tutta
-    // la sync" da "nessun risultato trovato" — senza questo, un'interruzione
-    // di Eureka durante `gestionale:sync` produce silenziosamente lo stesso
-    // esito di una notte senza nulla da segnalare (vedi hadCompleteFailure()
-    // usato da GestionaleSyncRunner).
-    private int $poolAttempts = 0;
-
-    private int $poolFailures = 0;
+    // Esito di OGNI chiamata fatta da questa istanza, raggruppato per
+    // endpoint (vedi endpointKey()): per distinguere "Eureka irraggiungibile
+    // per tutta la sync" da "nessun risultato trovato" — senza questo,
+    // un'interruzione di Eureka durante `gestionale:sync` produce
+    // silenziosamente lo stesso esito di una notte senza nulla da segnalare.
+    //
+    // Il conteggio e' per endpoint e non piu' globale (com'era con due soli
+    // contatori pooled) perche' il caso peggiore visto dal vivo non e' Eureka
+    // giu' del tutto, ma UN endpoint che smette di rispondere mentre gli
+    // altri funzionano: il 2026-08-27 il fornitore ha introdotto i diritti
+    // per modulo e /crm_api/m14/search ha iniziato a rispondere 403
+    // (modulo `crm` non abilitato sulle nostre credenziali). Con i contatori
+    // globali quel 403 non faceva scattare hadCompleteFailure() — le altre
+    // chiamate andavano — e il sync riportava "0 proposte macchinari"
+    // invece di "Eureka mi nega l'accesso". Vedi failedEndpoints().
+    //
+    // @var array<string, array{attempts: int, failures: int, statuses: array<string, int>}>
+    private array $callStats = [];
 
     private readonly string $baseUrl;
 
@@ -54,7 +63,107 @@ class EurekaClient
      */
     public function hadCompleteFailure(): bool
     {
-        return $this->poolAttempts > 0 && $this->poolFailures === $this->poolAttempts;
+        $attempts = array_sum(array_column($this->callStats, 'attempts'));
+        $failures = array_sum(array_column($this->callStats, 'failures'));
+
+        return $attempts > 0 && $failures === $attempts;
+    }
+
+    /**
+     * Endpoint su cui c'e' un problema sistematico, da segnalare a voce alta
+     * invece di lasciarli sparire dentro un risultato vuoto:
+     *
+     *   - tutte le chiamate a quell'endpoint sono fallite (endpoint morto,
+     *     anche se il resto di Eureka risponde);
+     *   - oppure e' comparso almeno un 401/403 (autenticazione o diritti di
+     *     modulo): non e' un disturbo di passaggio come un 500 o un timeout,
+     *     e ritentare non lo risolve — va vista da una persona.
+     *
+     * Un fallimento sporadico (qualche 500 su tante chiamate, vedi i 500 a
+     * raffica del fornitore) resta invece silenzioso di proposito: le
+     * chiamate qui sono best-effort e un buco ogni tanto e' tollerato.
+     *
+     * @return array<int, array{endpoint: string, attempts: int, failures: int, statuses: string}>
+     */
+    public function failedEndpoints(): array
+    {
+        $issues = [];
+
+        foreach ($this->callStats as $endpoint => $stats) {
+            $denied = isset($stats['statuses']['401']) || isset($stats['statuses']['403']);
+
+            if (! $denied && $stats['failures'] < $stats['attempts']) {
+                continue;
+            }
+
+            if ($stats['failures'] === 0) {
+                continue;
+            }
+
+            $statuses = [];
+            foreach ($stats['statuses'] as $status => $count) {
+                $statuses[] = $status.' x'.$count;
+            }
+
+            $issues[] = [
+                'endpoint' => $endpoint,
+                'attempts' => $stats['attempts'],
+                'failures' => $stats['failures'],
+                'statuses' => implode(', ', $statuses),
+            ];
+        }
+
+        usort($issues, fn (array $a, array $b) => $b['failures'] <=> $a['failures']);
+
+        return $issues;
+    }
+
+    /**
+     * Registra l'esito di una chiamata. $status null = la richiesta non e'
+     * nemmeno arrivata a una risposta HTTP (connessione, DNS, timeout).
+     */
+    private function recordCall(string $url, ?int $status): void
+    {
+        $key = $this->endpointKey($url);
+
+        $stats = $this->callStats[$key] ?? ['attempts' => 0, 'failures' => 0, 'statuses' => []];
+
+        $stats['attempts']++;
+
+        if ($status === null || $status < 200 || $status >= 300) {
+            $stats['failures']++;
+            $label = $status === null ? 'connessione' : (string) $status;
+            $stats['statuses'][$label] = ($stats['statuses'][$label] ?? 0) + 1;
+        }
+
+        $this->callStats[$key] = $stats;
+    }
+
+    /**
+     * Raggruppa le URL per endpoint tenendo i primi due segmenti di path e
+     * riducendo il resto a `*`: /articoli/articolo/CHIORD e
+     * /articoli/articolo/LAV2 sono lo stesso endpoint, e su un sync da
+     * migliaia di chiamate contarle separatamente riempirebbe le statistiche
+     * di una chiave per ricambio invece di dire "/articoli/articolo/* e'
+     * giu'". Due segmenti bastano a distinguere tutti gli endpoint che
+     * usiamo (/anagrafica/cerca, /show/q/*, /crm_api/m14/*, ...).
+     */
+    private function endpointKey(string $url): string
+    {
+        $path = trim((string) parse_url($url, PHP_URL_PATH), '/');
+
+        if ($path === '') {
+            return '/';
+        }
+
+        $segments = explode('/', $path);
+        $kept = array_slice($segments, 0, 2);
+
+        if (count($segments) > 2) {
+            $kept[] = '*';
+        }
+
+        return '/'.implode('/', $kept);
     }
 
     /**
@@ -103,12 +212,16 @@ class EurekaClient
                 $this->password,
             )->timeout(10)->get($url);
 
+            $this->recordCall($url, $response->status());
+
             if (! $response->successful()) {
                 return [];
             }
 
             return $response->json() ?? [];
         } catch (\Throwable) {
+            $this->recordCall($url, null);
+
             return [];
         }
     }
@@ -133,12 +246,16 @@ class EurekaClient
                 $this->password,
             )->timeout(10)->get($url);
 
+            $this->recordCall($url, $response->status());
+
             if (! $response->successful()) {
                 return [];
             }
 
             return $response->json() ?? [];
         } catch (\Throwable) {
+            $this->recordCall($url, null);
+
             return [];
         }
     }
@@ -163,12 +280,16 @@ class EurekaClient
                 $this->password,
             )->timeout(10)->get($url);
 
+            $this->recordCall($url, $response->status());
+
             if (! $response->successful()) {
                 return [];
             }
 
             return $response->json() ?? [];
         } catch (\Throwable) {
+            $this->recordCall($url, null);
+
             return [];
         }
     }
@@ -233,8 +354,6 @@ class EurekaClient
         $results = [];
 
         foreach (array_chunk($urlsByKey, $concurrency, true) as $chunk) {
-            $this->poolAttempts += count($chunk);
-
             try {
                 $responses = Http::pool(function (Pool $pool) use ($chunk) {
                     foreach ($chunk as $key => $url) {
@@ -248,22 +367,19 @@ class EurekaClient
                     }
                 });
             } catch (\Throwable) {
-                $this->poolFailures += count($chunk);
-
-                foreach (array_keys($chunk) as $key) {
+                foreach ($chunk as $key => $url) {
+                    $this->recordCall($url, null);
                     $results[$key] = [];
                 }
 
                 continue;
             }
 
-            foreach (array_keys($chunk) as $key) {
+            foreach ($chunk as $key => $url) {
                 $response = $responses[$key] ?? null;
                 $ok = $response instanceof Response && $response->successful();
 
-                if (! $ok) {
-                    $this->poolFailures++;
-                }
+                $this->recordCall($url, $response instanceof Response ? $response->status() : null);
 
                 $results[$key] = $ok ? ($response->json() ?? []) : [];
             }
@@ -294,12 +410,16 @@ class EurekaClient
                 $this->password,
             )->timeout(10)->get($url);
 
+            $this->recordCall($url, $response->status());
+
             if (! $response->successful()) {
                 return [];
             }
 
             return $response->json() ?? [];
         } catch (\Throwable) {
+            $this->recordCall($url, null);
+
             return [];
         }
     }
@@ -325,12 +445,16 @@ class EurekaClient
                 $this->password,
             )->timeout(10)->get($url);
 
+            $this->recordCall($url, $response->status());
+
             if (! $response->successful()) {
                 return [];
             }
 
             return $response->json('items') ?? [];
         } catch (\Throwable) {
+            $this->recordCall($url, null);
+
             return [];
         }
     }
