@@ -30,6 +30,7 @@ class Quote extends Model
         'quote_group_id',
         'information_request_id',
         'customer_id',
+        'billing_customer_id',
         'number',
         'date',
         'status',
@@ -128,6 +129,26 @@ class Quote extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    /**
+     * Chi paga QUESTO preventivo.
+     *
+     * Nullo = il pagante abituale del cliente, che e' il comportamento
+     * storico. Valorizzato = scelta fatta su questo documento, e vince.
+     */
+    public function billingCustomer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class, 'billing_customer_id');
+    }
+
+    /**
+     * Il destinatario della fatturazione per questo preventivo.
+     * Vedi ServiceReport::invoiceRecipient(): stessa precedenza.
+     */
+    public function invoiceRecipient(): ?Customer
+    {
+        return $this->billingCustomer ?? $this->customer?->invoiceRecipient();
     }
 
     public function tenant(): BelongsTo

@@ -55,8 +55,18 @@
                         <div class="customer-name">{{ \App\Support\DisplayName::titleCase($quote->customer->company_name) }}</div>
                     @endif
                     <table>
-                        @if($quote->customer?->billingCustomer)
-                            <tr><td class="label">Fatturato a:</td><td>{{ \App\Support\DisplayName::titleCase($quote->customer->billingCustomer->full_name) }}</td></tr>
+                        {{-- Il pagante di QUESTO preventivo, se diverso da chi lo riceve.
+                             Se coincidono la riga non serve: sarebbe "Fatturato a" uguale
+                             all'intestatario appena sopra. --}}
+                        @php
+                            // Blocco e non @php(...): la forma in linea si
+                            // ferma alla prima parentesi chiusa, e qui la
+                            // chiamata ne contiene una — il resto del
+                            // template finisce fuori sincrono.
+                            $pagante = $quote->invoiceRecipient();
+                        @endphp
+                        @if($pagante && $pagante->id !== $quote->customer?->id)
+                            <tr><td class="label">Fatturato a:</td><td>{{ \App\Support\DisplayName::titleCase($pagante->full_name) }}</td></tr>
                         @endif
                         @if($quote->customer?->first_name || $quote->customer?->last_name)
                             <tr><td class="label">Rif.to:</td><td>{{ \App\Support\DisplayName::titleCase(trim("{$quote->customer->first_name} {$quote->customer->last_name}")) }}</td></tr>
