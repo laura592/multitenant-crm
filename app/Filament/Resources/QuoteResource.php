@@ -348,7 +348,7 @@ class QuoteResource extends Resource
                         ->default(0),
                     Forms\Components\TextInput::make('extra_discount')
                         ->label('Sconto extra (%)')
-                        ->helperText('Si applica su quanto resta dopo lo sconto generale, come i listini "30+5".')
+                        ->helperText('Si applica su quanto resta dopo lo sconto generale, come i listini 30+5.')
                         ->numeric()
                         ->suffix('%')
                         ->default(0),
@@ -390,7 +390,7 @@ class QuoteResource extends Resource
                                         ->default(fn () => request()->query('group') ? QuoteGroup::find(request()->query('group'))?->customer_id : null)
                                         ->disabled(fn () => $isCreating && filled(request()->query('group')))
                                         ->dehydrated()
-                                        ->columnSpan(5)
+                                        ->columnSpan(4)
                                         ->createOptionForm([
                                             Forms\Components\TextInput::make('company_name')->label('Ragione sociale'),
                                             Forms\Components\TextInput::make('first_name')->label('Nome'),
@@ -412,17 +412,12 @@ class QuoteResource extends Resource
                                      */
                                     Forms\Components\Select::make('billing_customer_id')
                                         ->label('Fatturare a')
-                                        ->helperText(function (Forms\Get $get) {
-                                            if (filled($get('billing_customer_id'))) {
-                                                return 'Scelta per questo preventivo. Svuota per tornare al pagante abituale.';
-                                            }
-
-                                            $abituale = Customer::find($get('customer_id'))?->invoiceRecipient();
-
-                                            return $abituale
-                                                ? 'Vuoto = pagante abituale: '.DisplayName::titleCase($abituale->full_name)
-                                                : 'Vuoto = lo stesso cliente.';
-                                        })
+                                        // Corto: il pagante abituale si legge gia' dentro il
+                                        // campo come placeholder, ripeterlo qui lo fa solo
+                                        // andare a capo tre volte.
+                                        ->helperText(fn (Forms\Get $get) => filled($get('billing_customer_id'))
+                                            ? 'Solo per questo preventivo.'
+                                            : 'Vuoto = pagante abituale.')
                                         ->placeholder(fn (Forms\Get $get) => DisplayName::titleCase(
                                             Customer::find($get('customer_id'))?->invoiceRecipient()?->full_name
                                         ) ?? '—')
@@ -438,7 +433,13 @@ class QuoteResource extends Resource
                                                 ->visible(fn (Forms\Get $get) => filled($get('customer_id'))
                                                     && $get('billing_customer_id') !== $get('customer_id'))
                                                 ->action(fn (Forms\Set $set, Forms\Get $get) => $set('billing_customer_id', $get('customer_id')))
-                                        ),
+                                        )
+                                        // Numero(3) + Cliente(4) + questo(5) = riga piena.
+                                        // Il pannello e' stretto (la colonna Totali gli toglie
+                                        // un terzo di larghezza), quindi il numero — che e'
+                                        // corto e non si modifica — cede spazio ai due menu,
+                                        // che contengono ragioni sociali lunghe.
+                                        ->columnSpan(5),
                                     Forms\Components\DatePicker::make('date')
                                         ->label('Data')
                                         ->required()
@@ -473,7 +474,7 @@ class QuoteResource extends Resource
                                         ->columnSpan(4),
                                     Forms\Components\TextInput::make('extra_discount')
                                         ->label('Sconto extra (%)')
-                                        ->helperText('Si applica su quanto resta dopo lo sconto generale, come i listini \"30+5\".')
+                                        ->helperText('Si applica su quanto resta dopo lo sconto generale, come i listini 30+5.')
                                         ->numeric()
                                         ->suffix('%')
                                         ->default(0)
