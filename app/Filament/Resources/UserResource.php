@@ -8,10 +8,12 @@ use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 
 /**
  * Creazione/gestione utenti, riservata al ruolo "admin" e allo staff master
@@ -89,10 +91,28 @@ class UserResource extends Resource
                         ->required()
                         ->helperText('Ogni utente ha un solo ruolo applicativo.')
                         ->extraAttributes(['data-tour' => 'users-field-role']),
+                    // Il tenant si scrive SEMPRE, e dipende dall'utente che si
+                    // sta creando, non da chi lo crea. Prima la condizione era
+                    // ->dehydrated(fn () => ! auth()->user()?->is_super_admin):
+                    // ogni utente creato dallo staff master nasceva con
+                    // tenant_id NULL e quindi prendeva 404 su /admin/{tenant}
+                    // (Filament\Http\Middleware\IdentifyTenant fa abort(404)
+                    // quando User::canAccessTenant() e' false), senza nemmeno un
+                    // modo di rimediare dal pannello visto che il campo e'
+                    // Hidden. Solo un vero staff master resta senza tenant, per
+                    // scelta: vedi User::getTenants().
                     Forms\Components\Hidden::make('tenant_id')
                         ->default(fn () => Filament::getTenant()?->id)
-                        ->dehydrated(fn () => ! (bool) auth()->user()?->is_super_admin)
-                        ->dehydrateStateUsing(fn () => Filament::getTenant()?->id),
+                        ->dehydrated()
+                        ->dehydrateStateUsing(function (Forms\Get $get, ?User $record) {
+                            // Il toggle is_super_admin e' visibile solo allo staff
+                            // master: per tutti gli altri $get() torna null, quindi
+                            // si ricade sul valore gia' salvato sul record (in
+                            // creazione: nessuno, cioe' utente normale).
+                            $isMaster = $get('is_super_admin') ?? $record?->is_super_admin;
+
+                            return $isMaster ? null : Filament::getTenant()?->id;
+                        }),
                     Forms\Components\Toggle::make('is_super_admin')
                         ->label('Staff master (accesso a tutti i tenant)')
                         ->visible(fn () => (bool) auth()->user()?->is_super_admin)
@@ -170,13 +190,13 @@ class UserResource extends Resource
                         ->icon('heroicon-o-lock-closed')
                         ->color('danger')
                         ->requiresConfirmation()
-                        ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                        ->action(function (Collection $records) {
                             $ownAccount = $records->contains('id', auth()->id());
                             $records->reject(fn (User $record) => $record->id === auth()->id())
                                 ->each(fn (User $record) => $record->update(['is_active' => false]));
 
                             if ($ownAccount) {
-                                \Filament\Notifications\Notification::make()
+                                Notification::make()
                                     ->title('Il tuo account non è stato disattivato')
                                     ->body('Non puoi disattivare l\'utente con cui hai effettuato l\'accesso.')
                                     ->warning()
@@ -187,15 +207,15 @@ class UserResource extends Resource
                         ->label('Attiva selezionati')
                         ->icon('heroicon-o-lock-open')
                         ->color('success')
-                        ->action(fn (\Illuminate\Database\Eloquent\Collection $records) => $records->each(fn (User $record) => $record->update(['is_active' => true]))),
+                        ->action(fn (Collection $records) => $records->each(fn (User $record) => $record->update(['is_active' => true]))),
                     Tables\Actions\DeleteBulkAction::make()
-                        ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                        ->action(function (Collection $records) {
                             $ownAccount = $records->contains('id', auth()->id());
                             $records->reject(fn (User $record) => $record->id === auth()->id())
                                 ->each->delete();
 
                             if ($ownAccount) {
-                                \Filament\Notifications\Notification::make()
+                                Notification::make()
                                     ->title('Il tuo account non è stato eliminato')
                                     ->body('Non puoi eliminare l\'utente con cui hai effettuato l\'accesso.')
                                     ->warning()
