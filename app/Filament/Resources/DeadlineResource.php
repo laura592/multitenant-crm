@@ -156,9 +156,11 @@ class DeadlineResource extends Resource
                     ->options(fn () => Arr::except(Deadline::statusLabels(), Deadline::STATUS_RINNOVATA)),
                 Tables\Filters\Filter::make('urgent')
                     ->label('Solo urgenti/scadute')
-                    ->query(fn ($query) => $query
-                        ->where('status', Deadline::STATUS_ATTIVA)
-                        ->where('due_date', '<=', now()->addDays(30))),
+                    // Prima: soglia fissa a 30 giorni, che non coincideva con
+                    // il preavviso configurato sulla singola scadenza ne' con
+                    // il contatore "Scadenze urgenti" in dashboard che ci
+                    // rimanda qui. Ora entrambi passano da scopeUrgent().
+                    ->query(fn ($query) => $query->urgent()),
             ])
             ->actions([
                 Tables\Actions\Action::make('rinnova')

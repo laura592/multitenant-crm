@@ -3,9 +3,11 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Support\Carbon;
 
 class Deadline extends Model
 {
@@ -101,7 +103,7 @@ class Deadline extends Model
         ];
     }
 
-    public function suggestedRenewalDate(): \Illuminate\Support\Carbon
+    public function suggestedRenewalDate(): Carbon
     {
         $years = self::renewalPeriodsInYears()[$this->type] ?? 1;
 
@@ -111,6 +113,29 @@ class Deadline extends Model
     public function deadlinable(): MorphTo
     {
         return $this->morphTo();
+    }
+
+    /**
+     * Le scadenze entrate nel proprio periodo di preavviso, gia' scadute
+     * comprese: stesso criterio di isUrgent() ma valutato in SQL, per non
+     * caricare in PHP tutte le scadenze attive del tenant solo per contarle.
+     *
+     * L'espressione cambia per driver perche' DATEDIFF/CURDATE sono di MySQL:
+     * su SQLite (i test) la query andava in errore, motivo per cui il
+     * contatore in dashboard non era mai stato coperto da un test.
+     *
+     * Unico punto di verita' anche per il filtro "Solo urgenti/scadute" di
+     * DeadlineResource, che prima usava una soglia fissa di 30 giorni: il
+     * numero in dashboard e la lista che si apre cliccandolo devono per forza
+     * essere lo stesso insieme.
+     */
+    public function scopeUrgent(Builder $query): Builder
+    {
+        return $query
+            ->where('status', self::STATUS_ATTIVA)
+            ->whereRaw($query->getConnection()->getDriverName() === 'sqlite'
+                ? "julianday(date(due_date)) - julianday(date('now')) <= reminder_days_before"
+                : 'DATEDIFF(due_date, CURDATE()) <= reminder_days_before');
     }
 
     public function isUrgent(): bool

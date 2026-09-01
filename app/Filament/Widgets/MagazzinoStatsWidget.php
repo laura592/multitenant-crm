@@ -29,9 +29,15 @@ class MagazzinoStatsWidget extends BaseWidget
 
     // Partner e amministrazione non hanno accesso ai materiali (vedi
     // RolePermissions): questi conteggi non devono comparire in dashboard.
+    // Il gate e' su update_material e non su view_any_material perche' sono
+    // numeri di consistenza del catalogo, utili a chi il catalogo lo cura:
+    // per il dipendente, che sui materiali ha solo la lettura, "Materiali a
+    // catalogo: 812" e "Categorie: 14" sono cifre che non cambiano mai e non
+    // chiedono nessuna azione — occupavano meta' della prima schermata della
+    // sua dashboard senza dirgli niente.
     public static function canView(): bool
     {
-        return Auth::user()->can('view_any_material');
+        return Auth::user()->can('update_material');
     }
 
     protected function getStats(): array

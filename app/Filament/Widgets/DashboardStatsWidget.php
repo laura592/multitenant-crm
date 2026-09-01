@@ -2,6 +2,8 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Resources\CustomerResource;
+use App\Filament\Resources\QuoteResource;
 use App\Models\Customer;
 use App\Models\Quote;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
@@ -29,19 +31,25 @@ class DashboardStatsWidget extends BaseWidget
         $monthlyQuotes = Quote::whereMonth('date', now()->month)->whereYear('date', now()->year);
         $acceptedValue = (clone $monthlyQuotes)->where('status', 'accettato')->sum('total');
 
+        // Ogni card porta all'elenco corrispondente: un numero da solo non
+        // dice cosa farci, e finora l'unico modo di vedere "quali" era
+        // ripartire dal menu laterale.
         return [
             Stat::make('Preventivi questo mese', (clone $monthlyQuotes)->count())
                 ->description('Creati nel mese corrente')
                 ->icon('heroicon-o-document-text')
-                ->color('primary'),
+                ->color('primary')
+                ->url(QuoteResource::getUrl('index')),
             Stat::make('Valore accettati questo mese', number_format((float) $acceptedValue, 2, ',', '.').' €')
                 ->description('Preventivi accettati')
                 ->icon('heroicon-o-banknotes')
-                ->color('success'),
+                ->color('success')
+                ->url(QuoteResource::getUrl('index', ['tableFilters' => ['status' => ['value' => 'accettato']]])),
             Stat::make('Clienti', Customer::count())
                 ->description('Totale clienti')
                 ->icon('heroicon-o-users')
-                ->color('gray'),
+                ->color('gray')
+                ->url(CustomerResource::getUrl('index')),
         ];
     }
 }

@@ -2,11 +2,14 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Resources\DeadlineResource;
+use App\Filament\Resources\InformationRequestResource;
 use App\Models\Deadline;
 use App\Models\InformationRequest;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 
 /**
  * Cio' che richiede un'azione oggi, separato dai numeri di andamento
@@ -48,27 +51,58 @@ class PrioritaWidget extends BaseWidget
         $stats = [];
 
         if ($user->can('view_any_information::request')) {
-            $stats[] = Stat::make('Richieste da gestire', $openRequests = InformationRequest::whereIn('status', ['nuova', 'in_lavorazione'])->count())
-                ->description('Richieste informazioni aperte')
+            $openRequests = InformationRequest::whereIn('status', ['nuova', 'in_lavorazione'])->count();
+
+            $stats[] = Stat::make('Richieste da gestire', $openRequests)
+                ->description($openRequests > 0 ? 'Richieste informazioni aperte' : 'Nessuna richiesta in attesa')
                 ->icon('heroicon-o-inbox-arrow-down')
-                ->color($openRequests > 0 ? 'warning' : 'success');
+                ->color($openRequests > 0 ? 'warning' : 'success')
+                ->url(InformationRequestResource::getUrl('index'));
         }
 
         if ($user->can('view_any_deadline')) {
-            // Stesso criterio di Deadline::isUrgent() ma calcolato in SQL invece
-            // di caricare in PHP tutte le scadenze attive del tenant solo per
-            // contarle (query ripetuta ad ogni apertura della dashboard).
-            // Confronto su giorni di calendario (DATEDIFF su CURDATE), non
-            // sull'ora esatta come now()->diffInDays(): differenza irrilevante
-            // per un contatore di dashboard.
-            $stats[] = Stat::make('Scadenze urgenti', Deadline::where('status', Deadline::STATUS_ATTIVA)
-                ->whereRaw('DATEDIFF(due_date, CURDATE()) <= reminder_days_before')
-                ->count())
-                ->description('Entro il periodo di preavviso')
+            // Criterio in Deadline::scopeUrgent(), condiviso con il filtro
+            // "Solo urgenti/scadute" di DeadlineResource su cui punta il link
+            // di questa card.
+            $count = Deadline::urgent()->count();
+            // Il solo conteggio ("4") non dice cosa fare: la card riporta anche
+            // qual e' la scadenza piu' vicina e fra quanto scade, ed e'
+            // cliccabile verso l'elenco gia' filtrato sul filtro "urgent" di
+            // DeadlineResource. Il colore segue il numero invece di essere
+            // rosso fisso: con zero scadenze la card era rossa comunque.
+            $nearest = $count > 0
+                ? Deadline::urgent()->with('deadlinable')->orderBy('due_date')->first()
+                : null;
+
+            $stats[] = Stat::make('Scadenze urgenti', $count)
+                ->description($nearest
+                    ? 'Prima: '.Str::limit($nearest->relatedLabel(), 34).' — '.self::whenLabel($nearest)
+                    : 'Nessuna scadenza entro il preavviso')
                 ->icon('heroicon-o-exclamation-triangle')
-                ->color('danger');
+                ->color(match (true) {
+                    $count === 0 => 'success',
+                    $nearest->due_date->isPast() => 'danger',
+                    default => 'warning',
+                })
+                ->url(DeadlineResource::getUrl('index', ['tableFilters' => ['urgent' => ['isActive' => true]]]));
         }
 
         return $stats;
+    }
+
+    /**
+     * "scaduta da 3 giorni" / "scade oggi" / "fra 5 giorni": il conteggio in
+     * giorni di calendario, coerente con il DATEDIFF usato per selezionarle.
+     */
+    public static function whenLabel(Deadline $deadline): string
+    {
+        $days = (int) today()->diffInDays($deadline->due_date->startOfDay(), false);
+
+        return match (true) {
+            $days < 0 => 'scaduta da '.abs($days).(abs($days) === 1 ? ' giorno' : ' giorni'),
+            $days === 0 => 'scade oggi',
+            $days === 1 => 'scade domani',
+            default => 'fra '.$days.' giorni',
+        };
     }
 }

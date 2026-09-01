@@ -18,9 +18,17 @@ class FailedGestionaleServiceReportsWidget extends BaseWidget
     // scorrendo l'elenco, niente lo segnalava attivamente.
     protected static ?int $sort = 6;
 
+    // Gate sulla pagina "Sync Eureka" e non su view_any_service::report: un
+    // invio fallito si risolve guardando l'errore del gestionale e i log
+    // (storage/logs/eureka-import.log), cioe' e' roba di chi la
+    // sincronizzazione la governa — admin e amministratore, gli unici con
+    // page_GestionaleSyncReview in RolePermissions. Col permesso sui
+    // rapportini ci finivano dentro anche il tecnico che li compila e il
+    // profilo amministrazione che li integra: per loro e' un messaggio
+    // d'errore su cui non possono fare niente.
     public static function canView(): bool
     {
-        return Auth::user()->can('view_any_service::report');
+        return Auth::user()->can('page_GestionaleSyncReview');
     }
 
     protected int|string|array $columnSpan = 1;

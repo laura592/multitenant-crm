@@ -42,6 +42,10 @@ class LatestQuotesWidget extends BaseWidget
                     ->formatStateUsing(fn (string $state) => QuoteResource::statusLabels()[$state] ?? ucfirst($state))
                     ->color(fn (string $state) => QuoteResource::statusColors()[$state] ?? 'gray'),
             ])
+            ->recordUrl(fn (Quote $record) => QuoteResource::getUrl('view', ['record' => $record]))
+            ->emptyStateHeading('Nessun preventivo')
+            ->emptyStateDescription('I preventivi creati piu di recente compariranno qui.')
+            ->emptyStateIcon('heroicon-o-document-text')
             ->paginated(false);
     }
 }
