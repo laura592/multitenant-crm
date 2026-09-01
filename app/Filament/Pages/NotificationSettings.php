@@ -42,6 +42,7 @@ class NotificationSettings extends Page implements HasForms
             'notify_quote_emails' => $tenant?->notificationRecipients('quote') ?? [],
             'notify_quote_group_emails' => $tenant?->notificationRecipients('quote_group') ?? [],
             'notify_deadline_emails' => $tenant?->notificationRecipients('deadline') ?? [],
+            'notify_lavaggio_emails' => $tenant?->notificationRecipients('lavaggio') ?? [],
             'notify_customer_gestionale_review_emails' => $tenant?->notificationRecipients('customer_gestionale_review') ?? [],
             'notify_gestionale_sync_digest_emails' => $tenant?->notificationRecipients('gestionale_sync_digest') ?? [],
             'notify_gestionale_sync_failed_emails' => $tenant?->notificationRecipients('gestionale_sync_failed') ?? [],
@@ -94,6 +95,13 @@ class NotificationSettings extends Page implements HasForms
                     ->splitKeys([',', 'Tab'])
                     ->color('primary')
                     ->helperText('Promemoria settimanale con le scadenze in avvicinamento o scadute.'),
+                TagsInput::make('notify_lavaggio_emails')
+                    ->label('Lavaggi da programmare')
+                    ->placeholder('indirizzo@esempio.it')
+                    ->nestedRecursiveRules(['email'])
+                    ->splitKeys([',', 'Tab'])
+                    ->color('primary')
+                    ->helperText('Promemoria settimanale con i piani di lavaggio gia\' scaduti o in scadenza nei 7 giorni successivi.'),
                 TagsInput::make('notify_customer_gestionale_review_emails')
                     ->label('Clienti da rivedere su Eureka')
                     ->placeholder('indirizzo@esempio.it')
@@ -136,6 +144,7 @@ class NotificationSettings extends Page implements HasForms
         $quoteRecipients = array_values(array_unique(array_filter((array) ($state['notify_quote_emails'] ?? []))));
         $quoteGroupRecipients = array_values(array_unique(array_filter((array) ($state['notify_quote_group_emails'] ?? []))));
         $deadlineRecipients = array_values(array_unique(array_filter((array) ($state['notify_deadline_emails'] ?? []))));
+        $lavaggioRecipients = array_values(array_unique(array_filter((array) ($state['notify_lavaggio_emails'] ?? []))));
         $gestionaleReviewRecipients = array_values(array_unique(array_filter((array) ($state['notify_customer_gestionale_review_emails'] ?? []))));
         $gestionaleSyncDigestRecipients = array_values(array_unique(array_filter((array) ($state['notify_gestionale_sync_digest_emails'] ?? []))));
         $gestionaleSyncFailedRecipients = array_values(array_unique(array_filter((array) ($state['notify_gestionale_sync_failed_emails'] ?? []))));
@@ -147,6 +156,7 @@ class NotificationSettings extends Page implements HasForms
             'notify_quote_emails' => $quoteRecipients,
             'notify_quote_group_emails' => $quoteGroupRecipients,
             'notify_deadline_emails' => $deadlineRecipients,
+            'notify_lavaggio_emails' => $lavaggioRecipients,
             'notify_customer_gestionale_review_emails' => $gestionaleReviewRecipients,
             'notify_gestionale_sync_digest_emails' => $gestionaleSyncDigestRecipients,
             'notify_gestionale_sync_failed_emails' => $gestionaleSyncFailedRecipients,
@@ -159,6 +169,7 @@ class NotificationSettings extends Page implements HasForms
                 $quoteRecipients,
                 $quoteGroupRecipients,
                 $deadlineRecipients,
+                $lavaggioRecipients,
                 $gestionaleReviewRecipients,
                 $gestionaleSyncDigestRecipients,
                 $gestionaleSyncFailedRecipients,

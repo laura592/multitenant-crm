@@ -28,6 +28,7 @@ class Tenant extends Model implements HasName
         'notify_quote_emails',
         'notify_quote_group_emails',
         'notify_deadline_emails',
+        'notify_lavaggio_emails',
         'notify_customer_gestionale_emails',
         'notify_customer_gestionale_review_emails',
         'notify_gestionale_sync_digest_emails',
@@ -55,6 +56,7 @@ class Tenant extends Model implements HasName
         'notify_quote_emails' => 'array',
         'notify_quote_group_emails' => 'array',
         'notify_deadline_emails' => 'array',
+        'notify_lavaggio_emails' => 'array',
         'notify_customer_gestionale_emails' => 'array',
         'notify_customer_gestionale_review_emails' => 'array',
         'notify_gestionale_sync_digest_emails' => 'array',
@@ -220,6 +222,11 @@ class Tenant extends Model implements HasName
             'quote' => $this->normalizedRecipients($this->notify_quote_emails, $legacy),
             'quote_group' => $this->normalizedRecipients($this->notify_quote_group_emails, $legacy),
             'deadline' => $this->normalizedRecipients($this->notify_deadline_emails, $legacy),
+            // Nessun fallback ai destinatari globali: il digest dei lavaggi e'
+            // una lista operativa ristretta (chi programma i giri di lavaggio),
+            // non un avviso da mandare a tutto lo staff perche' le altre liste
+            // sono compilate.
+            'lavaggio' => $this->normalizedRecipients($this->notify_lavaggio_emails),
             'customer_gestionale_review' => $this->normalizedRecipients($this->notify_customer_gestionale_review_emails, $gestionaleFallback),
             'gestionale_sync_digest' => $this->normalizedRecipients($this->notify_gestionale_sync_digest_emails, $gestionaleFallback),
             'gestionale_sync_failed' => $this->normalizedRecipients($this->notify_gestionale_sync_failed_emails, $gestionaleFallback),
@@ -274,6 +281,7 @@ class Tenant extends Model implements HasName
         $line = trim(collect([
             $this->iban ? "IBAN: {$this->iban}" : null,
         ])->filter()->implode(' — '));
+
         return $line ?: null;
     }
 

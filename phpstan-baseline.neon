@@ -201,7 +201,7 @@ parameters:
 		-
 			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:notificationRecipients\(\)\.$#'
 			identifier: method.notFound
-			count: 9
+			count: 10
 			path: app/Filament/Pages/NotificationSettings.php
 
 		-

@@ -10,6 +10,12 @@ Artisan::command('inspire', function () {
 
 Schedule::command('deadlines:send-reminders')->weeklyOn(1, '08:00');
 
+// Mezz'ora prima del digest scadenze, stesso giorno: i lavaggi della settimana
+// vanno organizzati il lunedi' mattina, prima di distribuire i giri ai tecnici.
+// Destinatari in Notifiche > "Lavaggi da programmare" (notify_lavaggio_emails):
+// se la lista e' vuota il comando non manda niente, non ripiega sullo staff.
+Schedule::command('lavaggi:send-reminders')->weeklyOn(1, '07:30');
+
 Schedule::command('gestionale:sync')->dailyAt('03:00');
 
 // gestionale:sync (sopra) aggiorna ogni notte MachineUnit.eureka_billing_customer_code
