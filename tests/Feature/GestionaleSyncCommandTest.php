@@ -17,6 +17,21 @@ class GestionaleSyncCommandTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Http::fake() con soli pattern specifici NON blocca le URL non
+        // abbinate: escono in rete davvero, verso l'API di produzione del
+        // fornitore. Non se ne era accorto nessuno finche' le chiamate non
+        // stubbate erano veloci; con la lettura in blocco delle note
+        // (EurekaClient::noteAnagrafiche(), timeout 180s) un singolo test e'
+        // passato da 1 a 125 secondi, cioe' il tempo della chiamata vera.
+        // Da qui in poi una richiesta non stubbata fa fallire il test invece
+        // di raggiungere Eureka.
+        Http::preventStrayRequests();
+    }
+
     private function makeTenant(): Tenant
     {
         return Tenant::create([
@@ -52,6 +67,9 @@ class GestionaleSyncCommandTest extends TestCase
                 'nr_telefono' => '0424-514008',
             ]], 200),
             '*art_installati*' => Http::response([], 200),
+            // Catch-all esplicito: senza, con preventStrayRequests() attivo
+            // le chiamate non pertinenti a questo test fallirebbero.
+            '*' => Http::response([], 200),
         ]);
 
         $this->artisan('gestionale:sync')->assertExitCode(0);
@@ -106,6 +124,9 @@ class GestionaleSyncCommandTest extends TestCase
                 'id' => 11, 'rag_sociale_1' => 'DUNA BLU', 'citta' => 'CAORLE',
             ]], 200),
             '*art_installati*' => Http::response([], 200),
+            // Catch-all esplicito: senza, con preventStrayRequests() attivo
+            // le chiamate non pertinenti a questo test fallirebbero.
+            '*' => Http::response([], 200),
         ]);
 
         $this->artisan('gestionale:sync')->assertExitCode(0);
@@ -163,6 +184,9 @@ class GestionaleSyncCommandTest extends TestCase
                 'id' => 22, 'rag_sociale_1' => 'GIA AGGIORNATO', 'email' => 'STESSA@ESEMPIO.IT',
             ]], 200),
             '*art_installati*' => Http::response([], 200),
+            // Catch-all esplicito: senza, con preventStrayRequests() attivo
+            // le chiamate non pertinenti a questo test fallirebbero.
+            '*' => Http::response([], 200),
         ]);
 
         $this->artisan('gestionale:sync')->assertExitCode(0);
@@ -203,6 +227,9 @@ class GestionaleSyncCommandTest extends TestCase
                 'rag_sociale_1' => 'A CASA VECIA di PROCURA PAOLO E FABIO',
                 'partita_iva' => '04251310274',
             ]], 200),
+            // Catch-all esplicito: senza, con preventStrayRequests() attivo
+            // le chiamate non pertinenti a questo test fallirebbero.
+            '*' => Http::response([], 200),
         ]);
 
         $this->artisan('gestionale:sync')->assertExitCode(0);
@@ -234,6 +261,9 @@ class GestionaleSyncCommandTest extends TestCase
                 ['id_eureka' => 111, 'codice' => 'XTCLASSIC', 'descr1' => 'MACCHINA DALLA CORTE XT CLASSIC'],
                 ['id_eureka' => 222, 'codice' => 'XTCLASSIC2', 'descr1' => 'ALTRA VARIANTE XT CLASSIC'],
             ], 200),
+            // Catch-all esplicito: senza, con preventStrayRequests() attivo
+            // le chiamate non pertinenti a questo test fallirebbero.
+            '*' => Http::response([], 200),
         ]);
 
         $this->artisan('gestionale:sync')->assertExitCode(0);
@@ -391,6 +421,9 @@ class GestionaleSyncCommandTest extends TestCase
                 'codice_fiscale' => '22',
             ]], 200),
             '*art_installati*' => Http::response([], 200),
+            // Catch-all esplicito: senza, con preventStrayRequests() attivo
+            // le chiamate non pertinenti a questo test fallirebbero.
+            '*' => Http::response([], 200),
         ]);
 
         $this->artisan('gestionale:sync')->assertExitCode(0);
@@ -434,6 +467,9 @@ class GestionaleSyncCommandTest extends TestCase
                 'nr_telefono' => '0424-514008',
             ]], 200),
             '*art_installati*' => Http::response([], 200),
+            // Catch-all esplicito: senza, con preventStrayRequests() attivo
+            // le chiamate non pertinenti a questo test fallirebbero.
+            '*' => Http::response([], 200),
         ]);
 
         $this->artisan('gestionale:sync')->assertExitCode(0);
@@ -516,6 +552,9 @@ class GestionaleSyncCommandTest extends TestCase
                 'sigla_prov' => 'VI',
                 'email' => 'info@gdpitalia.com',
             ]], 200),
+            // Catch-all esplicito: senza, con preventStrayRequests() attivo
+            // le chiamate non pertinenti a questo test fallirebbero.
+            '*' => Http::response([], 200),
         ]);
 
         $this->artisan('gestionale:sync')
@@ -657,6 +696,9 @@ class GestionaleSyncCommandTest extends TestCase
                 'id' => 33, 'rag_sociale_1' => 'TRUNCATED', 'nr_telefono' => '0421 659329/0421 658',
             ]], 200),
             '*art_installati*' => Http::response([], 200),
+            // Catch-all esplicito: senza, con preventStrayRequests() attivo
+            // le chiamate non pertinenti a questo test fallirebbero.
+            '*' => Http::response([], 200),
         ]);
 
         $this->artisan('gestionale:sync')->assertExitCode(0);
@@ -700,6 +742,9 @@ class GestionaleSyncCommandTest extends TestCase
             '*art_installati*q=238*' => Http::response([
                 ['id_codice_f15' => 238, 'id' => 2662, 'matricola' => 'CMD1012043', 'articolo' => 'FABBRGHIACCIO', 'desc_articolo_1' => 'FABBRICATORE DI GHIACCIO'],
             ], 200),
+            // Catch-all esplicito: senza, con preventStrayRequests() attivo
+            // le chiamate non pertinenti a questo test fallirebbero.
+            '*' => Http::response([], 200),
         ]);
 
         $this->artisan('gestionale:sync')->assertExitCode(0);
@@ -728,6 +773,9 @@ class GestionaleSyncCommandTest extends TestCase
             '*art_installati*' => Http::response([
                 ['id_codice_f15' => 70, 'id' => 4242, 'matricola' => 'NUOVA-01', 'articolo' => 'SCONOSCIUTO', 'desc_articolo_1' => 'ARTICOLO MAI VISTO'],
             ], 200),
+            // Catch-all esplicito: senza, con preventStrayRequests() attivo
+            // le chiamate non pertinenti a questo test fallirebbero.
+            '*' => Http::response([], 200),
         ]);
 
         $this->artisan('gestionale:sync')->assertExitCode(0);
@@ -758,6 +806,9 @@ class GestionaleSyncCommandTest extends TestCase
             '*art_installati*' => Http::response([
                 ['id_codice_f15' => 50, 'id' => 999, 'matricola' => 'B36414', 'articolo' => 'BAV5', 'desc_articolo_1' => 'ADDOLCITORE BAV 5'],
             ], 200),
+            // Catch-all esplicito: senza, con preventStrayRequests() attivo
+            // le chiamate non pertinenti a questo test fallirebbero.
+            '*' => Http::response([], 200),
         ]);
 
         $this->artisan('gestionale:sync')->assertExitCode(0);
@@ -780,6 +831,9 @@ class GestionaleSyncCommandTest extends TestCase
             '*art_installati*' => Http::response([
                 ['id_codice_f15' => 60, 'id' => 111, 'matricola' => 'RIPETUTA-01', 'articolo' => 'BAV5', 'desc_articolo_1' => 'ADDOLCITORE'],
             ], 200),
+            // Catch-all esplicito: senza, con preventStrayRequests() attivo
+            // le chiamate non pertinenti a questo test fallirebbero.
+            '*' => Http::response([], 200),
         ]);
 
         $this->artisan('gestionale:sync')->assertExitCode(0);
