@@ -425,6 +425,80 @@ class EurekaClient
     }
 
     /**
+     * Note dell'anagrafica Eureka per tutti i clienti, in UNA chiamata
+     * (GET /anagrafica/f15?note=1) invece di una per cliente: la risposta
+     * pesa ~1,5 MB per ~2000 anagrafiche e impiega circa 80 secondi
+     * (misurato 2026-09-01), contro i ~2000 round-trip che costerebbe
+     * leggerle da /anagrafica/f15/{id}. Da qui il timeout molto piu' alto
+     * delle altre chiamate: e' una lettura di massa, gira nel sync notturno.
+     *
+     * Senza il parametro note=1 il campo e' presente ma sempre vuoto: le
+     * note sono testo libero senza limiti di lunghezza e il fornitore le
+     * omette di default dalla lista completa.
+     *
+     * @return array<int, string> id_eureka => nota ripulita (solo le non vuote)
+     */
+    public function noteAnagrafiche(): array
+    {
+        try {
+            $url = rtrim($this->baseUrl, '/').'/anagrafica/f15?note=1';
+
+            $response = Http::withBasicAuth(
+                $this->username,
+                $this->password,
+            )->timeout(180)->get($url);
+
+            $this->recordCall($url, $response->status());
+
+            if (! $response->successful()) {
+                return [];
+            }
+
+            $note = [];
+
+            foreach ($response->json() ?? [] as $anagrafica) {
+                $id = (int) ($anagrafica['id_eureka'] ?? 0);
+                $testo = self::ripulisciNota($anagrafica['note'] ?? null);
+
+                if ($id > 0 && $testo !== '') {
+                    $note[$id] = $testo;
+                }
+            }
+
+            return $note;
+        } catch (\Throwable) {
+            $this->recordCall(rtrim($this->baseUrl, '/').'/anagrafica/f15', null);
+
+            return [];
+        }
+    }
+
+    /**
+     * Le note arrivano dal database Eureka in RTF e l'API le converte in
+     * testo semplice, ma la conversione lascia in coda un ritorno a capo e
+     * un carattere NUL: `"note":"PAGA RIVER CAFFE' TREVISO\r\u0000"`
+     * (verificato 2026-09-01 su tutte le 101 note valorizzate). Il JSON e'
+     * valido — il NUL e' escapato — ma un NUL dentro una stringa fa
+     * inciampare parecchi consumatori a valle, e va tolto prima di salvarlo.
+     *
+     * Un caso mostra perche' non basta un trim degli spazi: l'anagrafica
+     * 3045 ha una nota composta SOLO da "\r\u0000", quindi senza questa
+     * pulizia risulterebbe valorizzata pur essendo vuota.
+     */
+    private static function ripulisciNota(?string $nota): string
+    {
+        if ($nota === null) {
+            return '';
+        }
+
+        // I ritorni a capo interni si tengono (le note multi-riga sono
+        // legittime): si normalizzano soltanto, per non salvare CRLF misti.
+        $nota = str_replace(["\x00", "\r\n", "\r"], ['', "\n", "\n"], $nota);
+
+        return trim($nota);
+    }
+
+    /**
      * NON UTILIZZATA dal 2026-08-31: /crm_api/* risponde 403 da quando il
      * fornitore ha introdotto i diritti per modulo (il modulo `crm` non e'
      * abilitato sulle nostre credenziali, vedi GET /utente/permessi), e la

@@ -648,6 +648,65 @@ class GestionaleSyncCommandTest extends TestCase
     }
 
     /**
+     * Le note Eureka sono uno specchio di sola lettura: si ricopiano sul
+     * cliente collegato, ripulite dal "\r\u0000" che la conversione da RTF
+     * lascia in coda a ognuna.
+     */
+    public function test_mirrors_eureka_notes_onto_linked_customers(): void
+    {
+        Mail::fake();
+
+        $tenant = $this->makeTenant();
+
+        $conNota = Customer::create([
+            'tenant_id' => $tenant->id, 'company_name' => 'Bar Bortolo', 'gestionale_code' => 3311,
+        ]);
+        // Nota composta solo da caratteri di scarto: deve restare vuota
+        // (caso reale, anagrafica 3045).
+        $soloScarto = Customer::create([
+            'tenant_id' => $tenant->id, 'company_name' => 'Marina del Cavallino', 'gestionale_code' => 3045,
+        ]);
+
+        Http::fake([
+            '*anagrafica/f15?note=1*' => Http::response([
+                // NUL vero: nel JSON dell'API arriva come \u0000 e il decoder
+                // lo trasforma in questo carattere (in PHP "\u0000" sarebbe
+                // invece il testo letterale, PHP vuole \x00 o \u{0000}).
+                ['id_eureka' => 3311, 'note' => "PAGA RIVER CAFFE' TREVISO\r\x00"],
+                ['id_eureka' => 3045, 'note' => "\r\x00"],
+            ], 200),
+            '*' => Http::response([], 200),
+        ]);
+
+        $this->artisan('gestionale:sync')->assertExitCode(0);
+
+        $this->assertSame("PAGA RIVER CAFFE' TREVISO", $conNota->fresh()->eureka_note);
+        $this->assertNull($soloScarto->fresh()->eureka_note);
+    }
+
+    /**
+     * Una risposta vuota non deve cancellare le note gia' salvate: puo'
+     * voler dire "chiamata fallita" tanto quanto "nessuna nota".
+     */
+    public function test_does_not_wipe_eureka_notes_when_the_call_returns_nothing(): void
+    {
+        Mail::fake();
+
+        $tenant = $this->makeTenant();
+
+        $customer = Customer::create([
+            'tenant_id' => $tenant->id, 'company_name' => 'Bar Bortolo',
+            'gestionale_code' => 3311, 'eureka_note' => 'PAGA RIVER CAFFE\' TREVISO',
+        ]);
+
+        Http::fake(['*' => Http::response([], 200)]);
+
+        $this->artisan('gestionale:sync')->assertExitCode(0);
+
+        $this->assertSame("PAGA RIVER CAFFE' TREVISO", $customer->fresh()->eureka_note);
+    }
+
+    /**
      * Casi reali che hanno guidato il parsing dei telefoni in
      * GestionaleSyncRunner::mergeEurekaPhones() — vedi il commento sul
      * metodo per il ragionamento completo.

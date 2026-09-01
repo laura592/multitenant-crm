@@ -39,7 +39,7 @@ class GestionaleSyncRunner
     }
 
     /**
-     * @return array{autofilled: array, diffs: array, customerLinks: array, productLinks: array, machineUnitLinks: array, newMachines: array, eurekaUnreachable: bool, apiIssues: array}
+     * @return array{autofilled: array, diffs: array, customerLinks: array, productLinks: array, machineUnitLinks: array, newMachines: array, eurekaNotes: array, eurekaUnreachable: bool, apiIssues: array}
      */
     public function run(): array
     {
@@ -52,6 +52,7 @@ class GestionaleSyncRunner
             'productLinks' => $this->proposeProductLinks(),
             'machineUnitLinks' => $this->proposeMachineUnitLinks(),
             'newMachines' => $this->importInstalledMachines(),
+            'eurekaNotes' => $this->syncEurekaNotes(),
             // Un'interruzione di Eureka per tutta la durata della sync
             // produce comunque array vuoti da ogni metodo sopra (best-effort
             // by design) — indistinguibile da "niente da segnalare" senza
@@ -368,6 +369,58 @@ class GestionaleSyncRunner
         }
 
         return $proposals;
+    }
+
+    /**
+     * Ricopia nel CRM le note dell'anagrafica Eureka (Customer::eureka_note).
+     *
+     * A differenza di reverifyLinkedCustomers(), che compila solo i campi
+     * vuoti e non sovrascrive mai un valore gia' presente, qui la
+     * sovrascrittura e' voluta: eureka_note e' uno SPECCHIO di sola lettura
+     * di un campo che vive su Eureka, non un campo del CRM. Se su Eureka la
+     * nota cambia o viene svuotata, qui deve seguire. Per questo la colonna
+     * e' separata da gestionale_review_note, che invece la scrive una
+     * persona nel CRM e non va mai toccata da qui.
+     *
+     * Volutamente NON alimenta billing_customer_id: le note sono testo
+     * libero ("PAGA RIVER CAFFE' TREVISO", "LAVAGGI MARTELLOZZO") e dedurne
+     * un pagante significherebbe indovinare un'anagrafica da una stringa.
+     * Servono come riscontro umano contro il pagante configurato, non come
+     * sua fonte — stessa logica per cui i collegamenti restano proposte.
+     *
+     * @return array<int, array{customer: Customer, note: ?string}> solo quelle cambiate
+     */
+    private function syncEurekaNotes(): array
+    {
+        $note = $this->client->noteAnagrafiche();
+
+        // Una risposta vuota puo' voler dire "nessuna nota" oppure "chiamata
+        // fallita": nel dubbio non si cancella niente. Un eventuale
+        // svuotamento vero si vedra' al giro successivo, mentre azzerare
+        // 101 note per un 500 di passaggio non sarebbe recuperabile.
+        if ($note === []) {
+            return [];
+        }
+
+        $cambiate = [];
+
+        $customers = Customer::query()
+            ->where('tenant_id', $this->tenant->id)
+            ->whereNotNull('gestionale_code')
+            ->get();
+
+        foreach ($customers as $customer) {
+            $nuova = $note[(int) $customer->gestionale_code] ?? null;
+
+            if ($nuova === $customer->eureka_note) {
+                continue;
+            }
+
+            $customer->update(['eureka_note' => $nuova]);
+            $cambiate[] = ['customer' => $customer, 'note' => $nuova];
+        }
+
+        return $cambiate;
     }
 
     /**

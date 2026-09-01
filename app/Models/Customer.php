@@ -51,6 +51,7 @@ class Customer extends Model
         'consent_marketing_at',
         'consent_source',
         'gestionale_code',
+        'eureka_note',
         'approved_for_gestionale_at',
         'sent_to_gestionale_at',
         'gestionale_review_flagged_at',

@@ -157,6 +157,13 @@ class CustomerResource extends Resource
                     TextEntry::make('sent_to_gestionale_at')->label('Inviato il')->date()->placeholder('—'),
                     TextEntry::make('gestionale_review_flagged_at')->label('Da aggiornare su Eureka dal')->date()->placeholder('—'),
                     TextEntry::make('gestionale_review_note')->label('Cosa è cambiato')->placeholder('—')->columnSpanFull(),
+                    // Sola lettura: la riscrive il sync a ogni giro da Eureka
+                    // (GestionaleSyncRunner::syncEurekaNotes()). Spesso contiene
+                    // chi paga per questo cliente — utile da confrontare a occhio
+                    // con "Fatturare a" qui sopra, che e' invece il dato del CRM.
+                    TextEntry::make('eureka_note')->label('Note su Eureka')->placeholder('—')
+                        ->helperText('Testo libero letto da Eureka, non modificabile qui')
+                        ->columnSpanFull(),
                 ]),
         ]);
     }
