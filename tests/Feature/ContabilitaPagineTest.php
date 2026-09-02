@@ -43,6 +43,9 @@ class ContabilitaPagineTest extends TestCase
             'tenant_id' => $this->tenant->id, 'name' => 'Amm', 'email' => 'amm@alex.it', 'password' => bcrypt('password'),
         ]);
         $this->giveRole($user, $this->tenant, 'admin');
+        // Staff master: le pagine contabili non passano piu' dai ruoli,
+        // sono riservate a is_super_admin (vedi il loro canAccess()).
+        $user->update(['is_super_admin' => true]);
         $this->actingAs($user);
         Filament::setTenant($this->tenant);
     }

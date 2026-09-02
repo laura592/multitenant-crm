@@ -36,11 +36,17 @@ class AllResourcesSmokeTest extends TestCase
         // gira la storia di una matricola, e ci abbiamo appena cambiato
         // dentro la risoluzione del pagante.
         'machine-units', 'materials', 'material-orders', 'suppliers',
-        // Partite aperte lette da Eureka: dati contabili, riservati ai ruoli
-        // amministrativi (vedi RolePermissions).
-        'scaduto',
-        'analisi-contabili',
     ];
+
+    /**
+     * Le pagine contabili non stanno fra le back-office perche' non
+     * dipendono piu' da un ruolo: sono riservate allo staff master e il
+     * cancello e' nel canAccess() di ciascuna (indicazione dell'utente,
+     * 02/09/2026). Un admin di tenant, che vede tutto il resto, qui prende
+     * 403 — ed e' la riga che deve diventare rossa se qualcuno le rimette
+     * nella matrice dei ruoli.
+     */
+    private const CONTABILITA_PATHS = ['scaduto', 'analisi-contabili', 'cash-flow'];
 
     public function test_admin_role_can_access_every_tenant_resource_except_tenant_management(): void
     {
@@ -55,6 +61,10 @@ class AllResourcesSmokeTest extends TestCase
         }
 
         $this->actingAs($user)->get("/admin/{$tenant->slug}/tenants")->assertForbidden();
+
+        foreach (self::CONTABILITA_PATHS as $path) {
+            $this->actingAs($user)->get("/admin/{$tenant->slug}/{$path}")->assertForbidden();
+        }
     }
 
     public function test_dipendente_role_can_operate_but_not_manage_payment_methods(): void
@@ -93,7 +103,7 @@ class AllResourcesSmokeTest extends TestCase
             $this->actingAs($user)->get("/admin/{$tenant->slug}/{$path}")->assertOk();
         }
 
-        foreach (['information-requests', ...self::BACK_OFFICE_PATHS, 'tenants'] as $path) {
+        foreach (['information-requests', ...self::BACK_OFFICE_PATHS, ...self::CONTABILITA_PATHS, 'tenants'] as $path) {
             $this->actingAs($user)->get("/admin/{$tenant->slug}/{$path}")->assertForbidden();
         }
     }
@@ -112,5 +122,9 @@ class AllResourcesSmokeTest extends TestCase
         $this->actingAs($staff)
             ->get("/admin/{$master->slug}/tenants")
             ->assertOk();
+
+        foreach (self::CONTABILITA_PATHS as $path) {
+            $this->actingAs($staff)->get("/admin/{$master->slug}/{$path}")->assertOk();
+        }
     }
 }

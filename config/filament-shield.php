@@ -76,6 +76,14 @@ return [
 
         'pages' => [
             'Dashboard',
+            // Contabilita': l'accesso non e' una casella da spuntare per un
+            // ruolo, e' riservato allo staff master e vive nel canAccess()
+            // di ciascuna pagina. Lasciare qui delle caselle che non
+            // cambiano niente manderebbe solo qualcuno a cercarle.
+            'ScadutoClienti',
+            'DettaglioScaduto',
+            'AnalisiContabili',
+            'CashFlow',
         ],
 
         'widgets' => [

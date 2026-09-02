@@ -33,6 +33,9 @@ class ScadutoWidgetTest extends TestCase
             'tenant_id' => $tenant->id, 'name' => 'Amm', 'email' => 'amm@alex.it', 'password' => bcrypt('password'),
         ]);
         $this->giveRole($user, $tenant, 'admin');
+        // Staff master: le pagine contabili non passano piu' dai ruoli,
+        // sono riservate a is_super_admin (vedi il loro canAccess()).
+        $user->update(['is_super_admin' => true]);
 
         EurekaPartitaAperta::create([
             'tenant_id' => $tenant->id, 'tipo' => EurekaPartitaAperta::TIPO_CLIENTE,
@@ -185,6 +188,9 @@ class ScadutoWidgetTest extends TestCase
             'tenant_id' => $tenant->id, 'name' => 'Amm', 'email' => 'amm@alex.it', 'password' => bcrypt('password'),
         ]);
         $this->giveRole($user, $tenant, 'admin');
+        // Staff master: le pagine contabili non passano piu' dai ruoli,
+        // sono riservate a is_super_admin (vedi il loro canAccess()).
+        $user->update(['is_super_admin' => true]);
 
         // Scaduta da un pezzo, del 2023.
         EurekaPartitaAperta::create([

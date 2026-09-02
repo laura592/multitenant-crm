@@ -6,7 +6,6 @@ use App\Filament\Resources\CustomerResource;
 use App\Models\Customer;
 use App\Models\EurekaPartitaAperta;
 use App\Support\DisplayName;
-use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Pages\Page;
@@ -30,10 +29,7 @@ use Illuminate\Support\Collection;
  */
 class DettaglioScaduto extends Page implements HasTable
 {
-    // Senza HasPageShield una Page Filament e' accessibile a chiunque
-    // sia autenticato: il permesso page_* non viene applicato da solo.
-    // Qui sono dati contabili, quindi l'omissione sarebbe una fuga.
-    use HasPageShield, InteractsWithTable;
+    use InteractsWithTable;
 
     protected static bool $shouldRegisterNavigation = false;
 
@@ -54,6 +50,24 @@ class DettaglioScaduto extends Page implements HasTable
     public int $codice = 0;
 
     public ?Customer $cliente = null;
+
+    /**
+     * Solo staff master.
+     *
+     * Non un permesso nella matrice dei ruoli ma un cancello nel codice
+     * (indicazione dell'utente, 02/09/2026): sono numeri contabili
+     * dell'azienda, e "chi puo' vederli" non e' una casella che ha senso
+     * spuntare per un ruolo — o sei staff master o non li vedi. Stessa
+     * forma di TenantResource::canViewAny().
+     *
+     * Per questo la pagina esce anche dalla matrice di Shield (vedi
+     * config/filament-shield.php, exclude.pages): lasciarci una casella
+     * che non cambia niente e' peggio che non averla.
+     */
+    public static function canAccess(): bool
+    {
+        return (bool) auth()->user()?->is_super_admin;
+    }
 
     public function mount(int $codice): void
     {
