@@ -1232,6 +1232,7 @@ class ServiceReportResource extends Resource
                     Tables\Actions\Action::make('send')
                         ->label('Invia')
                         ->icon('heroicon-o-paper-airplane')
+                        ->modalWidth('4xl')
                         ->form(fn (ServiceReport $record) => static::sendEmailFormSchema($record))
                         ->action(function (array $data, ServiceReport $record) {
                             $record->load(['customer', 'technician', 'machineProduct', 'machineMaterial', 'machineUnit.product', 'machineUnit.billingCustomer', 'partsUsed.product', 'materialsUsed.material', 'tenant']);
@@ -1415,7 +1416,9 @@ class ServiceReportResource extends Resource
      * rendering reale della mail (stesso iframe gia' usato in "Storico
      * invii email") mentre si scrive, invece di scoprirlo solo dopo
      * l'invio. Il PDF allegato non cambia (resta sempre showPrices=false),
-     * qui si modifica solo il testo del corpo email.
+     * qui si modifica solo il testo del corpo email: la seconda scheda lo
+     * mostra in sola lettura, cosi' si controlla anche l'allegato prima di
+     * spedirlo e non solo la mail che lo accompagna.
      *
      * @return array<Forms\Components\Component>
      */
@@ -1442,18 +1445,48 @@ class ServiceReportResource extends Resource
                 ->helperText('Questo testo viene inviato realmente nella mail. Il rapportino allegato non mostra mai i prezzi.')
                 ->live(debounce: 500)
                 ->default(fn () => static::defaultServiceReportEmailBody($record)),
-            Forms\Components\Placeholder::make('email_preview')
-                ->label('Anteprima email')
-                ->content(fn (Get $get): HtmlString => new HtmlString(
-                    // Vedi App\Support\OutsideLivewireRender: questo
-                    // ->content() e' un Placeholder reattivo (->live() su
-                    // custom_message sopra), quindi il ->render() qui sotto
-                    // parte SEMPRE mentre Livewire sta ridisegnando il
-                    // pannello — senza il fix, i commenti di tracciamento
-                    // <!--[if BLOCK]><![endif]--> di Livewire finiscono
-                    // ogni volta nell'anteprima (bug segnalato 2026-08-20).
-                    '<iframe srcdoc="'.e(OutsideLivewireRender::run(fn () => (new ServiceReportMail($record, '', is_string($get('custom_message')) ? $get('custom_message') : null))->render())).'" style="width:100%;height:60vh;border:0;border-radius:0.5rem;background:#fff;"></iframe>'
-                )),
+            // Due anteprime, ma una alla volta: impilate erano due iframe
+            // da 60vh in colonna e il pulsante "Invia" finiva fuori
+            // schermo. La mail resta la scheda aperta di default perche' e'
+            // l'unica cosa che si sta ancora modificando.
+            Forms\Components\Tabs::make('anteprime')
+                ->tabs([
+                    Forms\Components\Tabs\Tab::make('Anteprima email')
+                        ->icon('heroicon-o-envelope')
+                        ->schema([
+                            Forms\Components\Placeholder::make('email_preview')
+                                ->hiddenLabel()
+                                ->content(fn (Get $get): HtmlString => new HtmlString(
+                                    // Vedi App\Support\OutsideLivewireRender: questo
+                                    // ->content() e' un Placeholder reattivo (->live() su
+                                    // custom_message sopra), quindi il ->render() qui sotto
+                                    // parte SEMPRE mentre Livewire sta ridisegnando il
+                                    // pannello — senza il fix, i commenti di tracciamento
+                                    // <!--[if BLOCK]><![endif]--> di Livewire finiscono
+                                    // ogni volta nell'anteprima (bug segnalato 2026-08-20).
+                                    '<iframe srcdoc="'.e(OutsideLivewireRender::run(fn () => (new ServiceReportMail($record, '', is_string($get('custom_message')) ? $get('custom_message') : null))->render())).'" style="width:100%;height:60vh;border:0;border-radius:0.5rem;background:#fff;"></iframe>'
+                                )),
+                        ]),
+                    Forms\Components\Tabs\Tab::make('Anteprima rapportino')
+                        ->icon('heroicon-o-document-text')
+                        ->schema([
+                            Forms\Components\Placeholder::make('pdf_preview')
+                                ->hiddenLabel()
+                                // Stesso identico PDF che viene allegato: la
+                                // route con ?prezzi=0 rende 'pdf.service-report'
+                                // con showPrices=false, come fa ->action() qui
+                                // sopra. E' l'unica copia che il cliente vede,
+                                // i prezzi non ci vanno mai (vedi il controller).
+                                //
+                                // wire:ignore perche' il pannello si ridisegna
+                                // a ogni tasto nel testo email (->live() su
+                                // custom_message): senza, l'iframe rischia di
+                                // rigenerare il PDF a ogni battuta.
+                                ->content(new HtmlString(
+                                    '<div wire:ignore><iframe src="'.e(route('service-reports.pdf', [$record, 'prezzi' => 0])).'" style="width:100%;height:60vh;border:0;border-radius:0.5rem;background:#fff;"></iframe></div>'
+                                )),
+                        ]),
+                ]),
         ];
     }
 

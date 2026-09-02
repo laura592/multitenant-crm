@@ -136,6 +136,47 @@ class ServiceReportTest extends TestCase
     }
 
     /**
+     * La seconda scheda del modale "Invia" mostra il rapportino allegato.
+     * Deve puntare alla copia SENZA prezzi: e' l'unica che il cliente
+     * riceve, e un'anteprima con i prezzi farebbe credere il contrario a
+     * chi sta per spedire.
+     */
+    public function test_send_modal_previews_the_attached_report_without_prices(): void
+    {
+        $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);
+        $tech = User::create([
+            'tenant_id' => $tenant->id, 'name' => 'Tecnico Sette', 'email' => 'tech7@gifar.it', 'password' => bcrypt('password'),
+        ]);
+        $this->giveRole($tech, $tenant, 'dipendente');
+        $customer = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Bar Centrale']);
+
+        $report = ServiceReport::create([
+            'tenant_id' => $tenant->id,
+            'customer_id' => $customer->id,
+            'technician_id' => $tech->id,
+            'intervention_type' => ServiceReport::TYPE_MANUTENZIONE_ORDINARIA,
+            'intervention_date' => now(),
+            'work_performed' => 'Sostituzione guarnizioni',
+        ]);
+
+        $this->actingAs($tech);
+        Filament::setTenant($tenant);
+
+        $html = Livewire::test(ListServiceReports::class)
+            ->mountTableAction('send', $report)
+            ->html();
+
+        $this->assertStringContainsString(
+            e(route('service-reports.pdf', [$report, 'prezzi' => 0])),
+            $html,
+        );
+        $this->assertStringNotContainsString(
+            e(route('service-reports.pdf', [$report, 'prezzi' => 1])),
+            $html,
+        );
+    }
+
+    /**
      * I ricambi/materiali del rapportino pescano da Material, non piu' da
      * Product (quest'ultimo resta per il "Modello macchina" e per il
      * catalogo preventivi) — vedi ServiceReportResource, sezione
