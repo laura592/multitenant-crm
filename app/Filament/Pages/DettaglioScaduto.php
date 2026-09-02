@@ -41,7 +41,17 @@ class DettaglioScaduto extends Page implements HasTable
 
     protected static ?string $slug = 'scaduto/{codice}';
 
-    public int $codice;
+    /**
+     * Codice anagrafica Eureka, valorizzato da mount() con il parametro
+     * dell'URL. Ha un default perche' la pagina non e' sempre montata:
+     * Shield, per costruire la matrice dei permessi della pagina Ruoli,
+     * istanzia ogni Page e ne chiama getTitle() SENZA passare da mount()
+     * (vedi FilamentShield::getLocalizedPageLabel()). Senza default la
+     * proprieta' tipizzata resta non inizializzata e l'accesso solleva un
+     * Error che manda in 500 l'INTERA pagina Ruoli, non solo questa.
+     * Successo in produzione il 2026-09-02.
+     */
+    public int $codice = 0;
 
     public ?Customer $cliente = null;
 
@@ -60,6 +70,13 @@ class DettaglioScaduto extends Page implements HasTable
         // il titolo poteva prendere la ragione sociale di un FORNITORE con
         // lo stesso codice, o di un altro tenant quando a guardare e' un
         // super admin (per cui lo scope globale non si applica).
+        // Fuori da una richiesta reale non c'e' nessuna anagrafica da
+        // nominare: si torna l'etichetta generica, che e' anche quella che
+        // Shield mostra nell'elenco dei permessi.
+        if ($this->codice === 0) {
+            return 'Dettaglio scaduto';
+        }
+
         $nome = $this->cliente?->company_name
             ?: EurekaPartitaAperta::query()
                 ->where('tenant_id', Filament::getTenant()?->id)
