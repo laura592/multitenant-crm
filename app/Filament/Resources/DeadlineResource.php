@@ -29,6 +29,8 @@ class DeadlineResource extends Resource
 
     protected static ?string $navigationGroup = 'Amministrazione';
 
+    protected static ?int $navigationSort = 3;
+
     protected static ?string $navigationLabel = 'Scadenzario';
 
     protected static ?string $modelLabel = 'Scadenza';

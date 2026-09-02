@@ -24,6 +24,8 @@ class NotificationSettings extends Page implements HasForms
 
     protected static ?string $navigationGroup = 'Impostazioni';
 
+    protected static ?int $navigationSort = 5;
+
     protected static ?string $navigationLabel = 'Notifiche';
 
     protected static ?string $title = 'Notifiche';

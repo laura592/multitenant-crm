@@ -45,7 +45,11 @@ class AuditLogResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
 
-    protected static ?string $navigationGroup = 'Amministrazione';
+    // Strumento di diagnosi, non lavoro d'ufficio: in fondo a "Impostazioni",
+    // accanto a Sync Eureka.
+    protected static ?string $navigationGroup = 'Impostazioni';
+
+    protected static ?int $navigationSort = 7;
 
     protected static ?string $navigationLabel = 'Log modifiche';
 

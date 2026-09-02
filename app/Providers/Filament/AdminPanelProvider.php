@@ -192,14 +192,19 @@ class AdminPanelProvider extends PanelProvider
             // ciascuno la sidebar arrivava a scorrere parecchio prima ancora
             // di aprire una pagina. Filament ricorda comunque lo stato
             // aperto/chiuso per utente in sessione una volta espanso a mano.
+            // L'ordine e' quello del lavoro: prima cio' che si usa ogni
+            // giorno, in fondo la configurazione. "Impostazioni" e' l'ultima
+            // voce apposta - ci si entra di rado, e prima stava sopra
+            // "Amministrazione", che invece e' lavoro d'ufficio quotidiano
+            // (scaduto clienti, scadenzario, automezzi).
             ->navigationGroups([
                 NavigationGroup::make('Vendite')->collapsed(),
                 NavigationGroup::make('Catalogo')->collapsed(),
                 NavigationGroup::make('Interventi tecnici')->collapsed(),
                 NavigationGroup::make('Magazzino')->collapsed(),
                 NavigationGroup::make('Personale')->collapsed(),
-                NavigationGroup::make('Impostazioni')->collapsed(),
                 NavigationGroup::make('Amministrazione')->collapsed(),
+                NavigationGroup::make('Impostazioni')->collapsed(),
             ])
             ->middleware([
                 EncryptCookies::class,

@@ -22,7 +22,9 @@ class TenantResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-building-office-2';
 
-    protected static ?string $navigationGroup = 'Amministrazione';
+    protected static ?string $navigationGroup = 'Impostazioni';
+
+    protected static ?int $navigationSort = 3;
 
     protected static ?string $navigationLabel = 'Aziende partner';
 

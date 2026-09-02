@@ -4,7 +4,9 @@ return [
     'shield_resource' => [
         'should_register_navigation' => true,
         'slug' => 'shield/roles',
-        'navigation_sort' => -1,
+        // Subito dopo "Utenti" (navigationSort 1) dentro "Impostazioni":
+        // con -1 i Ruoli finivano in cima al gruppo, staccati dagli utenti.
+        'navigation_sort' => 2,
         'navigation_badge' => true,
         'navigation_group' => true,
         'sub_navigation_position' => null,

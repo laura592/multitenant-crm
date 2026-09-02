@@ -23,6 +23,8 @@ class PaymentMethodResource extends Resource
 
     protected static ?string $navigationGroup = 'Impostazioni';
 
+    protected static ?int $navigationSort = 4;
+
     protected static ?string $navigationLabel = 'Metodi di pagamento';
 
     protected static ?string $modelLabel = 'Metodo di pagamento';

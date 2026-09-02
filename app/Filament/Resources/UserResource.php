@@ -26,7 +26,12 @@ class UserResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-user-group';
 
-    protected static ?string $navigationGroup = 'Amministrazione';
+    // Utenti e Ruoli (RoleResource) sono la stessa cosa vista da due lati:
+    // stanno insieme in "Impostazioni", non fra gli strumenti di lavoro
+    // quotidiani dell'ufficio amministrativo.
+    protected static ?string $navigationGroup = 'Impostazioni';
+
+    protected static ?int $navigationSort = 1;
 
     protected static ?string $navigationLabel = 'Utenti';
 

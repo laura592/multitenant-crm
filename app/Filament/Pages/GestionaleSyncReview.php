@@ -35,6 +35,8 @@ class GestionaleSyncReview extends Page
 
     protected static ?string $navigationGroup = 'Impostazioni';
 
+    protected static ?int $navigationSort = 6;
+
     protected static ?string $navigationLabel = 'Sync Eureka';
 
     protected static ?string $title = 'Sync Eureka — da controllare';
