@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\ServiceReportResource\Pages\ListServiceReports;
 use App\Http\Controllers\RiepilogoRapportiniController;
 use App\Models\Customer;
 use App\Models\MachineUnit;
@@ -11,9 +12,11 @@ use App\Models\ServiceReport;
 use App\Models\ServiceReportMaterial;
 use App\Models\Tenant;
 use App\Models\User;
+use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Livewire\Livewire;
 use Tests\Concerns\AssignsPermissionRoles;
 use Tests\TestCase;
 
@@ -171,5 +174,27 @@ class RiepilogoRapportiniTest extends TestCase
         $this->get(route('service-reports.riepilogo', [
             'da' => '2026-08-01', 'a' => '2026-08-31', 'tenant' => $altro->id,
         ]))->assertForbidden();
+    }
+
+    /**
+     * Si apre in una scheda nuova: l'elenco resta dov'era, con i suoi filtri
+     * e la sua pagina, mentre si guarda la stampa. openUrlInNewTab() non si
+     * puo' usare perche' l'URL dipende dalle date, note solo al submit.
+     */
+    public function test_il_riepilogo_si_apre_in_una_scheda_nuova(): void
+    {
+        $report = $this->scenario('admin');
+        Filament::setTenant($report->tenant);
+
+        $componente = Livewire::test(ListServiceReports::class)
+            ->callAction('riepilogo', ['da' => '2026-08-01', 'a' => '2026-08-31']);
+
+        // JSON_UNESCAPED_SLASHES: senza, l'URL nel JSON e' "service-reports\/riepilogo"
+        // e il confronto fallirebbe per le barre sfuggite, non per il codice.
+        $effetti = json_encode($componente->effects, JSON_UNESCAPED_SLASHES);
+
+        $this->assertStringContainsString('window.open', $effetti, 'deve aprirsi in una scheda nuova');
+        $this->assertStringContainsString('service-reports/riepilogo', $effetti);
+        $this->assertStringContainsString('2026-08-01', $effetti);
     }
 }

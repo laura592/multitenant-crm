@@ -39,13 +39,25 @@ class ListServiceReports extends ListRecords
                         ->native(false)
                         ->afterOrEqual('da'),
                 ])
-                // Il tenant va passato: la rotta sta fuori dal pannello e lo
-                // staff master ha tenant_id nullo sull'utente.
-                ->action(fn (array $data) => redirect()->away(route('service-reports.riepilogo', [
-                    'da' => $data['da'],
-                    'a' => $data['a'],
-                    'tenant' => \Filament\Facades\Filament::getTenant()?->getKey(),
-                ])))
+                // Si apre in una scheda nuova, cosi' l'elenco resta dov'era
+                // (con i suoi filtri e la sua pagina) mentre si guarda la
+                // stampa. openUrlInNewTab() qui non si puo' usare: l'URL
+                // dipende dalle date, che si conoscono solo al submit.
+                //
+                // Il tenant va passato perche' la rotta sta fuori dal
+                // pannello e lo staff master ha tenant_id nullo sull'utente.
+                ->action(function (array $data, $livewire): void {
+                    $url = route('service-reports.riepilogo', [
+                        'da' => $data['da'],
+                        'a' => $data['a'],
+                        'tenant' => \Filament\Facades\Filament::getTenant()?->getKey(),
+                    ]);
+
+                    // JSON_UNESCAPED_SLASHES: senza, l'URL finisce nel JS
+                    // come "http:\/\/localhost/..." — funziona, ma e' illeggibile
+                    // in console e nei log del browser.
+                    $livewire->js('window.open('.json_encode($url, JSON_UNESCAPED_SLASHES).", '_blank')");
+                })
                 ->visible(fn (): bool => auth()->user()?->can('viewAny', \App\Models\ServiceReport::class) ?? false),
             Actions\Action::make('clientiVicini')
                 ->label('Cliente più vicino')
