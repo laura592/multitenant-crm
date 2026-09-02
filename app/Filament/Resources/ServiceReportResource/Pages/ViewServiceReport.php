@@ -18,14 +18,29 @@ class ViewServiceReport extends ViewRecord
                 ->icon('heroicon-o-arrow-left')
                 ->color('gray')
                 ->url(fn () => ServiceReportResource::getUrl('index')),
-            // Stessa action "pdf" della tabella (ServiceReportResource::table()),
+            // Stesse due action "pdf" della tabella (ServiceReportResource::table()),
             // qui per non dover tornare all'elenco solo per stampare.
+            //
+            // Ai dipendenti la copia con i prezzi non compare: il controllo
+            // che conta e' comunque nel controller, perche' la route sta
+            // fuori dal pannello e accetta ?prezzi=1 da chiunque.
             Actions\Action::make('pdf')
-                ->label('PDF')
+                ->label('PDF con prezzi')
+                ->icon('heroicon-o-document-arrow-down')
+                ->color('gray')
+                ->visible(fn (): bool => auth()->user()?->can('viewPrices', $this->record) ?? false)
+                ->url(fn () => route('service-reports.pdf', $this->record))
+                ->openUrlInNewTab(),
+            // Per chi non puo' vedere i prezzi questa e' l'unica voce, e
+            // allora si chiama semplicemente "PDF".
+            Actions\Action::make('pdf_senza_prezzi')
+                ->label(fn (): string => (auth()->user()?->can('viewPrices', $this->record) ?? false)
+                    ? 'PDF senza prezzi'
+                    : 'PDF')
                 ->icon('heroicon-o-document-arrow-down')
                 ->color('gray')
                 ->visible(fn (): bool => auth()->user()?->can('view', $this->record) ?? false)
-                ->url(fn () => route('service-reports.pdf', $this->record))
+                ->url(fn () => route('service-reports.pdf', [$this->record, 'prezzi' => 0]))
                 ->openUrlInNewTab(),
             // ->visible() esplicito e indipendente dal Gate: EditAction usa
             // di default ServiceReportPolicy::update(), che nega gia' la
