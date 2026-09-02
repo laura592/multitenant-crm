@@ -443,11 +443,48 @@ class ServiceReport extends Model
             'gestionale_scheda_lavoro_id' => $importato->gestionale_scheda_lavoro_id,
             'gestionale_number' => $importato->gestionale_number,
             'gestionale_document_date' => $importato->gestionale_document_date,
+            'notes' => self::uniscoTesti($this->notes, $importato->notes),
+            'problem_description' => self::uniscoTesti($this->problem_description, $importato->problem_description),
+            'work_performed' => self::uniscoTesti($this->work_performed, $importato->work_performed),
             'duplicato_suggerito_id' => null,
             'duplicato_suggerito_motivo' => null,
         ]);
 
         $importato->delete();
+    }
+
+    /**
+     * Unisce due testi tenendo per primo quello del CRM.
+     *
+     * Non si sceglie fra i due: quello del tecnico e' il piu' ricco, ma la
+     * scheda di Eureka a volte riporta qualcosa che qui non c'e' (una nota
+     * dell'ufficio, un riferimento a un documento). Scartarla significherebbe
+     * perdere informazione in modo irreversibile, e la conferma di un
+     * doppione non si annulla.
+     *
+     * Il testo importato viene aggiunto in coda solo se dice qualcosa di
+     * diverso — se e' identico o gia' contenuto non si duplica nulla — ed e'
+     * marcato, perche' chi lo rilegge fra sei mesi deve sapere da dove
+     * arriva.
+     */
+    private static function uniscoTesti(?string $nostro, ?string $importato): ?string
+    {
+        $nostro = trim((string) $nostro);
+        $importato = trim((string) $importato);
+
+        if ($importato === '' || $nostro === $importato) {
+            return $nostro !== '' ? $nostro : null;
+        }
+
+        if ($nostro === '') {
+            return $importato;
+        }
+
+        if (str_contains($nostro, $importato)) {
+            return $nostro;
+        }
+
+        return $nostro."\n\nDa Eureka: ".$importato;
     }
 
     /** Scarta la proposta: i due rapportini restano distinti. */
