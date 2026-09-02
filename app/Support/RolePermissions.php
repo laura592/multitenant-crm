@@ -40,6 +40,12 @@ class RolePermissions
     // service::report, machine::unit) - la cancellazione permanente resta
     // riservata a questo ruolo e allo staff master, mai a dipendente/
     // amministrazione/partner.
+    //
+    // view_prices_service::report non nasce da Shield (non e' un'azione su
+    // una Resource) ma da una regola dell'ufficio: i dipendenti non devono
+    // MAI far uscire un rapportino con i prezzi, l'amministrazione sceglie
+    // se stamparlo con o senza. Il PDF allegato alla mail non ha prezzi per
+    // nessuno. Applicato da ServiceReportPolicy::viewPrices().
     private const FULL_MANAGE = [...self::MANAGE, 'force_delete', 'force_delete_any'];
 
     // Come MANAGE ma senza alcun potere di eliminazione: usato da
@@ -98,6 +104,9 @@ class RolePermissions
                 ...self::expand('customer', self::VIEW),
                 // Non crea rapportini (li fanno i tecnici), ma li puo' correggere.
                 ...self::expand('service::report', ['view_any', 'view', 'update']),
+                // Stampa la copia con i prezzi quando serve: vedi la nota su
+                // view_prices_service::report piu' sotto.
+                'view_prices_service::report',
                 // Vede/corregge ore e ferie di tutto il personale per passarle al
                 // commercialista, ma niente azione di approvazione (resta a chi e'
                 // "responsabile": admin/staff master).
@@ -126,6 +135,7 @@ class RolePermissions
                 ...self::expand('quote::group', self::FULL_MANAGE),
                 ...self::expand('information::request', self::MANAGE),
                 ...self::expand('service::report', self::FULL_MANAGE),
+                'view_prices_service::report',
                 ...self::expand('maintenance::schedule', self::MANAGE),
                 ...self::expand('deadline', self::MANAGE),
                 ...self::expand('vehicle', self::MANAGE),
@@ -170,6 +180,7 @@ class RolePermissions
                 ...self::expand('quote::group', self::MANAGE_NO_DELETE),
                 ...self::expand('information::request', self::MANAGE_NO_DELETE),
                 ...self::expand('service::report', self::MANAGE_NO_DELETE),
+                'view_prices_service::report',
                 ...self::expand('maintenance::schedule', self::MANAGE_NO_DELETE),
                 ...self::expand('deadline', self::MANAGE_NO_DELETE),
                 ...self::expand('vehicle', self::MANAGE_NO_DELETE),

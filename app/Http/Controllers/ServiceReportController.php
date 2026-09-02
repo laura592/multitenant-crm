@@ -4,12 +4,23 @@ namespace App\Http\Controllers;
 
 use App\Models\ServiceReport;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Spatie\Permission\PermissionRegistrar;
 
 class ServiceReportController extends Controller
 {
-    public function pdf(ServiceReport $serviceReport)
+    /**
+     * Il rapportino scaricato dal pannello, con o senza prezzi.
+     *
+     * La scelta e' dell'amministrazione e viaggia in querystring
+     * (?prezzi=0). Per chi non ha il permesso sui prezzi non e' una scelta:
+     * esce sempre la copia senza, anche chiedendo ?prezzi=1 a mano.
+     *
+     * Non c'entra il PDF allegato alla mail, che non ha prezzi mai e non
+     * passa di qui (vedi ServiceReportResource, azione "send").
+     */
+    public function pdf(ServiceReport $serviceReport, Request $request)
     {
         // Route fuori dal pannello Filament: SetPermissionsTeamId (che collega
         // il tenant al "team" di spatie/laravel-permission) e' un tenant
@@ -26,10 +37,21 @@ class ServiceReportController extends Controller
         // un altro tenant conoscendone/indovinandone l'id.
         Gate::authorize('view', $serviceReport);
 
+        // I dipendenti non devono MAI far uscire un rapportino con i prezzi:
+        // qui non si nega l'accesso, si degrada alla copia senza prezzi, cosi'
+        // il tecnico il suo rapportino lo stampa comunque.
+        $conPrezzi = $request->boolean('prezzi', true)
+            && Gate::allows('viewPrices', $serviceReport);
+
         $pdf = Pdf::loadView('pdf.service-report', [
             'report' => $serviceReport->load(['customer', 'technician', 'machineProduct', 'machineMaterial', 'machineUnit.product', 'partsUsed.product', 'materialsUsed.material', 'tenant']),
+            'showPrices' => $conPrezzi,
         ]);
 
-        return $pdf->stream("rapportino-{$serviceReport->number}.pdf");
+        // Il nome del file dice quale copia e': con due stampe aperte sulla
+        // scrivania non si distinguerebbero.
+        $suffisso = $conPrezzi ? '' : '-senza-prezzi';
+
+        return $pdf->stream("rapportino-{$serviceReport->number}{$suffisso}.pdf");
     }
 }

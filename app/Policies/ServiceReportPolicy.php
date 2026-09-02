@@ -33,6 +33,25 @@ class ServiceReportPolicy
     }
 
     /**
+     * Chi puo' vedere i prezzi su un rapportino.
+     *
+     * I dipendenti non devono MAI far uscire un rapportino con i prezzi
+     * (indicazione dell'ufficio, 02/09/2026): il costo dell'intervento non e'
+     * roba che il tecnico discute in cantiere. L'amministrazione invece
+     * sceglie di volta in volta se stampare la copia con o senza.
+     *
+     * Il controllo vive qui e non solo nel bottone: la route
+     * service-reports.pdf sta fuori dal pannello e accetta ?prezzi=1 da
+     * chiunque sappia digitarlo. Nascondere la voce di menu non e' una
+     * protezione.
+     */
+    public function viewPrices(User $user, ServiceReport $serviceReport): bool
+    {
+        return $this->view($user, $serviceReport)
+            && $user->can('view_prices_service::report');
+    }
+
+    /**
      * Determine whether the user can create models.
      */
     public function create(User $user): bool

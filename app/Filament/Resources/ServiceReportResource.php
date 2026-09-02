@@ -1190,11 +1190,30 @@ class ServiceReportResource extends Resource
             ->actions([
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\ActionGroup::make([
+                    // Due voci invece di un modale con interruttore: chi
+                    // stampa sa gia' quale copia gli serve, e un passaggio in
+                    // piu' a ogni stampa costa piu' di una riga di menu.
+                    // La copia per il cliente in cantiere spesso non deve
+                    // mostrare quanto costa l'intervento.
                     Tables\Actions\Action::make('pdf')
-                        ->label('PDF')
+                        ->label('PDF con prezzi')
                         ->icon('heroicon-o-document-arrow-down')
-                        ->visible(fn (ServiceReport $record): bool => auth()->user()?->can('view', $record) ?? false)
+                        // Ai dipendenti la voce non compare proprio. Il
+                        // controllo che conta e' comunque nel controller: la
+                        // route sta fuori dal pannello e accetta ?prezzi=1.
+                        ->visible(fn (ServiceReport $record): bool => auth()->user()?->can('viewPrices', $record) ?? false)
                         ->url(fn (ServiceReport $record) => route('service-reports.pdf', $record))
+                        ->openUrlInNewTab(),
+                    // Per chi non puo' vedere i prezzi questa e' l'unica
+                    // voce, e allora si chiama semplicemente "PDF".
+                    Tables\Actions\Action::make('pdf_senza_prezzi')
+                        ->label(fn (ServiceReport $record): string => (auth()->user()?->can('viewPrices', $record) ?? false)
+                            ? 'PDF senza prezzi'
+                            : 'PDF')
+                        ->icon('heroicon-o-document-arrow-down')
+                        ->color('gray')
+                        ->visible(fn (ServiceReport $record): bool => auth()->user()?->can('view', $record) ?? false)
+                        ->url(fn (ServiceReport $record) => route('service-reports.pdf', [$record, 'prezzi' => 0]))
                         ->openUrlInNewTab(),
                     Tables\Actions\Action::make('send')
                         ->label('Invia')
