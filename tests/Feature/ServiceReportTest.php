@@ -7,13 +7,16 @@ use App\Filament\Resources\ServiceReportResource\Pages\EditServiceReport;
 use App\Filament\Resources\ServiceReportResource\Pages\ListServiceReports;
 use App\Mail\ServiceReportMail;
 use App\Models\Customer;
-use App\Models\Material;
+use App\Models\Lavaggio;
 use App\Models\MachineUnit;
+use App\Models\MaintenanceSchedule;
+use App\Models\Material;
 use App\Models\Product;
 use App\Models\ServiceReport;
 use App\Models\ServiceReportEmail;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Support\TariffeIntervento;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
@@ -24,7 +27,7 @@ use Tests\TestCase;
 
 class ServiceReportTest extends TestCase
 {
-    use RefreshDatabase, AssignsPermissionRoles;
+    use AssignsPermissionRoles, RefreshDatabase;
 
     public function test_technician_can_create_report_with_signature_and_parts_then_send_it(): void
     {
@@ -56,7 +59,7 @@ class ServiceReportTest extends TestCase
         $tinyPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
 
         $this->actingAs($tech);
-        \Filament\Facades\Filament::setTenant($tenant);
+        Filament::setTenant($tenant);
 
         Livewire::test(EditServiceReport::class, ['record' => $report->getRouteKey()])
             ->fillForm(['customer_signature_path' => $tinyPng, 'status' => 'firmato'])
@@ -73,7 +76,7 @@ class ServiceReportTest extends TestCase
         $this->get(route('service-reports.pdf', $report))->assertOk();
 
         // invio email dall'azione della tabella
-        Livewire::test(\App\Filament\Resources\ServiceReportResource\Pages\ListServiceReports::class)
+        Livewire::test(ListServiceReports::class)
             ->callTableAction('send', $report, data: ['recipient_emails' => ['cliente@test.it']]);
 
         Mail::assertSent(ServiceReportMail::class, fn ($mail) => $mail->hasTo('cliente@test.it'));
@@ -158,7 +161,7 @@ class ServiceReportTest extends TestCase
         ]);
 
         $this->actingAs($tech);
-        \Filament\Facades\Filament::setTenant($tenant);
+        Filament::setTenant($tenant);
 
         Livewire::test(EditServiceReport::class, ['record' => $report->getRouteKey()])
             ->fillForm([
@@ -234,18 +237,18 @@ class ServiceReportTest extends TestCase
         $this->giveRole($tech, $tenant, 'dipendente');
         $customer = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Bar Centrale']);
 
-        $birra = \App\Models\MaintenanceSchedule::create([
+        $birra = MaintenanceSchedule::create([
             'tenant_id' => $tenant->id,
             'customer_id' => $customer->id,
-            'type' => \App\Models\MaintenanceSchedule::TYPE_LAVAGGIO,
-            'beverage_type' => \App\Models\MaintenanceSchedule::BEVERAGE_BIRRA,
+            'type' => MaintenanceSchedule::TYPE_LAVAGGIO,
+            'beverage_type' => MaintenanceSchedule::BEVERAGE_BIRRA,
             'lines_count' => 2,
         ]);
-        $vino = \App\Models\MaintenanceSchedule::create([
+        $vino = MaintenanceSchedule::create([
             'tenant_id' => $tenant->id,
             'customer_id' => $customer->id,
-            'type' => \App\Models\MaintenanceSchedule::TYPE_LAVAGGIO,
-            'beverage_type' => \App\Models\MaintenanceSchedule::BEVERAGE_VINO,
+            'type' => MaintenanceSchedule::TYPE_LAVAGGIO,
+            'beverage_type' => MaintenanceSchedule::BEVERAGE_VINO,
             'lines_count' => 5,
         ]);
 
@@ -269,11 +272,79 @@ class ServiceReportTest extends TestCase
             ->assertHasNoFormErrors();
 
         $report = ServiceReport::where('customer_id', $customer->id)->latest()->first();
-        $rows = \App\Models\Lavaggio::where('service_report_id', $report->id)->get()->keyBy('maintenance_schedule_id');
+        $rows = Lavaggio::where('service_report_id', $report->id)->get()->keyBy('maintenance_schedule_id');
 
         $this->assertCount(2, $rows);
         $this->assertSame(2, $rows->get($birra->id)->lines_washed);
         $this->assertSame(3, $rows->get($vino->id)->lines_washed);
+    }
+
+    /**
+     * Le vie si scrivono in cima al rapportino, in "Impianti e vie lavate":
+     * arrivati in fondo, il lavaggio deve gia' risultare eseguito e le sue
+     * voci da fatturare gia' in elenco (qui 2 + 3 = 5 vie => LAV2 qty 1 +
+     * ULTERIORE VIA LAVATA qty 3), senza ridigitare lo stesso numero nel
+     * riquadro dei ricambi. Vedi LavaggioFields::syncVieDaImpianti().
+     */
+    public function test_vie_degli_impianti_accendono_lavaggio_e_righe_tariffa(): void
+    {
+        $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);
+        $tech = User::create([
+            'tenant_id' => $tenant->id, 'name' => 'Tecnico Otto', 'email' => 'tech8@gifar.it', 'password' => bcrypt('password'),
+        ]);
+        $this->giveRole($tech, $tenant, 'dipendente');
+        $customer = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Bar Centrale']);
+        $lav2 = Material::create(['tenant_id' => $tenant->id, 'code' => 'LAV2', 'category' => 'Eureka', 'type' => 'LAVAGGIO 2 VIE']);
+        $ultVia = Material::create(['tenant_id' => $tenant->id, 'code' => 'ULTVIA', 'category' => 'Eureka', 'type' => 'ULTERIORE VIA LAVATA']);
+
+        $birra = MaintenanceSchedule::create([
+            'tenant_id' => $tenant->id,
+            'customer_id' => $customer->id,
+            'type' => MaintenanceSchedule::TYPE_LAVAGGIO,
+            'beverage_type' => MaintenanceSchedule::BEVERAGE_BIRRA,
+            'lines_count' => 2,
+        ]);
+        $vino = MaintenanceSchedule::create([
+            'tenant_id' => $tenant->id,
+            'customer_id' => $customer->id,
+            'type' => MaintenanceSchedule::TYPE_LAVAGGIO,
+            'beverage_type' => MaintenanceSchedule::BEVERAGE_VINO,
+            'lines_count' => 3,
+        ]);
+
+        $this->actingAs($tech);
+        Filament::setTenant($tenant);
+
+        $livewire = Livewire::test(CreateServiceReport::class)
+            ->fillForm([
+                'customer_id' => $customer->id,
+                'technician_id' => $tech->id,
+                'intervention_type' => ServiceReport::TYPE_SANIFICAZIONE,
+                'intervention_date' => now(),
+                'work_performed' => 'Lavaggio impianti birra e vino',
+            ])
+            // Le righe si idratano con fillForm() (equivale ad averle gia'
+            // aggiunte), poi le vie si scrivono una alla volta sul path
+            // annidato del singolo campo: e' esattamente quello che manda il
+            // browser quando il tecnico digita dentro una riga, e cosi' si
+            // verifica che il rimbalzo dal campo figlio al repeater ci sia
+            // davvero (con ->set() sull'intero array non si vedrebbe).
+            ->fillForm([
+                'lavaggio_impianti' => [
+                    'riga-birra' => ['maintenance_schedule_id' => $birra->id, 'lines_washed' => null],
+                    'riga-vino' => ['maintenance_schedule_id' => $vino->id, 'lines_washed' => null],
+                ],
+            ])
+            ->set('data.lavaggio_impianti.riga-birra.lines_washed', 2)
+            ->set('data.lavaggio_impianti.riga-vino.lines_washed', 3);
+
+        $this->assertTrue((bool) $livewire->get('data._lavaggio_vie_eseguito'));
+        $this->assertSame(5, (int) $livewire->get('data.lavaggio_vie_count'));
+
+        $materialsUsed = collect($livewire->get('data.materialsUsed'));
+        $this->assertCount(2, $materialsUsed);
+        $this->assertSame(1, (int) $materialsUsed->firstWhere('material_id', $lav2->id)['quantity']);
+        $this->assertSame(3, (int) $materialsUsed->firstWhere('material_id', $ultVia->id)['quantity']);
     }
 
     /**
@@ -483,33 +554,33 @@ class ServiceReportTest extends TestCase
             'tenant_id' => $tenant->id, 'company_name' => 'Bar del Lido', 'city' => 'Jesolo',
             'billing_customer_id' => $martellozzo->id,
         ]);
-        $tariffe = \App\Support\TariffeIntervento::per($bar);
+        $tariffe = TariffeIntervento::per($bar);
         $this->assertSame('CHIMART', $tariffe['chiamata']);
         $this->assertSame('OREMART', $tariffe['manodopera']);
         $this->assertSame('LAVMART', $tariffe['lavaggio']);
         $this->assertSame('ULTVIAMART', $tariffe['lavaggio_ulteriore_via']);
-        $this->assertSame('CHIFEMART', \App\Support\TariffeIntervento::per($bar, true)['chiamata']);
+        $this->assertSame('CHIFEMART', TariffeIntervento::per($bar, true)['chiamata']);
 
         // Spigola: chiamata CHIVE ovunque, anche senza citta' in anagrafica
         $senzaCitta = Customer::create([
             'tenant_id' => $tenant->id, 'company_name' => 'Hotel Senza Citta',
             'billing_customer_id' => $spigola->id,
         ]);
-        $this->assertSame('CHIVE', \App\Support\TariffeIntervento::per($senzaCitta)['chiamata']);
-        $this->assertSame('ORESPIGOLA', \App\Support\TariffeIntervento::per($senzaCitta)['manodopera']);
+        $this->assertSame('CHIVE', TariffeIntervento::per($senzaCitta)['chiamata']);
+        $this->assertSame('ORESPIGOLA', TariffeIntervento::per($senzaCitta)['manodopera']);
 
         // nessun pagante: restano i codici di sempre, legati alla citta'
         $diretto = Customer::create([
             'tenant_id' => $tenant->id, 'company_name' => 'Caffe Diretto', 'city' => 'Venezia',
         ]);
-        $this->assertSame('CHIVE', \App\Support\TariffeIntervento::per($diretto)['chiamata']);
-        $this->assertSame('ORE', \App\Support\TariffeIntervento::per($diretto)['manodopera']);
-        $this->assertSame('LAV2', \App\Support\TariffeIntervento::per($diretto)['lavaggio']);
+        $this->assertSame('CHIVE', TariffeIntervento::per($diretto)['chiamata']);
+        $this->assertSame('ORE', TariffeIntervento::per($diretto)['manodopera']);
+        $this->assertSame('LAV2', TariffeIntervento::per($diretto)['lavaggio']);
 
         $fuori = Customer::create([
             'tenant_id' => $tenant->id, 'company_name' => 'Caffe Mestre', 'city' => 'Mestre-Venezia',
         ]);
-        $this->assertSame('CHIORD', \App\Support\TariffeIntervento::per($fuori)['chiamata']);
-        $this->assertSame('OREFEST', \App\Support\TariffeIntervento::per($fuori, true)['manodopera']);
+        $this->assertSame('CHIORD', TariffeIntervento::per($fuori)['chiamata']);
+        $this->assertSame('OREFEST', TariffeIntervento::per($fuori, true)['manodopera']);
     }
 }

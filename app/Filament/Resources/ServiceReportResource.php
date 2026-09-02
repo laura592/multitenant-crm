@@ -565,11 +565,28 @@ class ServiceReportResource extends Resource
                             Forms\Components\TextInput::make('lines_washed')
                                 ->label('Vie lavate')
                                 ->numeric()
-                                ->minValue(0),
+                                ->minValue(0)
+                                // live() perche' il totale vie di questo
+                                // repeater accende da solo il lavaggio e le
+                                // sue righe tariffa piu' in basso: senza,
+                                // l'afterStateUpdated del repeater (che
+                                // riceve il rimbalzo dai campi figli, vedi
+                                // HasState::callAfterStateUpdated) scatterebbe
+                                // solo aggiungendo o togliendo una riga, non
+                                // digitando le vie. onBlur: si aggiorna
+                                // quando si lascia il campo, non a ogni
+                                // cifra battuta ("15" passerebbe da "1").
+                                ->live(onBlur: true),
                         ])
                         ->columns(2)
                         ->visible(fn (Get $get) => $get('intervention_type') === ServiceReport::TYPE_SANIFICAZIONE)
-                        ->helperText('Lascia vuoto (nessuna riga) per applicarla a tutti i piani lavaggio attivi del cliente, senza vie specifiche per impianto (comportamento di sempre). Aggiungi una riga per ogni impianto coperto da questa visita.')
+                        // Le vie si scrivono qui, in cima al rapportino: da
+                        // qui discendono il toggle "Lavaggio eseguito" e le
+                        // righe LAV2/ULTERIORE VIA piu' in basso, invece di
+                        // farle ridigitare (e di lasciare senza voci da
+                        // fatturare chi si ferma a questo riquadro).
+                        ->afterStateUpdated(fn (Forms\Set $set, Get $get) => LavaggioFields::syncVieDaImpianti($set, $get))
+                        ->helperText('Lascia vuoto (nessuna riga) per applicarla a tutti i piani lavaggio attivi del cliente, senza vie specifiche per impianto (comportamento di sempre). Aggiungi una riga per ogni impianto coperto da questa visita: le vie totali accendono da sole il lavaggio e le sue voci tra i ricambi.')
                         ->addActionLabel('Aggiungi impianto')
                         ->defaultItems(0)
                         ->columnSpanFull(),
@@ -687,10 +704,17 @@ class ServiceReportResource extends Resource
                 ]),
             Forms\Components\Section::make('Descrizione')
                 ->schema([
-                    Forms\Components\Textarea::make('problem_description')->label('Problema riscontrato')->rows(2),
-                    Forms\Components\Textarea::make('work_performed')->label('Lavoro svolto')->rows(3)->required()
+                    // autosize(): il campo cresce con il testo invece di
+                    // restare alto due o tre righe. Su un lavoro svolto lungo
+                    // il tecnico vedeva solo le prime righe e doveva scorrere
+                    // dentro il riquadro per rileggere quello che aveva
+                    // scritto — segnalato dall'ufficio il 02/09/2026.
+                    Forms\Components\Textarea::make('problem_description')->label('Problema riscontrato')
+                        ->rows(2)->autosize(),
+                    Forms\Components\Textarea::make('work_performed')->label('Lavoro svolto')
+                        ->rows(4)->autosize()->required()
                         ->extraAttributes(['data-tour' => 'service-reports-field-work']),
-                    Forms\Components\Textarea::make('notes')->label('Note')->rows(2),
+                    Forms\Components\Textarea::make('notes')->label('Note')->rows(2)->autosize(),
                 ]),
             Forms\Components\Section::make('Ricambi/materiali utilizzati')
                 ->extraAttributes(['data-tour' => 'service-reports-field-materials'])

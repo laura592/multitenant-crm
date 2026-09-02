@@ -169,6 +169,39 @@ class LavaggioFields
     }
 
     /**
+     * Le vie lavate si dichiarano impianto per impianto in cima al
+     * rapportino ("Impianti e vie lavate"): quello e' il dato che il tecnico
+     * ha davanti tornando dal lavoro, e da li' discende tutto il resto —
+     * il lavaggio e' stato eseguito, e le righe tariffa LAV2/ULTVIA lo
+     * devono dire. Senza questo, la stessa informazione andava ridigitata
+     * piu' in basso in "Ricambi/materiali utilizzati" (toggle + numero vie),
+     * e chi si fermava al repeater consegnava un rapportino senza le voci
+     * da fatturare.
+     *
+     * Agisce solo quando almeno una riga ha le vie valorizzate: un repeater
+     * vuoto, o con le righe appena aggiunte e ancora da compilare, non deve
+     * spegnere un "Lavaggio eseguito" acceso a mano (capita sui clienti che
+     * un piano lavaggio collegato non ce l'hanno).
+     */
+    public static function syncVieDaImpianti(Forms\Set $set, Forms\Get $get): void
+    {
+        $totaleVie = collect($get('lavaggio_impianti') ?? [])
+            ->sum(fn (array $riga) => filled($riga['lines_washed'] ?? null) ? (int) $riga['lines_washed'] : 0);
+
+        if ($totaleVie < 1) {
+            return;
+        }
+
+        // Prima il toggle e il conteggio, poi le righe materiali:
+        // syncLavaggioViaMaterials() rilegge entrambi da $get e con il
+        // toggle ancora spento cancellerebbe le righe invece di scriverle.
+        $set('_lavaggio_vie_eseguito', true);
+        $set('lavaggio_vie_count', $totaleVie);
+
+        self::syncLavaggioViaMaterials($set, $get);
+    }
+
+    /**
      * Stesso meccanismo per key di add_chiamata_material/syncManodoperaMaterial
      * sopra: ricalcola da zero le righe generate da questo widget a ogni
      * cambio di toggle/numero vie, senza toccare righe uguali aggiunte a
