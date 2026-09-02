@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Material;
+use App\Support\Gestionale\RegistroSync;
 use App\Models\Tenant;
 use App\Support\EurekaClient;
 use Illuminate\Console\Command;
@@ -93,6 +94,12 @@ class SweepEurekaMaterialsCatalog extends Command
                 'type' => trim((string) ($article['descr1'] ?? '')) ?: 'Materiale Eureka',
             ]);
             $created++;
+
+            RegistroSync::movimento('catalogo', 'materiale creato', [
+                'articolo' => $code,
+                'descrizione' => trim((string) ($article['descr1'] ?? '')),
+                'listino' => isset($article['prezzo01']) ? round((float) $article['prezzo01'], 2) : null,
+            ]);
         }
 
         $this->info(sprintf(

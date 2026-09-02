@@ -73,6 +73,20 @@ return [
             'replace_placeholders' => true,
         ],
 
+        // Tutto quello che il CRM scambia con Eureka: cosa e' stato creato,
+        // aggiornato, riprezzato, unito. Separato da laravel.log perche' li'
+        // annegherebbe fra le eccezioni, e perche' quando l'ufficio chiede
+        // "questo rapportino da dove viene" si deve poter grepare un file
+        // solo. Tenuto piu' a lungo del log applicativo: le domande sui dati
+        // contabili arrivano settimane dopo.
+        'gestionale' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/gestionale.log'),
+            'level' => 'info',
+            'days' => env('LOG_GESTIONALE_DAYS', 90),
+            'replace_placeholders' => true,
+        ],
+
         'slack' => [
             'driver' => 'slack',
             'url' => env('LOG_SLACK_WEBHOOK_URL'),

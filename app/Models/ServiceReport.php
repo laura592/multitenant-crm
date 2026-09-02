@@ -497,6 +497,25 @@ class ServiceReport extends Model
         $this->adottaMaterialiDaEureka($importato);
 
         $importato->delete();
+
+        // Unire e' irreversibile nei fatti (il rapportino importato sparisce
+        // dagli elenchi) e cambia articoli, pagante e stato: e' il movimento
+        // piu' pesante di tutta l'integrazione, e deve restare scritto con il
+        // nome di chi lo ha deciso.
+        // Un'altra proposta puo' puntare alla scheda appena consumata: senza
+        // questa riga resterebbe li' fino al sync successivo, e confermarla
+        // aggancerebbe il rapportino a un documento morto (visto su
+        // RT-2026-0614, che proponeva la scheda del lavaggio invece di
+        // quella del filtro).
+        self::scartaProposteOrfane();
+
+        \App\Support\Gestionale\RegistroSync::movimento('doppioni', 'rapportini uniti', [
+            'nostro' => $this->number,
+            'importato' => $importato->number,
+            'scheda' => $this->gestionale_number,
+            'pagante' => $this->eureka_destinazione_label,
+            'deciso_da' => auth()->user()?->email,
+        ]);
     }
 
     /**

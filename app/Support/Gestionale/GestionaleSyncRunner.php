@@ -45,9 +45,11 @@ class GestionaleSyncRunner
      */
     public function run(): array
     {
+        RegistroSync::avvio('sync-anagrafiche', ['tenant' => $this->tenant->slug]);
+
         [$autofilled, $diffs] = $this->reverifyLinkedCustomers();
 
-        return [
+        $esito = [
             'autofilled' => $autofilled,
             'diffs' => $diffs,
             'customerLinks' => $this->proposeCustomerLinks(),
@@ -69,6 +71,19 @@ class GestionaleSyncRunner
             // Vedi EurekaClient::failedEndpoints().
             'apiIssues' => $this->client->failedEndpoints(),
         ];
+
+        RegistroSync::esito('sync-anagrafiche', [
+            'tenant' => $this->tenant->slug,
+            'campi_autocompilati' => count($esito['autofilled']),
+            'differenze_da_rivedere' => count($esito['diffs']),
+            'collegamenti_proposti' => count($esito['customerLinks']) + count($esito['productLinks']) + count($esito['machineUnitLinks']),
+            'macchine_create' => count($esito['newMachines']),
+            'note_aggiornate' => count($esito['eurekaNotes']),
+            'doppioni_proposti' => count($esito['doppioniRapportini']),
+            'endpoint_in_errore' => $esito['apiIssues'],
+        ]);
+
+        return $esito;
     }
 
     /**
@@ -432,14 +447,38 @@ class GestionaleSyncRunner
                 $motivo = ConfrontoRapportini::confidenza($nostro, $importato);
 
                 if ($motivo !== null) {
-                    $candidati[] = ['rapportino' => $importato, 'motivo' => $motivo];
+                    $candidati[] = [
+                        'rapportino' => $importato,
+                        'motivo' => $motivo,
+                        'peso' => ConfrontoRapportini::peso($motivo),
+                        'articoli' => ConfrontoRapportini::quantiArticoliInComune($nostro, $importato),
+                    ];
                 }
             }
 
-            // Con piu' di un candidato non si propone nulla: proporre il
-            // primo che capita significherebbe far confermare a occhi chiusi
-            // un abbinamento che il sistema stesso non sa distinguere.
-            if (count($candidati) !== 1) {
+            if ($candidati === []) {
+                continue;
+            }
+
+            // Con piu' candidati non ci si arrende: Eureka spezza spesso un
+            // intervento in due schede, una per macchina (RT-2026-0618:
+            // disinstallazione su SL-695, installazione su SL-696), e in quel
+            // caso una delle due somiglia molto piu' dell'altra. Restare
+            // zitti lasciava sei rapportini bloccati senza dirlo a nessuno.
+            //
+            // Si ordina per confidenza e poi per articoli in comune, e si
+            // propone il primo SOLO se stacca il secondo: a parita' il
+            // sistema non sa distinguere, e far confermare a occhi chiusi
+            // sarebbe peggio del silenzio.
+            usort($candidati, fn (array $a, array $b) => [$b['peso'], $b['articoli']] <=> [$a['peso'], $a['articoli']]);
+
+            if (isset($candidati[1])
+                && [$candidati[0]['peso'], $candidati[0]['articoli']] === [$candidati[1]['peso'], $candidati[1]['articoli']]) {
+                RegistroSync::movimento('sync-anagrafiche', 'doppione ambiguo, nessuna proposta', [
+                    'nostro' => $nostro->number,
+                    'candidati' => array_map(fn (array $c) => $c['rapportino']->gestionale_number, $candidati),
+                ]);
+
                 continue;
             }
 
@@ -451,6 +490,13 @@ class GestionaleSyncRunner
             ]);
 
             $proposte[] = ['nostro' => $nostro, 'importato' => $scelto['rapportino'], 'motivo' => $scelto['motivo']];
+
+            RegistroSync::movimento('sync-anagrafiche', 'doppione proposto', [
+                'nostro' => $nostro->number,
+                'importato' => $scelto['rapportino']->number,
+                'scheda' => $scelto['rapportino']->gestionale_number,
+                'motivo' => $scelto['motivo'],
+            ]);
         }
 
         return $proposte;
@@ -681,6 +727,16 @@ class GestionaleSyncRunner
                 $machineUnit->moveTo($customer, notes: $installNote, placedAt: $installedAt);
 
                 $imported[] = ['machineUnit' => $machineUnit, 'customer' => $customer];
+
+                // Le macchine il sync le crea da solo (non le propone): senza
+                // questa riga comparirebbero in anagrafica senza che nessuno
+                // sappia quando ne' da quale cliente.
+                RegistroSync::movimento('sync-anagrafiche', 'macchina creata', [
+                    'matricola' => $machineUnit->serial_number,
+                    'modello' => $machineUnit->display_name,
+                    'cliente' => $customer->company_name,
+                    'codice_cliente' => $customer->gestionale_code,
+                ]);
             }
         }
 

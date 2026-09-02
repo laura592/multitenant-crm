@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Material;
+use App\Support\Gestionale\RegistroSync;
 use App\Models\Tenant;
 use App\Support\Gestionale\EurekaClient;
 use Illuminate\Console\Command;
@@ -86,6 +87,15 @@ class RefreshMaterialPricesFromEureka extends Command
 
             if (! $dryRun) {
                 $material->update(['list_price' => $newPrice]);
+
+                // Un prezzo che cambia da solo di notte e' la cosa che
+                // l'ufficio chiede piu' spesso di ricostruire: va scritto il
+                // vecchio accanto al nuovo, non solo il nuovo.
+                RegistroSync::movimento('prezzi', 'listino aggiornato', [
+                    'articolo' => $material->code,
+                    'da' => $oldPrice,
+                    'a' => $newPrice,
+                ]);
             }
 
             $updated++;

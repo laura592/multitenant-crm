@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Models\ServiceReport;
 use App\Models\ServiceReportMaterial;
 use App\Models\Tenant;
+use App\Support\Gestionale\RegistroSync;
 use App\Models\User;
 use App\Support\EurekaClient;
 use Illuminate\Console\Command;
@@ -367,6 +368,15 @@ class ImportEurekaServiceReports extends Command
                 $created++;
 
                 if (! $dryRun) {
+                    RegistroSync::movimento('import-rapportini', 'rapportino creato', [
+                        'scheda_eureka' => $eurekaId,
+                        'numero_gestionale' => $gestionaleNumber,
+                        'data_intervento' => $interventionDate,
+                        'cliente' => $payload['customer_id'] ?? null,
+                    ]);
+                }
+
+                if (! $dryRun) {
                     DB::transaction(function () use ($tenant, $payload, $detail, $gestionaleNumber, $interventionDate, &$materialCache): void {
                         $report = new ServiceReport($payload);
                         // Anche uno storico ripescato da Eureka ha ormai un
@@ -398,6 +408,16 @@ class ImportEurekaServiceReports extends Command
             $unchanged,
             $skipped,
         ));
+
+        if (! $dryRun) {
+            RegistroSync::esito('import-rapportini', [
+                'tenant' => $tenant->slug,
+                'creati' => $created,
+                'aggiornati' => $updated,
+                'invariati' => $unchanged,
+                'saltati' => $skipped,
+            ]);
+        }
 
         return self::SUCCESS;
     }

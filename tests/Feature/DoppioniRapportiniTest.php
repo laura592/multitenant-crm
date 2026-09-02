@@ -473,15 +473,35 @@ class DoppioniRapportiniTest extends TestCase
 
         $primo->confermaDuplicato();
 
-        // La relazione deve ancora risolvere, altrimenti il modale esplode con
-        // "Call to a member function load() on null".
+        // La conferma chiude subito la proposta rimasta orfana: aspettare il
+        // sync successivo lascia una finestra in cui confermare la seconda
+        // aggancia un documento morto (visto su RT-2026-0614, che proponeva
+        // la scheda del lavaggio invece di quella del filtro).
         $secondo->refresh();
-        $this->assertNotNull($secondo->duplicatoSuggerito, 'la scheda unita deve restare leggibile');
+        $this->assertNull($secondo->duplicato_suggerito_id, 'la proposta orfana va chiusa subito');
+        $this->assertSame(0, ServiceReport::scartaProposteOrfane(), 'non deve restarne nessuna');
+    }
 
-        $this->assertSame(1, ServiceReport::scartaProposteOrfane());
+    /**
+     * Rete di sicurezza per una proposta orfana arrivata da un'altra strada
+     * (un rapportino importato cancellato a mano, un sync interrotto a meta').
+     * Il confronto deve disegnarsi lo stesso: senza withTrashed() esplodeva
+     * con "Call to a member function load() on null".
+     */
+    public function test_il_confronto_regge_una_scheda_gia_cancellata(): void
+    {
+        [$tenant, $tecnico, $cliente, $prodotto] = $this->scenario();
+        $macchina = $this->macchina($tenant, $cliente, $prodotto, '1858049');
 
-        $secondo->refresh();
-        $this->assertNull($secondo->duplicato_suggerito_id);
+        $nostro = $this->rapportino($tenant, $cliente, $tecnico, $macchina, ServiceReport::SOURCE_MANUALE, '2026-08-06');
+        $scheda = $this->rapportino($tenant, $cliente, $tecnico, $macchina, ServiceReport::SOURCE_EUREKA, '2026-08-06', 17523);
+
+        $nostro->update(['duplicato_suggerito_id' => $scheda->id]);
+        $scheda->delete();
+
+        $nostro->refresh();
+        $this->assertNotNull($nostro->duplicatoSuggerito, 'la scheda cancellata deve restare leggibile');
+        $this->assertSame($scheda->id, $nostro->duplicatoSuggerito->id);
     }
 
     /**
@@ -510,6 +530,55 @@ class DoppioniRapportiniTest extends TestCase
         $this->assertSame(782, (int) $nostro->eureka_destinazione_code);
         $this->assertSame("GOPPION CAFFE' SPA", $nostro->eureka_destinazione_label);
         $this->assertSame(10, (int) $nostro->eureka_stato_documento);
+    }
+
+    /**
+     * Eureka spezza un intervento in due schede, una per macchina
+     * (RT-2026-0618: disinstallazione su SL-695, installazione su SL-696).
+     * Il rapportino nostro somiglia a entrambe, ma una stacca l'altra sugli
+     * articoli in comune: restare zitti lasciava sei rapportini bloccati.
+     */
+    public function test_fra_due_candidati_propone_quello_che_stacca(): void
+    {
+        [$tenant, $tecnico, $cliente, $prodotto] = $this->scenario();
+        $macchina = $this->macchina($tenant, $cliente, $prodotto, '3400000287541');
+
+        $disinstallazione = Material::create([
+            'code' => 'DISIN/RITIRO', 'source' => Material::SOURCE_EUREKA,
+            'tenant_id' => $tenant->id, 'category' => 'Eureka', 'type' => 'Disinstallazione',
+        ]);
+        $installazione = Material::create([
+            'code' => 'INST', 'source' => Material::SOURCE_EUREKA,
+            'tenant_id' => $tenant->id, 'category' => 'Eureka', 'type' => 'Installazione',
+        ]);
+
+        // Il nostro: una visita sola, l'installazione fra i materiali.
+        $nostro = $this->rapportino($tenant, $cliente, $tecnico, $macchina, ServiceReport::SOURCE_MANUALE, '2026-08-10');
+        ServiceReportMaterial::create(['service_report_id' => $nostro->id, 'material_id' => $installazione->id, 'quantity' => 1]);
+
+        // Le due schede di Eureka, stessa macchina e stesso giorno.
+        $schedaInstallazione = $this->rapportino($tenant, $cliente, $tecnico, $macchina, ServiceReport::SOURCE_EUREKA, '2026-08-10', 17706);
+        ServiceReportMaterial::create(['service_report_id' => $schedaInstallazione->id, 'material_id' => $installazione->id, 'quantity' => 1]);
+
+        $schedaDisinstallazione = $this->rapportino($tenant, $cliente, $tecnico, $macchina, ServiceReport::SOURCE_EUREKA, '2026-08-10', 17704);
+        ServiceReportMaterial::create(['service_report_id' => $schedaDisinstallazione->id, 'material_id' => $disinstallazione->id, 'quantity' => 1]);
+
+        $this->proponi($tenant);
+
+        $nostro->refresh();
+        $this->assertSame(
+            $schedaInstallazione->id,
+            $nostro->duplicato_suggerito_id,
+            'deve vincere la scheda che condivide l\'articolo',
+        );
+    }
+
+    private function proponi(Tenant $tenant): array
+    {
+        $metodo = new \ReflectionMethod(\App\Support\Gestionale\GestionaleSyncRunner::class, 'proponiDoppioniRapportini');
+        $metodo->setAccessible(true);
+
+        return $metodo->invoke(new \App\Support\Gestionale\GestionaleSyncRunner($tenant));
     }
 
 }

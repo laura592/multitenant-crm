@@ -80,6 +80,36 @@ class ConfrontoRapportini
         return $ma->isNotEmpty() && $ma->intersect(self::materiali($b))->isNotEmpty();
     }
 
+    /**
+     * Quanti articoli condividono: serve a scegliere fra piu' candidati.
+     *
+     * Eureka spezza spesso un intervento del tecnico in piu' schede, una per
+     * macchina (RT-2026-0618: disinstallazione e installazione finite su
+     * SL-695 e SL-696). Il rapportino nostro somiglia allora a due schede
+     * dello stesso cliente e giorno, e a decidere e' quanti articoli ha in
+     * comune con l'una e con l'altra.
+     */
+    public static function quantiArticoliInComune(ServiceReport $a, ServiceReport $b): int
+    {
+        return self::materiali($a)->intersect(self::materiali($b))->count();
+    }
+
+    /**
+     * Quanto vale un livello di confidenza, per ordinare i candidati.
+     *
+     * Piu' alto = piu' affidabile. Non e' un punteggio da mostrare: serve
+     * solo a mettere in fila due candidati e vedere se uno stacca l'altro.
+     */
+    public static function peso(?string $motivo): int
+    {
+        return match ($motivo) {
+            self::CERTO => 3,
+            self::PROBABILE => 2,
+            self::DA_VERIFICARE => 1,
+            default => 0,
+        };
+    }
+
     /** @return Collection<int, string> */
     private static function materiali(ServiceReport $r): Collection
     {
