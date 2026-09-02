@@ -56,6 +56,7 @@ class GestionaleSyncRunner
             'productLinks' => $this->proposeProductLinks(),
             'machineUnitLinks' => $this->proposeMachineUnitLinks(),
             'newMachines' => $this->importInstalledMachines(),
+            'fusioniMacchine' => $this->proponiFusioniMacchine(),
             'eurekaNotes' => $this->syncEurekaNotes(),
             'doppioniRapportini' => $this->proponiDoppioniRapportini(),
             // Un'interruzione di Eureka per tutta la durata della sync
@@ -78,6 +79,7 @@ class GestionaleSyncRunner
             'differenze_da_rivedere' => count($esito['diffs']),
             'collegamenti_proposti' => count($esito['customerLinks']) + count($esito['productLinks']) + count($esito['machineUnitLinks']),
             'macchine_create' => count($esito['newMachines']),
+            'fusioni_macchine_proposte' => count($esito['fusioniMacchine']),
             'note_aggiornate' => count($esito['eurekaNotes']),
             'doppioni_proposti' => count($esito['doppioniRapportini']),
             'endpoint_in_errore' => $esito['apiIssues'],
@@ -403,6 +405,45 @@ class GestionaleSyncRunner
      *
      * @return array<int, array{nostro: ServiceReport, importato: ServiceReport, motivo: string}>
      */
+    /**
+     * Propone la fusione fra macchine che sono lo stesso apparecchio.
+     *
+     * L'import degli installati ha creato due volte la stessa orzina perche'
+     * Eureka la scrive con e senza spazi, e in anagrafica c'erano gia'
+     * "A 300 3400000310192" accanto a "3400000310192". Ogni doppione e' un
+     * rapportino che non si abbinera' mai.
+     *
+     * Come per i doppioni dei rapportini: si propone e basta. Fondere due
+     * macchine sposta rapportini e storico di manutenzione.
+     *
+     * @return array<int, array{tenere: MachineUnit, assorbire: MachineUnit, motivo: string}>
+     */
+    private function proponiFusioniMacchine(): array
+    {
+        // Le proposte gia' in piedi non si rifanno: una che una persona ha
+        // gia' scartato non deve ricomparire ad ogni sync.
+        $macchine = MachineUnit::query()
+            ->whereNull('fusione_suggerita_id')
+            ->get(['id', 'serial_number', 'model_name', 'gestionale_code', 'current_customer_id', 'created_at']);
+
+        $proposte = ConfrontoMacchine::proposte($macchine);
+
+        foreach ($proposte as $proposta) {
+            $proposta['assorbire']->update([
+                'fusione_suggerita_id' => $proposta['tenere']->id,
+                'fusione_suggerita_motivo' => $proposta['motivo'],
+            ]);
+
+            RegistroSync::movimento('sync-anagrafiche', 'fusione macchine proposta', [
+                'tenere' => $proposta['tenere']->serial_number,
+                'assorbire' => $proposta['assorbire']->serial_number,
+                'motivo' => $proposta['motivo'],
+            ]);
+        }
+
+        return $proposte;
+    }
+
     private function proponiDoppioniRapportini(): array
     {
         // Una proposta il cui bersaglio e' stato unito a un ALTRO rapportino

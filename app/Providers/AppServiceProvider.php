@@ -15,6 +15,7 @@ use App\Filament\Widgets\Gestionale\GestionaleCollegamentiMacchinariWidget;
 use App\Filament\Widgets\Gestionale\GestionaleCollegamentiProdottiWidget;
 use App\Filament\Widgets\Gestionale\GestionaleDaRivedereWidget;
 use App\Filament\Widgets\Gestionale\GestionaleDoppioniRapportiniWidget;
+use App\Filament\Widgets\Gestionale\GestionaleFusioniMacchineWidget;
 use App\Filament\Widgets\Gestionale\GestionaleMacchineImportateWidget;
 use App\Models\User;
 use App\Support\EurekaClient;
@@ -140,6 +141,7 @@ class AppServiceProvider extends ServiceProvider
             GestionaleCollegamentiMacchinariWidget::class,
             GestionaleMacchineImportateWidget::class,
             GestionaleDoppioniRapportiniWidget::class,
+            GestionaleFusioniMacchineWidget::class,
             AccontiSenzaSaldoWidget::class,
             ScadutoOverviewWidget::class,
             SaldiDivergentiWidget::class,

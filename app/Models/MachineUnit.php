@@ -49,6 +49,8 @@ class MachineUnit extends Model
         'gestionale_suggested_code',
         'gestionale_suggested_label',
         'eureka_billing_customer_code',
+        'fusione_suggerita_id',
+        'fusione_suggerita_motivo',
     ];
 
     protected $attributes = [
@@ -180,6 +182,70 @@ class MachineUnit extends Model
         $matricola = preg_replace('/[\s\-.\/]+/u', '', (string) $matricola);
 
         return mb_strtolower(trim((string) $matricola));
+    }
+
+    /** La macchina che il sync propone di assorbire in questa. */
+    public function fusioneSuggerita(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(self::class, 'fusione_suggerita_id')->withTrashed();
+    }
+
+    /**
+     * Assorbe l'altra macchina in questa: rapportini, collocazioni e storico
+     * passano di qua, e l'altra viene archiviata.
+     *
+     * Si tiene QUESTA perche' e' la piu' attendibile (vedi
+     * ConfrontoMacchine::proposte()), ma non si butta via quello che l'altra
+     * sapeva: modello e codice gestionale riempiono i vuoti di qui, mai il
+     * contrario. Il soft delete lascia la strada per tornare indietro.
+     */
+    public function assorbe(self $altra): void
+    {
+        if ($altra->is($this)) {
+            return;
+        }
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($altra) {
+            foreach ([
+                ['service_reports', 'machine_unit_id'],
+                ['machine_unit_placements', 'machine_unit_id'],
+                ['maintenance_schedules', 'machine_unit_id'],
+            ] as [$tabella, $colonna]) {
+                if (\Illuminate\Support\Facades\Schema::hasColumn($tabella, $colonna)) {
+                    \Illuminate\Support\Facades\DB::table($tabella)
+                        ->where($colonna, $altra->id)
+                        ->update([$colonna => $this->id]);
+                }
+            }
+
+            // I vuoti si riempiono, i valori esistenti non si toccano.
+            $this->fill(array_filter([
+                'model_name' => trim((string) $this->model_name) === '' ? $altra->model_name : null,
+                'gestionale_code' => $this->gestionale_code === null ? $altra->gestionale_code : null,
+                'product_id' => $this->product_id === null ? $altra->product_id : null,
+                'current_customer_id' => $this->current_customer_id === null ? $altra->current_customer_id : null,
+                'billing_customer_id' => $this->billing_customer_id === null ? $altra->billing_customer_id : null,
+            ], fn ($v) => $v !== null));
+
+            $this->fusione_suggerita_id = null;
+            $this->fusione_suggerita_motivo = null;
+            $this->save();
+
+            $altra->update(['fusione_suggerita_id' => null, 'fusione_suggerita_motivo' => null]);
+            $altra->delete();
+        });
+
+        \App\Support\Gestionale\RegistroSync::movimento('macchine', 'macchine fuse', [
+            'tenuta' => $this->serial_number,
+            'assorbita' => $altra->serial_number,
+            'deciso_da' => auth()->user()?->email,
+        ]);
+    }
+
+    /** Scarta la proposta: le due macchine restano distinte. */
+    public function scartaFusione(): void
+    {
+        $this->update(['fusione_suggerita_id' => null, 'fusione_suggerita_motivo' => null]);
     }
 
 }
