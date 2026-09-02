@@ -6,6 +6,7 @@ use App\Filament\Widgets\Gestionale\GestionaleCollegamentiClientiWidget;
 use App\Filament\Widgets\Gestionale\GestionaleCollegamentiMacchinariWidget;
 use App\Filament\Widgets\Gestionale\GestionaleCollegamentiProdottiWidget;
 use App\Filament\Widgets\Gestionale\GestionaleDaRivedereWidget;
+use App\Filament\Widgets\Gestionale\GestionaleDoppioniRapportiniWidget;
 use App\Filament\Widgets\Gestionale\GestionaleMacchineImportateWidget;
 use App\Jobs\ImportEurekaServiceReportsJob;
 use App\Jobs\RefreshMaterialPricesFromEurekaJob;
@@ -65,7 +66,7 @@ class GestionaleSyncReview extends Page
     // con le colonne di queste widget (testo lungo nelle note + due azioni
     // Conferma/Scarta) il contenuto non ci sta e finisce tagliato fuori vista,
     // scrollabile solo in orizzontale senza alcuna scrollbar visibile.
-    public function getHeaderWidgetsColumns(): int | string | array
+    public function getHeaderWidgetsColumns(): int|string|array
     {
         return 1;
     }
@@ -167,6 +168,7 @@ class GestionaleSyncReview extends Page
             GestionaleCollegamentiProdottiWidget::class,
             GestionaleCollegamentiMacchinariWidget::class,
             GestionaleMacchineImportateWidget::class,
+            GestionaleDoppioniRapportiniWidget::class,
         ];
     }
 }

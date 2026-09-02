@@ -107,6 +107,8 @@ class ServiceReport extends Model
         'signed_at',
         'notes',
         'eureka_service_report_id',
+        'duplicato_suggerito_id',
+        'duplicato_suggerito_motivo',
         'eureka_destinazione_code',
         'eureka_destinazione_label',
         'eureka_stato_documento',
@@ -404,6 +406,59 @@ class ServiceReport extends Model
         return $this->belongsTo(Customer::class);
     }
 
+    /**
+     * La scheda lavoro importata da Eureka che il sync ritiene documenti lo
+     * stesso intervento di questo rapportino (vedi
+     * GestionaleSyncRunner::proponiDoppioniRapportini()). E' una proposta:
+     * finche' non viene confermata i due rapportini restano entrambi.
+     */
+    public function duplicatoSuggerito(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'duplicato_suggerito_id');
+    }
+
+    /**
+     * Accetta la proposta: tiene QUESTO rapportino — quello compilato dal
+     * tecnico, con la firma del cliente e il dettaglio del lavoro — e gli
+     * trasferisce il collegamento a Eureka, eliminando la copia importata.
+     *
+     * Si tiene il nostro e non quello del gestionale perche' la scheda
+     * importata e' un riassunto amministrativo: senza firma, senza le note
+     * del tecnico e spesso senza tutti i ricambi. Il collegamento a Eureka,
+     * che e' l'unica cosa che il nostro non aveva, viene travasato qui.
+     *
+     * La copia importata viene soft-eliminata, non cancellata: se
+     * l'abbinamento si rivelasse sbagliato si recupera.
+     */
+    public function confermaDuplicato(): void
+    {
+        $importato = $this->duplicatoSuggerito;
+
+        if (! $importato) {
+            return;
+        }
+
+        $this->update([
+            'eureka_service_report_id' => $importato->eureka_service_report_id,
+            'gestionale_scheda_lavoro_id' => $importato->gestionale_scheda_lavoro_id,
+            'gestionale_number' => $importato->gestionale_number,
+            'gestionale_document_date' => $importato->gestionale_document_date,
+            'duplicato_suggerito_id' => null,
+            'duplicato_suggerito_motivo' => null,
+        ]);
+
+        $importato->delete();
+    }
+
+    /** Scarta la proposta: i due rapportini restano distinti. */
+    public function scartaDuplicato(): void
+    {
+        $this->update([
+            'duplicato_suggerito_id' => null,
+            'duplicato_suggerito_motivo' => null,
+        ]);
+    }
+
     public function machineUnit(): BelongsTo
     {
         return $this->belongsTo(MachineUnit::class);
@@ -598,7 +653,7 @@ class ServiceReport extends Model
     public function getMachineUnitDisplayNameAttribute(): ?string
     {
         return $this->machineUnit
-            ? $this->machineUnit->display_name . ' — ' . $this->machineUnit->serial_number
+            ? $this->machineUnit->display_name.' — '.$this->machineUnit->serial_number
             : null;
     }
 

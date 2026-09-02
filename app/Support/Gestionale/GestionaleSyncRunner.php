@@ -5,9 +5,11 @@ namespace App\Support\Gestionale;
 use App\Models\Customer;
 use App\Models\MachineUnit;
 use App\Models\Product;
+use App\Models\ServiceReport;
 use App\Models\Tenant;
 use App\Support\PhoneNumber;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * Confronta clienti/prodotti gia' collegati a Eureka con l'anagrafica reale
@@ -30,7 +32,7 @@ class GestionaleSyncRunner
     /** @var array<string, array<int, array<string, mixed>>>|null */
     private ?array $installedByCustomer = null;
 
-    /** @var \Illuminate\Support\Collection<int, Customer> */
+    /** @var Collection<int, Customer> */
     private $linkedCustomers;
 
     public function __construct(private readonly Tenant $tenant)
@@ -39,7 +41,7 @@ class GestionaleSyncRunner
     }
 
     /**
-     * @return array{autofilled: array, diffs: array, customerLinks: array, productLinks: array, machineUnitLinks: array, newMachines: array, eurekaNotes: array, eurekaUnreachable: bool, apiIssues: array}
+     * @return array{autofilled: array, diffs: array, customerLinks: array, productLinks: array, machineUnitLinks: array, newMachines: array, eurekaNotes: array, doppioniRapportini: array, eurekaUnreachable: bool, apiIssues: array}
      */
     public function run(): array
     {
@@ -53,6 +55,7 @@ class GestionaleSyncRunner
             'machineUnitLinks' => $this->proposeMachineUnitLinks(),
             'newMachines' => $this->importInstalledMachines(),
             'eurekaNotes' => $this->syncEurekaNotes(),
+            'doppioniRapportini' => $this->proponiDoppioniRapportini(),
             // Un'interruzione di Eureka per tutta la durata della sync
             // produce comunque array vuoti da ogni metodo sopra (best-effort
             // by design) — indistinguibile da "niente da segnalare" senza
@@ -369,6 +372,83 @@ class GestionaleSyncRunner
         }
 
         return $proposals;
+    }
+
+    /**
+     * Propone l'abbinamento fra i rapportini compilati nel CRM e le schede
+     * lavoro importate da Eureka che documentano lo stesso intervento.
+     *
+     * Non serve nessuna chiamata a Eureka: lavora sui rapportini gia'
+     * importati, quindi gira anche quando il gestionale non risponde.
+     *
+     * Come per i collegamenti di clienti e macchinari, qui si PROPONE
+     * soltanto. Unire due rapportini cancella dati firmati dal cliente ed e'
+     * irreversibile: la conferma resta a una persona, dalla pagina "Sync
+     * Eureka".
+     *
+     * @return array<int, array{nostro: ServiceReport, importato: ServiceReport, motivo: string}>
+     */
+    private function proponiDoppioniRapportini(): array
+    {
+        $nostri = ServiceReport::query()
+            ->where('tenant_id', $this->tenant->id)
+            ->where('source', ServiceReport::SOURCE_MANUALE)
+            ->whereNull('eureka_service_report_id')
+            ->whereNull('duplicato_suggerito_id')
+            ->whereNotNull('customer_id')
+            ->whereNotNull('intervention_date')
+            ->with(['machineUnit', 'materialsUsed'])
+            ->get();
+
+        if ($nostri->isEmpty()) {
+            return [];
+        }
+
+        // Si guardano solo le schede importate nello stesso arco di date dei
+        // rapportini da abbinare: caricare tutto l'archivio sarebbe inutile.
+        $importati = ServiceReport::query()
+            ->where('tenant_id', $this->tenant->id)
+            ->where('source', ServiceReport::SOURCE_EUREKA)
+            ->whereIn('customer_id', $nostri->pluck('customer_id')->unique())
+            ->whereBetween('intervention_date', [
+                $nostri->min('intervention_date'),
+                $nostri->max('intervention_date'),
+            ])
+            ->with(['machineUnit', 'materialsUsed'])
+            ->get()
+            ->groupBy('customer_id');
+
+        $proposte = [];
+
+        foreach ($nostri as $nostro) {
+            $candidati = [];
+
+            foreach ($importati->get($nostro->customer_id, collect()) as $importato) {
+                $motivo = ConfrontoRapportini::confidenza($nostro, $importato);
+
+                if ($motivo !== null) {
+                    $candidati[] = ['rapportino' => $importato, 'motivo' => $motivo];
+                }
+            }
+
+            // Con piu' di un candidato non si propone nulla: proporre il
+            // primo che capita significherebbe far confermare a occhi chiusi
+            // un abbinamento che il sistema stesso non sa distinguere.
+            if (count($candidati) !== 1) {
+                continue;
+            }
+
+            $scelto = $candidati[0];
+
+            $nostro->update([
+                'duplicato_suggerito_id' => $scelto['rapportino']->id,
+                'duplicato_suggerito_motivo' => $scelto['motivo'],
+            ]);
+
+            $proposte[] = ['nostro' => $nostro, 'importato' => $scelto['rapportino'], 'motivo' => $scelto['motivo']];
+        }
+
+        return $proposte;
     }
 
     /**
