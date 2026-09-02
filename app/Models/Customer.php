@@ -159,7 +159,7 @@ class Customer extends Model
     }
 
     /**
-     * @param array<int, string> $changedLabels
+     * @param  array<int, string>  $changedLabels
      */
     public function flagGestionaleReview(array $changedLabels): void
     {
@@ -178,7 +178,7 @@ class Customer extends Model
      * pagina "Modifica cliente": senza questo, quelle modifiche restavano
      * silenziose (nessuna nota, nessuna email a chi aggiorna Eureka a mano).
      *
-     * @param array<int, string> $changedAttributes chiavi del model cambiate (da getChanges())
+     * @param  array<int, string>  $changedAttributes  chiavi del model cambiate (da getChanges())
      */
     public function notifyGestionaleReviewIfLinked(array $changedAttributes): void
     {
@@ -213,7 +213,7 @@ class Customer extends Model
     }
 
     /**
-     * @param array<int, string>|null $value
+     * @param  array<int, string>|null  $value
      */
     public function setPhonesAttribute(?array $value): void
     {
@@ -255,6 +255,17 @@ class Customer extends Model
     public function billingCustomer(): BelongsTo
     {
         return $this->belongsTo(self::class, 'billing_customer_id');
+    }
+
+    /**
+     * L'inverso di billingCustomer(): le anagrafiche che QUESTO cliente paga.
+     * Per un gestore sono le sue sedi operative (i chioschi), che restano
+     * anagrafiche distinte perche' e' li' che si lavora e li' vanno i
+     * rapportini.
+     */
+    public function paidCustomers(): HasMany
+    {
+        return $this->hasMany(self::class, 'billing_customer_id');
     }
 
     /**

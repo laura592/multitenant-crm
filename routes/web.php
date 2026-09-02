@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\CustomerSchedaAnagraficaController;
 use App\Http\Controllers\QuoteController;
 use App\Http\Controllers\ServiceReportController;
 use Illuminate\Support\Facades\Route;
@@ -24,4 +25,6 @@ Route::get('/sessione-scaduta', fn () => response()->view('errors.419', [], 419)
 Route::middleware(['auth'])->group(function () {
     Route::get('service-reports/{serviceReport}/pdf', [ServiceReportController::class, 'pdf'])->name('service-reports.pdf');
     Route::get('quotes/{quote}/pdf', [QuoteController::class, 'pdf'])->name('quotes.pdf');
+    Route::get('customers/{customer}/scheda-anagrafica', CustomerSchedaAnagraficaController::class)
+        ->name('customers.scheda-anagrafica');
 });

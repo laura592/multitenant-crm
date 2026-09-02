@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources;
 
-use Illuminate\Database\Eloquent\Builder;
 use App\Filament\Forms\CustomerContactFields;
 use App\Filament\Forms\CustomerFiscalFields;
 use App\Filament\Forms\ItalianAddressFields;
@@ -24,6 +23,9 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\QueryException;
 
 class CustomerResource extends Resource
 {
@@ -38,7 +40,6 @@ class CustomerResource extends Resource
     protected static ?string $modelLabel = 'Cliente';
 
     protected static ?string $pluralModelLabel = 'Clienti';
-
 
     /**
      * Precarica le relazioni che l'elenco legge per ogni riga.
@@ -243,6 +244,10 @@ class CustomerResource extends Resource
                 Tables\Actions\ViewAction::make()
                     ->color('gray'),
                 Tables\Actions\ActionGroup::make([
+                    Tables\Actions\Action::make('scheda_anagrafica')
+                        ->label('Scheda anagrafica')
+                        ->icon('heroicon-o-document-arrow-down')
+                        ->url(fn (Customer $record) => route('customers.scheda-anagrafica', $record)),
                     Tables\Actions\Action::make('cerca_eureka')
                         ->label('Cerca su Eureka')
                         ->icon('heroicon-o-magnifying-glass')
@@ -273,7 +278,7 @@ class CustomerResource extends Resource
                             try {
                                 $record->update(['gestionale_code' => $data['gestionale_code']]);
                                 Notification::make()->title('Codice gestionale salvato')->success()->send();
-                            } catch (\Illuminate\Database\QueryException) {
+                            } catch (QueryException) {
                                 Notification::make()->title('Codice già usato da un altro cliente')->danger()->send();
                             }
                         }),
@@ -342,7 +347,7 @@ class CustomerResource extends Resource
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make()
-                        ->before(function (\Illuminate\Database\Eloquent\Collection $records, Tables\Actions\DeleteBulkAction $action) {
+                        ->before(function (Collection $records, Tables\Actions\DeleteBulkAction $action) {
                             $blocked = $records->filter(fn (Customer $record) => $record->hasBlockingRelatedRecords());
 
                             if ($blocked->isNotEmpty()) {

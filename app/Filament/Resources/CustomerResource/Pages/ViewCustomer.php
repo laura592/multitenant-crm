@@ -13,6 +13,13 @@ class ViewCustomer extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            // Il modulo che il cliente deve firmare, gia' compilato con quello
+            // che sappiamo di lui: vedi App\Support\Pdf\SchedaAnagraficaPdf.
+            Actions\Action::make('scheda_anagrafica')
+                ->label('Scheda anagrafica')
+                ->icon('heroicon-o-document-arrow-down')
+                ->color('gray')
+                ->url(fn () => route('customers.scheda-anagrafica', $this->record)),
             Actions\EditAction::make(),
         ];
     }
