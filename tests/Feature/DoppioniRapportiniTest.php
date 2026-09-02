@@ -114,7 +114,7 @@ class DoppioniRapportiniTest extends TestCase
         ])->render();
 
         $this->assertStringNotContainsString('scheda n.', $htmlSenza);
-        $this->assertStringContainsString('importato da Eureka', $htmlSenza);
+        $this->assertStringContainsString('da Eureka', $htmlSenza);
     }
 
     public function test_propone_e_conferma_lo_stesso_intervento(): void
@@ -152,7 +152,65 @@ class DoppioniRapportiniTest extends TestCase
             ->assertSee($importato->number)
             ->assertSee('Confronta');
 
-        // La conferma tiene il nostro e gli passa il collegamento a Eureka.
+        // Si deve poter decidere dal confronto stesso: chiuderlo per cercare
+        // la riga e premere un altro bottone e' un giro a vuoto proprio
+        // quando si e' appena letto il dettaglio.
+        Livewire::test(GestionaleDoppioniRapportiniWidget::class)
+            ->mountTableAction('dettagli', $nostro)
+            ->assertTableActionExists('dettagli')
+            ->callMountedTableAction();
+
+        $nostro->refresh();
+        $this->assertSame(17517, $nostro->eureka_service_report_id, 'il confronto deve poter confermare');
+        $this->assertSoftDeleted('service_reports', ['id' => $importato->id]);
+    }
+
+    /** Anche lo scarto si deve poter fare dal confronto, senza richiuderlo. */
+    public function test_dal_confronto_si_possono_tenere_separati(): void
+    {
+        [$tenant, $tecnico, $cliente, $prodotto] = $this->scenario();
+        $macchina = $this->macchina($tenant, $cliente, $prodotto, '1858049');
+        $nostro = $this->rapportino($tenant, $cliente, $tecnico, $macchina, ServiceReport::SOURCE_MANUALE, '2026-08-06');
+        $importato = $this->rapportino($tenant, $cliente, $tecnico, $macchina, ServiceReport::SOURCE_EUREKA, '2026-08-06', 17517);
+        $nostro->update([
+            'duplicato_suggerito_id' => $importato->id,
+            'duplicato_suggerito_motivo' => ConfrontoRapportini::PROBABILE,
+        ]);
+
+        $this->actingAs($tecnico);
+        Filament::setTenant($tenant);
+
+        // L'azione nel footer del modale non si monta come una riga: si
+        // recupera dal confronto e si esegue, che e' esattamente quello che
+        // fa il click.
+        $componente = Livewire::test(GestionaleDoppioniRapportiniWidget::class);
+        $confronto = $componente->instance()->getTable()->getAction('dettagli');
+        $scarta = collect($confronto->getExtraModalFooterActions())
+            ->firstWhere(fn ($azione) => $azione->getName() === 'scarta_dal_confronto');
+
+        $this->assertNotNull($scarta, 'dal confronto si deve poter dire «Sono diversi»');
+        $scarta->record($nostro)->call();
+
+        $nostro->refresh();
+        $this->assertNull($nostro->duplicato_suggerito_id);
+        $this->assertNull($nostro->eureka_service_report_id, 'scartare non deve collegare nulla');
+        $this->assertNotSoftDeleted('service_reports', ['id' => $importato->id]);
+    }
+
+    /** La conferma dal modello, indipendente dall'interfaccia. */
+    public function test_la_conferma_travasa_il_collegamento_a_eureka(): void
+    {
+        [$tenant, $tecnico, $cliente, $prodotto] = $this->scenario();
+        $macchina = $this->macchina($tenant, $cliente, $prodotto, '1858049');
+        $nostro = $this->rapportino($tenant, $cliente, $tecnico, $macchina, ServiceReport::SOURCE_MANUALE, '2026-08-06');
+        $nostro->update(['notes' => 'Cliente avvisato del ricambio']);
+        $importato = $this->rapportino($tenant, $cliente, $tecnico, $macchina, ServiceReport::SOURCE_EUREKA, '2026-08-06', 17517);
+        $importato->update(['notes' => 'Da fatturare a fine mese.']);
+        $nostro->update([
+            'duplicato_suggerito_id' => $importato->id,
+            'duplicato_suggerito_motivo' => ConfrontoRapportini::CERTO,
+        ]);
+
         $nostro->confermaDuplicato();
         $nostro->refresh();
 
@@ -203,4 +261,255 @@ class DoppioniRapportiniTest extends TestCase
 
         $this->assertNull($nostro->refresh()->duplicato_suggerito_id);
     }
+    /**
+     * Il caso RT-2026-0579: il tecnico non seleziona la macchina e scrive la
+     * matricola nel testo, la scheda di Eureka la porta in chiaro. Confermare
+     * senza raccoglierla butterebbe via l'unico aggancio all'apparecchio.
+     */
+    public function test_la_conferma_adotta_la_macchina_se_qui_manca(): void
+    {
+        [$tenant, $tecnico, $cliente, $prodotto] = $this->scenario();
+        $macchina = $this->macchina($tenant, $cliente, $prodotto, '3400000411147');
+
+        $nostro = $this->rapportino($tenant, $cliente, $tecnico, null, ServiceReport::SOURCE_MANUALE, '2026-08-05');
+        $importato = $this->rapportino($tenant, $cliente, $tecnico, $macchina, ServiceReport::SOURCE_EUREKA, '2026-08-05', 17518);
+        $nostro->update([
+            'duplicato_suggerito_id' => $importato->id,
+            'duplicato_suggerito_motivo' => ConfrontoRapportini::DA_VERIFICARE,
+        ]);
+
+        $this->assertNull($nostro->machine_unit_id);
+
+        $nostro->confermaDuplicato();
+        $nostro->refresh();
+
+        $this->assertSame($macchina->id, $nostro->machine_unit_id, 'la macchina della scheda va raccolta');
+    }
+
+    /** Se la macchina qui c'e' gia', non si sovrascrive: e' una scelta umana. */
+    public function test_la_conferma_non_sovrascrive_una_macchina_gia_presente(): void
+    {
+        [$tenant, $tecnico, $cliente, $prodotto] = $this->scenario();
+        $nostra = $this->macchina($tenant, $cliente, $prodotto, '1858049');
+        $loro = $this->macchina($tenant, $cliente, $prodotto, '3400000411147');
+
+        $nostro = $this->rapportino($tenant, $cliente, $tecnico, $nostra, ServiceReport::SOURCE_MANUALE, '2026-08-05');
+        $importato = $this->rapportino($tenant, $cliente, $tecnico, $loro, ServiceReport::SOURCE_EUREKA, '2026-08-05', 17519);
+        $nostro->update([
+            'duplicato_suggerito_id' => $importato->id,
+            'duplicato_suggerito_motivo' => ConfrontoRapportini::DA_VERIFICARE,
+        ]);
+
+        $nostro->confermaDuplicato();
+        $nostro->refresh();
+
+        $this->assertSame($nostra->id, $nostro->machine_unit_id, 'la macchina del tecnico non si tocca');
+    }
+
+    /**
+     * Unire constata che il documento e' gia' in Eureka: lo stato deve dirlo,
+     * altrimenti chi riapre il rapportino fra un mese lo corregge qui invece
+     * che sul gestionale.
+     */
+    public function test_unire_porta_lo_stato_in_gestionale(): void
+    {
+        [$tenant, $tecnico, $cliente, $prodotto] = $this->scenario();
+        $macchina = $this->macchina($tenant, $cliente, $prodotto, '1858049');
+
+        $nostro = $this->rapportino($tenant, $cliente, $tecnico, $macchina, ServiceReport::SOURCE_MANUALE, '2026-08-06');
+        $nostro->update(['status' => 'completato']);
+        $importato = $this->rapportino($tenant, $cliente, $tecnico, $macchina, ServiceReport::SOURCE_EUREKA, '2026-08-06', 17520);
+        $nostro->update([
+            'duplicato_suggerito_id' => $importato->id,
+            'duplicato_suggerito_motivo' => ConfrontoRapportini::CERTO,
+        ]);
+
+        $nostro->confermaDuplicato();
+        $nostro->refresh();
+
+        $this->assertSame('in_gestionale', $nostro->status);
+        $this->assertContains($nostro->status, ServiceReport::CLOSED_STATUSES);
+    }
+
+    /** Scartare non cambia lo stato: non si e' constatato nulla. */
+    public function test_scartare_non_tocca_lo_stato(): void
+    {
+        [$tenant, $tecnico, $cliente, $prodotto] = $this->scenario();
+        $macchina = $this->macchina($tenant, $cliente, $prodotto, '1858049');
+
+        $nostro = $this->rapportino($tenant, $cliente, $tecnico, $macchina, ServiceReport::SOURCE_MANUALE, '2026-08-06');
+        $nostro->update(['status' => 'completato']);
+        $importato = $this->rapportino($tenant, $cliente, $tecnico, $macchina, ServiceReport::SOURCE_EUREKA, '2026-08-06', 17521);
+        $nostro->update(['duplicato_suggerito_id' => $importato->id]);
+
+        $nostro->scartaDuplicato();
+        $nostro->refresh();
+
+        $this->assertSame('completato', $nostro->status);
+    }
+
+    /**
+     * Gli articoli buoni sono quelli del gestionale (indicazione
+     * dell'ufficio, 02/09/2026): e' li' che si fattura. Confermando
+     * RT-2026-0584 (1 riga) su una scheda da 2 un materiale spariva del
+     * tutto — segnalato dal vivo lo stesso giorno.
+     */
+    public function test_unire_prende_gli_articoli_del_gestionale(): void
+    {
+        [$tenant, $tecnico, $cliente, $prodotto] = $this->scenario();
+        $macchina = $this->macchina($tenant, $cliente, $prodotto, '1858049');
+
+        $ore = Material::create([
+            'code' => 'ORE', 'source' => Material::SOURCE_EUREKA,
+            'tenant_id' => $tenant->id, 'category' => 'Eureka', 'type' => 'Manodopera',
+        ]);
+        $ricambio = Material::create([
+            'code' => '431029055', 'source' => Material::SOURCE_EUREKA,
+            'tenant_id' => $tenant->id, 'category' => 'Eureka', 'type' => 'Ricambio',
+        ]);
+
+        $nostro = $this->rapportino($tenant, $cliente, $tecnico, $macchina, ServiceReport::SOURCE_MANUALE, '2026-08-06');
+        ServiceReportMaterial::create([
+            'service_report_id' => $nostro->id, 'material_id' => $ore->id, 'quantity' => 1,
+        ]);
+
+        $importato = $this->rapportino($tenant, $cliente, $tecnico, $macchina, ServiceReport::SOURCE_EUREKA, '2026-08-06', 17513);
+        ServiceReportMaterial::create([
+            'service_report_id' => $importato->id, 'material_id' => $ore->id, 'quantity' => 3,
+        ]);
+        ServiceReportMaterial::create([
+            'service_report_id' => $importato->id, 'material_id' => $ricambio->id, 'quantity' => 1,
+        ]);
+
+        $nostro->update([
+            'duplicato_suggerito_id' => $importato->id,
+            'duplicato_suggerito_motivo' => ConfrontoRapportini::CERTO,
+        ]);
+
+        $nostro->confermaDuplicato();
+        $nostro->refresh();
+
+        $righe = $nostro->materialsUsed()->get()->keyBy('material_id');
+
+        $this->assertCount(2, $righe, 'il ricambio della scheda deve arrivare qui');
+        $this->assertArrayHasKey($ricambio->id, $righe->all());
+        // Gli articoli buoni sono quelli del gestionale: e' li' che si
+        // fattura, quindi vince la quantita' di Eureka.
+        $this->assertSame('3.00', (string) $righe[$ore->id]->quantity);
+    }
+
+    /**
+     * La versione del tecnico non sparisce davvero: resta soft-deleted, cosi'
+     * si puo' ancora vedere cosa e' cambiato.
+     */
+    public function test_le_righe_sostituite_restano_recuperabili(): void
+    {
+        [$tenant, $tecnico, $cliente, $prodotto] = $this->scenario();
+        $macchina = $this->macchina($tenant, $cliente, $prodotto, '1858049');
+
+        $suo = Material::create([
+            'code' => 'LAVMART', 'source' => Material::SOURCE_EUREKA,
+            'tenant_id' => $tenant->id, 'category' => 'Eureka', 'type' => 'Lavaggio',
+        ]);
+        $loro = Material::create([
+            'code' => 'LAV2MART', 'source' => Material::SOURCE_EUREKA,
+            'tenant_id' => $tenant->id, 'category' => 'Eureka', 'type' => 'Lavaggio',
+        ]);
+
+        $nostro = $this->rapportino($tenant, $cliente, $tecnico, $macchina, ServiceReport::SOURCE_MANUALE, '2026-08-06');
+        ServiceReportMaterial::create(['service_report_id' => $nostro->id, 'material_id' => $suo->id, 'quantity' => 1]);
+
+        $importato = $this->rapportino($tenant, $cliente, $tecnico, $macchina, ServiceReport::SOURCE_EUREKA, '2026-08-06', 17516);
+        ServiceReportMaterial::create(['service_report_id' => $importato->id, 'material_id' => $loro->id, 'quantity' => 1]);
+
+        $nostro->update(['duplicato_suggerito_id' => $importato->id]);
+        $nostro->confermaDuplicato();
+
+        $vive = $nostro->materialsUsed()->pluck('material_id');
+        $this->assertEquals([$loro->id], $vive->all(), 'resta il codice che Eureka riconosce');
+
+        $this->assertSoftDeleted('service_report_materials', [
+            'service_report_id' => $nostro->id, 'material_id' => $suo->id,
+        ]);
+    }
+
+    /** Una scheda senza righe non deve svuotare il rapportino del tecnico. */
+    public function test_una_scheda_senza_righe_non_cancella_i_materiali(): void
+    {
+        [$tenant, $tecnico, $cliente, $prodotto] = $this->scenario();
+        $macchina = $this->macchina($tenant, $cliente, $prodotto, '1858049');
+        $materiale = Material::create([
+            'code' => 'ORE', 'source' => Material::SOURCE_EUREKA,
+            'tenant_id' => $tenant->id, 'category' => 'Eureka', 'type' => 'Manodopera',
+        ]);
+
+        $nostro = $this->rapportino($tenant, $cliente, $tecnico, $macchina, ServiceReport::SOURCE_MANUALE, '2026-08-06');
+        ServiceReportMaterial::create(['service_report_id' => $nostro->id, 'material_id' => $materiale->id, 'quantity' => 2]);
+
+        $importato = $this->rapportino($tenant, $cliente, $tecnico, $macchina, ServiceReport::SOURCE_EUREKA, '2026-08-06', 17522);
+        $nostro->update(['duplicato_suggerito_id' => $importato->id]);
+
+        $nostro->confermaDuplicato();
+
+        $this->assertCount(1, $nostro->materialsUsed()->get());
+    }
+
+    /**
+     * Due rapportini possono proporre la stessa scheda: confermarne uno la
+     * manda in soft delete e l'altra proposta resta orfana. Il confronto non
+     * deve schiantarsi, e la proposta va chiusa.
+     */
+    public function test_una_proposta_orfana_non_rompe_il_confronto(): void
+    {
+        [$tenant, $tecnico, $cliente, $prodotto] = $this->scenario();
+        $macchina = $this->macchina($tenant, $cliente, $prodotto, '1858049');
+
+        $primo = $this->rapportino($tenant, $cliente, $tecnico, $macchina, ServiceReport::SOURCE_MANUALE, '2026-08-06');
+        $secondo = $this->rapportino($tenant, $cliente, $tecnico, $macchina, ServiceReport::SOURCE_MANUALE, '2026-08-06');
+        $scheda = $this->rapportino($tenant, $cliente, $tecnico, $macchina, ServiceReport::SOURCE_EUREKA, '2026-08-06', 17514);
+
+        $primo->update(['duplicato_suggerito_id' => $scheda->id, 'duplicato_suggerito_motivo' => ConfrontoRapportini::CERTO]);
+        $secondo->update(['duplicato_suggerito_id' => $scheda->id, 'duplicato_suggerito_motivo' => ConfrontoRapportini::CERTO]);
+
+        $primo->confermaDuplicato();
+
+        // La relazione deve ancora risolvere, altrimenti il modale esplode con
+        // "Call to a member function load() on null".
+        $secondo->refresh();
+        $this->assertNotNull($secondo->duplicatoSuggerito, 'la scheda unita deve restare leggibile');
+
+        $this->assertSame(1, ServiceReport::scartaProposteOrfane());
+
+        $secondo->refresh();
+        $this->assertNull($secondo->duplicato_suggerito_id);
+    }
+
+    /**
+     * Chi paga davvero deve seguire l'unione: RT-2026-0586 dichiarava "paga
+     * il cliente stesso" mentre Eureka sapeva che pagava GOPPION CAFFE' SPA.
+     * E' un dato di fatturazione, non un dettaglio.
+     */
+    public function test_unire_porta_anche_il_pagante_di_eureka(): void
+    {
+        [$tenant, $tecnico, $cliente, $prodotto] = $this->scenario();
+        $macchina = $this->macchina($tenant, $cliente, $prodotto, '1858049');
+
+        $nostro = $this->rapportino($tenant, $cliente, $tecnico, $macchina, ServiceReport::SOURCE_MANUALE, '2026-08-06');
+        $importato = $this->rapportino($tenant, $cliente, $tecnico, $macchina, ServiceReport::SOURCE_EUREKA, '2026-08-06', 17499);
+        $importato->update([
+            'eureka_destinazione_code' => 782,
+            'eureka_destinazione_label' => "GOPPION CAFFE' SPA",
+            'eureka_stato_documento' => 10,
+            'eureka_stato_label' => 'Chiuso',
+        ]);
+
+        $nostro->update(['duplicato_suggerito_id' => $importato->id]);
+        $nostro->confermaDuplicato();
+        $nostro->refresh();
+
+        $this->assertSame(782, (int) $nostro->eureka_destinazione_code);
+        $this->assertSame("GOPPION CAFFE' SPA", $nostro->eureka_destinazione_label);
+        $this->assertSame(10, (int) $nostro->eureka_stato_documento);
+    }
+
 }

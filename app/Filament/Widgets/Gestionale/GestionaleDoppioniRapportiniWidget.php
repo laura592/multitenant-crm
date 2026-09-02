@@ -71,9 +71,28 @@ class GestionaleDoppioniRapportiniWidget extends BaseWidget
                     ->icon('heroicon-o-eye')
                     ->color('gray')
                     ->modalHeading('Sono lo stesso intervento?')
-                    ->modalSubmitAction(false)
-                    ->modalCancelActionLabel('Chiudi')
+                    // Si decide da qui: chiudere il confronto per poi cercare
+                    // la riga giusta e premere un altro bottone e' un giro a
+                    // vuoto proprio nel momento in cui si e' appena guardato
+                    // il dettaglio e si sa la risposta.
+                    ->modalSubmitActionLabel('È lo stesso')
+                    ->modalCancelActionLabel('Decido dopo')
                     ->modalWidth('4xl')
+                    ->extraModalFooterActions([
+                        Tables\Actions\Action::make('scarta_dal_confronto')
+                            ->label('Sono diversi')
+                            ->color('gray')
+                            ->icon('heroicon-o-x-mark')
+                            ->action(function (ServiceReport $record) {
+                                $record->scartaDuplicato();
+                                Notification::make()->title('Tenuti separati')->success()->send();
+                            })
+                            ->cancelParentActions(),
+                    ])
+                    ->action(function (ServiceReport $record) {
+                        $record->confermaDuplicato();
+                        Notification::make()->title('Rapportini uniti')->success()->send();
+                    })
                     ->modalContent(fn (ServiceReport $record) => view(
                         'filament.widgets.confronto-rapportini',
                         [

@@ -166,4 +166,20 @@ class MachineUnit extends Model
             'gestionale_suggested_label' => null,
         ]);
     }
+    /**
+     * Chiave di confronto fra matricole.
+     *
+     * Eureka scrive la stessa matricola in forme diverse — "BRL 003 020002113218"
+     * per un cliente e "BRL003020002113218" per un altro, "-0819352" e "0819352" —
+     * e confrontarle alla lettera crea due macchine per un solo apparecchio
+     * (successo davvero nell'import degli installati del 02/09/2026).
+     * Spazi, trattini e punti non portano informazione in un numero di serie.
+     */
+    public static function chiaveMatricola(?string $matricola): string
+    {
+        $matricola = preg_replace('/[\s\-.\/]+/u', '', (string) $matricola);
+
+        return mb_strtolower(trim((string) $matricola));
+    }
+
 }

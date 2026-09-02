@@ -390,6 +390,11 @@ class GestionaleSyncRunner
      */
     private function proponiDoppioniRapportini(): array
     {
+        // Una proposta il cui bersaglio e' stato unito a un ALTRO rapportino
+        // non ha piu' niente da decidere, e lasciata li' fa esplodere il
+        // confronto. Si chiude prima di proporne di nuove.
+        ServiceReport::scartaProposteOrfane();
+
         $nostri = ServiceReport::query()
             ->where('tenant_id', $this->tenant->id)
             ->where('source', ServiceReport::SOURCE_MANUALE)
@@ -562,7 +567,7 @@ class GestionaleSyncRunner
         // sulle macchine gia' note, che altrimenti il ciclo sotto salterebbe
         // del tutto (era pensato solo per creare macchine nuove).
         $knownMachineUnits = MachineUnit::query()->get(['id', 'serial_number', 'eureka_billing_customer_code'])
-            ->keyBy(fn (MachineUnit $m) => mb_strtolower(trim($m->serial_number)));
+            ->keyBy(fn (MachineUnit $m) => MachineUnit::chiaveMatricola($m->serial_number));
         $knownSerials = $knownMachineUnits->map(fn () => true)->all();
 
         $installedByCustomer = $this->installedMachinesByCustomer();
@@ -579,7 +584,7 @@ class GestionaleSyncRunner
                     continue;
                 }
 
-                $key = mb_strtolower($serial);
+                $key = MachineUnit::chiaveMatricola($serial);
 
                 // id_intestatario_fattura_f15 (confermato dal vendor via email
                 // 2026-08-24): chi paga davvero per questa macchina, se diverso

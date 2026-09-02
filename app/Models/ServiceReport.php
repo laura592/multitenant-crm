@@ -412,9 +412,35 @@ class ServiceReport extends Model
      * GestionaleSyncRunner::proponiDoppioniRapportini()). E' una proposta:
      * finche' non viene confermata i due rapportini restano entrambi.
      */
+    /**
+     * withTrashed() non e' un dettaglio: due rapportini possono proporre la
+     * stessa scheda importata, e confermarne uno la manda in soft delete
+     * lasciando l'altra proposta a puntare nel vuoto. Senza, il confronto
+     * esplodeva con "Call to a member function load() on null" (visto dal
+     * vivo il 02/09/2026). La proposta orfana va vista e chiusa, non fatta
+     * schiantare — se ne occupa scartaProposteOrfane().
+     */
     public function duplicatoSuggerito(): BelongsTo
     {
-        return $this->belongsTo(self::class, 'duplicato_suggerito_id');
+        return $this->belongsTo(self::class, 'duplicato_suggerito_id')->withTrashed();
+    }
+
+    /**
+     * Chiude le proposte che puntano a una scheda ormai unita a un altro
+     * rapportino: non c'e' piu' niente da decidere.
+     */
+    public static function scartaProposteOrfane(): int
+    {
+        $orfane = self::query()
+            ->whereNotNull('duplicato_suggerito_id')
+            ->whereHas('duplicatoSuggerito', fn ($q) => $q->onlyTrashed())
+            ->get();
+
+        foreach ($orfane as $rapportino) {
+            $rapportino->scartaDuplicato();
+        }
+
+        return $orfane->count();
     }
 
     /**
@@ -443,14 +469,98 @@ class ServiceReport extends Model
             'gestionale_scheda_lavoro_id' => $importato->gestionale_scheda_lavoro_id,
             'gestionale_number' => $importato->gestionale_number,
             'gestionale_document_date' => $importato->gestionale_document_date,
+            // Chi paga davvero, se diverso dal cliente presso cui si e'
+            // intervenuti. Senza questi due il rapportino unito dichiarava
+            // "paga il cliente stesso" anche quando Eureka sapeva il
+            // contrario (RT-2026-0586: pagava GOPPION CAFFE' SPA) — una
+            // bugia su un dato di fatturazione, non un dettaglio estetico.
+            'eureka_destinazione_code' => $importato->eureka_destinazione_code,
+            'eureka_destinazione_label' => $importato->eureka_destinazione_label,
+            // Stato grezzo del documento su Eureka: serve a distinguere una
+            // scheda chiusa da una ancora aperta la'.
+            'eureka_stato_documento' => $importato->eureka_stato_documento,
+            'eureka_stato_label' => $importato->eureka_stato_label,
             'notes' => self::uniscoTesti($this->notes, $importato->notes),
             'problem_description' => self::uniscoTesti($this->problem_description, $importato->problem_description),
             'work_performed' => self::uniscoTesti($this->work_performed, $importato->work_performed),
             'duplicato_suggerito_id' => null,
             'duplicato_suggerito_motivo' => null,
-        ]);
+            // Unire vuol dire constatare che il documento e' gia' in Eureka:
+            // "completato" descrive un rapportino chiuso qui, e non dice a
+            // chi lo riapre fra un mese che da correggere e' la scheda del
+            // gestionale. E' lo stesso stato che assegna
+            // SendServiceReportToGestionaleJob dopo un invio riuscito.
+            // Non e' "inviato", che significa spedito via mail al cliente.
+            'status' => 'in_gestionale',
+        ] + $this->macchinaDaAdottare($importato));
+
+        $this->adottaMaterialiDaEureka($importato);
 
         $importato->delete();
+    }
+
+    /**
+     * Sostituisce le righe materiale con quelle della scheda importata.
+     *
+     * Gli articoli buoni sono quelli del gestionale (indicazione dell'ufficio,
+     * 02/09/2026): e' li' che si fattura, e una riga che il tecnico ha
+     * scritto in un modo e l'ufficio in un altro — LAVMART contro LAV2MART su
+     * RT-2026-0581 — deve finire con il codice che Eureka riconosce.
+     *
+     * Le righe di qui non spariscono davvero: sono soft-deleted, quindi la
+     * versione del tecnico resta consultabile se serve capire cosa e'
+     * cambiato.
+     *
+     * Se la scheda importata non ha righe non si tocca niente: non c'e'
+     * niente da adottare, e svuotare il rapportino sarebbe una perdita secca.
+     */
+    private function adottaMaterialiDaEureka(self $importato): void
+    {
+        $loro = $importato->materialsUsed;
+
+        if ($loro->isEmpty()) {
+            return;
+        }
+
+        $this->materialsUsed()->get()->each->delete();
+
+        foreach ($loro as $riga) {
+            $this->materialsUsed()->create([
+                'material_id' => $riga->material_id,
+                'quantity' => $riga->quantity,
+                'unit_cost_snapshot' => $riga->unit_cost_snapshot,
+                'line_total_snapshot' => $riga->line_total_snapshot,
+                'notes' => $riga->notes,
+            ]);
+        }
+    }
+
+    /**
+     * La macchina della scheda importata, ma solo se qui non ce n'e' una.
+     *
+     * Il caso che conta: il tecnico compila il rapportino senza selezionare
+     * la macchina e scrive la matricola nel testo (RT-2026-0579,
+     * "Serial-No. 3400000411147"), mentre la scheda di Eureka porta quella
+     * matricola in chiaro. Confermare il doppione senza raccoglierla
+     * butterebbe via l'unico aggancio all'apparecchio.
+     *
+     * Si riempie un vuoto, non si sovrascrive mai: se una macchina qui c'e'
+     * gia' ed e' diversa, quella e' una discordanza che il confronto mostra
+     * e che decide una persona.
+     *
+     * @return array<string, mixed>
+     */
+    private function macchinaDaAdottare(self $importato): array
+    {
+        if ($this->machine_unit_id !== null || $importato->machine_unit_id === null) {
+            return [];
+        }
+
+        return array_filter([
+            'machine_unit_id' => $importato->machine_unit_id,
+            'machine_product_id' => $this->machine_product_id ?? $importato->machine_product_id,
+            'machine_serial_number' => $this->machine_serial_number ?: $importato->machine_serial_number,
+        ], fn ($valore) => $valore !== null);
     }
 
     /**
@@ -470,7 +580,8 @@ class ServiceReport extends Model
     private static function uniscoTesti(?string $nostro, ?string $importato): ?string
     {
         $nostro = trim((string) $nostro);
-        $importato = trim((string) $importato);
+        // La boilerplate di Eureka non e' contenuto: non va fusa.
+        $importato = \App\Support\Gestionale\ConfrontoRapportini::testoUtile($importato);
 
         if ($importato === '' || $nostro === $importato) {
             return $nostro !== '' ? $nostro : null;

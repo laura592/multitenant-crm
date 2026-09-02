@@ -90,8 +90,41 @@ class ConfrontoRapportini
             ->values();
     }
 
-    private static function matricola(ServiceReport $r): string
+    /**
+     * Matricola normalizzata, o stringa vuota se non c'e'.
+     *
+     * Le schede di Eureka portano spesso una matricola di soli zeri
+     * ("0000000", "000000", ...): non e' un numero di serie, e' il campo
+     * lasciato in bianco dall'ufficio. Trattarla come un valore vero
+     * significherebbe dichiarare diverse due macchine per un segnaposto.
+     */
+    public static function matricola(ServiceReport $r): string
     {
-        return mb_strtolower(trim((string) ($r->machineUnit->serial_number ?? '')));
+        $matricola = trim((string) ($r->machineUnit->serial_number ?? $r->machine_serial_number ?? ''));
+
+        if ($matricola === '' || trim($matricola, '0') === '') {
+            return '';
+        }
+
+        // Stessa normalizzazione dell'import: "BRL 003 020..." e "BRL003020..."
+        // sono la stessa macchina, non due.
+        return \App\Models\MachineUnit::chiaveMatricola($matricola);
+    }
+
+    /**
+     * Ripulisce un testo importato dalla boilerplate di Eureka.
+     *
+     * L'import scrive nelle note "Numero documento Eureka: NNN" e nient'altro:
+     * alla verifica sono cosi' tutte e 3.703 le schede importate. E' un
+     * riferimento che il CRM tiene gia' in gestionale_number, quindi non e'
+     * una differenza da segnalare ne' qualcosa da fondere nelle note del
+     * tecnico — sarebbe solo rumore su ogni riga.
+     */
+    public static function testoUtile(?string $testo): string
+    {
+        $testo = trim((string) $testo);
+        $testo = preg_replace('/^\s*Numero documento Eureka:\s*\S+\s*$/mu', '', $testo);
+
+        return trim((string) $testo);
     }
 }
