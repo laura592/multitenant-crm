@@ -308,7 +308,19 @@ e i ruoli di un tenant non compaiono in un altro.
 
 4 ruoli applicativi, definiti in `App\Support\RolePermissions` (fonte unica usata sia dal
 `RolesAndPermissionsSeeder` che dai test tramite `Tests\Concerns\AssignsPermissionRoles`) e creati
-per ogni tenant da quel seeder:
+per ogni tenant da quel seeder.
+
+Il seeder serve a preparare un ambiente nuovo (`php artisan db:seed`) e crea solo i ruoli
+**mancanti**: i permessi di un ruolo che esiste già non li tocca. Dal 2026-09-02 **`update.sh` non
+lo lancia più**: fino ad allora girava dopo ogni `git pull` riallineando tutti i ruoli al codice, e
+ogni aggiornamento cancellava i permessi concessi a mano dalla pagina Ruoli del pannello.
+
+In produzione ruoli e permessi cambiano solo per mano di una persona: dal pannello, oppure con
+`php artisan ruoli:sincronizza` (`App\Console\Commands\SincronizzaRuoli`), che mostra il diff per
+tenant/ruolo e chiede conferma prima di sovrascrivere — con `--crea-mancanti` crea anche i ruoli di
+un tenant appena creato, che nasce senza.
+
+I ruoli:
 
 - **`dipendente`**: vede il catalogo condiviso in sola lettura; CRUD completo su
   clienti/preventivi/richieste informazioni/rapportini/piani di manutenzione; sola visualizzazione

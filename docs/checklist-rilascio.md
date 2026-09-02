@@ -61,15 +61,20 @@ aggiungi, rinomini o togli una Resource/Widget/Page.
 
 - [ ] Se hai modificato `App\Support\RolePermissions` (aggiunto/tolto un
       permesso a un ruolo, aggiunto un ruolo nuovo): risincronizza i ruoli
-      per ogni tenant, non solo in locale — è idempotente, sicuro da
-      rilanciare.
+      per ogni tenant, non solo in locale. **`./update.sh` non tocca più
+      ruoli e permessi** (riallineando cancellava quelli concessi a mano dalla
+      pagina Ruoli del pannello): è un passo separato, da fare consapevolmente.
 
   ```bash
-  php artisan db:seed --class=RolesAndPermissionsSeeder
+  php artisan ruoli:sincronizza --dry-run       # solo per vedere cosa cambierebbe
+  php artisan ruoli:sincronizza                 # mostra il diff e chiede conferma
+  php artisan ruoli:sincronizza --crea-mancanti # tenant appena creato: nasce senza ruoli
   ```
 
-  (`Role::syncPermissions()` allinea esattamente ai permessi definiti nel
-  codice: aggiunge i nuovi, toglie quelli non più presenti.)
+  Allinea esattamente ai permessi definiti nel codice: aggiunge i nuovi,
+  toglie quelli non più presenti — comprese le spunte messe a mano dal
+  pannello, che infatti vengono mostrate in rosso prima di confermare.
+  `--tenant=` e `--role=` restringono il campo.
 
 - [ ] Widget e Page **non sono gated di default** da Shield: se un
       widget/pagina nuovo deve essere visibile solo a certi ruoli, applica

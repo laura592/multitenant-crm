@@ -23,12 +23,23 @@ npm run build
 echo "==> Migrazioni database"
 "$PHP_BIN" artisan migrate --force
 
-# I permessi di ogni ruolo sono dati in role_has_permissions, non solo
-# codice: senza questo passo, una modifica a App\Support\RolePermissions
-# resta senza effetto online finche' non si ri-sincronizzano manualmente
-# (successo il 2026-07-27 con "dipendente" e i preventivi).
-echo "==> Sincronizzazione ruoli/permessi"
-"$PHP_BIN" artisan db:seed --class=RolesAndPermissionsSeeder --force
+# QUI NON SI TOCCANO RUOLI E PERMESSI. Fino al 2026-09-02 questo script
+# lanciava `db:seed --class=RolesAndPermissionsSeeder`, che riallineava ogni
+# ruolo di ogni tenant a App\Support\RolePermissions: risultato, ogni
+# aggiornamento cancellava i permessi concessi a mano dalla pagina Ruoli del
+# pannello. In produzione ruoli e permessi li decide chi amministra, non il
+# deploy.
+#
+# Serve portare online una modifica a RolePermissions (o dare i ruoli a un
+# tenant appena creato)? E' un gesto separato, da fare quando lo decidi tu:
+#
+#     php artisan ruoli:sincronizza --dry-run        # cosa cambierebbe
+#     php artisan ruoli:sincronizza                  # applica, dopo conferma
+#     php artisan ruoli:sincronizza --crea-mancanti  # tenant nuovo, ruoli da creare
+#
+# Il reset della cache resta: non cambia nessun permesso, ricarica solo quelli
+# gia' in tabella dopo il deploy.
+echo "==> Reset cache permessi (ruoli e permessi NON vengono modificati)"
 "$PHP_BIN" artisan permission:cache-reset
 
 echo "==> Pulizia cache"
