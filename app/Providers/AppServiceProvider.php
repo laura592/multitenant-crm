@@ -20,11 +20,13 @@ use App\Support\EurekaClient;
 use Filament\Forms\Components\DatePicker;
 use Filament\Infolists\Infolist;
 use Filament\Notifications\Notification;
+use Filament\Pages\BasePage;
 use Filament\Support\Facades\FilamentView;
 use Filament\Tables\Table;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Validation\ValidationException;
 use Jeffgreco13\FilamentBreezy\Livewire\PersonalInfo;
 use Jeffgreco13\FilamentBreezy\Livewire\TwoFactorAuthentication;
 use Jeffgreco13\FilamentBreezy\Livewire\UpdatePassword;
@@ -176,5 +178,19 @@ class AppServiceProvider extends ServiceProvider
                 ]);
             },
         );
+
+        // Quando il salvataggio si ferma per un campo non valido, Filament
+        // segna il campo in rosso e basta: su un form lungo (il rapportino
+        // arriva a otto sezioni) l'errore resta fuori schermo, magari dentro
+        // una sezione chiusa, e chi ha premuto "Salva" vede solo il bottone
+        // girare un istante e tornare come prima — "il salva non funziona".
+        // Un avviso rosso dice cosa manca, e il browser porta al campo.
+        BasePage::$reportValidationErrorUsing = function (ValidationException $exception): void {
+            Notification::make()
+                ->title('Non salvato: controlla i campi in rosso')
+                ->body($exception->validator->errors()->first())
+                ->danger()
+                ->send();
+        };
     }
 }
