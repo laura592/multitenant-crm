@@ -34,6 +34,9 @@ class PartiteAperteHeaderWidgetTest extends TestCase
             'password' => bcrypt('password'),
         ]);
         $this->giveRole($user, $tenant, 'admin');
+        // Staff master: lo scaduto non passa piu' dai ruoli, e' riservato
+        // a is_super_admin (vedi ScadutoClienti::canAccess()).
+        $user->update(['is_super_admin' => true]);
 
         return [$tenant, $user];
     }

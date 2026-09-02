@@ -32,8 +32,9 @@ use Illuminate\Support\Carbon;
  */
 class CashFlow extends Page implements HasTable
 {
-    // Senza HasPageShield una Page Filament e' accessibile a chiunque sia
-    // autenticato: qui sono previsioni di cassa, l'omissione sarebbe una fuga.
+    // Una Page Filament senza cancello e' accessibile a chiunque sia
+    // autenticato: qui sono previsioni di cassa, l'omissione sarebbe una
+    // fuga. Il cancello e' canAccess(), qui sotto.
     use InteractsWithTable;
 
     protected static ?string $navigationIcon = 'heroicon-o-arrow-trending-up';
@@ -109,13 +110,18 @@ class CashFlow extends Page implements HasTable
                     ->wrap()
                     ->weight('medium')
                     // Numero e data del documento, saltando i pezzi che
-                    // mancano. Un trim(..., ' del ') sembrava piu' corto ma
-                    // e' un'altra cosa: toglie i CARATTERI d, e, l e spazio
-                    // dalle estremita', quindi funzionava per caso finche'
-                    // il numero cominciava per cifra.
+                    // mancano.
+                    //
+                    // Il "del" sta FUORI da format(): dentro, d/e/l non sono
+                    // lettere ma codici di formato — giorno, fuso orario e
+                    // nome del giorno — e la data usciva
+                    // "10Europe/RomeWednesday 10/12/2025". (Prima ancora era
+                    // un trim(..., ' del '), che toglieva quei caratteri
+                    // dalle estremita' e funzionava solo per caso, finche'
+                    // il numero cominciava per cifra.)
                     ->description(fn (EurekaCashflowVoce $r) => implode(' ', array_filter([
                         filled($r->numero) ? "n. {$r->numero}" : null,
-                        $r->data_documento?->format('del d/m/Y'),
+                        $r->data_documento ? 'del '.$r->data_documento->format('d/m/Y') : null,
                     ]))),
 
                 Tables\Columns\TextColumn::make('tipo')

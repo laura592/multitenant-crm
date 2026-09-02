@@ -181,7 +181,14 @@ class ContabilitaPagineTest extends TestCase
             ->assertSee('BEVCO SRL')
             ->assertSee('Fattura fornitore')
             ->assertSee('n. 524/A')
-            ->assertSee('FRANKE KAFFEEMASCHINEN AG');
+            ->assertSee('FRANKE KAFFEEMASCHINEN AG')
+            // La data va guardata per davvero, non solo il numero: il "del"
+            // era finito DENTRO format(), dove d/e/l non sono lettere ma
+            // codici — giorno, fuso orario e nome del giorno — e la riga
+            // usciva "10Europe/RomeWednesday 10/12/2025". Asserire solo
+            // "n. 524/A" lasciava passare tutto questo.
+            ->assertSee('del '.now()->subMonth()->format('d/m/Y'))
+            ->assertDontSee('Europe/Rome');
     }
 
     private function fatturato(int $anno, int $mese, float $netto): void
