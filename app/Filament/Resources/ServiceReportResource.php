@@ -1095,11 +1095,25 @@ class ServiceReportResource extends Resource
             // l'altro della pagina.
             ->defaultSort(fn ($query) => $query->orderByDesc('intervention_date')->orderByDesc('created_at'))
             ->columns([
-                Tables\Columns\TextColumn::make('number')->label('Numero')->searchable(),
+                // Ordinabile sulla colonna nuda: il numero e' sempre
+                // RT-AAAA-NNNN, dodici caratteri con anno e progressivo a
+                // lunghezza fissa, quindi l'ordine alfabetico coincide con
+                // quello di emissione. Nessuna espressione da inventare.
+                Tables\Columns\TextColumn::make('number')->label('Numero')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('gestionale_number')
                     ->label('Numero gestionale')
                     ->placeholder('—')
                     ->searchable()
+                    // Il numero di Eureka NON e' a lunghezza fissa, quindi
+                    // qui l'ordinamento dev'essere numerico e non alfabetico:
+                    // altrimenti la scheda 1000 verrebbe prima della 999.
+                    //
+                    // "+ 0" e non un CAST: la sintassi del cast cambia fra
+                    // MySQL (SIGNED) e SQLite (INTEGER), e questa colonna e'
+                    // varchar in entrambi. Le schede senza numero vanno in
+                    // fondo invece di ammucchiarsi in cima come farebbe NULL.
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query
+                        ->orderByRaw('gestionale_number IS NULL, (gestionale_number + 0) '.$direction))
                     // Colonna separata (non in coda al numero CRM: erano
                     // "tutto misto" nella stessa cella) e nascosta di
                     // default per non riportare via lo spazio recuperato
