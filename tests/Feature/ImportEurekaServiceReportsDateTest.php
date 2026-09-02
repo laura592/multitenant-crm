@@ -87,6 +87,75 @@ class ImportEurekaServiceReportsDateTest extends TestCase
         $this->assertSame($customer->id, $report->customer_id);
     }
 
+    /**
+     * Le note delle schede lavoro arrivano dall'API con caratteri NUL dentro
+     * al testo (residuo della conversione RTF lato fornitore: verificato
+     * 2026-09-01, da 3 a 7 per scheda). Non devono finire in colonna: \s non
+     * li intercetta, quindi il collasso degli spazi da solo non basta.
+     */
+    public function test_nul_characters_in_notes_never_reach_the_database(): void
+    {
+        $tenant = Tenant::create(['name' => 'Alex', 'slug' => 'alex', 'is_master' => true]);
+
+        Customer::create([
+            'tenant_id' => $tenant->id, 'company_name' => 'Camping Marina 2000', 'gestionale_code' => 399,
+        ]);
+
+        $technician = User::create([
+            'tenant_id' => $tenant->id, 'name' => 'Tecnico', 'email' => 'tecnico@alex.it', 'password' => bcrypt('x'),
+        ]);
+
+        $eurekaId = 13867;
+
+        Http::fake(function ($request) use ($eurekaId) {
+            $url = $request->url();
+
+            if (preg_match('#/schedelavoro/'.$eurekaId.'(\?|$)#', $url)) {
+                return Http::response([
+                    'id_eureka' => $eurekaId,
+                    'numero' => 835,
+                    'data' => '2025-10-17T00:00:00.000+02:00',
+                    'id_intestatario' => 399,
+                    'sl_articolo' => ['id_eureka' => 271, 'codice' => 'SPINA 4 VIE', 'descr1' => 'IMPIANTO ALLA SPINA 4 VIE'],
+                    'sl_matricola' => '',
+                    'sl_sintomo' => '',
+                    'sl_lavorazione' => '',
+                    'stato_documento' => 10,
+                    // NUL veri, come li produce il decoder JSON leggendo \u0000
+                    'note' => "Sostituita\x00 guarnizione\r\x00 e filtro\x00",
+                    'dettaglio' => [],
+                ], 200);
+            }
+
+            if (str_contains($url, '/schedelavoro/')) {
+                return Http::response([[
+                    'id' => $eurekaId,
+                    'id_codice_f15' => 399,
+                    'data_documento' => '2025-10-17T00:00:00.000+02:00',
+                ]], 200);
+            }
+
+            return Http::response([], 404);
+        });
+
+        $this->artisan('eureka:import-service-reports', [
+            '--tenant' => 'alex',
+            '--technician' => $technician->email,
+            '--from' => '2025-01-01',
+            '--to' => '2025-12-31',
+            '--with-detail' => true,
+        ])->assertExitCode(0);
+
+        $report = ServiceReport::where('eureka_service_report_id', $eurekaId)->firstOrFail();
+
+        $this->assertStringNotContainsString("\x00", (string) $report->notes);
+        // Le newline restano: separano le righe della nota, e il parsing
+        // delle mention articolo ci si appoggia (vedi
+        // ImportEurekaServiceReports::syncArticleMentionsFromNotes()).
+        $this->assertStringContainsString('Sostituita guarnizione', (string) $report->notes);
+        $this->assertStringContainsString('e filtro', (string) $report->notes);
+    }
+
     public function test_intervention_date_falls_back_to_document_date_without_appointment(): void
     {
         $tenant = Tenant::create([

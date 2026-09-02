@@ -1073,6 +1073,24 @@ class ImportEurekaServiceReports extends Command
             return null;
         }
 
+        // Il NUL arriva dalla conversione RTF -> testo semplice fatta
+        // dall'API: nel JSON e' escapato come \u0000, quindi il payload e'
+        // valido, ma il decoder lo trasforma in un carattere vero che
+        // finirebbe dritto in colonna. Verificato 2026-09-01: ogni scheda
+        // lavoro ne contiene da 3 a 7 nel campo note, anche in mezzo al
+        // testo e non solo in coda. Va tolto qui e non in normalizeText()
+        // perche' questo e' l'unico punto attraversato da entrambi i
+        // percorsi (buildNotes e syncArticleMentionsFromNotes), e perche'
+        // \s non intercetta il NUL: il collasso degli spazi non lo toglie.
+        //
+        // I rapportini gia' in archivio sono puliti solo perche' importati
+        // prima che l'API esponesse questo campo cosi'.
+        $value = str_replace("\x00", '', $value);
+
+        if ($value === '') {
+            return null;
+        }
+
         if (! str_starts_with($value, '{\\rtf')) {
             return $value;
         }
