@@ -840,7 +840,24 @@ class ImportEurekaServiceReports extends Command
 
     private function isArticleMention(string $line): bool
     {
-        return preg_match('/\b(?:aggiunto|aggiunta)\s+articolo\s*:\s*(?:(?<quantity>\d+)\s*(?:x|×)\s*)?(?<code>[A-Za-z0-9._\/-]+)\b/i', $line) === 1;
+        return $this->extractArticleMention($line) !== null;
+    }
+
+    /**
+     * La riga che Eureka scrive nelle note quando l'ufficio aggiunge un
+     * articolo: "18/08/26 12:12 EUREKA - Aggiunto articolo: 1,5x ORE".
+     *
+     * La quantita' puo' avere la virgola decimale, e senza ammetterla il
+     * gruppo non combaciava: la regex ripiegava sul primo pezzo utile e
+     * prendeva "1" come CODICE articolo, creando materiali fantasma
+     * chiamati "1", "5", "1x" (trovati dal vivo il 02/09/2026).
+     *
+     * Il codice deve iniziare con una lettera o una cifra: "Aggiunto
+     * articolo: 1x ." non deve produrre nulla.
+     */
+    private function articleMentionPattern(): string
+    {
+        return '/\b(?:aggiunto|aggiunta)\s+articolo\s*:\s*(?:(?<quantity>\d+(?:[.,]\d+)?)\s*(?:x|×)\s*)?(?<code>[A-Za-z0-9][A-Za-z0-9._\/-]*)\b/i';
     }
 
     /**
@@ -848,12 +865,18 @@ class ImportEurekaServiceReports extends Command
      */
     private function extractArticleMention(string $line): ?array
     {
-        if (! preg_match('/\b(?:aggiunto|aggiunta)\s+articolo\s*:\s*(?:(?<quantity>\d+)\s*(?:x|×)\s*)?(?<code>[A-Za-z0-9._\/-]+)\b/i', $line, $matches)) {
+        if (! preg_match($this->articleMentionPattern(), $line, $matches)) {
+            return null;
+        }
+
+        // "1x ." non ha un codice: la regex ripiega su "1x", che e' il
+        // moltiplicatore, non un articolo.
+        if (preg_match('/^\d+(?:[.,]\d+)?x$/i', $matches['code'])) {
             return null;
         }
 
         $quantity = isset($matches['quantity']) && $matches['quantity'] !== ''
-            ? (float) $matches['quantity']
+            ? (float) str_replace(',', '.', $matches['quantity'])
             : 1.0;
         $code = $this->normalizeText($matches['code']);
         if ($code === null || $code === '') {
