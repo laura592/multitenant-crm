@@ -189,6 +189,52 @@ class EurekaClient
     /**
      * @return array<string, mixed>|null
      */
+    /**
+     * Scorre l'INTERO catalogo articoli, una pagina alla volta.
+     *
+     * /articoli/ricerca vuole obbligatoriamente un filtro RQL, ma
+     * `gt(id,0)` vale "prendi tutto" e `limit=(offset,quanti)` pagina
+     * davvero (verificato 2026-09-01: offset diversi restituiscono record
+     * diversi, la pagina e' tappata a 100).
+     *
+     * E' l'alternativa alle ricerche a tentoni con cui il catalogo veniva
+     * censito prima: quelle passavano da /articoli/lista, che tronca a 100
+     * risultati senza dire quanti ne esistano, e perdevano in silenzio tutto
+     * quello che stava oltre il centesimo di ogni prefisso.
+     *
+     * Generatore per non tenere in memoria l'intero catalogo e per lasciar
+     * lavorare il chiamante mentre le pagine arrivano.
+     *
+     * @return \Generator<int, array<string, mixed>>
+     */
+    public function eachArticle(int $perPage = 100): \Generator
+    {
+        $offset = 0;
+
+        while (true) {
+            $pagina = $this->get('/articoli/ricerca', [
+                'rql' => 'gt(id,0)',
+                'limit' => "({$offset},{$perPage})",
+            ]);
+
+            if ($pagina === []) {
+                return;
+            }
+
+            foreach ($pagina as $articolo) {
+                yield $articolo;
+            }
+
+            // Pagina incompleta: era l'ultima. Senza questo controllo
+            // servirebbe una chiamata in piu' solo per vedere il vuoto.
+            if (count($pagina) < $perPage) {
+                return;
+            }
+
+            $offset += $perPage;
+        }
+    }
+
     public function findArticleByCode(string $code): ?array
     {
         $payload = $this->get('/articoli/articolo/'.rawurlencode($code));

@@ -8,16 +8,21 @@ use App\Support\EurekaClient;
 use Illuminate\Console\Command;
 
 /**
- * L'API Eureka non offre un elenco completo/paginato del catalogo articoli
- * (/articoli/lista/(codice) fa solo ricerca parziale sul codice, capped a
- * 100 risultati, nessuna paginazione — verificato dal vivo 2026-08-21):
- * l'unico modo per scoprire materiali mai referenziati in nessun rapportino
- * importato e' scansionare con tante ricerche diverse e raccogliere i
- * codici unici trovati. Qui si usano tutte le combinazioni a 2 cifre
- * (00-99): sul primo giro (2026-08-21, a mano) ha trovato 2039 codici
- * unici, 1368 mai visti prima nel catalogo locale. Non e' un censimento
- * completo (i codici alfanumerici senza cifre non vengono mai trovati),
- * solo il meglio possibile con l'API disponibile.
+ * Importa nel catalogo locale gli articoli Eureka mai visti in un
+ * rapportino, scorrendo l'INTERO catalogo.
+ *
+ * Fino al 2026-09-01 questo comando faceva 100 ricerche a due cifre
+ * (00-99) su /articoli/lista, nella convinzione che l'API non offrisse un
+ * elenco paginato. Quella rotta pero' tronca a 100 risultati senza dire
+ * quanti ne esistano: ogni ricerca perdeva in silenzio tutto cio' che
+ * stava oltre il centesimo, e i codici senza cifre non venivano trovati
+ * mai. Ne mancavano parecchi, fra cui 10067629 GUARNIZIONE SILICONE ROSSO
+ * GH1 SPM, segnalato dall'ufficio.
+ *
+ * /articoli/ricerca invece pagina davvero: vuole un filtro RQL
+ * obbligatorio, ma `gt(id,0)` vale "prendi tutto". Vedi
+ * EurekaClient::eachArticle(): ora e' un censimento completo, non un
+ * campionamento.
  */
 class SweepEurekaMaterialsCatalog extends Command
 {
@@ -25,7 +30,7 @@ class SweepEurekaMaterialsCatalog extends Command
         {--tenant= : Slug tenant (default: tenant master)}
         {--dry-run : Mostra quanti materiali nuovi troverebbe senza crearli}';
 
-    protected $description = 'Scansiona il catalogo articoli Eureka con ricerche a 2 cifre per scoprire materiali mai referenziati in un rapportino';
+    protected $description = 'Importa dal catalogo Eureka i materiali non ancora presenti in locale';
 
     public function __construct(private readonly EurekaClient $eureka)
     {
@@ -40,24 +45,18 @@ class SweepEurekaMaterialsCatalog extends Command
 
         $dryRun = (bool) $this->option('dry-run');
 
-        $queries = [];
-        foreach (range(0, 99) as $n) {
-            $queries[] = str_pad((string) $n, 2, '0', STR_PAD_LEFT);
-        }
-
-        $this->info('Scansione in corso (100 ricerche pooled, con pause)...');
-        $responses = $this->eureka->pooledSearchArticles($queries);
+        $this->info('Lettura del catalogo articoli in corso...');
 
         $found = [];
-        foreach ($responses as $rows) {
-            foreach ($rows as $row) {
-                if (isset($row['codice']) && trim((string) $row['codice']) !== '') {
-                    $found[trim((string) $row['codice'])] = $row;
-                }
+        foreach ($this->eureka->eachArticle() as $row) {
+            $codice = trim((string) ($row['codice'] ?? ''));
+
+            if ($codice !== '') {
+                $found[$codice] = $row;
             }
         }
 
-        $this->info('Codici unici trovati: '.count($found));
+        $this->info('Articoli letti dal catalogo: '.count($found));
 
         $existingCodes = Material::query()
             ->where('tenant_id', $tenant->id)
