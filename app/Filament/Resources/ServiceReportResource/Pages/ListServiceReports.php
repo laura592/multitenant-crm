@@ -39,9 +39,12 @@ class ListServiceReports extends ListRecords
                         ->native(false)
                         ->afterOrEqual('da'),
                 ])
+                // Il tenant va passato: la rotta sta fuori dal pannello e lo
+                // staff master ha tenant_id nullo sull'utente.
                 ->action(fn (array $data) => redirect()->away(route('service-reports.riepilogo', [
                     'da' => $data['da'],
                     'a' => $data['a'],
+                    'tenant' => \Filament\Facades\Filament::getTenant()?->getKey(),
                 ])))
                 ->visible(fn (): bool => auth()->user()?->can('viewAny', \App\Models\ServiceReport::class) ?? false),
             Actions\Action::make('clientiVicini')

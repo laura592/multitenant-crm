@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\RiepilogoRapportiniController;
 use App\Models\Customer;
 use App\Models\MachineUnit;
 use App\Models\Material;
@@ -11,18 +12,20 @@ use App\Models\ServiceReportMaterial;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Tests\Concerns\AssignsPermissionRoles;
 use Tests\TestCase;
 
 /**
  * Il riepilogo di un periodo, da stampare: cliente, chi paga, macchina e
- * articoli su una riga sola, in orizzontale.
+ * articoli su una riga sola, in orizzontale e senza importi.
  */
 class RiepilogoRapportiniTest extends TestCase
 {
     use AssignsPermissionRoles, RefreshDatabase;
 
-    private function scenario(string $ruolo = 'amministrazione'): array
+    private function scenario(string $ruolo = 'amministrazione'): ServiceReport
     {
         $tenant = Tenant::create(['name' => 'Alex', 'slug' => 'alex', 'is_master' => true]);
         $utente = User::create([
@@ -57,12 +60,22 @@ class RiepilogoRapportiniTest extends TestCase
 
         $this->actingAs($utente);
 
-        return [$report, $utente];
+        return $report;
+    }
+
+    private function riepilogo(ServiceReport $report): string
+    {
+        return view('pdf.riepilogo-rapportini', [
+            'rapportini' => ServiceReport::with(['customer', 'billingCustomer', 'machineUnit', 'materialsUsed.material'])->get(),
+            'da' => Carbon::parse('2026-08-01'),
+            'a' => Carbon::parse('2026-08-31'),
+            'tenant' => $report->tenant,
+        ])->render();
     }
 
     public function test_il_riepilogo_copre_il_periodo_chiesto(): void
     {
-        [$report] = $this->scenario();
+        $this->scenario();
 
         $risposta = $this->get(route('service-reports.riepilogo', ['da' => '2026-08-01', 'a' => '2026-08-31']));
 
@@ -92,39 +105,71 @@ class RiepilogoRapportiniTest extends TestCase
         $this->get(route('service-reports.riepilogo', ['da' => 'pippo', 'a' => '2026-08-31']))->assertOk();
     }
 
-    public function test_la_vista_mostra_cliente_pagante_macchina_e_articoli(): void
+    public function test_mostra_cliente_pagante_macchina_e_articoli(): void
     {
-        [$report] = $this->scenario();
-
-        $html = view('pdf.riepilogo-rapportini', [
-            'rapportini' => ServiceReport::with(['customer', 'billingCustomer', 'machineUnit', 'materialsUsed.material'])->get(),
-            'da' => \Illuminate\Support\Carbon::parse('2026-08-01'),
-            'a' => \Illuminate\Support\Carbon::parse('2026-08-31'),
-            'showPrices' => true,
-            'tenant' => $report->tenant,
-        ])->render();
+        $html = $this->riepilogo($this->scenario());
 
         $this->assertStringContainsString('Bar Centrale', $html);
         $this->assertStringContainsString('Dersut', $html, 'chi paga deve comparire');
         $this->assertStringContainsString('1858049', $html);
-        $this->assertStringContainsString('2× CHIORD', $html, 'la quantita si scrive solo se diversa da 1');
-        $this->assertStringContainsString('92,40', $html);
+        // La quantita' si scrive solo quando e' diversa da 1.
+        $this->assertStringContainsString('2', $html);
+        $this->assertStringContainsString('CHIORD', $html);
     }
 
-    /** Senza permesso sui prezzi il riepilogo non porta importi. */
-    public function test_al_dipendente_il_riepilogo_esce_senza_importi(): void
+    /**
+     * Senza importi per scelta dell'ufficio: il riepilogo dice COSA e' stato
+     * fatto e su quale macchina, non quanto e' costato. Chi vuole i numeri li
+     * ha dalle pagine contabili.
+     */
+    public function test_il_riepilogo_non_porta_importi(): void
     {
-        [$report] = $this->scenario('dipendente');
-
-        $html = view('pdf.riepilogo-rapportini', [
-            'rapportini' => ServiceReport::with(['customer', 'billingCustomer', 'machineUnit', 'materialsUsed.material'])->get(),
-            'da' => \Illuminate\Support\Carbon::parse('2026-08-01'),
-            'a' => \Illuminate\Support\Carbon::parse('2026-08-31'),
-            'showPrices' => false,
-            'tenant' => $report->tenant,
-        ])->render();
+        $html = $this->riepilogo($this->scenario());
 
         $this->assertStringNotContainsString('92,40', $html);
-        $this->assertStringContainsString('CHIORD', $html, 'gli articoli restano, sparisce il costo');
+        $this->assertStringNotContainsString('Importo', $html);
+        $this->assertStringNotContainsString('Totale', $html);
+    }
+
+    /**
+     * Lo staff master ha tenant_id nullo sull'utente e accede ai tenant dal
+     * prefisso del pannello (/admin/alex/...). Filtrando sul tenant
+     * dell'utente il riepilogo usciva VUOTO senza dire perche' — segnalato
+     * dal vivo il 02/09/2026.
+     */
+    public function test_lo_staff_master_stampa_il_tenant_scelto(): void
+    {
+        $report = $this->scenario();
+        $master = User::create([
+            'tenant_id' => null, 'name' => 'Staff', 'email' => 'staff@alex.it',
+            'password' => bcrypt('password'), 'is_super_admin' => true,
+        ]);
+
+        $this->actingAs($master)
+            ->get(route('service-reports.riepilogo', [
+                'da' => '2026-08-01', 'a' => '2026-08-31', 'tenant' => $report->tenant_id,
+            ]))
+            ->assertOk();
+
+        // Cio' che conta e' QUALE tenant risolve: il peso del PDF non lo
+        // direbbe, perche' anche un riepilogo vuoto pesa.
+        $metodo = new \ReflectionMethod(RiepilogoRapportiniController::class, 'tenant');
+        $metodo->setAccessible(true);
+        $risolto = $metodo->invoke(new RiepilogoRapportiniController, Request::create('/', 'GET', [
+            'tenant' => $report->tenant_id,
+        ]));
+
+        $this->assertSame($report->tenant_id, $risolto->id);
+    }
+
+    /** Un tenant a cui non si ha accesso non si stampa. */
+    public function test_non_si_stampa_il_riepilogo_di_un_altro_tenant(): void
+    {
+        $this->scenario('dipendente');
+        $altro = Tenant::create(['name' => 'Altro', 'slug' => 'altro']);
+
+        $this->get(route('service-reports.riepilogo', [
+            'da' => '2026-08-01', 'a' => '2026-08-31', 'tenant' => $altro->id,
+        ]))->assertForbidden();
     }
 }

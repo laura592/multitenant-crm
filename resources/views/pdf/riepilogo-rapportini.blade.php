@@ -2,7 +2,11 @@
 
      Serve a controllare un mese di lavoro senza aprire un rapportino alla
      volta, quindi e' fitto per scelta: font piccolo, righe strette, e gli
-     articoli su una riga sola separati da virgola invece che elencati. --}}
+     articoli su una riga sola separati da virgola invece che elencati.
+
+     Senza importi: serve a controllare COSA e' stato fatto e su quale
+     macchina, non quanto e' costato (indicazione dell'ufficio, 02/09/2026).
+     Chi vuole i numeri li ha dalle pagine contabili. --}}
 @php
     $pagante = function ($r) {
         // invoiceRecipient() esplode se il cliente e' stato eliminato: in un
@@ -16,7 +20,6 @@
 
         return $chi && $chi->id !== $r->customer?->id ? $chi->company_name : null;
     };
-    $totale = $rapportini->sum(fn ($r) => (float) $r->materialsUsed->sum('line_total_snapshot'));
 @endphp
 <!DOCTYPE html>
 <html lang="it">
@@ -56,7 +59,6 @@
                 <th style="width:120px">Paga</th>
                 <th style="width:130px">Macchina</th>
                 <th>Articoli</th>
-                @if($showPrices)<th class="num" style="width:56px">Importo</th>@endif
             </tr>
         </thead>
         <tbody>
@@ -87,23 +89,11 @@
                         })->implode(', ') }}
                     @endif
                 </td>
-                @if($showPrices)
-                    @php($importo = (float) $righe->sum('line_total_snapshot'))
-                    <td class="num">{{ $importo > 0 ? number_format($importo, 2, ',', '.') : '' }}</td>
-                @endif
             </tr>
         @empty
-            <tr><td colspan="{{ $showPrices ? 8 : 7 }}" class="muted">Nessun intervento nel periodo.</td></tr>
+            <tr><td colspan="7" class="muted">Nessun intervento nel periodo.</td></tr>
         @endforelse
         </tbody>
-        @if($showPrices && $totale > 0)
-            <tfoot>
-                <tr>
-                    <td colspan="7" class="num">Totale</td>
-                    <td class="num">{{ number_format($totale, 2, ',', '.') }}</td>
-                </tr>
-            </tfoot>
-        @endif
     </table>
 </body>
 </html>

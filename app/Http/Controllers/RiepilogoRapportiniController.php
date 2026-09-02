@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ServiceReport;
+use App\Models\Tenant;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -18,6 +19,10 @@ use Spatie\Permission\PermissionRegistrar;
  *
  * Orizzontale, perche' in verticale le sei colonne si strizzano al punto che
  * la descrizione degli articoli va a capo a ogni parola.
+ *
+ * Senza importi per scelta: serve a controllare COSA e' stato fatto e su
+ * quale macchina. Non c'e' quindi nessun permesso sui prezzi da rispettare
+ * qui — a differenza della stampa del singolo rapportino.
  */
 class RiepilogoRapportiniController extends Controller
 {
@@ -30,7 +35,14 @@ class RiepilogoRapportiniController extends Controller
 
         Gate::authorize('viewAny', ServiceReport::class);
 
-        $tenantId = auth()->user()?->tenant_id;
+        // Il tenant NON si prende da auth()->user()->tenant_id: lo staff
+        // master ce l'ha nullo (accede a tutti i tenant dall'URL del
+        // pannello, /admin/alex/...), e filtrare su null dava un riepilogo
+        // vuoto senza dire perche'. Fuori dal pannello quel prefisso non
+        // arriva, quindi lo passa il pulsante.
+        $tenant = $this->tenant($request);
+
+        abort_unless(auth()->user()?->canAccessTenant($tenant), 403);
 
         $da = $this->data($request->query('da'), now()->startOfMonth());
         $a = $this->data($request->query('a'), now());
@@ -40,7 +52,7 @@ class RiepilogoRapportiniController extends Controller
         }
 
         $rapportini = ServiceReport::query()
-            ->where('tenant_id', $tenantId)
+            ->where('tenant_id', $tenant->id)
             ->whereBetween('intervention_date', [$da->toDateString(), $a->toDateString()])
             ->with([
                 'customer', 'billingCustomer', 'customer.billingCustomer',
@@ -50,20 +62,34 @@ class RiepilogoRapportiniController extends Controller
             ->orderBy('number')
             ->get();
 
-        // I prezzi seguono la stessa regola della stampa del singolo
-        // rapportino: i dipendenti non devono farli uscire mai.
-        $conPrezzi = $rapportini->isNotEmpty()
-            && Gate::allows('viewPrices', $rapportini->first());
-
         $pdf = Pdf::loadView('pdf.riepilogo-rapportini', [
             'rapportini' => $rapportini,
             'da' => $da,
             'a' => $a,
-            'showPrices' => $conPrezzi,
-            'tenant' => auth()->user()?->tenant,
+            'tenant' => $tenant,
         ])->setPaper('a4', 'landscape');
 
         return $pdf->stream(sprintf('riepilogo-rapportini-%s_%s.pdf', $da->format('Y-m-d'), $a->format('Y-m-d')));
+    }
+
+    /**
+     * Il tenant su cui stampare: quello passato dal pulsante, altrimenti
+     * quello dell'utente (che per lo staff master e' nullo, e allora si
+     * ricade sul master).
+     */
+    private function tenant(Request $request): Tenant
+    {
+        $richiesto = trim((string) $request->query('tenant'));
+
+        if ($richiesto !== '') {
+            return Tenant::query()
+                ->where('id', $richiesto)
+                ->orWhere('slug', $richiesto)
+                ->firstOrFail();
+        }
+
+        return auth()->user()?->tenant
+            ?? Tenant::query()->where('is_master', true)->firstOrFail();
     }
 
     /** Una data malformata non deve dare un 500: si ricade sul default. */
