@@ -4,7 +4,10 @@ namespace App\Filament\Pages;
 
 use App\Models\EurekaPartitaAperta;
 use App\Support\DisplayName;
+use App\Support\OutsideLivewireRender;
+use Barryvdh\DomPDF\Facade\Pdf;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
+use Filament\Actions;
 use Filament\Facades\Filament;
 use Filament\Pages\Page;
 use Filament\Tables;
@@ -112,6 +115,52 @@ class ScadutoClienti extends Page implements HasTable
     private static function giorni(mixed $data): int
     {
         return (int) Carbon::parse($data)->diffInDays(now());
+    }
+
+    /**
+     * Stampa dell'elenco: e' la lista con cui si telefona, e al telefono si
+     * segna a penna. Esce quello che si vede a schermo — stesso ordine,
+     * stessa ricerca (getFilteredSortedTableQuery), senza la paginazione:
+     * stampare solo i primi 25 di una lista ordinata per urgenza vorrebbe
+     * dire perdere per strada proprio chi va richiamato domani.
+     */
+    protected function getHeaderActions(): array
+    {
+        return [
+            Actions\Action::make('stampa')
+                ->label('Stampa')
+                ->icon('heroicon-o-printer')
+                ->color('gray')
+                ->action(function () {
+                    $righe = $this->getFilteredSortedTableQuery()->get()->map(fn ($record) => [
+                        'cliente' => DisplayName::titleCase($record->ragione_sociale),
+                        'fatture' => (int) $record->fatture,
+                        'scaduto' => (float) $record->scaduto,
+                        'lordo' => (float) $record->lordo,
+                        'crediti' => abs((float) $record->crediti),
+                        'giorni' => $record->piu_vecchia ? self::giorni($record->piu_vecchia) : null,
+                        'piu_vecchia' => $record->piu_vecchia ? Carbon::parse($record->piu_vecchia)->format('d/m/Y') : null,
+                    ])->all();
+
+                    // Vedi App\Support\OutsideLivewireRender: il rendering
+                    // parte da dentro un'azione Livewire e senza questo il PDF
+                    // si porta dietro i commenti <!--[if BLOCK]--> attorno a
+                    // ogni @if.
+                    $pdf = OutsideLivewireRender::run(fn () => Pdf::loadView('pdf.scaduto-clienti', [
+                        'righe' => $righe,
+                        'tenant' => Filament::getTenant(),
+                        'ricerca' => $this->getTableSearch(),
+                        'data' => now()->format('d/m/Y'),
+                        'totale' => array_sum(array_column($righe, 'scaduto')),
+                        'attesaMassima' => $righe ? max(array_map(fn ($r) => $r['giorni'] ?? 0, $righe)) : null,
+                    ]));
+
+                    return response()->streamDownload(
+                        fn () => print ($pdf->output()),
+                        'scaduto-clienti-'.now()->format('Y-m-d').'.pdf',
+                    );
+                }),
+        ];
     }
 
     public function table(Table $table): Table
