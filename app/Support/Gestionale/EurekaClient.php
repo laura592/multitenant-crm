@@ -6,6 +6,7 @@ use App\Models\Tenant;
 use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Client per l'API REST del gestionale Eureka (ALEX srl), usata per inviare
@@ -346,12 +347,34 @@ class EurekaClient
     }
 
     /**
+     * Chiavi che NON hanno ricevuto una risposta valida nell'ultima chiamata
+     * pooled. Serve dove "risposta vuota" e "chiamata fallita" portano a
+     * decisioni opposte: pooledRequests() restituisce [] in entrambi i casi,
+     * e sulle partite aperte la differenza vale una fattura che sparisce
+     * dall'elenco di chi va sollecitato. Non e' il caso di ogni chiamante,
+     * quindi resta un dato a parte invece di cambiare il tracciato dei
+     * risultati per tutti.
+     *
+     * @var array<int, int|string>
+     */
+    private array $chiaviPooledFallite = [];
+
+    /**
+     * @return array<int, int|string>
+     */
+    public function chiaviPooledFallite(): array
+    {
+        return $this->chiaviPooledFallite;
+    }
+
+    /**
      * @param  array<int|string, string>  $urlsByKey  URL assoluta gia' completa per ciascuna chiamata
      * @return array<int|string, array>
      */
     private function pooledRequests(array $urlsByKey, int $concurrency): array
     {
         $results = [];
+        $this->chiaviPooledFallite = [];
 
         foreach (array_chunk($urlsByKey, $concurrency, true) as $chunk) {
             try {
@@ -369,6 +392,7 @@ class EurekaClient
             } catch (\Throwable) {
                 foreach ($chunk as $key => $url) {
                     $this->recordCall($url, null);
+                    $this->chiaviPooledFallite[] = $key;
                     $results[$key] = [];
                 }
 
@@ -380,6 +404,10 @@ class EurekaClient
                 $ok = $response instanceof Response && $response->successful();
 
                 $this->recordCall($url, $response instanceof Response ? $response->status() : null);
+
+                if (! $ok) {
+                    $this->chiaviPooledFallite[] = $key;
+                }
 
                 $results[$key] = $ok ? ($response->json() ?? []) : [];
             }
@@ -422,6 +450,282 @@ class EurekaClient
 
             return [];
         }
+    }
+
+    /**
+     * Fatture registrate in contabilita' (clienti o fornitori), in una
+     * chiamata: ~2000 documenti dal 2023 a oggi.
+     *
+     * A differenza delle partite aperte questi dati sono verificati contro i
+     * PDF reali delle fatture e coincidono, quindi sono la base preferibile
+     * per le analisi.
+     *
+     * Restituisce NULL se la chiamata e' fallita e un array (anche vuoto) se
+     * Eureka ha risposto: chi importa sostituisce una fotografia intera e
+     * deve poter distinguere "nessun documento" da "non ho potuto chiedere",
+     * altrimenti un 500 di passaggio cancella l'archivio.
+     *
+     * @return array<int, array<string, mixed>>|null
+     */
+    public function fattureContabili(bool $fornitori = false, string $dal = '2023-01-01'): ?array
+    {
+        $path = ($fornitori ? '/contabilita/fatture/fornitori' : '/contabilita/fatture/clienti')
+            .'?'.http_build_query(['data_da' => $dal]);
+
+        try {
+            $url = rtrim($this->baseUrl, '/').$path;
+
+            $response = Http::withBasicAuth(
+                $this->username,
+                $this->password,
+            )->timeout(120)->get($url);
+
+            $this->recordCall($url, $response->status());
+
+            if (! $response->successful()) {
+                return null;
+            }
+
+            return $response->json() ?? [];
+        } catch (\Throwable) {
+            $this->recordCall(rtrim($this->baseUrl, '/').$path, null);
+
+            return null;
+        }
+    }
+
+    /**
+     * Tetto di righe per chiamata imposto dal fornitore su
+     * /articoli/cerca-in-righe. Chiedere di piu' non alza il tetto: il
+     * servizio scarta il valore fuori intervallo e torna al DEFAULT di 50,
+     * cioe' chiedendo 2000 se ne ricevono 50 senza nessun errore. Verificato
+     * dal vivo il 2026-09-02.
+     */
+    private const RIGHE_PER_CHIAMATA = 500;
+
+    /**
+     * Righe documento che contengono un testo (ricerca full-text su
+     * /articoli/cerca-in-righe). Usata per ritrovare gli acconti: le
+     * fatture di acconto e le righe "A DETRARRE FATTURA DI ACCONTO NR X"
+     * si riconoscono solo dal testo della riga, non da un campo strutturato.
+     *
+     * Interrogata UN ANNO ALLA VOLTA e non in un colpo solo. L'endpoint non
+     * ha paginazione: superato il tetto di 500 righe taglia il resto senza
+     * dirlo, e una riga persa qui non e' un buco visibile — e' un acconto
+     * che risulta mai saldato, cioe' un falso allarme in "Analisi
+     * contabili". Oggi le righe sono ~185 su tre anni e mezzo, quindi la
+     * finestra annuale tiene il margine largo mentre l'archivio cresce.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function righeDocumentoContenenti(string $testo, string $dal = '2023-01-01'): array
+    {
+        $primoAnno = (int) substr($dal, 0, 4);
+        $ultimoAnno = (int) now()->format('Y');
+
+        $righe = [];
+
+        for ($anno = $primoAnno; $anno <= $ultimoAnno; $anno++) {
+            $righe = [
+                ...$righe,
+                ...$this->righeDocumentoNellAnno($testo, max($dal, "{$anno}-01-01"), "{$anno}-12-31"),
+            ];
+        }
+
+        return $righe;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function righeDocumentoNellAnno(string $testo, string $da, string $a): array
+    {
+        $path = '/articoli/cerca-in-righe?'.http_build_query([
+            'testo' => $testo,
+            'data_da' => $da,
+            'data_a' => $a,
+            'limit' => self::RIGHE_PER_CHIAMATA,
+        ]);
+
+        try {
+            $url = rtrim($this->baseUrl, '/').$path;
+
+            $response = Http::withBasicAuth(
+                $this->username,
+                $this->password,
+            )->timeout(90)->get($url);
+
+            $this->recordCall($url, $response->status());
+
+            $righe = $response->successful() ? ($response->json() ?? []) : [];
+
+            // Una finestra piena e' quasi certamente una finestra tagliata:
+            // non c'e' modo di chiedere le successive, quindi almeno lo si
+            // scrive nel log invece di far sparire righe in silenzio.
+            if (count($righe) >= self::RIGHE_PER_CHIAMATA) {
+                Log::warning("Eureka cerca-in-righe: \"{$testo}\" dal {$da} al {$a} ha riempito il tetto di ".self::RIGHE_PER_CHIAMATA.' righe, le successive sono perse.');
+            }
+
+            return $righe;
+        } catch (\Throwable) {
+            $this->recordCall(rtrim($this->baseUrl, '/').$path, null);
+
+            return [];
+        }
+    }
+
+    /**
+     * KPI di fatturato (/contabilita/fatturato), clienti o fornitori, con
+     * totali di periodo e ripartizione mensile.
+     *
+     * Si prende il NETTO calcolato da Eureka invece di sommare gli
+     * imponibili della nostra copia: i due numeri non coincidono (424.548,69
+     * contro 438.484,17 sul 2026, misurati il 2026-09-02) perche' Eureka
+     * pesa le causali con T07CAUSALI_CG e filtra sulla data di
+     * registrazione, non su quella del documento. Ricostruirlo a mano
+     * significherebbe reimplementare il piano dei conti del gestionale e
+     * sbagliarlo: meglio riportare il suo numero e dire da dove viene.
+     *
+     * NULL se la chiamata e' fallita.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function fatturato(bool $fornitori, string $dal, string $al): ?array
+    {
+        return $this->getJson('/contabilita/fatturato?'.http_build_query([
+            'tipo' => $fornitori ? 'F' : 'C',
+            'data_da' => $dal,
+            'data_a' => $al,
+        ]), timeout: 60);
+    }
+
+    /**
+     * Cash flow prospettico mensile (/contabilita/cashflow): scadenze
+     * clienti e fornitori piu' ordini e bolle ancora aperti.
+     *
+     * E' l'unica cosa in tutto il modulo che guarda AVANTI — le partite
+     * aperte dicono cosa e' gia' andato storto, questo dice quando i soldi
+     * arrivano e quando escono.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function cashflow(string $dal, string $al): ?array
+    {
+        return $this->getJson('/contabilita/cashflow?'.http_build_query([
+            'data_da' => $dal,
+            'data_a' => $al,
+        ]), timeout: 90);
+    }
+
+    /**
+     * Le singole voci che compongono il cash flow di un mese
+     * (/contabilita/cashflow/dettaglio): serve a rispondere a "questi 59.000
+     * di uscite a gennaio, da cosa vengono?".
+     *
+     * In importo il segno indica il verso: positivo entrata, negativo
+     * uscita. L'anagrafica compare solo come testo libero (descrizione),
+     * quindi le righe non sono collegabili ai clienti del CRM — per quello
+     * ci sono le partite aperte.
+     *
+     * @return array<int, array<string, mixed>>|null
+     */
+    public function cashflowDettaglio(int $anno, int $mese): ?array
+    {
+        return $this->getJson('/contabilita/cashflow/dettaglio?'.http_build_query([
+            'anno' => $anno,
+            'mese' => $mese,
+        ]), timeout: 60);
+    }
+
+    /**
+     * GET che restituisce JSON, con la sola distinzione che conta per gli
+     * import: NULL se Eureka non ha risposto, il corpo decodificato se ha
+     * risposto. Le chiamate qui sopra erano cinque copie della stessa
+     * try/catch.
+     *
+     * @return array<mixed>|null
+     */
+    private function getJson(string $path, int $timeout): ?array
+    {
+        $url = rtrim($this->baseUrl, '/').$path;
+
+        try {
+            $response = Http::withBasicAuth($this->username, $this->password)
+                ->timeout($timeout)
+                ->get($url);
+
+            $this->recordCall($url, $response->status());
+
+            return $response->successful() ? ($response->json() ?? []) : null;
+        } catch (\Throwable) {
+            $this->recordCall($url, null);
+
+            return null;
+        }
+    }
+
+    /**
+     * Anagrafiche con almeno una partita aperta, in una chiamata
+     * (/contabilita/saldi, o la variante fornitori). Sono ~87 clienti e ~56
+     * fornitori: l'elenco serve a sapere PER CHI vale la pena chiedere il
+     * dettaglio, invece di interrogare tutte le 2000 anagrafiche.
+     *
+     * NULL se la chiamata e' fallita, array (anche vuoto) se Eureka ha
+     * risposto: come fattureContabili(), l'import sostituisce una fotografia
+     * intera e non deve confondere "nessuna partita aperta" con "non ho
+     * potuto chiedere".
+     *
+     * @return array<int, array{id_nominativo: int, codice: string, nominativo: string, saldo: float}>|null
+     */
+    public function saldiPartiteAperte(bool $fornitori = false): ?array
+    {
+        $path = $fornitori ? '/contabilita/saldi/fornitori' : '/contabilita/saldi';
+
+        try {
+            $url = rtrim($this->baseUrl, '/').$path;
+
+            $response = Http::withBasicAuth(
+                $this->username,
+                $this->password,
+            )->timeout(30)->get($url);
+
+            $this->recordCall($url, $response->status());
+
+            if (! $response->successful()) {
+                return null;
+            }
+
+            return $response->json() ?? [];
+        } catch (\Throwable) {
+            $this->recordCall(rtrim($this->baseUrl, '/').$path, null);
+
+            return null;
+        }
+    }
+
+    /**
+     * Dettaglio delle partite aperte di ciascuna anagrafica indicata, in
+     * gruppi concorrenti: una chiamata per anagrafica
+     * (/contabilita/partitaaperta/{id}, o la variante fornitore).
+     *
+     * Non si usa /contabilita/cashflow/dettaglio, che elencherebbe le
+     * scadenze di un mese intero in una sola chiamata: non espone l'id
+     * dell'anagrafica ma solo la ragione sociale come testo libero, quindi le
+     * righe non sarebbero collegabili ai clienti del CRM.
+     *
+     * @param  array<int, int>  $codici  id_nominativo Eureka
+     * @return array<int, array> id_nominativo => elenco partite
+     */
+    public function partiteAperte(array $codici, bool $fornitori = false): array
+    {
+        $base = $fornitori ? '/contabilita/partitaaperta/fornitore/' : '/contabilita/partitaaperta/';
+
+        $paths = [];
+        foreach ($codici as $codice) {
+            $paths[$codice] = $base.((int) $codice);
+        }
+
+        return $this->pooledGetByPath($paths);
     }
 
     /**

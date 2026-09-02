@@ -110,6 +110,10 @@ class RolePermissions
                 ...self::expand('vehicle', self::MANAGE),
                 'widget_TimbraWidget',
                 'page_RiepilogoOre',
+                // Scaduto clienti: e' il profilo ufficio a seguire gli incassi.
+                'page_ScadutoClienti',
+                'page_DettaglioScaduto',
+                'page_AnalisiContabili',
             ],
             'admin' => [
                 ...self::expand('brand', self::MANAGE),
@@ -147,6 +151,10 @@ class RolePermissions
                 'page_ClientiVicini',
                 'page_NotificationSettings',
                 'page_GestionaleSyncReview',
+                // Scaduto clienti: strumento di chi segue incassi e solleciti.
+                'page_ScadutoClienti',
+                'page_DettaglioScaduto',
+                'page_AnalisiContabili',
             ],
             // Specchio di "admin" sopra, risorsa per risorsa: stesso
             // perimetro, solo MANAGE_NO_DELETE al posto di MANAGE/FULL_MANAGE.
@@ -180,6 +188,10 @@ class RolePermissions
                 'page_ClientiVicini',
                 'page_NotificationSettings',
                 'page_GestionaleSyncReview',
+                // Scaduto clienti: strumento di chi segue incassi e solleciti.
+                'page_ScadutoClienti',
+                'page_DettaglioScaduto',
+                'page_AnalisiContabili',
             ],
             default => throw new \InvalidArgumentException("Ruolo sconosciuto: {$role}"),
         };

@@ -18,7 +18,7 @@ use Tests\TestCase;
  */
 class AllResourcesSmokeTest extends TestCase
 {
-    use RefreshDatabase, AssignsPermissionRoles;
+    use AssignsPermissionRoles, RefreshDatabase;
 
     // price-lists e' qui e non fra le back-office perche' un partner ci
     // accede davvero: gli servono i prezzi per fare un preventivo. Verificato
@@ -36,6 +36,10 @@ class AllResourcesSmokeTest extends TestCase
         // gira la storia di una matricola, e ci abbiamo appena cambiato
         // dentro la risoluzione del pagante.
         'machine-units', 'materials', 'material-orders', 'suppliers',
+        // Partite aperte lette da Eureka: dati contabili, riservati ai ruoli
+        // amministrativi (vedi RolePermissions).
+        'scaduto',
+        'analisi-contabili',
     ];
 
     public function test_admin_role_can_access_every_tenant_resource_except_tenant_management(): void
@@ -69,6 +73,8 @@ class AllResourcesSmokeTest extends TestCase
         $this->actingAs($user)->get("/admin/{$tenant->slug}/vehicles")->assertForbidden();
         $this->actingAs($user)->get("/admin/{$tenant->slug}/deadlines")->assertForbidden();
         $this->actingAs($user)->get("/admin/{$tenant->slug}/payment-methods")->assertForbidden();
+        $this->actingAs($user)->get("/admin/{$tenant->slug}/scaduto")->assertForbidden();
+        $this->actingAs($user)->get("/admin/{$tenant->slug}/analisi-contabili")->assertForbidden();
         $this->actingAs($user)->get("/admin/{$tenant->slug}/tenants")->assertForbidden();
         // I preventivi non sono di competenza del dipendente (solo partner/admin).
         $this->actingAs($user)->get("/admin/{$tenant->slug}/quotes")->assertForbidden();

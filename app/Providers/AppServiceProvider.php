@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Filament\Widgets\Contabilita\AccontiSenzaSaldoWidget;
+use App\Filament\Widgets\Contabilita\ScadutoOverviewWidget;
 use App\Filament\Widgets\Gestionale\GestionaleCollegamentiClientiWidget;
 use App\Filament\Widgets\Gestionale\GestionaleCollegamentiMacchinariWidget;
 use App\Filament\Widgets\Gestionale\GestionaleCollegamentiProdottiWidget;
@@ -114,12 +116,22 @@ class AppServiceProvider extends ServiceProvider
         // quella lista evita apposta discoverWidgets() sulla cartella
         // Gestionale/, vedi commento li'): li registriamo qui invece, solo
         // per Livewire, senza farli comparire in Dashboard.
+        //
+        // Stessa cosa per i widget di Contabilita', usati solo dentro
+        // AnalisiContabili e ScadutoClienti. AccontiSenzaSaldoWidget e' una
+        // TABELLA: ricerca, ordinamento e paginazione sono tutte azioni
+        // Livewire, quindi la sola $isLazy = false non bastava — il primo
+        // render passava, ma appena si scriveva qualcosa nel campo "Cerca"
+        // la /livewire/update tornava 419 e app.js rimbalzava su
+        // /sessione-scaduta. Riprodotto con Playwright il 2026-09-02.
         collect([
             GestionaleDaRivedereWidget::class,
             GestionaleCollegamentiClientiWidget::class,
             GestionaleCollegamentiProdottiWidget::class,
             GestionaleCollegamentiMacchinariWidget::class,
             GestionaleMacchineImportateWidget::class,
+            AccontiSenzaSaldoWidget::class,
+            ScadutoOverviewWidget::class,
         ])->filter(fn (string $widget) => class_exists($widget))
             ->each(fn (string $widget) => Livewire::component(
                 app(ComponentRegistry::class)->getName($widget),
