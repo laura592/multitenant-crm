@@ -700,16 +700,31 @@ class ImportEurekaServiceReports extends Command
 
             $createdMaterialIds[] = $material->id;
 
+            $quantita = max(0.0, (float) ($row['quantita'] ?? 1));
+
+            // Eureka manda spesso prezzo=0 sulle righe di intervento (CHIORD
+            // e le installazioni: da sole 3.200 righe sullo storico), e
+            // prenderlo alla lettera lasciava senza valore proprio le voci
+            // fatturabili. Quando la riga non porta un prezzo si usa il
+            // listino dell'articolo, che l'import del catalogo tiene
+            // aggiornato — meglio il prezzo corrente del nulla.
+            $prezzo = (float) ($row['prezzo'] ?? 0) ?: null;
+            $prezzo ??= ((float) ($material->list_price ?? 0) ?: null);
+
+            // "importo" = prezzo_netto * quantita' (sconti di riga gia'
+            // applicati, IVA esclusa): il valore economico reale della riga,
+            // che unit_cost_snapshot da solo non da' (e' il prezzo unitario
+            // lordo). Se manca anche quello si ricostruisce dal prezzo, che
+            // e' comunque meglio di una riga senza importo.
+            $importo = (float) ($row['importo'] ?? 0) ?: null;
+            $importo ??= ($prezzo === null ? null : round($prezzo * $quantita, 2));
+
             ServiceReportMaterial::create([
                 'service_report_id' => $report->id,
                 'material_id' => $material->id,
-                'quantity' => max(0.0, (float) ($row['quantita'] ?? 1)),
-                'unit_cost_snapshot' => (float) ($row['prezzo'] ?? 0) ?: null,
-                // "importo" = prezzo_netto * quantita' (sconti di riga gia'
-                // applicati, IVA esclusa): il valore economico reale della
-                // riga, che unit_cost_snapshot da solo non da' (e' il prezzo
-                // unitario lordo).
-                'line_total_snapshot' => (float) ($row['importo'] ?? 0) ?: null,
+                'quantity' => $quantita,
+                'unit_cost_snapshot' => $prezzo,
+                'line_total_snapshot' => $importo,
                 'notes' => $this->normalizeText($row['descrizione'] ?? null),
             ]);
         }
@@ -980,11 +995,17 @@ class ImportEurekaServiceReports extends Command
 
     private function mapStatus(mixed $statoDocumento): string
     {
-        // stato_documento=10 → stato_documento_descr "Archiviato" (verificato
-        // dal vivo su tutto lo storico importato, es. GET /schedelavoro/16976)
-        // → documento chiuso/definitivo → inviato (il cliente ha già il documento).
-        // Qualsiasi altro valore (es. 3="Ricevuto") → non ancora archiviato → bozza.
-        return (int) $statoDocumento === 10 ? 'inviato' : 'bozza';
+        // Una scheda che arriva da qui VIVE in Eureka: e' li' che va corretta,
+        // e "in_gestionale" e' lo stato che lo dice (lo stesso che assegna
+        // SendServiceReportToGestionaleJob dopo un invio riuscito).
+        //
+        // Prima si mappava stato_documento=10 ("Archiviato") su "inviato": era
+        // sbagliato, perche' nel CRM "inviato" significa spedito via mail AL
+        // CLIENTE dall'azione di invio — cosa mai avvenuta per queste schede.
+        // Lo stato grezzo di Eureka resta comunque salvato in
+        // eureka_stato_documento/eureka_stato_label per chi deve distinguere
+        // archiviato da ricevuto.
+        return 'in_gestionale';
     }
 
     /**
