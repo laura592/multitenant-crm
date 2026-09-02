@@ -127,13 +127,15 @@ class RapportinoPdfPrezziTest extends TestCase
     }
 
     /** Il permesso non deve finire per sbaglio ai ruoli sbagliati. */
-    public function test_solo_amministrazione_e_admin_possono_vedere_i_prezzi(): void
+    public function test_solo_amministrazione_e_admin_vedono_i_prezzi(): void
     {
-        foreach (['dipendente', 'partner'] as $ruolo) {
+        // "amministratore" e' il titolare: legge i numeri dalle pagine
+        // contabili, non stampa listini sui rapportini.
+        foreach (['dipendente', 'partner', 'amministratore'] as $ruolo) {
             $this->assertNotContains('view_prices_service::report', RolePermissions::for($ruolo), $ruolo);
         }
 
-        foreach (['amministrazione', 'admin', 'amministratore'] as $ruolo) {
+        foreach (['amministrazione', 'admin'] as $ruolo) {
             $this->assertContains('view_prices_service::report', RolePermissions::for($ruolo), $ruolo);
         }
     }

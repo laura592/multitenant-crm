@@ -46,6 +46,11 @@ class RolePermissions
     // MAI far uscire un rapportino con i prezzi, l'amministrazione sceglie
     // se stamparlo con o senza. Il PDF allegato alla mail non ha prezzi per
     // nessuno. Applicato da ServiceReportPolicy::viewPrices().
+    //
+    // Solo "amministrazione" e "admin" (indicazione dell'ufficio,
+    // 02/09/2026): "amministratore" e' il profilo titolare, che vede i
+    // numeri dalle pagine contabili e non ha bisogno di stampare listini
+    // sui rapportini.
     private const FULL_MANAGE = [...self::MANAGE, 'force_delete', 'force_delete_any'];
 
     // Come MANAGE ma senza alcun potere di eliminazione: usato da
@@ -180,7 +185,6 @@ class RolePermissions
                 ...self::expand('quote::group', self::MANAGE_NO_DELETE),
                 ...self::expand('information::request', self::MANAGE_NO_DELETE),
                 ...self::expand('service::report', self::MANAGE_NO_DELETE),
-                'view_prices_service::report',
                 ...self::expand('maintenance::schedule', self::MANAGE_NO_DELETE),
                 ...self::expand('deadline', self::MANAGE_NO_DELETE),
                 ...self::expand('vehicle', self::MANAGE_NO_DELETE),
