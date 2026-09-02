@@ -3,6 +3,10 @@
 namespace App\Filament\Pages;
 
 use App\Filament\Widgets\Contabilita\AccontiSenzaSaldoWidget;
+use App\Filament\Widgets\Contabilita\FatturatoMensileWidget;
+use App\Filament\Widgets\Contabilita\FatturatoOverviewWidget;
+use App\Filament\Widgets\Contabilita\RibaWidget;
+use App\Filament\Widgets\Contabilita\SaldiDivergentiWidget;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Pages\Page;
 
@@ -35,13 +39,22 @@ class AnalisiContabili extends Page
 
     public function getSubheading(): ?string
     {
-        return 'Costruite sulle fatture registrate in contabilità. I dati si aggiornano con eureka:import-fatture.';
+        return 'Costruite sulle fatture registrate in contabilità. I dati si aggiornano con eureka:import-fatture e eureka:import-kpi-contabili.';
     }
 
     protected function getHeaderWidgets(): array
     {
+        // L'ordine e' un discorso: prima quanto abbiamo fatturato, poi
+        // com'e' andato mese per mese, poi come lo incassiamo, e in fondo le
+        // due liste di cose che non tornano. Chi apre la pagina per sapere
+        // "come va" si ferma in alto; chi la apre per sistemare qualcosa
+        // scorre.
         return [
+            FatturatoOverviewWidget::class,
+            FatturatoMensileWidget::class,
+            RibaWidget::class,
             AccontiSenzaSaldoWidget::class,
+            SaldiDivergentiWidget::class,
         ];
     }
 

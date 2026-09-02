@@ -20,9 +20,13 @@ use Filament\Widgets\ChartWidget;
  */
 class CashflowMensileWidget extends ChartWidget
 {
-    protected static ?string $heading = 'Entrate e uscite previste';
+    // "Previste" solo nei riquadri sopra, che contano davvero solo il
+    // futuro. Qui dentro ci sono anche i mesi gia' passati dell'anno in
+    // corso: Eureka li restituisce e servono da termine di paragone, ma
+    // chiamare "previsione" gennaio a settembre sarebbe falso.
+    protected static ?string $heading = 'Entrate e uscite, mese per mese';
 
-    protected static ?string $description = 'Da scadenziario e documenti aperti su Eureka. Le uscite sono sotto lo zero.';
+    protected static ?string $description = 'Dallo scadenziario e dai documenti ancora aperti su Eureka. Le uscite stanno sotto lo zero; i mesi già passati restano per confronto.';
 
     protected int|string|array $columnSpan = 'full';
 

@@ -91,3 +91,22 @@ Schedule::command('eureka:sweep-materials-catalog', ['--tenant' => 'alex'])->wee
 // rapportino/push gestionale/geocodifica non aspettano mai un job bulk
 // gia' in corso di lunga durata (thread 2026-08-21).
 Schedule::command('queue:work --queue=default,eureka-bulk --stop-when-empty --max-time=50')->everyMinute()->withoutOverlapping();
+
+// Gli import contabili girano di notte, non piu' a mano.
+//
+// Finora erano comandi da terminale, e le pagine (Scaduto clienti, Analisi
+// contabili, Cash flow) mostravano quello che c'era dall'ultima volta che
+// qualcuno se n'era ricordato — su uno scaduto, "ferma da 400 giorni"
+// calcolato su una fotografia di due settimane fa e' una telefonata fatta
+// coi numeri sbagliati.
+//
+// Orari sfalsati dagli altri sync Eureka (03:00 gestionale, 04:00
+// rapportini, 05:00 prezzi): l'API del fornitore e' gia' andata in
+// disservizio sotto carico il 2026-08-06, e questi tre comandi insieme
+// fanno ~160 chiamate.
+//
+// Le partite per prime: sono la fotografia da cui dipende lo scaduto, cioe'
+// l'unica di queste pagine su cui qualcuno agisce la mattina dopo.
+Schedule::command('eureka:import-partite-aperte', ['--tenant' => 'alex'])->dailyAt('05:30');
+Schedule::command('eureka:import-fatture', ['--tenant' => 'alex'])->dailyAt('05:45');
+Schedule::command('eureka:import-kpi-contabili', ['--tenant' => 'alex'])->dailyAt('06:15');

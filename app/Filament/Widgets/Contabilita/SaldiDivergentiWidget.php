@@ -104,7 +104,15 @@ class SaldiDivergentiWidget extends TableWidget
             ->selectRaw("{$sommaPartite} as saldo_partite")
             ->selectRaw("saldo - {$sommaPartite} as scarto")
             // Sotto il centesimo e' arrotondamento, non una divergenza.
-            ->whereRaw("ABS(saldo - {$sommaPartite}) > ?", [EurekaSaldoAnagrafica::TOLLERANZA])
+            //
+            // La soglia e' scritta NELLA query e non legata come parametro.
+            // Laravel lega i float come stringhe, e SQLite (i test) confronta
+            // un numero con una stringa mettendo sempre il numero prima:
+            // "ABS(...) > '0.01'" e' falso per qualunque scarto, quindi il
+            // controllo non trovava mai niente pur essendo giusto su MySQL.
+            // E' una costante nostra, non un valore che arriva da fuori:
+            // interpolarla non apre nessuna porta.
+            ->whereRaw('ABS(saldo - '.$sommaPartite.') > '.EurekaSaldoAnagrafica::TOLLERANZA)
             ->orderByRaw("ABS(saldo - {$sommaPartite}) DESC");
     }
 }

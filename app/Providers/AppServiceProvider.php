@@ -3,6 +3,12 @@
 namespace App\Providers;
 
 use App\Filament\Widgets\Contabilita\AccontiSenzaSaldoWidget;
+use App\Filament\Widgets\Contabilita\CashflowMensileWidget;
+use App\Filament\Widgets\Contabilita\CashflowOverviewWidget;
+use App\Filament\Widgets\Contabilita\FatturatoMensileWidget;
+use App\Filament\Widgets\Contabilita\FatturatoOverviewWidget;
+use App\Filament\Widgets\Contabilita\RibaWidget;
+use App\Filament\Widgets\Contabilita\SaldiDivergentiWidget;
 use App\Filament\Widgets\Contabilita\ScadutoOverviewWidget;
 use App\Filament\Widgets\Gestionale\GestionaleCollegamentiClientiWidget;
 use App\Filament\Widgets\Gestionale\GestionaleCollegamentiMacchinariWidget;
@@ -132,6 +138,12 @@ class AppServiceProvider extends ServiceProvider
             GestionaleMacchineImportateWidget::class,
             AccontiSenzaSaldoWidget::class,
             ScadutoOverviewWidget::class,
+            SaldiDivergentiWidget::class,
+            FatturatoOverviewWidget::class,
+            FatturatoMensileWidget::class,
+            RibaWidget::class,
+            CashflowOverviewWidget::class,
+            CashflowMensileWidget::class,
         ])->filter(fn (string $widget) => class_exists($widget))
             ->each(fn (string $widget) => Livewire::component(
                 app(ComponentRegistry::class)->getName($widget),

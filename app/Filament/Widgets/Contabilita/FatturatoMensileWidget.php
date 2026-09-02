@@ -103,8 +103,8 @@ class FatturatoMensileWidget extends ChartWidget
                     // Un asse che non parte da zero fa sembrare enormi
                     // differenze piccole.
                     'beginAtZero' => true,
-                    'ticks' => ['callback' => null],
                 ],
+                'x' => ['grid' => ['display' => false]],
             ],
             'plugins' => [
                 // La legenda c'e' sempre con piu' di una serie: il colore da

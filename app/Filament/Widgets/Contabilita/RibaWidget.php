@@ -26,6 +26,18 @@ class RibaWidget extends StatsOverviewWidget
 
     protected static bool $isLazy = false;
 
+    // La base e' il TOTALE dei documenti, IVA inclusa: e' quello che il
+    // cliente paga davvero, ed e' cio' che passa (o non passa) dalla banca.
+    // Detto a voce perche' accanto, nella stessa pagina, il riquadro
+    // "Fatturato" mostra il netto contabile: due numeri diversi che
+    // parlano della stessa annata sembrano un errore finche' non si dice
+    // che misurano cose diverse.
+    // Non statiche: StatsOverviewWidget le dichiara come proprieta' di
+    // istanza, e ridichiararle static e' un errore fatale di PHP.
+    protected ?string $heading = 'Come si incassa';
+
+    protected ?string $description = 'Sul totale delle fatture emesse, IVA inclusa — non sul netto contabile del riquadro sopra.';
+
     protected function getStats(): array
     {
         $anno = (int) now()->format('Y');
