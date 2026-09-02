@@ -19,9 +19,13 @@ class DatabaseSeeder extends Seeder
             TenantSeeder::class,
             UserSeeder::class,
             RolesAndPermissionsSeeder::class,
-            ScadenzarioDemoSeeder::class,
-            BeerLineMaintenanceDemoSeeder::class,
-            DemoOperationalDataSeeder::class,
         ]);
+
+        // I seeder di dati finti (scadenzario, lavaggi birra, dati operativi)
+        // sono stati tolti il 02/09/2026: il locale si popola dal dump di
+        // produzione, e clienti/rapportini inventati in mezzo a quelli veri
+        // costavano piu' fatica di quanta ne risparmiassero. Quelli rimasti
+        // caricano anagrafiche reali (comuni, marchi, fornitori, materiali) o
+        // servono a far partire l'app (tenant, utenti, ruoli).
     }
 }
