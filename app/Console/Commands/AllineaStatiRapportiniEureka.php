@@ -37,10 +37,16 @@ class AllineaStatiRapportiniEureka extends Command
         $tenant = $this->resolveTenant();
         $dryRun = (bool) $this->option('dry-run');
 
+        // Non solo le schede importate: anche un rapportino nostro unito a una
+        // scheda VIVE ormai su Eureka. Quelli uniti prima che confermaDuplicato()
+        // cambiasse lo stato (02/09/2026) erano rimasti "completato" pur avendo
+        // il collegamento — RT-2026-0580, 0581, 0622.
         $daCambiare = ServiceReport::query()
             ->where('tenant_id', $tenant->id)
-            ->where('source', ServiceReport::SOURCE_EUREKA)
-            ->where('status', '<>', 'in_gestionale');
+            ->where('status', '<>', 'in_gestionale')
+            ->where(fn ($q) => $q
+                ->where('source', ServiceReport::SOURCE_EUREKA)
+                ->orWhereNotNull('eureka_service_report_id'));
 
         $conteggi = (clone $daCambiare)
             ->selectRaw('status, count(*) as n')
