@@ -387,15 +387,33 @@ class ServiceReport extends Model
         $year ??= (int) date('Y');
         $prefix = "RT-{$year}-";
 
-        $last = static::withoutGlobalScopes()
+        // Si prende il numero libero PIU' BASSO, non l'ultimo piu' uno.
+        //
+        // Unire un doppione libera il numero della copia archiviata (vedi
+        // liberaNumero()), e senza questo quei numeri resterebbero buchi per
+        // sempre: 63 in due giorni di lavoro sui doppioni. Cosi' la serie si
+        // richiude da sola senza rinumerare niente — rinumerare avrebbe
+        // spostato anche i 19 rapportini gia' spediti ai clienti, che il
+        // numero ce l'hanno stampato sul PDF.
+        //
+        // Il prezzo, scelto con l'ufficio il 03/09/2026: il numero non dice
+        // piu' QUANDO. Un rapportino importato a settembre puo' ricevere
+        // 0583. Per l'ordine c'e' la data dell'intervento.
+        //
+        // withoutGlobalScopes(): i numeri dei rapportini archiviati restano
+        // occupati, altrimenti si riassegnerebbe il numero di uno che
+        // qualcuno puo' ancora ripescare.
+        $usati = static::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
             ->where('number', 'like', "{$prefix}%")
-            ->orderByRaw('CAST(SUBSTRING(number, -4) AS UNSIGNED) DESC')
-            ->first();
+            ->pluck('number')
+            ->map(fn (string $numero) => (int) substr($numero, -4))
+            ->filter()
+            ->flip();
 
         $next = 1;
-        if ($last && preg_match('/-(\d+)$/', $last->number, $matches)) {
-            $next = (int) $matches[1] + 1;
+        while ($usati->has($next)) {
+            $next++;
         }
 
         return $prefix.str_pad((string) $next, 4, '0', STR_PAD_LEFT);
@@ -496,6 +514,13 @@ class ServiceReport extends Model
 
         $this->adottaMaterialiDaEureka($importato);
 
+        // Il numero della copia torna libero: e' il rapportino del tecnico
+        // che resta, e lasciarlo appeso a una copia archiviata aprirebbe un
+        // buco nella serie per sempre. La copia si ritrova comunque dal
+        // numero di scheda del gestionale, che dopo l'unione e' il suo vero
+        // nome.
+        $importato->liberaNumero();
+
         $importato->delete();
 
         // Unire e' irreversibile nei fatti (il rapportino importato sparisce
@@ -516,6 +541,25 @@ class ServiceReport extends Model
             'pagante' => $this->eureka_destinazione_label,
             'deciso_da' => auth()->user()?->email,
         ]);
+    }
+
+    /**
+     * Rende il numero CRM di nuovo assegnabile.
+     *
+     * La colonna non ammette NULL ed e' unica per tenant, quindi il numero
+     * non si cancella: si sostituisce con un'etichetta fuori dalla serie,
+     * che non puo' collidere. Il rapportino resta rintracciabile dal numero
+     * di scheda del gestionale.
+     */
+    public function liberaNumero(): void
+    {
+        if (! str_starts_with((string) $this->number, 'RT-')) {
+            return;
+        }
+
+        $riferimento = $this->eureka_service_report_id ?? $this->id;
+
+        $this->forceFill(['number' => "UNITO-{$riferimento}"])->save();
     }
 
     /**
