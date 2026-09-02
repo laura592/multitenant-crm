@@ -18,12 +18,19 @@ use Illuminate\Support\Str;
  */
 class PrioritaWidget extends BaseWidget
 {
-    protected static ?int $sort = 0;
+    // Apre il contenuto della sezione "Da fare adesso" (SezioneDaFare, sort 0).
+    protected static ?int $sort = 1;
 
-    // Meta pagina (2 colonne): affiancata a MagazzinoStatsWidget (stesso
-    // sort successivo, columnSpan 1) invece di occupare una riga intera per
-    // sole 2 card, che lasciava la seconda meta dello schermo vuota.
     protected int|string|array $columnSpan = 1;
+
+    // Riga intera quando le card sono due (mezza riga ciascuna, nessun buco
+    // a fianco); meta' riga quando il ruolo ne vede una sola (partner,
+    // amministrazione: vedi getStats()), che a tutta larghezza diventerebbe
+    // una card enorme per un numero solo.
+    public function getColumnSpan(): int|string|array
+    {
+        return count($this->getStats()) > 1 ? 'full' : 1;
+    }
 
     // Default Filament per 2 stat e' 3 colonne interne (lascia una terza
     // traccia vuota, visibile come buco a fianco della seconda card): qui le

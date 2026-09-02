@@ -11,7 +11,9 @@ use Illuminate\Support\Facades\Auth;
 
 class UpcomingDeadlinesWidget extends BaseWidget
 {
-    protected static ?int $sort = 4;
+    // Sezione "Da fare adesso", stesso sort di FailedGestionaleService
+    // ReportsWidget: le due tabelle (colSpan 1) stanno sulla stessa riga.
+    protected static ?int $sort = 2;
 
     public static function canView(): bool
     {

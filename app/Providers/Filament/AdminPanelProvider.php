@@ -8,14 +8,16 @@ use App\Filament\Widgets\FailedGestionaleServiceReportsWidget;
 use App\Filament\Widgets\LatestQuotesWidget;
 use App\Filament\Widgets\MagazzinoStatsWidget;
 use App\Filament\Widgets\PrioritaWidget;
+use App\Filament\Widgets\Sezioni\SezioneAndamento;
+use App\Filament\Widgets\Sezioni\SezioneAzioniRapide;
+use App\Filament\Widgets\Sezioni\SezioneDaFare;
+use App\Filament\Widgets\Sezioni\SezioneMagazzino;
 use App\Filament\Widgets\TimbraWidget;
 use App\Filament\Widgets\UpcomingDeadlinesWidget;
 use App\Filament\Widgets\UpcomingMaintenanceWidget;
 use App\Http\Middleware\SetPermissionsTeamId;
 use App\Models\Tenant;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
-use Illuminate\Validation\Rules\Password;
-use Jeffgreco13\FilamentBreezy\BreezyCore;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -26,13 +28,15 @@ use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
 use Filament\Support\Enums\MaxWidth;
-use Illuminate\Support\Facades\Blade;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Blade;
+use Illuminate\Validation\Rules\Password;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Jeffgreco13\FilamentBreezy\BreezyCore;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -156,16 +160,33 @@ class AdminPanelProvider extends PanelProvider
             // (pensati solo per la pagina "Sync Eureka", vedi
             // GestionaleSyncReview::getHeaderWidgets()) alla Dashboard
             // generale, senza $sort: finivano in cima, sopra i KPI veri.
+            // Ordine reale in pagina: lo decide il $sort di ogni widget, non
+            // questo elenco. I quattro Sezione* sono soli titoli (vedi
+            // SezioneWidget) e aprono ciascuno il proprio blocco:
+            //   -3 Azioni rapide       -> Crea preventivo (-2), Timbra (-1)
+            //    0 Da fare adesso      -> Priorita' (1), Prossime scadenze +
+            //                             Invii Eureka falliti (2, affiancati),
+            //                             Piani in scadenza (3)
+            //    4 Andamento commerciale -> numeri preventivi/clienti (5),
+            //                             Ultimi preventivi (6)
+            //    7 Magazzino           -> catalogo materiali (8)
             ->widgets([
+                SezioneAzioniRapide::class,
                 CreaPreventivoWidget::class,
                 TimbraWidget::class,
+
+                SezioneDaFare::class,
                 PrioritaWidget::class,
-                MagazzinoStatsWidget::class,
+                UpcomingDeadlinesWidget::class,
+                FailedGestionaleServiceReportsWidget::class,
+                UpcomingMaintenanceWidget::class,
+
+                SezioneAndamento::class,
                 DashboardStatsWidget::class,
                 LatestQuotesWidget::class,
-                UpcomingDeadlinesWidget::class,
-                UpcomingMaintenanceWidget::class,
-                FailedGestionaleServiceReportsWidget::class,
+
+                SezioneMagazzino::class,
+                MagazzinoStatsWidget::class,
             ])
             // Tutti collassati di default: con 5+ gruppi e fino a 6 voci
             // ciascuno la sidebar arrivava a scorrere parecchio prima ancora

@@ -15,11 +15,9 @@ use Illuminate\Support\Facades\Auth;
  */
 class MagazzinoStatsWidget extends BaseWidget
 {
-    protected static ?int $sort = 1;
-
-    // Affiancata a PrioritaWidget nella griglia a 2 colonne della dashboard:
-    // vedi commento su PrioritaWidget::$columnSpan.
-    protected int|string|array $columnSpan = 1;
+    // Ultima sezione della dashboard (SezioneMagazzino, sort 7): sono numeri
+    // di consistenza del catalogo, non cose da fare.
+    protected static ?int $sort = 8;
 
     // Vedi commento su PrioritaWidget::getColumns(): stesso motivo.
     protected function getColumns(): int

@@ -17,7 +17,8 @@ class UpcomingMaintenanceWidget extends Widget
     // interlaccia i record riga per riga fra le colonne (1-2-3-4 sparsi su 2
     // colonne), mentre qui servono due liste sequenziali separate (1-5 a
     // sinistra, 6-10 a destra) - da qui la vista custom.
-    protected static ?int $sort = 5;
+    // Chiude la sezione "Da fare adesso".
+    protected static ?int $sort = 3;
 
     public static function canView(): bool
     {

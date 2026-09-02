@@ -12,11 +12,11 @@ use Illuminate\Support\Facades\Auth;
 
 class FailedGestionaleServiceReportsWidget extends BaseWidget
 {
-    // Stesso sort/columnSpan delle altre tabelle di sintesi in dashboard
-    // (Prossime scadenze, Piani in scadenza): finora un invio fallito si
-    // scopriva solo aprendo il singolo rapportino o notando l'icona rossa
-    // scorrendo l'elenco, niente lo segnalava attivamente.
-    protected static ?int $sort = 6;
+    // Sezione "Da fare adesso", affiancato a Prossime scadenze (stesso sort,
+    // stesso columnSpan): finora un invio fallito si scopriva solo aprendo il
+    // singolo rapportino o notando l'icona rossa scorrendo l'elenco, niente
+    // lo segnalava attivamente.
+    protected static ?int $sort = 2;
 
     // Gate sulla pagina "Sync Eureka" e non su view_any_service::report: un
     // invio fallito si risolve guardando l'errore del gestionale e i log

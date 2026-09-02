@@ -16,7 +16,8 @@ use Illuminate\Support\Facades\Auth;
  */
 class DashboardStatsWidget extends BaseWidget
 {
-    protected static ?int $sort = 2;
+    // Apre il contenuto della sezione "Andamento commerciale" (sort 4).
+    protected static ?int $sort = 5;
 
     // I numeri qui sono tutti preventivi (dipendente/amministrazione non
     // hanno accesso ai preventivi, vedi RolePermissions): senza questo

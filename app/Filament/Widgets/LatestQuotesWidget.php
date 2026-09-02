@@ -12,9 +12,8 @@ use Illuminate\Support\Facades\Auth;
 
 class LatestQuotesWidget extends BaseWidget
 {
-    // Stesso sort di UpcomingDeadlinesWidget cosi le due tabelle (colSpan 1)
-    // finiscono sulla stessa riga della griglia a 2 colonne, affiancate.
-    protected static ?int $sort = 4;
+    // Chiude la sezione "Andamento commerciale", sotto i suoi numeri.
+    protected static ?int $sort = 6;
 
     // Chi non ha accesso ai preventivi (dipendente/amministrazione) non deve
     // vederli nemmeno riassunti qui.
@@ -23,7 +22,10 @@ class LatestQuotesWidget extends BaseWidget
         return Auth::user()->can('view_any_quote');
     }
 
-    protected int|string|array $columnSpan = 1;
+    // Riga intera: non e' piu' affiancata a Prossime scadenze (finita nella
+    // sezione "Da fare adesso"), da sola a meta' riga lasciava mezzo schermo
+    // vuoto.
+    protected int|string|array $columnSpan = 'full';
 
     protected static ?string $heading = 'Ultimi preventivi';
 
