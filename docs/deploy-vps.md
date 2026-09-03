@@ -15,14 +15,22 @@ Situazione di partenza, verificata il 2026-09-03:
 | Caselle `@alexcaffe.com` | cPanel (`mail.alexcaffe.com`) | **resta dov'è** |
 | DNS autoritativo | `ns1/ns2.cmshigh.com` (Serverplan) | resta lì, si editano i record |
 
-Taglia consigliata: OVH **VPS-2** (4 vCore, 8 GB RAM, 75 GB NVMe), impegno 12
-mesi, immagine **Ubuntu 26.04 LTS**. Il disco non è il vincolo — il DB del CRM
-è ~42 MB e `storage/app` ~43 MB — lo è la RAM quando WordPress, php-fpm, MySQL
-e i job notturni girano insieme.
+Macchina scelta (ordine del 03/09/2026): OVH **VPS-1** — 2 vCore, 4 GB RAM,
+40 GB NVMe, impegno 12 mesi, immagine **Ubuntu 26.04 LTS**, piu' le opzioni
+Snapshot e Automated Backup Premium. 62,52 €/anno.
 
-**Datacenter: Gravelines** (Francia), o Limburg (Germania) se preferisci la
-giurisdizione tedesca. Si sceglie all'ordine e non si cambia dopo: spostare la
-VPS significa rifarla e rifare il cutover. Fra le sedi UE la latenza
+La VPS-2 (8 GB) sarebbe stata piu' comoda ma non era ordinabile in un
+datacenter UE, e la sede vince sulla RAM: il datacenter non si cambia mai piu',
+mentre l'upgrade a un modello superiore mantiene IP, disco e dati e costa un
+riavvio. Se lo swap lavora tutti i giorni (`free -h`, `vmstat 1 5`), si sale.
+
+Il disco non e' un vincolo: il DB del CRM e' ~42 MB e `storage/app` ~43 MB.
+E `npm run build` si puo' lasciare sul server — la build di questo progetto e'
+58 moduli per 80 KB di output, qualche centinaio di MB di Node, non il picco
+da 2 GB che si teme di solito.
+
+**Datacenter: Gravelines** (Francia). Si sceglie all'ordine e non si cambia
+dopo: spostare la VPS significa rifarla e rifare il cutover. Fra le sedi UE la latenza
 dall'Italia varia di una decina di millisecondi, irrilevante qui: si sceglie
 sulla capacità del sito, e Gravelines è il piu' grande di OVH. Strasburgo si
 evita — a marzo 2021 un incendio ha distrutto l'edificio SBG2 e danneggiato
@@ -118,14 +126,33 @@ curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt install -y node
 in `.env` resta `127.0.0.1` esattamente com'è oggi.
 
 ```bash
-mysql_secure_installation
-mysql -e "CREATE DATABASE crm CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-mysql -e "CREATE USER 'crm'@'localhost' IDENTIFIED BY '<password-lunga>';"
-mysql -e "GRANT ALL ON crm.* TO 'crm'@'localhost';"
+sudo mysql_secure_installation
+sudo mysql
+```
+```sql
+CREATE DATABASE crm CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'crm'@'localhost' IDENTIFIED BY '<password-lunga-e-casuale>';
+GRANT ALL PRIVILEGES ON crm.* TO 'crm'@'localhost';
+FLUSH PRIVILEGES;
 ```
 
-Un DB e un utente **per applicazione**: l'utente di WordPress non deve poter
+Un DB e un utente **per applicazione** — le stesse tre righe con `wordpress`
+al posto di `crm` quando arriva il sito: l'utente di WordPress non deve poter
 leggere il database del CRM. È metà del motivo per cui li tieni separati.
+
+### Guardarci dentro senza phpMyAdmin
+
+Non installare phpMyAdmin sulla VPS: è una pagina di login su internet davanti
+al database, ed è fra i bersagli più scansionati che esistano. Dal Mac si apre
+un tunnel SSH e si usa un client locale (TablePlus, Sequel Ace):
+
+```bash
+ssh -L 3307:127.0.0.1:3306 deploy@<IP-VPS>
+```
+
+Finché quel terminale resta aperto, il client si collega a `127.0.0.1:3307`
+con l'utente `crm`. Nessuna porta esposta, nessuna interfaccia web da tenere
+aggiornata.
 
 ### Due pool php-fpm, non uno
 
