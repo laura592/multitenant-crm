@@ -355,6 +355,29 @@ class ImportEurekaServiceReports extends Command
                 $updated++;
 
                 if (! $dryRun) {
+                    // L'elenco dei rapportini gia' importati si carica una
+                    // volta sola all'inizio, e con --with-detail il ciclo dura
+                    // parecchi minuti: nel frattempo qualcuno puo' eliminare
+                    // dal pannello proprio uno di quelli in coda. Allora
+                    // save() fa un UPDATE che tocca zero righe e passa senza
+                    // protestare, e a esplodere e' l'inserimento delle righe
+                    // materiale, che non trova piu' il padre (successo in
+                    // produzione il 03/09/2026 su RT-2026-0676).
+                    //
+                    // Un rapportino sparito non deve fermare gli altri
+                    // seicento: si salta e si annota.
+                    if (! ServiceReport::withTrashed()->whereKey($existing->getKey())->exists()) {
+                        $this->warn("  eliminato nel frattempo, saltato: #{$eurekaId}");
+                        RegistroSync::problema('import-rapportini', 'rapportino eliminato durante l\'import', [
+                            'scheda_eureka' => $eurekaId,
+                            'numero' => $existing->number,
+                        ]);
+                        $updated--;
+                        $skipped++;
+
+                        continue;
+                    }
+
                     DB::transaction(function () use ($tenant, $existing, $detail, &$materialCache): void {
                         $existing->save();
                         if ($detail) {
