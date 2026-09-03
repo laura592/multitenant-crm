@@ -387,34 +387,26 @@ class ServiceReport extends Model
         $year ??= (int) date('Y');
         $prefix = "RT-{$year}-";
 
-        // Si prende il numero libero PIU' BASSO, non l'ultimo piu' uno.
+        // Si prende l'ULTIMO piu' uno, mai un numero gia' usato.
         //
-        // Unire un doppione libera il numero della copia archiviata (vedi
-        // liberaNumero()), e senza questo quei numeri resterebbero buchi per
-        // sempre: 63 in due giorni di lavoro sui doppioni. Cosi' la serie si
-        // richiude da sola senza rinumerare niente — rinumerare avrebbe
-        // spostato anche i 19 rapportini gia' spediti ai clienti, che il
-        // numero ce l'hanno stampato sul PDF.
+        // Per un giorno (02-03/09/2026) si riempivano i buchi lasciati dalle
+        // unioni, per non lasciare la serie bucata. La regola e' caduta il
+        // 03/09: l'ufficio stampa il riepilogo degli interventi e quei numeri
+        // finiscono su carta, quindi un numero non puo' cambiare significato.
+        // RT-2026-0579 era "Hotel Vidi Miramare" sulla stampa del 02/09;
+        // riassegnarlo a una scheda importata avrebbe reso quella carta
+        // bugiarda.
         //
-        // Il prezzo, scelto con l'ufficio il 03/09/2026: il numero non dice
-        // piu' QUANDO. Un rapportino importato a settembre puo' ricevere
-        // 0583. Per l'ordine c'e' la data dell'intervento.
-        //
-        // withoutGlobalScopes(): i numeri dei rapportini archiviati restano
-        // occupati, altrimenti si riassegnerebbe il numero di uno che
-        // qualcuno puo' ancora ripescare.
-        $usati = static::withoutGlobalScopes()
+        // I buchi restano, e vanno bene: dicono che li' c'e' stata
+        // un'unione. withoutGlobalScopes() perche' anche i numeri dei
+        // rapportini archiviati restano occupati.
+        $ultimo = static::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
             ->where('number', 'like', "{$prefix}%")
-            ->pluck('number')
-            ->map(fn (string $numero) => (int) substr($numero, -4))
-            ->filter()
-            ->flip();
+            ->orderByRaw('CAST(SUBSTRING(number, -4) AS UNSIGNED) DESC')
+            ->value('number');
 
-        $next = 1;
-        while ($usati->has($next)) {
-            $next++;
-        }
+        $next = $ultimo && preg_match('/-(\d+)$/', $ultimo, $m) ? (int) $m[1] + 1 : 1;
 
         return $prefix.str_pad((string) $next, 4, '0', STR_PAD_LEFT);
     }
@@ -514,13 +506,13 @@ class ServiceReport extends Model
 
         $this->adottaMaterialiDaEureka($importato);
 
-        // Il numero della copia torna libero: e' il rapportino del tecnico
-        // che resta, e lasciarlo appeso a una copia archiviata aprirebbe un
-        // buco nella serie per sempre. La copia si ritrova comunque dal
-        // numero di scheda del gestionale, che dopo l'unione e' il suo vero
-        // nome.
-        $importato->liberaNumero();
-
+        // La copia archiviata TIENE il suo numero.
+        //
+        // Per un giorno lo si liberava, per non lasciare buchi nella serie.
+        // Ma l'ufficio stampa il riepilogo degli interventi e quei numeri
+        // finiscono su carta: riassegnarne uno renderebbe bugiarda una
+        // stampa gia' consegnata (indicazione dell'ufficio, 03/09/2026).
+        // Il buco resta, e dice che li' c'e' stata un'unione.
         $importato->delete();
 
         // Unire e' irreversibile nei fatti (il rapportino importato sparisce
@@ -541,25 +533,6 @@ class ServiceReport extends Model
             'pagante' => $this->eureka_destinazione_label,
             'deciso_da' => auth()->user()?->email,
         ]);
-    }
-
-    /**
-     * Rende il numero CRM di nuovo assegnabile.
-     *
-     * La colonna non ammette NULL ed e' unica per tenant, quindi il numero
-     * non si cancella: si sostituisce con un'etichetta fuori dalla serie,
-     * che non puo' collidere. Il rapportino resta rintracciabile dal numero
-     * di scheda del gestionale.
-     */
-    public function liberaNumero(): void
-    {
-        if (! str_starts_with((string) $this->number, 'RT-')) {
-            return;
-        }
-
-        $riferimento = $this->eureka_service_report_id ?? $this->id;
-
-        $this->forceFill(['number' => "UNITO-{$riferimento}"])->save();
     }
 
     /**
