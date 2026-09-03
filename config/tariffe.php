@@ -31,9 +31,14 @@ return [
             'manodopera_festiva' => 'OREFEMART',
             // A catalogo ci sono due codici quasi uguali: LAVMART (28,00,
             // "LAVAGGIO 2 VIE MARTELLOZZO") e LAV2MART (27,50, descritto solo
-            // come "LAVAGGIO 2 VIE"). Quello giusto e' LAVMART, confermato
-            // 2026-08-31, anche se lo storico usa piu' spesso l'altro.
-            'lavaggio' => 'LAVMART',
+            // come "LAVAGGIO 2 VIE"). Quello giusto e' LAV2MART, corretto
+            // dall'ufficio il 2026-09-03: ribalta la nota del 2026-08-31, che
+            // aveva scelto LAVMART perche' e' quello col nome del pagante.
+            //
+            // Il nome inganna, lo storico no: 293 righe LAV2MART dal 2023 al
+            // 01/09/2026 contro 17 LAVMART sporadiche. Prima di rimetterlo
+            // "a posto" guardando la descrizione a catalogo, ricontrolla li'.
+            'lavaggio' => 'LAV2MART',
             'lavaggio_ulteriore_via' => 'ULTVIAMART',
         ],
 

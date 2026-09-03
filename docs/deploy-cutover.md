@@ -1,5 +1,10 @@
 # Deploy e cutover in produzione (hosting condiviso cPanel)
 
+> **Storico.** Questo runbook descrive il primo deploy su cPanel, cioe' come
+> e' nata la produzione attuale. Per portare CRM e sito su VPS (lasciando la
+> posta su Serverplan) vedi `docs/deploy-vps.md`, che lo sostituisce
+> operativamente.
+
 Runbook per il primo deploy reale di `multitenant-crm`, in sostituzione della
 vecchia app "app_preventivi_vg". Vedi `docs/architecture.md` §8 per il piano
 di migrazione dati e `docs/checklist-rilascio.md` per il gate generico di
