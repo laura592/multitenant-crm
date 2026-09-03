@@ -108,10 +108,17 @@ class RolePermissions
                 'page_ClientiVicini',
             ],
             'amministrazione' => [
-                // Profilo ufficio: nessun accesso a catalogo/preventivi/interventi
-                // sul campo, solo cio' che serve per la gestione amministrativa
-                // del personale e l'integrazione dei rapportini.
+                // Profilo ufficio: nessun accesso al catalogo ne' agli
+                // interventi sul campo, solo cio' che serve per la gestione
+                // amministrativa del personale e l'integrazione dei
+                // rapportini.
                 ...self::expand('customer', self::VIEW),
+                // I preventivi li legge e basta (richiesta dell'ufficio,
+                // 03/09/2026): servono a rispondere al telefono e a
+                // controllare cosa e' stato promesso, non a rifarli — quelli
+                // restano di chi li scrive.
+                ...self::expand('quote', self::VIEW),
+                ...self::expand('quote::group', self::VIEW),
                 // Non crea rapportini (li fanno i tecnici), ma li puo' correggere.
                 ...self::expand('service::report', ['view_any', 'view', 'update']),
                 // Stampa la copia con i prezzi quando serve: vedi la nota su

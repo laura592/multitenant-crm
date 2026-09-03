@@ -279,16 +279,39 @@ class RolePermissionsTest extends TestCase
     {
         $user = $this->makeUser('amministrazione', 'http-amministrazione@gifar.it');
 
-        foreach (['customers', 'service-reports', 'time-entries', 'leave-requests', 'riepilogo-ore', 'deadlines', 'vehicles'] as $path) {
+        // 'quotes' e' in sola lettura dal 03/09/2026: l'elenco si apre, ma
+        // creare e modificare restano vietati (vedi il test sui permessi).
+        foreach (['customers', 'service-reports', 'time-entries', 'leave-requests', 'riepilogo-ore', 'deadlines', 'vehicles', 'quotes'] as $path) {
             $this->actingAs($user)->get("/admin/{$this->tenant->slug}/{$path}")->assertOk();
         }
 
+        $this->actingAs($user)->get("/admin/{$this->tenant->slug}/quotes/create")->assertForbidden();
+
         foreach ([
-            'quotes', 'products', 'categories', 'brands', 'product-families',
+            'products', 'categories', 'brands', 'product-families',
             'materials', 'material-orders',
             'maintenance-schedules', 'payment-methods', 'information-requests', 'tenants',
         ] as $path) {
             $this->actingAs($user)->get("/admin/{$this->tenant->slug}/{$path}")->assertForbidden();
         }
     }
+    /**
+     * L'ufficio legge i preventivi e basta: servono a rispondere al telefono
+     * e a controllare cosa e' stato promesso, non a rifarli (richiesta
+     * dell'ufficio, 03/09/2026).
+     */
+    public function test_amministrazione_legge_i_preventivi_ma_non_li_tocca(): void
+    {
+        $permessi = \App\Support\RolePermissions::for('amministrazione');
+
+        foreach (['view_any_quote', 'view_quote', 'view_any_quote::group', 'view_quote::group'] as $consentito) {
+            $this->assertContains($consentito, $permessi, $consentito);
+        }
+
+        foreach (['create_quote', 'update_quote', 'delete_quote',
+            'create_quote::group', 'update_quote::group', 'delete_quote::group'] as $vietato) {
+            $this->assertNotContains($vietato, $permessi, $vietato);
+        }
+    }
+
 }
