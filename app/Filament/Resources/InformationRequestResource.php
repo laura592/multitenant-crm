@@ -221,17 +221,29 @@ class InformationRequestResource extends Resource
                 // informazioni si richiama, non si scrive, e con undici colonne
                 // l'elenco era diventato illeggibile. L'email si riaccende dal
                 // menu delle colonne quando serve.
+                // Tutti i contatti, non solo il primo: 99 clienti hanno piu'
+                // di un'email e 19 piu' di un numero, e chi richiama da questa
+                // pagina deve vederli tutti invece di aprire l'anagrafica.
+                // Con l'elenco su piu' righe ogni valore e' copiabile per
+                // conto suo: si copia il numero che serve, non tutti insieme.
+                //
+                // L'email era nascosta di default: chi apre questa pagina sta
+                // per rispondere a una richiesta, quindi i due modi di
+                // rispondere si vedono subito (richiesta dell'ufficio,
+                // 03/09/2026).
                 Tables\Columns\TextColumn::make('customer_email')
                     ->label('Email')
-                    ->getStateUsing(fn (InformationRequest $record) => $record->customer?->primaryEmail())
+                    ->getStateUsing(fn (InformationRequest $record) => $record->customer?->emails ?: null)
+                    ->listWithLineBreaks()
                     ->placeholder('—')
                     ->copyable()
                     ->copyMessage('Email copiata')
                     ->icon('heroicon-o-envelope')
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->toggleable(),
                 Tables\Columns\TextColumn::make('customer_phone')
                     ->label('Telefono')
-                    ->getStateUsing(fn (InformationRequest $record) => $record->customer?->primaryPhone())
+                    ->getStateUsing(fn (InformationRequest $record) => $record->customer?->phones ?: null)
+                    ->listWithLineBreaks()
                     ->placeholder('—')
                     ->copyable()
                     ->copyMessage('Telefono copiato')
