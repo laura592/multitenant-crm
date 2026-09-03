@@ -112,4 +112,48 @@ class NumerazioneRapportiniTest extends TestCase
         $this->assertSame('UNITO-999', $copia->fresh()->number);
         $this->assertSame("RT-{$anno}-0001", $this->rapportino()->number);
     }
+    /**
+     * Il comando una tantum per gli ambienti dove si e' unito PRIMA che
+     * liberaNumero() esistesse: la produzione al 03/09/2026.
+     */
+    public function test_il_comando_libera_i_numeri_delle_copie_gia_unite(): void
+    {
+        $anno = date('Y');
+
+        // Una copia unita "alla vecchia maniera": archiviata, ma il numero
+        // ancora suo, e la sua scheda ormai su un rapportino vivo.
+        $nostro = $this->rapportino();                                   // 0001
+        $copia = $this->rapportino(ServiceReport::SOURCE_EUREKA, 17814); // 0002
+        $nostro->update(['eureka_service_report_id' => 17814]);
+        $copia->delete();
+
+        // Un rapportino archiviato per altri motivi: il suo numero NON si
+        // tocca, puo' essere ripescato.
+        $scartato = $this->rapportino();                                 // 0003
+        $scartato->delete();
+
+        $this->artisan('rapportini:libera-numeri-uniti', ['--tenant' => 'alex', '--force' => true])
+            ->assertSuccessful();
+
+        $this->assertSame('UNITO-17814', $copia->fresh()->number);
+        $this->assertSame("RT-{$anno}-0003", $scartato->fresh()->number);
+        // Il buco lasciato dalla copia si richiude, quello dello scartato no.
+        $this->assertSame("RT-{$anno}-0002", $this->rapportino()->number);
+    }
+
+    /** In prova a vuoto non scrive niente. */
+    public function test_il_comando_in_prova_a_vuoto_non_tocca_i_numeri(): void
+    {
+        $anno = date('Y');
+        $nostro = $this->rapportino();
+        $copia = $this->rapportino(ServiceReport::SOURCE_EUREKA, 17814);
+        $nostro->update(['eureka_service_report_id' => 17814]);
+        $copia->delete();
+
+        $this->artisan('rapportini:libera-numeri-uniti', ['--tenant' => 'alex', '--dry-run' => true])
+            ->assertSuccessful();
+
+        $this->assertSame("RT-{$anno}-0002", $copia->fresh()->number);
+    }
+
 }
