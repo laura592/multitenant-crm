@@ -66,6 +66,12 @@ class RolePermissions
     // corregge, non lo fa sparire.
     private const MANAGE_NO_DELETE = ['view_any', 'view', 'create', 'update', 'restore', 'restore_any'];
 
+    // Il perimetro di "amministrazione" sulle risorse operative: legge, crea
+    // e corregge, ma non cancella e non ripristina. Distinto da
+    // MANAGE_NO_DELETE, che il restore lo concede: rimettere in piedi un
+    // record archiviato e' una decisione da admin, non da ufficio.
+    private const UFFICIO = ['view_any', 'view', 'create', 'update'];
+
     public static function for(string $role): array
     {
         return match ($role) {
@@ -111,10 +117,9 @@ class RolePermissions
                 'page_ClientiVicini',
             ],
             'amministrazione' => [
-                // Profilo ufficio: nessun accesso al catalogo ne' agli
-                // interventi sul campo, solo cio' che serve per la gestione
-                // amministrativa del personale e l'integrazione dei
-                // rapportini.
+                // Profilo ufficio: la gestione amministrativa del personale,
+                // l'integrazione dei rapportini e il lavoro quotidiano su
+                // catalogo e macchine. Niente cancellazioni, mai.
                 ...self::expand('customer', self::VIEW),
                 // I preventivi li legge e basta (richiesta dell'ufficio,
                 // 03/09/2026): servono a rispondere al telefono e a
@@ -122,8 +127,7 @@ class RolePermissions
                 // restano di chi li scrive.
                 ...self::expand('quote', self::VIEW),
                 ...self::expand('quote::group', self::VIEW),
-                // Non crea rapportini (li fanno i tecnici), ma li puo' correggere.
-                ...self::expand('service::report', ['view_any', 'view', 'update']),
+                ...self::expand('service::report', self::UFFICIO),
                 // Stampa la copia con i prezzi quando serve: vedi la nota su
                 // view_prices_service::report piu' sotto.
                 'view_prices_service::report',
@@ -137,6 +141,14 @@ class RolePermissions
                 // revisioni, rinnovi contratto).
                 ...self::expand('deadline', self::MANAGE_NO_DELETE),
                 ...self::expand('vehicle', self::MANAGE_NO_DELETE),
+                // Catalogo, macchine installate e piani manutenzione: li
+                // usa davvero (confermato dall'ufficio il 03/09/2026, dopo
+                // che il diff di ruoli:sincronizza stava per toglierglieli —
+                // un materiale nuovo era stato inserito il giorno prima).
+                // Niente ordini materiali: quelli restano di chi compra.
+                ...self::expand('machine::unit', self::UFFICIO),
+                ...self::expand('maintenance::schedule', self::UFFICIO),
+                ...self::expand('material', self::UFFICIO),
                 'widget_TimbraWidget',
                 'page_RiepilogoOre',
             ],

@@ -147,7 +147,7 @@ class RolePermissionsTest extends TestCase
         $this->assertFalse($dipendente->can('update', $vehicle));
     }
 
-    public function test_amministrazione_sees_hr_data_and_can_correct_service_reports_but_not_create_or_manage_catalog(): void
+    public function test_amministrazione_sees_hr_data_and_works_on_reports_and_catalog_but_never_deletes(): void
     {
         $amministrazione = $this->makeUser('amministrazione', 'amministrazione@gifar.it');
         $customer = Customer::create(['tenant_id' => $this->tenant->id, 'company_name' => 'Bar Rossi']);
@@ -170,11 +170,10 @@ class RolePermissionsTest extends TestCase
         $this->assertFalse($amministrazione->can('update', $customer));
         $this->assertFalse($amministrazione->can('delete', $customer));
 
-        // Consentito: puo' correggere un rapportino esistente, ma non crearne uno nuovo
-        // (li fanno solo i tecnici) ne' cancellarlo.
+        // Consentito: crea e corregge rapportini, mai li cancella.
         $this->assertTrue($amministrazione->can('viewAny', ServiceReport::class));
+        $this->assertTrue($amministrazione->can('create', ServiceReport::class));
         $this->assertTrue($amministrazione->can('update', $report));
-        $this->assertFalse($amministrazione->can('create', ServiceReport::class));
         $this->assertFalse($amministrazione->can('delete', $report));
 
         // Consentito: vede/corregge ore e ferie di tutto il personale per il commercialista,
@@ -193,8 +192,18 @@ class RolePermissionsTest extends TestCase
         $this->assertTrue($amministrazione->can('viewAny', LeaveRequest::class));
         $this->assertFalse($amministrazione->can('delete', $leaveRequest));
 
-        // Vietato: nessun accesso a catalogo/magazzino.
-        $this->assertFalse($amministrazione->can('viewAny', Material::class));
+        // Consentito: il catalogo materiali lo tiene aggiornato l'ufficio
+        // (confermato 03/09/2026), ma senza mai cancellare una voce.
+        $material = Material::create([
+            'tenant_id' => $this->tenant->id, 'code' => 'TEST01',
+            'source' => Material::SOURCE_MANUALE, 'category' => 'Test', 'type' => 'Test',
+        ]);
+        $this->assertTrue($amministrazione->can('viewAny', Material::class));
+        $this->assertTrue($amministrazione->can('create', Material::class));
+        $this->assertTrue($amministrazione->can('update', $material));
+        $this->assertFalse($amministrazione->can('delete', $material));
+
+        // Vietato: gli ordini ai fornitori restano di chi compra.
         $this->assertFalse($amministrazione->can('viewAny', MaterialOrder::class));
 
         // Consentito: gestisce scadenzario e parco veicoli (assicurazioni, revisioni, rinnovi).
@@ -281,7 +290,9 @@ class RolePermissionsTest extends TestCase
 
         // 'quotes' e' in sola lettura dal 03/09/2026: l'elenco si apre, ma
         // creare e modificare restano vietati (vedi il test sui permessi).
-        foreach (['customers', 'service-reports', 'time-entries', 'leave-requests', 'riepilogo-ore', 'deadlines', 'vehicles', 'quotes'] as $path) {
+        // 'materials' e 'maintenance-schedules' aperti dal 03/09/2026: il
+        // catalogo lo tiene aggiornato l'ufficio (vedi RolePermissions).
+        foreach (['customers', 'service-reports', 'time-entries', 'leave-requests', 'riepilogo-ore', 'deadlines', 'vehicles', 'quotes', 'materials', 'maintenance-schedules'] as $path) {
             $this->actingAs($user)->get("/admin/{$this->tenant->slug}/{$path}")->assertOk();
         }
 
@@ -289,8 +300,7 @@ class RolePermissionsTest extends TestCase
 
         foreach ([
             'products', 'categories', 'brands', 'product-families',
-            'materials', 'material-orders',
-            'maintenance-schedules', 'payment-methods', 'information-requests', 'tenants',
+            'material-orders', 'payment-methods', 'information-requests', 'tenants',
         ] as $path) {
             $this->actingAs($user)->get("/admin/{$this->tenant->slug}/{$path}")->assertForbidden();
         }
