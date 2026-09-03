@@ -103,12 +103,16 @@ class RolePermissionsTest extends TestCase
         $this->assertFalse($dipendente->can('update', $material));
         $this->assertTrue($dipendente->can('create', MaterialOrder::class));
         $this->assertTrue($dipendente->can('update', $order));
-        $this->assertTrue($dipendente->can('delete', $order));
+        // Dal 03/09/2026 il dipendente non cancella niente (indicazione
+        // dell'ufficio): corregge, non fa sparire.
+        $this->assertFalse($dipendente->can('delete', $order));
 
-        // Consentito: gestisce ore/ferie proprie in view/create/update. Le
-        // timbrature si possono anche eliminare (deve poter correggere da
-        // solo un errore, es. da "Recupera turni passati"), le ferie no
-        // (restano solo a chi puo' approvare/rifiutare).
+        // Consentito: gestisce ore/ferie proprie in view/create/update, ma
+        // non elimina ne' le une ne' le altre. La cancellazione delle
+        // timbrature c'era per far correggere da soli un errore (es. da
+        // "Recupera turni passati") ed e' caduta con la regola del
+        // 03/09/2026: ora una timbratura sbagliata si corregge o la si fa
+        // togliere a chi amministra.
         $timeEntry = TimeEntry::create([
             'tenant_id' => $this->tenant->id, 'user_id' => $dipendente->id,
             'clock_in' => now()->subHours(2), 'clock_out' => now(),
@@ -119,7 +123,7 @@ class RolePermissionsTest extends TestCase
         ]);
         $this->assertTrue($dipendente->can('create', TimeEntry::class));
         $this->assertTrue($dipendente->can('create', LeaveRequest::class));
-        $this->assertTrue($dipendente->can('delete', $timeEntry));
+        $this->assertFalse($dipendente->can('delete', $timeEntry));
         $this->assertFalse($dipendente->can('delete', $leaveRequest));
 
         // Consentito: gestisce interamente i rapportini di intervento.
@@ -132,7 +136,7 @@ class RolePermissionsTest extends TestCase
             'work_performed' => 'Intervento di prova',
         ]);
         $this->assertTrue($dipendente->can('create', ServiceReport::class));
-        $this->assertTrue($dipendente->can('delete', $report));
+        $this->assertFalse($dipendente->can('delete', $report));
 
         // Vietato: scadenzario e parco veicoli sono roba da amministrazione, non da tecnici.
         $this->assertFalse($dipendente->can('viewAny', Deadline::class));

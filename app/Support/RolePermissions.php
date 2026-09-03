@@ -53,9 +53,14 @@ class RolePermissions
     // sui rapportini.
     private const FULL_MANAGE = [...self::MANAGE, 'force_delete', 'force_delete_any'];
 
-    // Come MANAGE ma senza alcun potere di eliminazione: usato da
-    // "amministratore", che rispecchia il perimetro di risorse di "admin" ma
-    // senza delete/delete_any (ne' force_delete, mai incluso in MANAGE).
+    // Come MANAGE ma senza alcun potere di eliminazione.
+    //
+    // Lo usano "amministratore" (stesso perimetro di "admin" ma senza
+    // delete/delete_any, ne' force_delete che in MANAGE non c'e' mai) e, dal
+    // 03/09/2026 su indicazione dell'ufficio, anche "dipendente" e
+    // "amministrazione": cancellare non e' una cosa che si fa dal campo o
+    // dall'ufficio, si chiede a chi amministra. Chi sbaglia un rapportino lo
+    // corregge, non lo fa sparire.
     private const MANAGE_NO_DELETE = ['view_any', 'view', 'create', 'update', 'restore', 'restore_any'];
 
     public static function for(string $role): array
@@ -81,13 +86,13 @@ class RolePermissions
                 ...self::expand('customer', ['view_any', 'view', 'create']),
                 // I preventivi non sono di sua competenza: li vedono/gestiscono
                 // solo partner e admin/staff master.
-                ...self::expand('information::request', self::MANAGE),
-                ...self::expand('service::report', self::MANAGE),
-                ...self::expand('maintenance::schedule', self::MANAGE),
-                ...self::expand('machine::unit', self::MANAGE),
-                ...self::expand('lavaggio', self::MANAGE),
+                ...self::expand('information::request', self::MANAGE_NO_DELETE),
+                ...self::expand('service::report', self::MANAGE_NO_DELETE),
+                ...self::expand('maintenance::schedule', self::MANAGE_NO_DELETE),
+                ...self::expand('machine::unit', self::MANAGE_NO_DELETE),
+                ...self::expand('lavaggio', self::MANAGE_NO_DELETE),
                 ...self::expand('material', self::VIEW),
-                ...self::expand('material::order', self::MANAGE),
+                ...self::expand('material::order', self::MANAGE_NO_DELETE),
                 ...self::expand('supplier', self::VIEW),
                 ...self::expand('price::list', self::VIEW),
                 // Vede solo le proprie ore/ferie (ScopesToOwnUserUnlessResponsabile).
@@ -96,7 +101,7 @@ class RolePermissions
                 // un weekend) senza dover ogni volta passare da un admin -
                 // resta comunque scoperto solo le proprie, mai quelle di
                 // altri colleghi.
-                ...self::expand('time::entry', ['view_any', 'view', 'create', 'update', 'delete']),
+                ...self::expand('time::entry', ['view_any', 'view', 'create', 'update']),
                 ...self::expand('leave::request', ['view_any', 'view', 'create', 'update']),
                 'widget_TimbraWidget',
                 'page_RiepilogoOre',
@@ -120,8 +125,8 @@ class RolePermissions
                 // Scadenzario e parco veicoli: gestione completa, non riguardano
                 // gli interventi sul campo ma l'amministrazione (assicurazioni,
                 // revisioni, rinnovi contratto).
-                ...self::expand('deadline', self::MANAGE),
-                ...self::expand('vehicle', self::MANAGE),
+                ...self::expand('deadline', self::MANAGE_NO_DELETE),
+                ...self::expand('vehicle', self::MANAGE_NO_DELETE),
                 'widget_TimbraWidget',
                 'page_RiepilogoOre',
             ],

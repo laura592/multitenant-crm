@@ -156,4 +156,31 @@ class RuoliPermessiUpdateTest extends TestCase
             ->pluck('name')
             ->all();
     }
+    /**
+     * Cancellare e' di chi amministra.
+     *
+     * Non e' una cosa che si fa dal campo o dall'ufficio (indicazione
+     * dell'ufficio, 03/09/2026): chi sbaglia un rapportino lo corregge, non
+     * lo fa sparire. Il test esiste perche' la deriva e' silenziosa —
+     * un self::MANAGE aggiunto per comodita' a un ruolo qualsiasi ci
+     * rimetterebbe dentro delete e delete_any senza che nessuno se ne
+     * accorga.
+     */
+    public function test_solo_admin_puo_cancellare(): void
+    {
+        foreach (['dipendente', 'amministrazione', 'amministratore', 'partner'] as $ruolo) {
+            $conDelete = array_values(array_filter(
+                \App\Support\RolePermissions::for($ruolo),
+                fn (string $permesso) => str_contains($permesso, 'delete'),
+            ));
+
+            $this->assertSame([], $conDelete, "{$ruolo} non deve poter cancellare");
+        }
+
+        $this->assertNotEmpty(array_filter(
+            \App\Support\RolePermissions::for('admin'),
+            fn (string $permesso) => str_contains($permesso, 'delete'),
+        ), 'admin deve poter cancellare');
+    }
+
 }
