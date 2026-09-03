@@ -91,10 +91,14 @@ class RefreshMaterialPricesFromEureka extends Command
                 // Un prezzo che cambia da solo di notte e' la cosa che
                 // l'ufficio chiede piu' spesso di ricostruire: va scritto il
                 // vecchio accanto al nuovo, non solo il nuovo.
+                // Arrotondati: un float grezzo finisce nel log come
+                // 13.160000000000000142108547152 ed e' illeggibile proprio
+                // dove serve, cioe' quando si cerca quando e' cambiato un
+                // prezzo.
                 RegistroSync::movimento('prezzi', 'listino aggiornato', [
                     'articolo' => $material->code,
-                    'da' => $oldPrice,
-                    'a' => $newPrice,
+                    'da' => $oldPrice === null ? null : round((float) $oldPrice, 2),
+                    'a' => round((float) $newPrice, 2),
                 ]);
             }
 
