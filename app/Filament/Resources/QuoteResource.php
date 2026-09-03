@@ -58,8 +58,8 @@ class QuoteResource extends Resource
      * rapportini erano 56 query per 25 righe invece di 8, e il conto cresce
      * con la paginazione.
      *
-     * customer e' una colonna dell'elenco; i due billingCustomer servono a
-     * invoiceRecipient(), che senza eager loading interroga il database una
+     * customer e' una colonna dell'elenco; billingCustomer resta caricato per
+     * l'anagrafica del cliente, che senza eager loading interroga il database una
      * volta per riga.
      */
     public static function getEloquentQuery(): Builder
@@ -415,48 +415,6 @@ class QuoteResource extends Resource
                                             ...CustomerContactFields::schema(),
                                             ...ItalianAddressFields::schema(),
                                         ]),
-                                    /*
-                                     | Chi paga QUESTO preventivo.
-                                     |
-                                     | Vuoto significa "come al solito", cioe' il pagante del
-                                     | cliente — ed e' il caso normale, non si tocca. Serve
-                                     | quando il preventivo va intestato E fatturato alla
-                                     | stessa persona a cui l'hai fatto, anche se di norma
-                                     | paga il torrefattore.
-                                     |
-                                     | Il PDF stampa la riga "Fatturato a" solo se il pagante
-                                     | e' davvero diverso dall'intestatario.
-                                     */
-                                    Forms\Components\Select::make('billing_customer_id')
-                                        ->label('Fatturare a')
-                                        // Corto: il pagante abituale si legge gia' dentro il
-                                        // campo come placeholder, ripeterlo qui lo fa solo
-                                        // andare a capo tre volte.
-                                        ->helperText(fn (Forms\Get $get) => filled($get('billing_customer_id'))
-                                            ? 'Solo per questo preventivo.'
-                                            : 'Vuoto = pagante abituale.')
-                                        ->placeholder(fn (Forms\Get $get) => DisplayName::titleCase(
-                                            Customer::find($get('customer_id'))?->invoiceRecipient()?->full_name
-                                        ) ?? '—')
-                                        ->relationship('billingCustomer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
-                                        ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::customerOption($record))
-                                        ->searchable(['company_name', 'first_name', 'last_name', 'city'])
-                                        ->preload()
-                                        ->live()
-                                        ->hintAction(
-                                            Forms\Components\Actions\Action::make('fattura_al_cliente')
-                                                ->label('Fattura al cliente')
-                                                ->icon('heroicon-m-user')
-                                                ->visible(fn (Forms\Get $get) => filled($get('customer_id'))
-                                                    && $get('billing_customer_id') !== $get('customer_id'))
-                                                ->action(fn (Forms\Set $set, Forms\Get $get) => $set('billing_customer_id', $get('customer_id')))
-                                        )
-                                        // Numero(3) + Cliente(4) + questo(5) = riga piena.
-                                        // Il pannello e' stretto (la colonna Totali gli toglie
-                                        // un terzo di larghezza), quindi il numero — che e'
-                                        // corto e non si modifica — cede spazio ai due menu,
-                                        // che contengono ragioni sociali lunghe.
-                                        ->columnSpan(5),
                                     Forms\Components\DatePicker::make('date')
                                         ->label('Data')
                                         ->required()
@@ -733,7 +691,7 @@ class QuoteResource extends Resource
                 ->label('Email destinatario')
                 ->email()
                 ->required()
-                ->default(fn (Quote $record) => $record->customer?->invoiceRecipient()->primaryEmail()),
+                ->default(fn (Quote $record) => static::emailDestinatario($record)),
             Forms\Components\TextInput::make('cc_email')
                 ->label('CC (opzionale)')
                 ->email()
@@ -750,10 +708,28 @@ class QuoteResource extends Resource
         ];
     }
 
+    /**
+     * A chi va il preventivo: a CHI LO HA CHIESTO, mai a chi paga.
+     *
+     * Prima si passava da Customer::invoiceRecipient(), che segue il pagante
+     * impostato sull'anagrafica: su Mariver quello e' Dersut, e la mail
+     * partiva verso il torrefattore invece che verso il cliente (visto dal
+     * vivo il 03/09/2026). E' la stessa regola gia' valida per i rapportini.
+     *
+     * Metodo e non closure in linea: cosi' la regola si puo' verificare con
+     * un test, invece di vivere dentro uno schema Filament che fuori dal
+     * form non si sa valutare.
+     */
+    public static function emailDestinatario(Quote $record): ?string
+    {
+        return $record->customer?->primaryEmail();
+    }
+
     protected static function defaultQuoteEmailBody(Quote $record): string
     {
-        $recipient = $record->customer?->invoiceRecipient();
-        $customerName = DisplayName::titleCase($recipient?->company_name) ?: (DisplayName::titleCase($recipient?->full_name) ?? 'Cliente');
+        // Si saluta il cliente, non chi paga: vedi il campo destinatario.
+        $cliente = $record->customer;
+        $customerName = DisplayName::titleCase($cliente?->company_name) ?: (DisplayName::titleCase($cliente?->full_name) ?? 'Cliente');
         $total = '€ '.number_format((float) $record->subtotal, 2, ',', '.').' + IVA';
         $signatureName = static::emailSignatureName($record);
 

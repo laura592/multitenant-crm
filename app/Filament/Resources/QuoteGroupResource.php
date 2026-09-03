@@ -147,7 +147,8 @@ class QuoteGroupResource extends Resource
                 ->label('Email destinatario')
                 ->email()
                 ->required()
-                ->default(fn (QuoteGroup $record) => $record->customer?->invoiceRecipient()->primaryEmail()),
+                // Al cliente, mai al pagante: vedi QuoteResource.
+                ->default(fn (QuoteGroup $record) => $record->customer?->primaryEmail()),
             Forms\Components\TextInput::make('cc_email')
                 ->label('CC (opzionale)')
                 ->email()

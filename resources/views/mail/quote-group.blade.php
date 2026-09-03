@@ -3,7 +3,8 @@
 	$tenant = $group->tenant ?: $group->customer?->tenant;
 	$resolvedSubject = trim((string) ($subjectText ?? "Offerta {$group->number}"));
 	$renderedBody = trim((string) ($emailBody ?? ''));
-	$recipient = $group->customer?->invoiceRecipient();
+	// Si saluta il cliente, non chi paga (vedi QuoteResource).
+	$recipient = $group->customer;
 	$customerName = \App\Support\DisplayName::titleCase($recipient?->company_name) ?: \App\Support\DisplayName::titleCase($recipient?->full_name);
 @endphp
 
