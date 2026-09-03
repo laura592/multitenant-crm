@@ -91,6 +91,47 @@ class ServiceReportBulkStatusTest extends TestCase
         return [$tenant, $user, $customer];
     }
 
+    /**
+     * Lo stato "In gestionale" e' un'etichetta dell'ufficio, non una
+     * serratura: dal 03/09/2026 si imposta a mano e il rapportino resta
+     * modificabile finche' il documento non esiste davvero su Eureka.
+     */
+    public function test_lo_stato_in_gestionale_non_blocca_da_solo(): void
+    {
+        [$tenant, $user, $customer] = $this->scenario();
+
+        $etichettato = $this->rapportino($tenant, $customer, $user, 'in_gestionale');
+
+        $this->assertFalse($etichettato->isSuEureka());
+        $this->assertFalse($etichettato->isLocked());
+
+        Livewire::test(ListServiceReports::class)
+            ->callTableBulkAction('cambia_stato', [$etichettato], data: ['status' => 'completato']);
+
+        $this->assertSame('completato', $etichettato->refresh()->status);
+    }
+
+    /**
+     * L'altra meta': un rapportino nostro unito al suo doppione importato
+     * vive su Eureka pur non essendo mai passato da un invio CRM->Eureka.
+     * Lo blocca l'aggancio alla scheda, non lo stato.
+     */
+    public function test_un_rapportino_agganciato_a_una_scheda_eureka_resta_bloccato(): void
+    {
+        [$tenant, $user, $customer] = $this->scenario();
+
+        $unito = $this->rapportino($tenant, $customer, $user, 'completato');
+        $unito->update(['eureka_service_report_id' => 17713]);
+
+        $this->assertTrue($unito->isSuEureka());
+        $this->assertTrue($unito->isLocked());
+
+        Livewire::test(ListServiceReports::class)
+            ->callTableBulkAction('cambia_stato', [$unito], data: ['status' => 'bozza']);
+
+        $this->assertSame('completato', $unito->refresh()->status);
+    }
+
     private function rapportino(Tenant $tenant, Customer $customer, User $tech, string $status): ServiceReport
     {
         return ServiceReport::create([

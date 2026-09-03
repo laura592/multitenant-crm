@@ -305,34 +305,49 @@ class ServiceReport extends Model
     }
 
     /**
-     * Un rapportino non e' piu' modificabile da CRM quando:
-     * - e' arrivato da Eureka (SOURCE_EUREKA, vedi ImportEurekaServiceReports), o
-     * - e' gia' stato inviato con successo a Eureka (gestionale_sync_status=sent,
-     *   vedi SendServiceReportToGestionaleJob).
+     * Il documento esiste davvero su Eureka. E' un FATTO, non una scelta:
+     * - e' arrivato da li' (SOURCE_EUREKA, vedi ImportEurekaServiceReports),
+     * - o e' stato inviato con successo (gestionale_sync_status=sent, vedi
+     *   SendServiceReportToGestionaleJob),
+     * - o e' agganciato a una scheda lavoro Eureka (eureka_service_report_id),
+     *   che e' il caso di un rapportino nostro unito al suo doppione
+     *   importato: vive su Eureka pur non essendo mai passato da un invio
+     *   CRM->Eureka.
      *
-     * In entrambi i casi Eureka e' ormai (anche) la fonte autorevole per quel
-     * documento, e una modifica lato CRM andrebbe fuori sincrono col gestionale
-     * senza che nessuno se ne accorga.
+     * Stessa domanda a cui risponde ServiceReportResource::gestionaleDisplayState()
+     * per decidere il badge "Stato invio Eureka".
+     */
+    public function isSuEureka(): bool
+    {
+        return $this->source === self::SOURCE_EUREKA
+            || $this->gestionale_sync_status === 'sent'
+            || $this->eureka_service_report_id !== null;
+    }
+
+    /**
+     * Un rapportino non e' piu' modificabile da CRM quando esiste su Eureka:
+     * li' e' ormai (anche) la fonte autorevole, e una modifica lato CRM
+     * andrebbe fuori sincrono col gestionale senza che nessuno se ne accorga.
      *
-     * - oppure e' in stato "in_gestionale", che significa la stessa cosa detta
-     *   in modo visibile: lo scrive solo SendServiceReportToGestionaleJob
-     *   insieme a sync=sent, e non e' scegliibile a mano dal form.
+     * Il blocco NON guarda piu' lo stato (2026-09-03). Fino a ieri
+     * "in_gestionale" bloccava, e per questo non era scegliibile a mano dal
+     * form: metterlo avrebbe chiuso il rapportino per sbaglio. Ora lo stato
+     * torna a essere solo un'etichetta amministrativa, che l'ufficio imposta
+     * quando vuole, e a chiudere e' il fatto — isSuEureka(). Le due cose
+     * coincidono comunque nella pratica: tutti i rapportini in produzione
+     * con stato "in_gestionale" hanno gia' eureka_service_report_id, quindi
+     * nessuno di quelli chiusi si e' riaperto con questo cambio.
      *
      * "Completato" NON blocca piu' (2026-08-31). Era un flag impostato a mano,
      * e trattarlo come irreversibile significava che un errore di battitura
      * accorto dopo aver spuntato la casella non si poteva piu' correggere:
-     * l'unica via era cancellare e rifare. Il blocco resta legato all'unico
-     * fatto che lo giustifica davvero, cioe' che il documento sia gia' passato
-     * in Eureka — che e' anche cio' che questo stato diventera' quando l'invio
-     * sara' automatico.
+     * l'unica via era cancellare e rifare.
      *
      * Usato da ServiceReportPolicy::update().
      */
     public function isLocked(): bool
     {
-        return $this->source === self::SOURCE_EUREKA
-            || $this->gestionale_sync_status === 'sent'
-            || $this->status === 'in_gestionale';
+        return $this->isSuEureka();
     }
 
     /**

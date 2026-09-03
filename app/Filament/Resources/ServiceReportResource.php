@@ -38,7 +38,6 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
@@ -426,9 +425,12 @@ class ServiceReportResource extends Resource
                         ->required(),
                     Forms\Components\Select::make('status')
                         ->label('Stato')
-                        // "In gestionale" non e' scegliibile a mano: lo scrive
-                        // il job di invio quando Eureka accetta il documento.
-                        ->options(fn () => Arr::except(self::statusLabels(), ['in_gestionale']))
+                        // "In gestionale" e' scegliibile a mano dal 03/09/2026:
+                        // e' un'etichetta amministrativa, non una serratura.
+                        // A bloccare il rapportino e' il fatto che il documento
+                        // esista su Eureka (ServiceReport::isSuEureka()), non
+                        // questa tendina.
+                        ->options(fn () => self::statusLabels())
                         ->default('bozza')
                         ->required(),
                 ]),
@@ -1359,14 +1361,14 @@ class ServiceReportResource extends Resource
                     ->form([
                         Forms\Components\Select::make('status')
                             ->label('Nuovo stato')
-                            ->options(fn () => Arr::except(self::statusLabels(), ['in_gestionale']))
+                            ->options(fn () => self::statusLabels())
                             ->native(false)
                             ->required()
-                            // "In gestionale" non e' nell'elenco: lo scrive
-                            // solo il job di invio a Eureka, insieme al flag di
-                            // sincronizzazione. Metterlo a mano direbbe che il
-                            // documento e' passato in Eureka quando non e' vero.
-                            ->helperText('"In gestionale" non si imposta a mano: lo scrive l\'invio a Eureka.'),
+                            // "In gestionale" si puo' impostare a mano dal
+                            // 03/09/2026: dice come sta la pratica in ufficio.
+                            // Non chiude il rapportino - a bloccarlo e' il
+                            // documento che esiste su Eureka, non lo stato.
+                            ->helperText('"In gestionale" e\' un\'etichetta: non blocca il rapportino, a bloccarlo e\' l\'invio a Eureka.'),
                     ])
                     ->action(function (Collection $records, array $data): void {
                         $aggiornati = 0;
