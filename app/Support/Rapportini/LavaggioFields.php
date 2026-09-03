@@ -183,9 +183,9 @@ class LavaggioFields
      * spegnere un "Lavaggio eseguito" acceso a mano (capita sui clienti che
      * un piano lavaggio collegato non ce l'hanno).
      */
-    public static function syncVieDaImpianti(Forms\Set $set, Forms\Get $get): void
+    public static function syncVieDaImpianti(Forms\Set $set, Forms\Get $get, string $su = ''): void
     {
-        $totaleVie = collect($get('lavaggio_impianti') ?? [])
+        $totaleVie = collect($get($su.'lavaggio_impianti') ?? [])
             ->sum(fn (array $riga) => filled($riga['lines_washed'] ?? null) ? (int) $riga['lines_washed'] : 0);
 
         if ($totaleVie < 1) {
@@ -195,10 +195,10 @@ class LavaggioFields
         // Prima il toggle e il conteggio, poi le righe materiali:
         // syncLavaggioViaMaterials() rilegge entrambi da $get e con il
         // toggle ancora spento cancellerebbe le righe invece di scriverle.
-        $set('_lavaggio_vie_eseguito', true);
-        $set('lavaggio_vie_count', $totaleVie);
+        $set($su.'_lavaggio_vie_eseguito', true);
+        $set($su.'lavaggio_vie_count', $totaleVie);
 
-        self::syncLavaggioViaMaterials($set, $get);
+        self::syncLavaggioViaMaterials($set, $get, $su);
     }
 
     /**
@@ -207,34 +207,34 @@ class LavaggioFields
      * cambio di toggle/numero vie, senza toccare righe uguali aggiunte a
      * mano (dedupe via $alreadyAdded, come altrove in questo file).
      */
-    public static function syncLavaggioViaMaterials(Forms\Set $set, Forms\Get $get): void
+    public static function syncLavaggioViaMaterials(Forms\Set $set, Forms\Get $get, string $su = ''): void
     {
-        $materialsUsed = $get('materialsUsed') ?? [];
+        $materialsUsed = $get($su.'materialsUsed') ?? [];
 
         foreach (['_lavaggio_base_material_key', '_lavaggio_ult_material_key'] as $keyField) {
-            $key = $get($keyField);
+            $key = $get($su.$keyField);
 
             if ($key && array_key_exists($key, $materialsUsed)) {
                 unset($materialsUsed[$key]);
             }
         }
 
-        $eseguito = (bool) $get('_lavaggio_vie_eseguito');
-        $vieCount = (int) $get('lavaggio_vie_count');
+        $eseguito = (bool) $get($su.'_lavaggio_vie_eseguito');
+        $vieCount = (int) $get($su.'lavaggio_vie_count');
 
         if (! $eseguito || $vieCount < 1) {
-            $set('materialsUsed', $materialsUsed);
-            $set('_lavaggio_base_material_key', null);
-            $set('_lavaggio_ult_material_key', null);
+            $set($su.'materialsUsed', $materialsUsed);
+            $set($su.'_lavaggio_base_material_key', null);
+            $set($su.'_lavaggio_ult_material_key', null);
             // Spegnere il toggle azzera anche il conteggio: il campo e' una
             // colonna vera, senza questo resterebbe in DB il numero di vie
             // del lavaggio appena tolto dal rapportino.
-            $set('lavaggio_vie_count', null);
+            $set($su.'lavaggio_vie_count', null);
 
             return;
         }
 
-        $tariffe = TariffeIntervento::per(Customer::find($get('customer_id')));
+        $tariffe = TariffeIntervento::per(Customer::find($get($su.'customer_id')));
         $baseMaterial = Material::where('code', $tariffe['lavaggio'] ?? self::LAVAGGIO_VIE_BASE_MATERIAL_CODE)->first();
         $ultMaterial = Material::where('code', $tariffe['lavaggio_ulteriore_via'] ?? self::LAVAGGIO_VIE_ULTERIORE_MATERIAL_CODE)->first();
 
@@ -263,9 +263,9 @@ class LavaggioFields
             }
         }
 
-        $set('materialsUsed', $materialsUsed);
-        $set('_lavaggio_base_material_key', $newBaseKey);
-        $set('_lavaggio_ult_material_key', $newUltKey);
+        $set($su.'materialsUsed', $materialsUsed);
+        $set($su.'_lavaggio_base_material_key', $newBaseKey);
+        $set($su.'_lavaggio_ult_material_key', $newUltKey);
     }
 
     /**

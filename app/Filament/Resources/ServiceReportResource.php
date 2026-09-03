@@ -554,13 +554,26 @@ class ServiceReportResource extends Resource
                                 ->required()
                                 ->searchable()
                                 ->live()
-                                ->afterStateUpdated(function (Forms\Set $set, ?string $state) {
+                                ->afterStateUpdated(function (Forms\Set $set, Get $get, ?string $state) {
                                     if (! $state) {
                                         return;
                                     }
 
                                     $schedule = MaintenanceSchedule::find($state);
                                     $set('lines_washed', $schedule?->lines_count);
+
+                                    // Scrivere le vie con $set NON risveglia
+                                    // l'afterStateUpdated del repeater: quello
+                                    // scatta solo se le vie le digiti tu e poi
+                                    // esci dal campo. Scegliendo l'impianto e
+                                    // fermandosi li', le righe LAV2/ULTVIA non
+                                    // arrivavano mai e il rapportino restava
+                                    // senza voci da fatturare (segnalato dal
+                                    // vivo il 03/09/2026). Si chiama quindi da
+                                    // qui, risalendo di due livelli fino al
+                                    // form: '../' e' la riga del repeater,
+                                    // '../../' il modulo.
+                                    LavaggioFields::syncVieDaImpianti($set, $get, '../../');
                                 }),
                             Forms\Components\TextInput::make('lines_washed')
                                 ->label('Vie lavate')
