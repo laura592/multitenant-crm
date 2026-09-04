@@ -14,7 +14,7 @@ use Tests\TestCase;
 
 class QuotePanelSmokeTest extends TestCase
 {
-    use AssignsPermissionRoles, RefreshDatabase;
+    use RefreshDatabase, AssignsPermissionRoles;
 
     public function test_partner_user_can_see_own_tenant_quote_in_panel(): void
     {

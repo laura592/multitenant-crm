@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Filament\Pages\RiepilogoOre;
-use App\Filament\Resources\LeaveRequestResource\Pages\ListLeaveRequests;
 use App\Filament\Widgets\TimbraWidget;
 use App\Models\LeaveRequest;
 use App\Models\Tenant;
@@ -18,7 +17,7 @@ use Tests\TestCase;
 
 class PresenzeTest extends TestCase
 {
-    use AssignsPermissionRoles, RefreshDatabase;
+    use RefreshDatabase, AssignsPermissionRoles;
 
     public function test_employee_can_clock_in_and_out_from_widget(): void
     {
@@ -74,7 +73,7 @@ class PresenzeTest extends TestCase
 
         $this->assertSame(2, TimeEntry::where('user_id', $employee->id)->count());
 
-        $page = new RiepilogoOre;
+        $page = new RiepilogoOre();
         $page->mount();
         $page->month = today()->month;
         $page->year = today()->year;
@@ -135,7 +134,7 @@ class PresenzeTest extends TestCase
         $this->actingAs($employee);
         Filament::setTenant($tenant);
 
-        $page = new RiepilogoOre;
+        $page = new RiepilogoOre();
         $page->mount();
         $page->month = $today->month;
         $page->year = $today->year;
@@ -171,7 +170,7 @@ class PresenzeTest extends TestCase
         $this->actingAs($employee);
         Filament::setTenant($tenant);
 
-        $page = new RiepilogoOre;
+        $page = new RiepilogoOre();
         $page->mount();
         $page->month = $monday->month;
         $page->year = $monday->year;
@@ -198,7 +197,7 @@ class PresenzeTest extends TestCase
         $this->actingAs($employee);
         Filament::setTenant($tenant);
 
-        $page = new RiepilogoOre;
+        $page = new RiepilogoOre();
         $page->mount();
         $page->month = $today->month;
         $page->year = $today->year;
@@ -230,7 +229,7 @@ class PresenzeTest extends TestCase
         $this->actingAs($employee);
         Filament::setTenant($tenant);
 
-        $page = new RiepilogoOre;
+        $page = new RiepilogoOre();
         $page->mount();
         $page->month = $today->month;
         $page->year = $today->year;
@@ -265,7 +264,7 @@ class PresenzeTest extends TestCase
         $this->actingAs($owner);
         Filament::setTenant($tenant);
 
-        Livewire::test(ListLeaveRequests::class)
+        \Livewire\Livewire::test(\App\Filament\Resources\LeaveRequestResource\Pages\ListLeaveRequests::class)
             ->callTableAction('approve', $leave);
 
         $this->assertSame(1, $employee->notifications()->count());
@@ -369,7 +368,7 @@ class PresenzeTest extends TestCase
         $this->actingAs($employee);
         Filament::setTenant($tenant);
 
-        $page = new RiepilogoOre;
+        $page = new RiepilogoOre();
         $page->mount();
         $page->month = $day->month;
         $page->year = $day->year;
@@ -399,7 +398,7 @@ class PresenzeTest extends TestCase
             $this->actingAs($viewer);
             Filament::setTenant($tenant);
 
-            $page = new RiepilogoOre;
+            $page = new RiepilogoOre();
             $page->mount();
 
             $this->assertEqualsCanonicalizing(

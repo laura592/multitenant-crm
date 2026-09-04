@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Console\Commands\SincronizzaTuttoEureka;
 use App\Models\Tenant;
 use App\Support\Gestionale\RegistroSync;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -35,7 +34,7 @@ class SincronizzaTuttoTest extends TestCase
     {
         Tenant::create(['name' => 'Alex', 'slug' => 'alex', 'is_master' => true]);
 
-        $comando = new SincronizzaTuttoEureka;
+        $comando = new \App\Console\Commands\SincronizzaTuttoEureka;
         $metodo = new \ReflectionMethod($comando, 'passi');
         $metodo->setAccessible(true);
 
@@ -105,7 +104,6 @@ class SincronizzaTuttoTest extends TestCase
         // Le domande sui dati contabili arrivano settimane dopo il fatto.
         $this->assertGreaterThan(config('logging.channels.daily.days'), $gestionale['days']);
     }
-
     /**
      * --with-detail non e' opzionale: senza, le schede arrivano senza righe
      * articolo e con la data documento al posto di quella dell'appuntamento
@@ -113,7 +111,7 @@ class SincronizzaTuttoTest extends TestCase
      */
     public function test_i_rapportini_si_importano_sempre_col_dettaglio(): void
     {
-        $comando = new SincronizzaTuttoEureka;
+        $comando = new \App\Console\Commands\SincronizzaTuttoEureka;
         $metodo = new \ReflectionMethod($comando, 'passi');
         $metodo->setAccessible(true);
 
@@ -123,4 +121,5 @@ class SincronizzaTuttoTest extends TestCase
         $this->assertTrue($argomenti['--with-detail']);
         $this->assertSame('2026-01-01', $argomenti['--from']);
     }
+
 }

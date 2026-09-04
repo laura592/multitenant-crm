@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Filament\Resources\QuoteResource;
 use App\Models\Customer;
 use App\Models\Quote;
 use App\Models\Tenant;
@@ -57,10 +56,10 @@ class PreventivoDestinatarioTest extends TestCase
 
         $this->assertSame(
             'info@mariver.example',
-            QuoteResource::emailDestinatario($preventivo),
+            \App\Filament\Resources\QuoteResource::emailDestinatario($preventivo),
             'il preventivo va a chi lo ha chiesto',
         );
-        $this->assertNotSame($pagante->primaryEmail(), QuoteResource::emailDestinatario($preventivo));
+        $this->assertNotSame($pagante->primaryEmail(), \App\Filament\Resources\QuoteResource::emailDestinatario($preventivo));
     }
 
     /** Anche il testo saluta il cliente. */
@@ -68,7 +67,7 @@ class PreventivoDestinatarioTest extends TestCase
     {
         [$preventivo] = $this->scenario();
 
-        $metodo = new \ReflectionMethod(QuoteResource::class, 'defaultQuoteEmailBody');
+        $metodo = new \ReflectionMethod(\App\Filament\Resources\QuoteResource::class, 'defaultQuoteEmailBody');
         $metodo->setAccessible(true);
         $corpo = $metodo->invoke(null, $preventivo);
 

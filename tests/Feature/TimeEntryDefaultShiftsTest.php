@@ -15,7 +15,7 @@ use Tests\TestCase;
 
 class TimeEntryDefaultShiftsTest extends TestCase
 {
-    use AssignsPermissionRoles, RefreshDatabase;
+    use RefreshDatabase, AssignsPermissionRoles;
 
     public function test_standard_shifts_are_built_from_configured_default_times(): void
     {

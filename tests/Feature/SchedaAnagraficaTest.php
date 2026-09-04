@@ -228,7 +228,6 @@ class SchedaAnagraficaTest extends TestCase
             ->get(route('customers.scheda-anagrafica', $this->cliente()))
             ->assertForbidden();
     }
-
     /**
      * Chi paga si scrive macchina per macchina, non una volta sola in cima.
      *
@@ -321,4 +320,5 @@ class SchedaAnagraficaTest extends TestCase
 
         $this->assertStringNotContainsString('c1_rag_sociale', $byte);
     }
+
 }

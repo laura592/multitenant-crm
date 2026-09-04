@@ -18,7 +18,7 @@ use Tests\TestCase;
 
 class QuoteGroupPageTest extends TestCase
 {
-    use AssignsPermissionRoles, RefreshDatabase;
+    use RefreshDatabase, AssignsPermissionRoles;
 
     public function test_offer_edit_page_exposes_action_to_add_a_new_quote(): void
     {

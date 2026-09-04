@@ -15,7 +15,7 @@ use Tests\TestCase;
 
 class MoneyInputFormatTest extends TestCase
 {
-    use AssignsPermissionRoles, RefreshDatabase;
+    use RefreshDatabase, AssignsPermissionRoles;
 
     public function test_italian_formatted_price_is_saved_as_correct_decimal_on_create(): void
     {

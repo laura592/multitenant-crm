@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\MaterialOrderResource;
-use App\Filament\Resources\MaterialOrderResource\Pages\EditMaterialOrder;
 use App\Filament\Resources\MaterialOrderResource\RelationManagers\ItemsRelationManager;
 use App\Models\Material;
 use App\Models\MaterialOrder;
@@ -18,7 +17,7 @@ use Tests\TestCase;
 
 class MaterialOrderSupplierTest extends TestCase
 {
-    use AssignsPermissionRoles, RefreshDatabase;
+    use RefreshDatabase, AssignsPermissionRoles;
 
     private Tenant $tenant;
 
@@ -115,7 +114,7 @@ class MaterialOrderSupplierTest extends TestCase
 
         $component = Livewire::test(ItemsRelationManager::class, [
             'ownerRecord' => $order,
-            'pageClass' => EditMaterialOrder::class,
+            'pageClass' => \App\Filament\Resources\MaterialOrderResource\Pages\EditMaterialOrder::class,
         ]);
 
         $component->assertOk();

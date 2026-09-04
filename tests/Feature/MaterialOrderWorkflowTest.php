@@ -17,7 +17,7 @@ use Tests\TestCase;
 
 class MaterialOrderWorkflowTest extends TestCase
 {
-    use AssignsPermissionRoles, RefreshDatabase;
+    use RefreshDatabase, AssignsPermissionRoles;
 
     private Tenant $tenant;
 

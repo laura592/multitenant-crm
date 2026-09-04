@@ -32,7 +32,7 @@ use Tests\TestCase;
  */
 class QuotePdfCrossTenantTest extends TestCase
 {
-    use AssignsPermissionRoles, RefreshDatabase;
+    use RefreshDatabase, AssignsPermissionRoles;
 
     private Tenant $tenant;
 

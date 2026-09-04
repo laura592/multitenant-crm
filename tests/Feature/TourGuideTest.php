@@ -3,8 +3,8 @@
 namespace Tests\Feature;
 
 use App\Livewire\TourGuide;
-use App\Models\Tenant;
 use App\Models\TourView;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Support\HelpGuide\TourRegistry;
 use Filament\Facades\Filament;
@@ -15,7 +15,7 @@ use Tests\TestCase;
 
 class TourGuideTest extends TestCase
 {
-    use AssignsPermissionRoles, RefreshDatabase;
+    use RefreshDatabase, AssignsPermissionRoles;
 
     public function test_registry_entries_have_a_title_and_text_on_every_step(): void
     {
@@ -33,7 +33,6 @@ class TourGuideTest extends TestCase
      * Il componente e' embeddato in OGNI pagina Filament via render hook
      * (AdminPanelProvider): deve reggere anche le pagine senza un tour
      * registrato, senza il fatal "missing root tag" di Livewire su un
-     *
      * @if nudo senza else (successo davvero, vedi thread 2026-08-24).
      */
     public function test_renders_without_error_on_a_page_without_a_registered_tour(): void

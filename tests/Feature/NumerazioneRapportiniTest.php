@@ -58,6 +58,8 @@ class NumerazioneRapportiniTest extends TestCase
         $this->assertSame("RT-{$anno}-0003", $this->rapportino()->number);
     }
 
+
+
     /**
      * Un rapportino archiviato TIENE il suo numero, che sia stato unito o
      * cancellato: puo' essere ripescato, e un numero che cambia significato
@@ -85,4 +87,5 @@ class NumerazioneRapportiniTest extends TestCase
         // Il rapportino del tecnico non si e' mosso.
         $this->assertSame("RT-{$anno}-0001", $nostro->fresh()->number);
     }
+
 }

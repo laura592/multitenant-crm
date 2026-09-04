@@ -30,7 +30,7 @@ use Tests\TestCase;
  */
 class ProductAndMachineUnitViewPageTest extends TestCase
 {
-    use AssignsPermissionRoles, RefreshDatabase;
+    use RefreshDatabase, AssignsPermissionRoles;
 
     private function loginAdmin(): Tenant
     {

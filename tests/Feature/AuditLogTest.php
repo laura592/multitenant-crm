@@ -4,11 +4,11 @@ namespace Tests\Feature;
 
 use App\Models\AuditLog;
 use App\Models\Customer;
-use App\Models\Material;
 use App\Models\ServiceReport;
 use App\Models\ServiceReportMaterial;
-use App\Models\Tenant;
+use App\Models\Material;
 use App\Models\TimeEntry;
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\AssignsPermissionRoles;
@@ -24,7 +24,7 @@ use Tests\TestCase;
  */
 class AuditLogTest extends TestCase
 {
-    use AssignsPermissionRoles, RefreshDatabase;
+    use RefreshDatabase, AssignsPermissionRoles;
 
     public function test_updating_a_tracked_model_creates_an_audit_log_entry_with_causer_and_tenant(): void
     {

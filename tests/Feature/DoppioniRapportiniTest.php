@@ -12,7 +12,6 @@ use App\Models\ServiceReportMaterial;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Support\Gestionale\ConfrontoRapportini;
-use App\Support\Gestionale\GestionaleSyncRunner;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -262,7 +261,6 @@ class DoppioniRapportiniTest extends TestCase
 
         $this->assertNull($nostro->refresh()->duplicato_suggerito_id);
     }
-
     /**
      * Il caso RT-2026-0579: il tecnico non seleziona la macchina e scrive la
      * matricola nel testo, la scheda di Eureka la porta in chiaro. Confermare
@@ -577,9 +575,10 @@ class DoppioniRapportiniTest extends TestCase
 
     private function proponi(Tenant $tenant): array
     {
-        $metodo = new \ReflectionMethod(GestionaleSyncRunner::class, 'proponiDoppioniRapportini');
+        $metodo = new \ReflectionMethod(\App\Support\Gestionale\GestionaleSyncRunner::class, 'proponiDoppioniRapportini');
         $metodo->setAccessible(true);
 
-        return $metodo->invoke(new GestionaleSyncRunner($tenant));
+        return $metodo->invoke(new \App\Support\Gestionale\GestionaleSyncRunner($tenant));
     }
+
 }
