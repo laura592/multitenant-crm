@@ -25,26 +25,56 @@ class PagantePulitoDaiClientiTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_toglie_il_pagante_ai_clienti_e_lascia_le_macchine(): void
+    public function test_tiene_il_pagante_che_le_macchine_confermano(): void
     {
         $tenant = Tenant::create(['name' => 'Alex', 'slug' => 'alex', 'is_master' => true]);
-
         $torrefattore = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Illy Caffe SPA']);
-        $cliente = Customer::create([
+
+        // Confermato: la macchina di questo cliente dice lo stesso pagante.
+        $confermato = Customer::create([
+            'tenant_id' => $tenant->id, 'company_name' => 'Bar Confermato',
+            'billing_customer_id' => $torrefattore->id,
+        ]);
+        MachineUnit::create([
+            'tenant_id' => $tenant->id, 'current_customer_id' => $confermato->id,
+            'serial_number' => 'AAA-1', 'billing_customer_id' => $torrefattore->id,
+        ]);
+
+        // Non confermato: la macchina c'e' ma non dice chi paga. E' il caso
+        // di "Bar Nostro", dove l'Illy veniva da una scheda del 2023.
+        $debole = Customer::create([
             'tenant_id' => $tenant->id, 'company_name' => 'Bar Nostro',
             'billing_customer_id' => $torrefattore->id,
         ]);
-        $macchina = MachineUnit::create([
-            'tenant_id' => $tenant->id, 'current_customer_id' => $cliente->id,
-            'serial_number' => '1858049', 'billing_customer_id' => $torrefattore->id,
+        MachineUnit::create([
+            'tenant_id' => $tenant->id, 'current_customer_id' => $debole->id, 'serial_number' => 'BBB-2',
         ]);
 
         $this->artisan('clienti:pulisci-pagante', ['--tenant' => 'alex', '--force' => true])
             ->assertSuccessful();
 
-        $this->assertNull($cliente->fresh()->billing_customer_id, 'il cliente non deve piu avere un pagante');
-        // La macchina lo tiene: li' il dato viene dagli installati di Eureka.
-        $this->assertSame($torrefattore->id, $macchina->fresh()->billing_customer_id);
+        $this->assertSame($torrefattore->id, $confermato->fresh()->billing_customer_id, 'confermato dalle macchine: si tiene');
+        $this->assertNull($debole->fresh()->billing_customer_id, 'non confermato: si toglie');
+    }
+
+    /** Con --tutti cade anche quello che le macchine confermano. */
+    public function test_con_tutti_toglie_anche_i_confermati(): void
+    {
+        $tenant = Tenant::create(['name' => 'Alex', 'slug' => 'alex', 'is_master' => true]);
+        $torrefattore = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Illy Caffe SPA']);
+        $cliente = Customer::create([
+            'tenant_id' => $tenant->id, 'company_name' => 'Bar Confermato',
+            'billing_customer_id' => $torrefattore->id,
+        ]);
+        MachineUnit::create([
+            'tenant_id' => $tenant->id, 'current_customer_id' => $cliente->id,
+            'serial_number' => 'AAA-1', 'billing_customer_id' => $torrefattore->id,
+        ]);
+
+        $this->artisan('clienti:pulisci-pagante', ['--tenant' => 'alex', '--tutti' => true, '--force' => true])
+            ->assertSuccessful();
+
+        $this->assertNull($cliente->fresh()->billing_customer_id);
     }
 
     /** In prova a vuoto non tocca niente. */

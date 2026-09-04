@@ -3,7 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Customer;
-use App\Models\ServiceReport;
+use App\Models\MachineUnit;
 use App\Models\Tenant;
 use Illuminate\Console\Command;
 
@@ -26,11 +26,20 @@ use Illuminate\Console\Command;
  * piu' giusto nel merito, perche' il torrefattore paga per la macchina che ha
  * dato in comodato, non per tutto quello che si fa da quel cliente.
  * invoiceRecipient() guarda comunque prima la macchina.
+ *
+ * E proprio le macchine dicono quali valori sul cliente salvare: dove
+ * concordano, il dato non e' inventato e resta (80 su 199 al 04/09/2026).
+ * Si toglie il resto — chi non ha macchine, chi le ha senza pagante, e i 12
+ * dove le macchine indicano qualcun ALTRO: li' il dato sul cliente non e'
+ * debole, e' sbagliato. Due esempi che lo mostrano da soli: "Biennale
+ * Giardini Chiosco" e "Biennale Giardini Terrazza" hanno i paganti
+ * incrociati fra loro. Con --tutti si toglie anche quello confermato.
  */
 class PuliscePaganteClienti extends Command
 {
     protected $signature = 'clienti:pulisci-pagante
         {--tenant=       : Slug tenant (default: tenant master)}
+        {--tutti         : Toglie il pagante anche dove le macchine lo confermano}
         {--dry-run       : Mostra il diff senza scrivere nulla}
         {--force         : Non chiedere conferma}';
 
@@ -54,31 +63,64 @@ class PuliscePaganteClienti extends Command
             return self::SUCCESS;
         }
 
-        // Su quante schede si regge ciascuno: e' il numero che dice se il
-        // pagante era una regola o una coincidenza.
-        $righe = $clienti->map(function (Customer $c) {
-            $schede = ServiceReport::query()
-                ->where('customer_id', $c->id)
+        // Il confronto che conta non e' quante schede lo dicono, ma se le
+        // MACCHINE di quel cliente dicono lo stesso: li' il pagante ha una
+        // fonte vera (id_intestatario_fattura_f15 negli installati). Dove
+        // concordano, il dato sul cliente non e' inventato e si tiene.
+        $gruppi = ['confermato' => [], 'non confermato' => []];
+
+        foreach ($clienti as $cliente) {
+            $macchine = MachineUnit::query()
+                ->where('current_customer_id', $cliente->id)
                 ->whereNull('deleted_at')
-                ->where('eureka_destinazione_code', $c->billingCustomer?->gestionale_code)
-                ->count();
+                ->whereNotNull('billing_customer_id')
+                ->pluck('billing_customer_id');
 
-            return [
-                'cliente' => mb_substr((string) $c->company_name, 0, 34),
-                'pagante' => mb_substr((string) $c->billingCustomer?->company_name, 0, 26),
-                'schede' => $schede,
+            $concordi = $macchine->contains($cliente->billing_customer_id);
+            $discordi = $macchine->reject(fn ($id) => $id === $cliente->billing_customer_id);
+
+            $motivo = match (true) {
+                $macchine->isEmpty() => 'nessuna macchina lo conferma',
+                $concordi && $discordi->isEmpty() => 'confermato dalle macchine',
+                $concordi => 'confermato in parte',
+                default => 'LE MACCHINE DICONO ALTRO',
+            };
+
+            $gruppi[$concordi && $discordi->isEmpty() ? 'confermato' : 'non confermato'][] = [
+                'cliente' => mb_substr((string) $cliente->company_name, 0, 32),
+                'pagante' => mb_substr((string) $cliente->billingCustomer?->company_name, 0, 24),
+                'motivo' => $motivo,
+                'id' => $cliente->id,
             ];
-        })->sortBy('schede')->values();
+        }
 
-        $this->line("Clienti con un pagante impostato: {$clienti->count()}");
+        $daTogliere = collect($this->option('tutti')
+            ? array_merge($gruppi['confermato'], $gruppi['non confermato'])
+            : $gruppi['non confermato']);
+
+        $this->line('Clienti con un pagante impostato: '.$clienti->count());
+        $this->line('  confermato dalle macchine: '.count($gruppi['confermato']).($this->option('tutti') ? ' (verra\' tolto anche questo)' : ' — si tiene'));
+        $this->line('  non confermato:            '.count($gruppi['non confermato']));
+        $this->newLine();
+
+        if ($daTogliere->isEmpty()) {
+            $this->info('Niente da togliere.');
+
+            return self::SUCCESS;
+        }
+
         $this->table(
-            ['Cliente', 'Pagante', 'Schede che lo dicono'],
-            $righe->take(12)->map(fn (array $r) => array_values($r))->all(),
+            ['Cliente', 'Pagante', 'Perche\''],
+            $daTogliere->take(12)->map(fn (array $r) => [$r['cliente'], $r['pagante'], $r['motivo']])->all(),
         );
 
-        $deboli = $righe->where('schede', '<=', 1)->count();
-        $this->warn("Di questi, {$deboli} si reggono su una sola scheda (o su nessuna).");
-        $this->line('Le macchine non vengono toccate: li\' il pagante viene dagli installati di Eureka.');
+        $contraddetti = $daTogliere->where('motivo', 'LE MACCHINE DICONO ALTRO')->count();
+
+        if ($contraddetti > 0) {
+            $this->warn("{$contraddetti} hanno macchine che indicano un pagante DIVERSO: li' il dato sul cliente e' sbagliato, non solo debole.");
+        }
+
+        $this->line('Le macchine non vengono toccate in nessun caso.');
 
         if ($dryRun) {
             $this->comment('Prova a vuoto: non e\' stato scritto nulla.');
@@ -86,15 +128,14 @@ class PuliscePaganteClienti extends Command
             return self::SUCCESS;
         }
 
-        if (! $this->option('force') && ! $this->confirm("Tolgo il pagante a {$clienti->count()} clienti?", false)) {
+        if (! $this->option('force') && ! $this->confirm('Tolgo il pagante a '.$daTogliere->count().' clienti?', false)) {
             $this->comment('Annullato.');
 
             return self::SUCCESS;
         }
 
         $puliti = Customer::query()
-            ->where('tenant_id', $tenant->id)
-            ->whereNotNull('billing_customer_id')
+            ->whereIn('id', $daTogliere->pluck('id'))
             ->update(['billing_customer_id' => null]);
 
         $this->info("Clienti ripuliti: {$puliti}.");
