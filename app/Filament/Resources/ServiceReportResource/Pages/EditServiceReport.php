@@ -66,6 +66,8 @@ class EditServiceReport extends EditRecord
             'lavaggio_vie_count' => $defaults['vie_count'],
             '_lavaggio_base_material_key' => $defaults['lavaggio_base_key'],
             '_lavaggio_ult_material_key' => $defaults['lavaggio_ult_key'],
+            '_sanificazione_material_key' => $defaults['sanificazione_key'],
+            '_sanificazione_count' => $defaults['sanificazioni_count'],
             'lavaggio_impianti' => LavaggioFields::resolveLavaggioImpiantiDefaults($this->getRecord()),
         ];
     }

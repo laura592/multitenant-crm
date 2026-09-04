@@ -93,5 +93,11 @@ return [
         'manodopera_festiva' => 'OREFEST',
         'lavaggio' => 'LAV2',
         'lavaggio_ulteriore_via' => 'ULTVIA',
+        // Gli impianti acqua non si contano a vie: la voce da fatturare e'
+        // una sanificazione dell'impianto, a corpo (SANIFICAZIONE = 110,00,
+        // "SANIFICAZIONE IMPIANTO ACQUA"). Nessun pagante ha finora un
+        // codice proprio, ma la voce sta qui come le altre cosi' che
+        // aggiungerlo a un listino sia una riga sola.
+        'sanificazione' => 'SANIFICAZIONE',
     ],
 ];

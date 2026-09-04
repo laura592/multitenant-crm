@@ -754,6 +754,15 @@ class ServiceReportResource extends Resource
                     Forms\Components\Hidden::make('_lavaggio_ult_material_key')
                         ->dehydrated(false)
                         ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['lavaggio_ult_key']),
+                    // Impianti acqua: la riga generata e' SANIFICAZIONE, e il
+                    // conteggio e' quanti impianti acqua ci sono sul
+                    // rapportino — non le vie, che li' non si contano.
+                    Forms\Components\Hidden::make('_sanificazione_material_key')
+                        ->dehydrated(false)
+                        ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['sanificazione_key']),
+                    Forms\Components\Hidden::make('_sanificazione_count')
+                        ->dehydrated(false)
+                        ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['sanificazioni_count']),
                     // Scorciatoie che aggiungono/rimuovono righe materiale da sole
                     // (stesso meccanismo per key, dehydrated(false), per entrambe):
                     // "Chiamata" per il ricambio CHIVE/CHIORD (tariffa base
@@ -841,7 +850,7 @@ class ServiceReportResource extends Resource
                                 ->live()
                                 ->dehydrated(false)
                                 ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['lavaggio_base_key'] !== null)
-                                ->helperText('Aggiunge da sola LAVAGGIO 2 VIE (sempre) + ULTERIORE VIA LAVATA per le vie oltre la seconda.')
+                                ->helperText('Aggiunge da sola LAVAGGIO 2 VIE (sempre) + ULTERIORE VIA LAVATA per le vie oltre la seconda. Gli impianti acqua non passano di qui: prendono SANIFICAZIONE IMPIANTO ACQUA, una per impianto.')
                                 ->afterStateUpdated(fn (Forms\Set $set, Get $get) => LavaggioFields::syncLavaggioViaMaterials($set, $get)),
                             // Unico campo della sezione che e' una colonna
                             // vera (service_reports.lavaggio_vie_count), non
