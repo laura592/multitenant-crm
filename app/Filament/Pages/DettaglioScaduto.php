@@ -52,25 +52,22 @@ class DettaglioScaduto extends Page implements HasTable
     public ?Customer $cliente = null;
 
     /**
-     * Solo staff master.
-     *
-     * Non un permesso nella matrice dei ruoli ma un cancello nel codice
-     * (indicazione dell'utente, 02/09/2026): sono numeri contabili
-     * dell'azienda, e "chi puo' vederli" non e' una casella che ha senso
-     * spuntare per un ruolo — o sei staff master o non li vedi. Stessa
-     * forma di TenantResource::canViewAny().
-     *
-     * Per questo la pagina esce anche dalla matrice di Shield (vedi
-     * config/filament-shield.php, exclude.pages): lasciarci una casella
-     * che non cambia niente e' peggio che non averla.
+     * Il dettaglio di una posizione scaduta segue l'elenco: un permesso
+     * solo, page_ScadutoClienti. Per questo la pagina resta esclusa dalla
+     * matrice di Shield (config/filament-shield.php, exclude.pages) — due
+     * caselle per la stessa cosa si scordano di restare in fase.
      */
     public static function canAccess(): bool
     {
-        return (bool) auth()->user()?->is_super_admin;
+        return ScadutoClienti::canAccess();
     }
 
     public function mount(int $codice): void
     {
+        // Il permesso e' quello dell'elenco: senza, questa pagina non si
+        // apre nemmeno arrivandoci con l'URL in mano.
+        abort_unless(static::canAccess(), 403);
+
         $this->codice = $codice;
         $this->cliente = Customer::query()
             ->where('tenant_id', Filament::getTenant()?->id)

@@ -77,16 +77,16 @@ return [
 
         'pages' => [
             'Dashboard',
-            // Contabilita': l'accesso non e' una casella da spuntare per un
-            // ruolo, e' riservato allo staff master e vive nel canAccess()
-            // di ciascuna pagina. Lasciare qui delle caselle che non
-            // cambiano niente manderebbe solo qualcuno a cercarle.
-            'ScadutoClienti',
+
+            // Qui restano solo le pagine di DETTAGLIO: seguono il permesso
+            // del loro elenco, e una seconda casella per la stessa cosa si
+            // scorderebbe di restare in fase.
+            //
+            // Le contabili (ScadutoClienti, AnalisiContabili, CashFlow) sono
+            // uscite da questa lista il 04/09/2026: erano riservate allo
+            // staff master da un cancello nel codice, ora sono permessi come
+            // gli altri e si vedono nella matrice dei ruoli.
             'DettaglioScaduto',
-            'AnalisiContabili',
-            'CashFlow',
-            // Dettaglio di "Chi paga per chi": non e' un privilegio separato,
-            // segue page_PagantiMacchine (vedi DettaglioPagante::canAccess).
             'DettaglioPagante',
         ],
 

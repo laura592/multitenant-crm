@@ -39,12 +39,12 @@ class AllResourcesSmokeTest extends TestCase
     ];
 
     /**
-     * Le pagine contabili non stanno fra le back-office perche' non
-     * dipendono piu' da un ruolo: sono riservate allo staff master e il
-     * cancello e' nel canAccess() di ciascuna (indicazione dell'utente,
-     * 02/09/2026). Un admin di tenant, che vede tutto il resto, qui prende
-     * 403 — ed e' la riga che deve diventare rossa se qualcuno le rimette
-     * nella matrice dei ruoli.
+     * Le pagine contabili stanno a parte perche' hanno una storia: dal
+     * 02/09/2026 erano riservate allo staff master da un cancello nel
+     * codice, fuori dalla matrice dei ruoli. Dal 04/09/2026 sono permessi
+     * come gli altri, concessi al solo ruolo "admin" (indicazione
+     * dell'ufficio) — quindi qui l'admin di tenant le apre, mentre
+     * dipendente e partner restano fuori piu' sotto.
      */
     private const CONTABILITA_PATHS = ['scaduto', 'analisi-contabili', 'cash-flow'];
 
@@ -63,7 +63,7 @@ class AllResourcesSmokeTest extends TestCase
         $this->actingAs($user)->get("/admin/{$tenant->slug}/tenants")->assertForbidden();
 
         foreach (self::CONTABILITA_PATHS as $path) {
-            $this->actingAs($user)->get("/admin/{$tenant->slug}/{$path}")->assertForbidden();
+            $this->actingAs($user)->get("/admin/{$tenant->slug}/{$path}")->assertOk();
         }
     }
 
@@ -83,8 +83,9 @@ class AllResourcesSmokeTest extends TestCase
         $this->actingAs($user)->get("/admin/{$tenant->slug}/vehicles")->assertForbidden();
         $this->actingAs($user)->get("/admin/{$tenant->slug}/deadlines")->assertForbidden();
         $this->actingAs($user)->get("/admin/{$tenant->slug}/payment-methods")->assertForbidden();
-        $this->actingAs($user)->get("/admin/{$tenant->slug}/scaduto")->assertForbidden();
-        $this->actingAs($user)->get("/admin/{$tenant->slug}/analisi-contabili")->assertForbidden();
+        foreach (self::CONTABILITA_PATHS as $path) {
+            $this->actingAs($user)->get("/admin/{$tenant->slug}/{$path}")->assertForbidden();
+        }
         $this->actingAs($user)->get("/admin/{$tenant->slug}/tenants")->assertForbidden();
         // I preventivi non sono di competenza del dipendente (solo partner/admin).
         $this->actingAs($user)->get("/admin/{$tenant->slug}/quotes")->assertForbidden();

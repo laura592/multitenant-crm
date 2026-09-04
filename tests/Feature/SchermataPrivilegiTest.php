@@ -169,6 +169,85 @@ class SchermataPrivilegiTest extends TestCase
         $this->assertSame(count(FilamentShield::getResources()), $totale);
     }
 
+    /**
+     * Le contabili erano fuori dalla matrice: si passava o no per
+     * is_super_admin, e nella schermata dei privilegi non c'era niente.
+     */
+    public function test_le_pagine_contabili_sono_nella_matrice(): void
+    {
+        $pagine = RoleResource::getPageOptions();
+
+        foreach (['page_ScadutoClienti', 'page_AnalisiContabili', 'page_CashFlow'] as $pagina) {
+            $this->assertArrayHasKey($pagina, $pagine);
+        }
+
+        // Il dettaglio dello scaduto no: segue l'elenco.
+        $this->assertArrayNotHasKey('page_DettaglioScaduto', $pagine);
+    }
+
+    /** L'ufficio le ha volute su "admin" e su nessun altro ruolo (04/09/2026). */
+    public function test_le_contabili_sono_solo_di_admin(): void
+    {
+        $contabili = ['page_ScadutoClienti', 'page_AnalisiContabili', 'page_CashFlow'];
+
+        foreach ($contabili as $pagina) {
+            $this->assertContains($pagina, RolePermissions::for('admin'), $pagina);
+        }
+
+        foreach (['dipendente', 'amministrazione', 'partner', 'amministratore'] as $ruolo) {
+            foreach ($contabili as $pagina) {
+                $this->assertNotContains($pagina, RolePermissions::for($ruolo), "{$ruolo} / {$pagina}");
+            }
+        }
+    }
+
+    /**
+     * Il cancello e' cambiato di natura, non di severita': chi e' staff
+     * master continua a entrare senza che nessuno gli conceda niente.
+     */
+    public function test_lo_staff_master_vede_le_contabili_senza_permessi(): void
+    {
+        $tenant = \App\Models\Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);
+
+        $staff = \App\Models\User::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Staff Alex',
+            'email' => 'staff@test.it',
+            'password' => bcrypt('password'),
+            'is_super_admin' => true,
+        ]);
+        $this->actingAs($staff);
+
+        $this->assertTrue(\App\Filament\Pages\CashFlow::canAccess());
+        $this->assertTrue(\App\Filament\Pages\ScadutoClienti::canAccess());
+        $this->assertTrue(\App\Filament\Pages\AnalisiContabili::canAccess());
+        $this->assertTrue(\App\Filament\Pages\DettaglioScaduto::canAccess());
+
+        $chiunque = \App\Models\User::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Senza permesso',
+            'email' => 'senza@test.it',
+            'password' => bcrypt('password'),
+        ]);
+        $this->actingAs($chiunque);
+
+        $this->assertFalse(\App\Filament\Pages\CashFlow::canAccess());
+        $this->assertFalse(\App\Filament\Pages\DettaglioScaduto::canAccess());
+    }
+
+    public function test_il_dettaglio_scaduto_segue_lelenco(): void
+    {
+        $this->assertSame(
+            (new \ReflectionMethod(\App\Filament\Pages\ScadutoClienti::class, 'canAccess'))->getName(),
+            (new \ReflectionMethod(\App\Filament\Pages\DettaglioScaduto::class, 'canAccess'))->getName()
+        );
+
+        $this->assertStringContainsString(
+            'ScadutoClienti::canAccess()',
+            file_get_contents(app_path('Filament/Pages/DettaglioScaduto.php'))
+        );
+    }
+
     public function test_il_dettaglio_pagante_segue_lelenco(): void
     {
         $tenant = \App\Models\Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);

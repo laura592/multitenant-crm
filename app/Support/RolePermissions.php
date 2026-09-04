@@ -250,7 +250,15 @@ class RolePermissions
                 'page_PagantiMacchine',
                 'page_NotificationSettings',
                 'page_GestionaleSyncReview',
-                // Scaduto clienti: strumento di chi segue incassi e solleciti.
+                // Le tre pagine contabili. Fino al 03/09/2026 non erano
+                // permessi ma un cancello is_super_admin nel codice; dal
+                // 04/09/2026 sono caselle come le altre, e l'ufficio le ha
+                // volute su "admin" e su nessun altro ruolo. Chi ha
+                // is_super_admin le vede comunque, per il Gate::before in
+                // AppServiceProvider.
+                'page_ScadutoClienti',
+                'page_AnalisiContabili',
+                'page_CashFlow',
             ],
             // Specchio di "admin" sopra, risorsa per risorsa: stesso
             // perimetro, solo MANAGE_NO_DELETE al posto di MANAGE/FULL_MANAGE.
@@ -294,7 +302,6 @@ class RolePermissions
                 'page_PagantiMacchine',
                 'page_NotificationSettings',
                 'page_GestionaleSyncReview',
-                // Scaduto clienti: strumento di chi segue incassi e solleciti.
             ],
             default => throw new \InvalidArgumentException("Ruolo sconosciuto: {$role}"),
         };
