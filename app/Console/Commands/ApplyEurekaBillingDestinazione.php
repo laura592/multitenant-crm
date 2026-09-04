@@ -9,6 +9,15 @@ use App\Models\Tenant;
 use Illuminate\Console\Command;
 
 /**
+ * ATTENZIONE (03/09/2026): la parte sui CLIENTI e' stata smontata da
+ * clienti:pulisci-pagante e non va rilanciata. L'anagrafica di Eureka non ha
+ * un campo "chi paga" — ha nove campi, tutti anagrafici — quindi promuovere a
+ * regola del cliente la destinazione di una scheda e' un'inferenza, non un
+ * dato: 51 clienti su 199 si reggevano su UNA sola scheda, e su "Bar Nostro"
+ * bastava un intervento del 2023 fatturato a Illy. Sulle MACCHINE invece il
+ * pagante ha una fonte vera (id_intestatario_fattura_f15 negli installati) e
+ * resta valido: per quello c'e' eureka:apply-machine-billing-payer.
+ *
  * Applica su Customer/MachineUnit.billing_customer_id il pagante reale gia'
  * noto da Eureka (ServiceReport.eureka_destinazione_code, gia' letto da
  * BackfillServiceReportEurekaDestinazione/ImportEurekaServiceReports): quel
