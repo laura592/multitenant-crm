@@ -96,4 +96,45 @@ class PrezzoRigheRapportinoTest extends TestCase
         $this->assertSame('42.00', (string) $riga->unit_cost_snapshot);
         $this->assertSame('63.00', (string) $riga->line_total_snapshot);
     }
+
+    /**
+     * Cambiando l'articolo di una riga il prezzo deve seguire: RT-2026-0647
+     * in produzione aveva DC3 (102,80) al prezzo di F3 (77,16), l'articolo
+     * con cui la riga era nata prima della correzione.
+     */
+    public function test_cambiando_l_articolo_il_prezzo_segue(): void
+    {
+        [$report, $f3] = $this->scenario(listino: 77.16);
+        $dc3 = Material::create([
+            'tenant_id' => $f3->tenant_id, 'code' => 'DC3', 'category' => 'Eureka',
+            'type' => 'MANUT. DALLA CORTE A/3', 'source' => Material::SOURCE_EUREKA, 'list_price' => 102.80,
+        ]);
+
+        $riga = ServiceReportMaterial::create([
+            'service_report_id' => $report->id, 'material_id' => $f3->id, 'quantity' => 1,
+        ]);
+        $this->assertSame('77.16', (string) $riga->unit_cost_snapshot);
+
+        $riga->update(['material_id' => $dc3->id]);
+
+        $this->assertSame('102.80', (string) $riga->fresh()->unit_cost_snapshot);
+        $this->assertSame('102.80', (string) $riga->fresh()->line_total_snapshot);
+    }
+
+    /**
+     * Un prezzo corretto a mano non si tocca: si rifa' solo quando cambia
+     * l'articolo o la quantita', non a ogni salvataggio.
+     */
+    public function test_un_prezzo_corretto_a_mano_sopravvive_al_salvataggio(): void
+    {
+        [$report, $materiale] = $this->scenario();
+
+        $riga = ServiceReportMaterial::create([
+            'service_report_id' => $report->id, 'material_id' => $materiale->id, 'quantity' => 1,
+        ]);
+        $riga->update(['unit_cost_snapshot' => 50.00]);
+        $riga->update(['notes' => 'sconto concordato']);
+
+        $this->assertSame('50.00', (string) $riga->fresh()->unit_cost_snapshot);
+    }
 }

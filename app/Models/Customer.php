@@ -269,6 +269,21 @@ class Customer extends Model
     }
 
     /**
+     * Le MACCHINE che questo cliente paga, ovunque siano installate.
+     *
+     * Diversa da paidCustomers(): li' sono anagrafiche intere, qui singole
+     * matricole. E' questa la relazione che regge davvero, perche' il
+     * pagante per macchina viene dagli installati di Eureka mentre quello
+     * sul cliente era dedotto (vedi clienti:pulisci-pagante). Un
+     * torrefattore paga per la macchina data in comodato, non per tutto
+     * quello che si fa da quel cliente.
+     */
+    public function macchinePagate(): HasMany
+    {
+        return $this->hasMany(MachineUnit::class, 'billing_customer_id');
+    }
+
+    /**
      * Destinatario effettivo di documenti/fatture per questo cliente: se
      * stesso, a meno che non paghi qualcun altro al posto suo.
      */

@@ -10,6 +10,7 @@ use App\Models\MachineUnit;
 use App\Models\Material;
 use App\Models\Product;
 use App\Support\DisplayName;
+use App\Support\TariffeIntervento;
 use App\Support\Gestionale\EurekaClient;
 use Filament\Actions\MountableAction;
 use Filament\Facades\Filament;
@@ -115,6 +116,19 @@ class MachineUnitResource extends Resource
                         ->label('Categoria impianto')
                         ->options(static::typeLabels())
                         ->helperText('Solo per impianti bevande: colonna spina (birra/vino/selz) o impianto acqua standalone. Lascia vuoto per le altre macchine (caffe, macinadosatori, ecc.).'),
+                    // La manutenzione si decide guardando la macchina: qui si
+                    // dice che tipo e'. Vuoto = quello del modello a
+                    // catalogo, cosi' non si compilano 774 schede per dire
+                    // ogni volta la stessa cosa. Il pagante (sotto, o quello
+                    // del cliente) sceglie da solo la variante di listino:
+                    // F2 diventa F2GOPPION senza che nessuno lo scriva.
+                    Forms\Components\TextInput::make('maintenance_code')
+                        ->label('Codice manutenzione')
+                        ->placeholder(fn (?MachineUnit $record) => $record?->material?->maintenance_code
+                            ? "{$record->material->maintenance_code} (dal modello)"
+                            : 'es. F2, C3, DC2, MANA300')
+                        ->helperText(fn (?MachineUnit $record) => static::aiutoCodiceManutenzione($record))
+                        ->maxLength(255),
                     Forms\Components\Select::make('billing_customer_id')
                         ->label('Fatturare a')
                         ->relationship('billingCustomer', 'company_name')
@@ -350,6 +364,34 @@ class MachineUnitResource extends Resource
         return [
             PlacementsRelationManager::class,
         ];
+    }
+
+    /**
+     * Cosa succede davvero lasciando vuoto il campo, detto con i dati di
+     * QUESTA macchina: il codice del modello e la variante del suo pagante.
+     */
+    protected static function aiutoCodiceManutenzione(?MachineUnit $record): string
+    {
+        if (! $record) {
+            return 'Vuoto = si eredita dal modello a catalogo.';
+        }
+
+        $dalModello = $record->material?->maintenance_code;
+        $risolto = TariffeIntervento::manutenzione($record, $record->currentCustomer);
+
+        if (! $dalModello && ! $risolto) {
+            return 'Ne\' qui ne\' il modello a catalogo hanno un codice: la scorciatoia "Manutenzione ordinaria" del rapportino non avra\' niente da mettere in riga.';
+        }
+
+        if (! $record->maintenance_code && $dalModello) {
+            return $risolto !== $dalModello
+                ? "Vuoto: eredita {$dalModello} dal modello, che col pagante diventa {$risolto}."
+                : "Vuoto: eredita {$dalModello} dal modello.";
+        }
+
+        return $risolto && $risolto !== $record->maintenance_code
+            ? "Col pagante diventa {$risolto}."
+            : 'Vale solo per questa macchina, non per le altre dello stesso modello.';
     }
 
     public static function statusLabels(): array

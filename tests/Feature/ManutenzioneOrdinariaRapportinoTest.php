@@ -136,4 +136,42 @@ class ManutenzioneOrdinariaRapportinoTest extends TestCase
 
         $this->assertNotContains('F3', $codici);
     }
+
+    /**
+     * Il codice si decide guardando la macchina: quello sulla macchina vince
+     * su quello del suo modello, che resta il valore normale per tutte le
+     * altre macchine dello stesso tipo.
+     */
+    public function test_il_codice_sulla_macchina_vince_su_quello_del_modello(): void
+    {
+        [$tenant, $cliente, $macchina] = $this->scenario();
+        $this->materiale($tenant, 'F4', 'MANUTENZIONE ORDINARIA F4');
+
+        $this->assertSame('F3', TariffeIntervento::manutenzione($macchina, $cliente));
+
+        $macchina->update(['maintenance_code' => 'F4']);
+
+        $this->assertSame('F4', TariffeIntervento::manutenzione($macchina->fresh(), $cliente));
+    }
+
+    /**
+     * Una macchina puo' avere un pagante suo — Goppion su una sola macchina
+     * di un bar che per il resto paga da se' — e in quel caso e' lui a
+     * scegliere la variante di listino, non il pagante del cliente.
+     */
+    public function test_il_pagante_della_macchina_vince_su_quello_del_cliente(): void
+    {
+        [$tenant, $cliente, $macchina] = $this->scenario();
+        $this->materiale($tenant, 'F3GOPPION', 'MANUTENZIONE ORDINARIA F3 COMPRESO MATER');
+
+        // Il cliente non ha pagante: si resta sul codice base.
+        $this->assertSame('F3', TariffeIntervento::manutenzione($macchina, $cliente));
+
+        $goppion = Customer::create([
+            'tenant_id' => $tenant->id, 'company_name' => 'Goppion Caffe SPA', 'gestionale_code' => 782,
+        ]);
+        $macchina->update(['billing_customer_id' => $goppion->id]);
+
+        $this->assertSame('F3GOPPION', TariffeIntervento::manutenzione($macchina->fresh(), $cliente));
+    }
 }

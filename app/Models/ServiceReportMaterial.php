@@ -43,15 +43,33 @@ class ServiceReportMaterial extends Model
      * la regola e' una sola.
      *
      * Non sovrascrive mai un prezzo gia' presente: quello arrivato da Eureka
-     * e' il dato buono, e il listino nel frattempo puo' essere cambiato.
-     * L'importo invece si rifa' quando cambia la quantita', altrimenti
-     * correggendo "2" in "3" resterebbe l'importo di due.
+     * e' il dato buono, e il listino nel frattempo puo' essere cambiato. Un
+     * prezzo corretto a mano resta quindi com'e'.
+     *
+     * Due eccezioni, dove il prezzo di prima non descrive piu' la riga:
+     * cambiando la QUANTITA' si rifa' l'importo (correggendo "2" in "3"
+     * restava l'importo di due) e cambiando l'ARTICOLO si rifa' tutto, prezzo
+     * compreso — quello vecchio era di un altro materiale.
      */
     protected static function booted(): void
     {
         static::saving(function (self $riga): void {
+            // Cambiato l'articolo, il prezzo di prima non vuol piu' dire
+            // niente: era di un altro materiale. Succedeva correggendo una
+            // riga nel repeater — RT-2026-0647 aveva DC3 (102,80) al prezzo
+            // di F3 (77,16), l'articolo con cui la riga era nata.
+            //
+            // Si rilegge dal database e non da $riga->material: la relazione
+            // in memoria e' ancora quella del materiale vecchio.
+            if ($riga->exists && $riga->isDirty('material_id')) {
+                $listino = (float) (Material::whereKey($riga->material_id)->value('list_price') ?? 0);
+
+                $riga->unit_cost_snapshot = $listino > 0 ? $listino : null;
+                $riga->line_total_snapshot = null;
+            }
+
             if ($riga->unit_cost_snapshot === null) {
-                $listino = (float) ($riga->material?->list_price ?? 0);
+                $listino = (float) (Material::whereKey($riga->material_id)->value('list_price') ?? 0);
 
                 if ($listino > 0) {
                     $riga->unit_cost_snapshot = $listino;

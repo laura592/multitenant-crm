@@ -23,9 +23,7 @@ class TariffeIntervento
     {
         $standard = config('tariffe.standard');
         $pagante = $cliente?->billingCustomer;
-        $listino = $pagante?->gestionale_code
-            ? (config('tariffe.paganti')[(int) $pagante->gestionale_code] ?? null)
-            : null;
+        $listino = self::listino($pagante) ?: null;
 
         // Sul pagante il codice e' lo stesso ovunque si vada: e' il listino
         // concordato con lui, non la difficolta' del viaggio.
@@ -63,19 +61,40 @@ class TariffeIntervento
      */
     public static function manutenzione(?MachineUnit $macchina, ?Customer $cliente): ?string
     {
-        $base = $macchina?->material?->maintenance_code;
+        // Prima la macchina, poi il suo modello: il codice normale vive sul
+        // modello a catalogo (si compila una volta per modello invece che su
+        // 774 macchine), ma la singola macchina puo' fare eccezione e allora
+        // comanda lei.
+        $base = $macchina?->maintenance_code ?: $macchina?->material?->maintenance_code;
 
         if (blank($base)) {
             return null;
         }
 
-        $suffisso = self::per($cliente)['manutenzione_suffisso'] ?? null;
+        // Chi paga davvero, con la stessa precedenza usata ovunque nell'app
+        // (vedi Lavaggio::invoiceRecipient): una macchina puo' avere un
+        // pagante suo — Goppion sulla singola macchina di un bar che per il
+        // resto paga da se' — e in quel caso vince sul pagante del cliente.
+        $pagante = $macchina?->billingCustomer ?? $cliente?->billingCustomer;
+        $suffisso = self::listino($pagante)['manutenzione_suffisso'] ?? null;
 
         if (filled($suffisso) && Material::where('code', $base.$suffisso)->exists()) {
             return $base.$suffisso;
         }
 
         return $base;
+    }
+
+    /**
+     * Il listino configurato per un pagante, o null se non ne ha uno.
+     *
+     * @return array<string, mixed>
+     */
+    private static function listino(?Customer $pagante): array
+    {
+        return $pagante?->gestionale_code
+            ? (config('tariffe.paganti')[(int) $pagante->gestionale_code] ?? [])
+            : [];
     }
 
     /**

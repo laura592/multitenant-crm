@@ -40,6 +40,12 @@ class Material extends Model
         'list_price' => 'decimal:2',
     ];
 
+    /** Le macchine installate di questo modello. */
+    public function machineUnits(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(MachineUnit::class);
+    }
+
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class);

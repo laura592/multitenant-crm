@@ -35,6 +35,7 @@ class MachineUnit extends Model
     public const TYPE_IMPIANTO_ACQUA = 'impianto_acqua';
 
     protected $fillable = [
+        'maintenance_code',
         'tenant_id',
         'source',
         'product_id',
