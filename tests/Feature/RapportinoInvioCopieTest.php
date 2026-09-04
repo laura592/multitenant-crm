@@ -145,6 +145,26 @@ class RapportinoInvioCopieTest extends TestCase
         $this->assertSame('firmato', $report->fresh()->status);
     }
 
+    /**
+     * Mandare a Eureka e mandare al cliente sono due gesti distinti, e si
+     * possono fare in quest'ordine. Ma l'email non deve riportare indietro lo
+     * stato: "in gestionale" e' terminale, ed e' l'unica traccia in elenco
+     * che il documento su Eureka esiste.
+     */
+    public function test_l_email_dopo_il_gestionale_non_declassa_lo_stato(): void
+    {
+        [$report, $tenant] = $this->scenario();
+        $report->update(['status' => 'in_gestionale', 'gestionale_sync_status' => 'sent']);
+        $this->comeRuolo($tenant, 'amministrazione');
+        Mail::fake();
+
+        Livewire::test(ListServiceReports::class)
+            ->callTableAction('send', $report, data: ['recipient_emails' => ['bar@porto.it']]);
+
+        Mail::assertSent(ServiceReportMail::class);
+        $this->assertSame('in_gestionale', $report->fresh()->status);
+    }
+
     public function test_l_ufficio_scrive_al_pagante_e_sceglie_la_copia(): void
     {
         [$report, $tenant] = $this->scenario();

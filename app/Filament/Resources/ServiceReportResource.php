@@ -1326,7 +1326,18 @@ class ServiceReportResource extends Resource
                                     ->cc($ccRecipients)
                                     ->send(new ServiceReportMail($record, $pdf->output(), $data['custom_message'] ?? null)));
 
-                                $record->update(['status' => 'inviato']);
+                                // "In gestionale" non si torna indietro: e' lo
+                                // stato terminale, e il documento su Eureka
+                                // esiste. Mandare la copia al cliente DOPO
+                                // averlo spedito al gestionale — cosa
+                                // legittima, sono due gesti distinti —
+                                // riportava lo stato a "inviato", cancellando
+                                // l'unica traccia visibile in elenco che il
+                                // rapportino fosse gia' passato in Eureka.
+                                if ($record->status !== 'in_gestionale') {
+                                    $record->update(['status' => 'inviato']);
+                                }
+
                                 Notification::make()->title('Rapportino inviato')->success()->send();
                             } catch (\Throwable $e) {
                                 $email->update(['status' => 'failed', 'error_message' => $e->getMessage()]);
