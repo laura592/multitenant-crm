@@ -128,6 +128,12 @@ class MachineUnitResource extends Resource
                             ? "{$record->material->maintenance_code} (dal modello)"
                             : 'es. F2, C3, DC2, MANA300')
                         ->helperText(fn (?MachineUnit $record) => static::aiutoCodiceManutenzione($record))
+                        // Suggerimenti invece di un menu chiuso: i codici a
+                        // catalogo si scelgono dall'elenco, ma resta possibile
+                        // scriverne uno nuovo — il catalogo di Eureka cambia e
+                        // un campo bloccato costringerebbe ad aspettare
+                        // l'import per registrare una macchina.
+                        ->datalist(static::codiciManutenzione())
                         ->maxLength(255),
                     Forms\Components\Select::make('billing_customer_id')
                         ->label('Fatturare a')
@@ -370,6 +376,35 @@ class MachineUnitResource extends Resource
      * Cosa succede davvero lasciando vuoto il campo, detto con i dati di
      * QUESTA macchina: il codice del modello e la variante del suo pagante.
      */
+    /**
+     * I codici manutenzione a catalogo, per il menu di suggerimenti.
+     *
+     * Solo i BASE: le varianti per pagante (F2GOPPION, F2HTS, F2DAN) e
+     * quelle festive le sceglie da sola TariffeIntervento::manutenzione()
+     * guardando chi paga, e offrirle qui farebbe scrivere a mano un codice
+     * che poi verrebbe ricalcolato — con l'effetto di bloccare la variante
+     * sbagliata se il cliente cambia torrefattore.
+     *
+     * @return array<int, string>
+     */
+    public static function codiciManutenzione(): array
+    {
+        $suffissi = collect(config('tariffe.paganti', []))
+            ->pluck('manutenzione_suffisso')
+            ->filter()
+            ->unique()
+            ->values();
+
+        return Material::query()
+            ->where('type', 'like', 'manutenzione%')
+            ->orderBy('code')
+            ->pluck('code')
+            ->reject(fn (string $code) => str_ends_with($code, 'FEST')
+                || $suffissi->contains(fn (string $s) => str_ends_with($code, $s) && $code !== $s))
+            ->values()
+            ->all();
+    }
+
     protected static function aiutoCodiceManutenzione(?MachineUnit $record): string
     {
         if (! $record) {

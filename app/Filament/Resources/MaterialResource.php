@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\MaterialResource\Pages;
+use App\Filament\Resources\MachineUnitResource;
 use App\Models\Material;
 use App\Models\Supplier;
 use Filament\Forms;
@@ -133,6 +134,11 @@ class MaterialResource extends Resource
                 ->label('Codice manutenzione ordinaria')
                 ->placeholder('es. F3, C2, DC2, MANA300')
                 ->helperText('Solo per i modelli di macchina: il codice della manutenzione dovuta su questo modello.')
+                // Stessi suggerimenti del campo sulla singola macchina (vedi
+                // MachineUnitResource::codiciManutenzione()): i codici base
+                // si scelgono dall'elenco, ma si puo' ancora scriverne uno
+                // nuovo.
+                ->datalist(MachineUnitResource::codiciManutenzione())
                 ->maxLength(255),
             Forms\Components\TextInput::make('tube_diameter')
                 ->label('Tubo Ø'),
