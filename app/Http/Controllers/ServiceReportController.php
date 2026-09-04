@@ -17,8 +17,11 @@ class ServiceReportController extends Controller
      * (?prezzi=0). Per chi non ha il permesso sui prezzi non e' una scelta:
      * esce sempre la copia senza, anche chiedendo ?prezzi=1 a mano.
      *
-     * Non c'entra il PDF allegato alla mail, che non ha prezzi mai e non
-     * passa di qui (vedi ServiceReportResource, azione "send").
+     * Questa route serve anche l'anteprima dell'allegato dentro la
+     * procedura guidata di invio (ServiceReportResource, azione "send"): il
+     * PDF spedito non passa di qui, ma nasce dalla stessa view con gli
+     * stessi due flag, cosi' l'anteprima non puo' mostrare una copia
+     * diversa da quella che parte.
      */
     public function pdf(ServiceReport $serviceReport, Request $request)
     {

@@ -139,17 +139,18 @@ class LavaggioRicambiAutomaticiTest extends TestCase
         $this->assertContains('SANIFICAZIONE', $codici, 'un impianto acqua deve portare la sanificazione');
         $this->assertNotContains('LAV2', $codici, 'un impianto acqua non si fattura a vie');
         $this->assertNotContains('ULTVIA', $codici);
-        // Il toggle si accende comunque: il lavoro e' stato fatto, cambia
-        // solo la voce da fatturare. Ma senza vie da contare.
-        $this->assertTrue((bool) ($stato['_lavaggio_vie_eseguito'] ?? false));
+        // Due interruttori distinti: si accende la sanificazione, non il
+        // lavaggio, che riguarda solo le vie.
+        $this->assertTrue((bool) ($stato['_sanificazione_eseguita'] ?? false));
+        $this->assertFalse((bool) ($stato['_lavaggio_vie_eseguito'] ?? false));
         $this->assertNull($stato['lavaggio_vie_count'] ?? null);
     }
 
     /**
-     * Spegnere "Lavaggio eseguito" toglie tutto il generato, sanificazione
-     * compresa: il toggle vale per l'intero lavoro sugli impianti.
+     * Ogni interruttore governa la sua voce: spegnere la sanificazione toglie
+     * SANIFICAZIONE, e il lavaggio delle vie resta affar suo.
      */
-    public function test_spegnere_il_toggle_toglie_anche_la_sanificazione(): void
+    public function test_spegnere_la_sanificazione_toglie_la_sua_voce(): void
     {
         [$cliente, $piano, $utente] = $this->scenario(vie: 1, bevanda: MaintenanceSchedule::BEVERAGE_ACQUA);
 
@@ -163,12 +164,12 @@ class LavaggioRicambiAutomaticiTest extends TestCase
 
         $this->assertContains('SANIFICAZIONE', $this->codiciNelForm($form->instance()->form->getRawState()));
 
-        $form->set('data._lavaggio_vie_eseguito', false);
+        $form->set('data._sanificazione_eseguita', false);
 
         $this->assertNotContains(
             'SANIFICAZIONE',
             $this->codiciNelForm($form->instance()->form->getRawState()),
-            'spento il toggle, la voce non deve restare in elenco',
+            'spenta la sanificazione, la voce non deve restare in elenco',
         );
     }
 
@@ -205,6 +206,9 @@ class LavaggioRicambiAutomaticiTest extends TestCase
 
         $this->assertContains('LAV2', $codici);
         $this->assertContains('SANIFICAZIONE', $codici);
+        // Entrambi i lavori, entrambi gli interruttori.
+        $this->assertTrue((bool) ($stato['_lavaggio_vie_eseguito'] ?? false));
+        $this->assertTrue((bool) ($stato['_sanificazione_eseguita'] ?? false));
         // Tre vie dalla birra, non quattro: la via dell'acqua non si somma.
         $this->assertSame(3, (int) ($stato['lavaggio_vie_count'] ?? 0));
 

@@ -273,4 +273,52 @@ class SchedaAnagraficaTest extends TestCase
         $this->assertSame('', $righe['BBB-2']);
     }
 
+    /**
+     * Le schede di piu' clienti in un PDF solo, per la spedizione a pacchi.
+     *
+     * I nomi dei campi del modulo sono fissi ("rag_sociale", "mac1_modello"):
+     * in AcroForm due widget con lo stesso nome sono LO STESSO campo, quindi
+     * senza un prefisso per scheda scrivere nel terzo cliente cambierebbe
+     * anche il primo.
+     */
+    public function test_il_pacco_tiene_separati_i_campi_di_ogni_cliente(): void
+    {
+        $tenant = Tenant::create(['name' => 'Alex', 'slug' => 'alex', 'is_master' => true]);
+        $clienti = collect(['Bar Uno', 'Bar Due', 'Bar Tre'])->map(
+            fn (string $nome) => Customer::create(['tenant_id' => $tenant->id, 'company_name' => $nome]),
+        );
+
+        $byte = SchedaAnagraficaPdf::moltiClienti(
+            $clienti->map(fn (Customer $c) => [
+                'valori' => SchedaAnagraficaData::for($c),
+                'conteggi' => SchedaAnagraficaData::conteggi($c),
+            ])->all(),
+            $tenant,
+        );
+
+        $this->assertStringStartsWith('%PDF', $byte);
+
+        // Quattro pagine per cliente.
+        $pagine = substr_count($byte, '/Type /Page') - substr_count($byte, '/Type /Pages');
+        $this->assertSame(12, $pagine);
+
+        // Un prefisso per scheda, e nessuno vuoto.
+        foreach (['c1_', 'c2_', 'c3_'] as $prefisso) {
+            $this->assertStringContainsString($prefisso, $byte, "manca il prefisso {$prefisso}");
+        }
+    }
+
+    /** La scheda singola resta senza prefisso: e' un modulo solo. */
+    public function test_la_scheda_singola_non_prende_prefissi(): void
+    {
+        $tenant = Tenant::create(['name' => 'Alex', 'slug' => 'alex', 'is_master' => true]);
+        $cliente = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Bar Uno']);
+
+        $byte = (new SchedaAnagraficaPdf(
+            SchedaAnagraficaData::for($cliente), $tenant, SchedaAnagraficaData::conteggi($cliente),
+        ))->render();
+
+        $this->assertStringNotContainsString('c1_rag_sociale', $byte);
+    }
+
 }

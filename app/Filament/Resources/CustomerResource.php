@@ -11,6 +11,8 @@ use App\Filament\Resources\CustomerResource\RelationManagers\MacchinariRelationM
 use App\Filament\Resources\CustomerResource\RelationManagers\QuotesRelationManager;
 use App\Filament\Resources\CustomerResource\RelationManagers\ServiceReportsRelationManager;
 use App\Models\Customer;
+use App\Support\Pdf\SchedaAnagraficaData;
+use App\Support\Pdf\SchedaAnagraficaPdf;
 use App\Support\DisplayName;
 use App\Support\Gestionale\EurekaClient;
 use Filament\Facades\Filament;
@@ -345,6 +347,35 @@ class CustomerResource extends Resource
                 ]),
             ])
             ->bulkActions([
+                // Le schede anagrafiche in un PDF solo, da stampare e
+                // spedire: una campagna si fa a pacchi, non aprendo un
+                // cliente alla volta (richiesta dell'ufficio, 04/09/2026).
+                // Fuori dal gruppo "azioni di massa" perche' e' l'unica non
+                // distruttiva e la si cerca subito.
+                Tables\Actions\BulkAction::make('schede_anagrafiche')
+                    ->label('Stampa schede anagrafiche')
+                    ->icon('heroicon-o-printer')
+                    ->color('gray')
+                    ->deselectRecordsAfterCompletion()
+                    ->action(function (Collection $records) {
+                        $schede = $records
+                            ->sortBy(fn (Customer $c) => mb_strtolower((string) ($c->company_name ?: $c->full_name)))
+                            ->map(fn (Customer $c) => [
+                                'valori' => SchedaAnagraficaData::for($c),
+                                'conteggi' => SchedaAnagraficaData::conteggi($c),
+                            ])->values()->all();
+
+                        $byte = SchedaAnagraficaPdf::moltiClienti($schede, $records->first()?->tenant);
+
+                        // Come per la scheda singola: "attachment", perche'
+                        // aperto nel visualizzatore del browser il modulo
+                        // perde i campi precompilati.
+                        return response()->streamDownload(
+                            fn () => print($byte),
+                            'schede-anagrafiche-'.now()->format('Y-m-d').'.pdf',
+                            ['Content-Type' => 'application/pdf'],
+                        );
+                    }),
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make()
                         ->before(function (Collection $records, Tables\Actions\DeleteBulkAction $action) {

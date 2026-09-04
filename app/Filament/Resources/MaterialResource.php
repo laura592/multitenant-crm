@@ -124,6 +124,16 @@ class MaterialResource extends Resource
             Forms\Components\TextInput::make('variant')
                 ->label('Variante')
                 ->maxLength(255),
+            // Si compila solo sui MODELLI di macchina, non sui ricambi: e' il
+            // codice che la scorciatoia "Manutenzione ordinaria" del
+            // rapportino mette in riga quando su quel modello si interviene.
+            // Il pagante con listino proprio prende comunque la sua variante
+            // (F3 -> F3GOPPION), vedi config/tariffe.php.
+            Forms\Components\TextInput::make('maintenance_code')
+                ->label('Codice manutenzione ordinaria')
+                ->placeholder('es. F3, C2, DC2, MANA300')
+                ->helperText('Solo per i modelli di macchina: il codice della manutenzione dovuta su questo modello.')
+                ->maxLength(255),
             Forms\Components\TextInput::make('tube_diameter')
                 ->label('Tubo Ø'),
             Forms\Components\TextInput::make('tube_diameter_2')

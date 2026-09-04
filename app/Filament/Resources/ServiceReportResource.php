@@ -761,6 +761,9 @@ class ServiceReportResource extends Resource
                     Forms\Components\Hidden::make('_sanificazione_material_key')
                         ->dehydrated(false)
                         ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['sanificazione_key']),
+                    Forms\Components\Hidden::make('_manutenzione_material_key')
+                        ->dehydrated(false)
+                        ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['manutenzione_key']),
                     Forms\Components\Hidden::make('_sanificazione_count')
                         ->dehydrated(false)
                         ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['sanificazioni_count']),
@@ -850,16 +853,8 @@ class ServiceReportResource extends Resource
                                 ->label('Lavaggio eseguito')
                                 ->live()
                                 ->dehydrated(false)
-                                // Acceso anche da una sola SANIFICAZIONE: il
-                                // toggle dice che il lavoro sugli impianti e'
-                                // stato fatto, non quale voce si fattura.
-                                ->default(function (?ServiceReport $record) {
-                                    $defaults = LavaggioFields::resolveLavaggioShortcutDefaults($record);
-
-                                    return $defaults['lavaggio_base_key'] !== null
-                                        || $defaults['sanificazione_key'] !== null;
-                                })
-                                ->helperText('Aggiunge da sola LAVAGGIO 2 VIE (sempre) + ULTERIORE VIA LAVATA per le vie oltre la seconda. Per gli impianti acqua, che non si contano a vie, aggiunge invece SANIFICAZIONE IMPIANTO ACQUA, una per impianto.')
+                                ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['lavaggio_base_key'] !== null)
+                                ->helperText('Aggiunge da sola LAVAGGIO 2 VIE (sempre) + ULTERIORE VIA LAVATA per le vie oltre la seconda.')
                                 ->afterStateUpdated(fn (Forms\Set $set, Get $get) => LavaggioFields::syncLavaggioViaMaterials($set, $get)),
                             // Unico campo della sezione che e' una colonna
                             // vera (service_reports.lavaggio_vie_count), non
@@ -882,6 +877,31 @@ class ServiceReportResource extends Resource
                                 ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['vie_count'])
                                 ->visible(fn (Get $get) => (bool) $get('_lavaggio_vie_eseguito'))
                                 ->afterStateUpdated(fn (Forms\Set $set, Get $get) => LavaggioFields::syncLavaggioViaMaterials($set, $get)),
+                            // Interruttore a se' dal 04/09/2026: lavare le vie
+                            // di un impianto bevande e sanificare un impianto
+                            // acqua sono due lavori diversi, con due voci
+                            // diverse, e capita di farne uno solo. Scegliendo
+                            // gli impianti in cima al rapportino si accende da
+                            // solo quello giusto.
+                            Forms\Components\Toggle::make('_sanificazione_eseguita')
+                                ->label('Sanificazione acqua')
+                                ->live()
+                                ->dehydrated(false)
+                                ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['sanificazione_key'] !== null)
+                                ->helperText('Aggiunge SANIFICAZIONE IMPIANTO ACQUA, una per impianto acqua. Gli impianti acqua non si contano a vie.')
+                                ->afterStateUpdated(fn (Forms\Set $set, Get $get) => LavaggioFields::syncLavaggioViaMaterials($set, $get)),
+                            // Manutenzione ordinaria: il codice non e' fisso,
+                            // dipende dal MODELLO della macchina scelta
+                            // (Faema 3 gruppi -> F3, Cimbali 2 -> C2), e dal
+                            // pagante (F3 -> F3GOPPION). Vedi
+                            // TariffeIntervento::manutenzione().
+                            Forms\Components\Toggle::make('add_manutenzione_material')
+                                ->label('Manutenzione ordinaria')
+                                ->live()
+                                ->dehydrated(false)
+                                ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['manutenzione_key'] !== null)
+                                ->helperText(fn (Get $get) => self::descrizioneManutenzione($get))
+                                ->afterStateUpdated(fn (bool $state, Forms\Set $set, Get $get) => self::syncManutenzioneMaterial($state, $set, $get)),
                         ]),
                     // Materiali (App\Models\Material), non Product: quest'ultimo e'
                     // lo stesso elenco usato per i preventivi, senza filtro —
@@ -1071,6 +1091,84 @@ class ServiceReportResource extends Resource
         return $tariffe['pagante']
             ? "Aggiunge {$codice} (listino {$tariffe['pagante']})."
             : "Aggiunge {$codice}.";
+    }
+
+    /**
+     * Il codice manutenzione che verrebbe inserito, o perche' non c'e'.
+     *
+     * Vale la pena dirlo prima: il codice dipende dal modello della macchina,
+     * e su un modello non ancora compilato il toggle non farebbe niente
+     * lasciando credere di aver caricato la voce.
+     */
+    private static function descrizioneManutenzione(Get $get): string
+    {
+        $macchina = MachineUnit::find($get('machine_unit_id'));
+
+        if (! $macchina) {
+            return 'Scegli prima la macchina: il codice dipende dal suo modello.';
+        }
+
+        $codice = TariffeIntervento::manutenzione($macchina, Customer::find($get('customer_id')));
+
+        if (! $codice) {
+            return 'Il modello di questa macchina non ha un codice manutenzione: impostalo in Magazzino > Materiali.';
+        }
+
+        $descrizione = Material::where('code', $codice)->value('type');
+
+        return "Aggiunge {$codice}".($descrizione ? " — {$descrizione}." : '.');
+    }
+
+    /**
+     * Stesso meccanismo per key di syncManodoperaMaterial(), con una
+     * differenza: qui il codice non e' una costante di ripiego ma si ricava
+     * dal modello della macchina. Senza codice non si aggiunge niente —
+     * meglio nessuna riga che una riga sbagliata da correggere in fattura.
+     */
+    private static function syncManutenzioneMaterial(bool $enabled, Forms\Set $set, Get $get): void
+    {
+        $materialsUsed = $get('materialsUsed') ?? [];
+        $addedKey = $get('_manutenzione_material_key');
+
+        if (! $enabled) {
+            if ($addedKey && array_key_exists($addedKey, $materialsUsed)) {
+                unset($materialsUsed[$addedKey]);
+                $set('materialsUsed', $materialsUsed);
+            }
+
+            $set('_manutenzione_material_key', null);
+
+            return;
+        }
+
+        if ($addedKey && array_key_exists($addedKey, $materialsUsed)) {
+            return;
+        }
+
+        $codice = TariffeIntervento::manutenzione(
+            MachineUnit::find($get('machine_unit_id')),
+            Customer::find($get('customer_id')),
+        );
+
+        $materialId = $codice ? Material::where('code', $codice)->value('id') : null;
+
+        if (! $materialId) {
+            return;
+        }
+
+        $giaPresente = collect($materialsUsed)->contains(
+            fn (array $item) => ($item['material_id'] ?? null) === $materialId
+        );
+
+        if ($giaPresente) {
+            return;
+        }
+
+        $newKey = (string) Str::uuid();
+        $materialsUsed[$newKey] = ['material_id' => $materialId, 'quantity' => 1];
+
+        $set('materialsUsed', $materialsUsed);
+        $set('_manutenzione_material_key', $newKey);
     }
 
     private static function syncManodoperaMaterial(bool $enabled, Forms\Set $set, Get $get): void
@@ -1269,7 +1367,13 @@ class ServiceReportResource extends Resource
                         // ServiceReportPolicy::sendEmail().
                         ->visible(fn (ServiceReport $record): bool => auth()->user()?->can('sendEmail', $record) ?? false)
                         ->modalWidth('4xl')
-                        ->form(fn (ServiceReport $record) => static::sendEmailFormSchema($record))
+                        ->modalHeading('Invia il rapportino al cliente')
+                        ->modalSubmitActionLabel('Invia')
+                        // Procedura guidata e non modale unico: la copia da
+                        // allegare decide se i prezzi escono dall'azienda, e
+                        // in fondo a una colonna di campi passava come una
+                        // spunta qualsiasi. Vedi sendEmailWizardSteps().
+                        ->steps(fn (ServiceReport $record) => static::sendEmailWizardSteps($record))
                         ->action(function (array $data, ServiceReport $record) {
                             $record->load(['customer', 'technician', 'machineProduct', 'machineMaterial', 'machineUnit.product', 'machineUnit.billingCustomer', 'partsUsed.product', 'materialsUsed.material', 'tenant']);
 
@@ -1283,10 +1387,7 @@ class ServiceReportResource extends Resource
                             // ricontrolla che sia fra quelle consentite a chi
                             // sta spedendo. Un radio nascosto (il tecnico) e'
                             // comunque un campo che viaggia nella richiesta.
-                            $copie = array_keys(static::copieEmailConsentite($record));
-                            $copia = in_array($data['copia'] ?? null, $copie, true)
-                                ? $data['copia']
-                                : ServiceReportPolicy::COPIA_SENZA_ARTICOLI;
+                            $copia = static::copiaEmailConsentita($record, $data['copia'] ?? null);
                             $flag = static::copiaEmailFlags($copia);
 
                             $pdf = OutsideLivewireRender::run(fn () => Pdf::loadView('pdf.service-report', [
@@ -1485,23 +1586,11 @@ class ServiceReportResource extends Resource
     }
 
     /**
-     * Form dell'azione "Invia": stesso principio di
-     * QuoteResource::sendEmailFormSchema() (testo modificabile con
-     * anteprima), con in piu' un placeholder reattivo che mostra il
-     * rendering reale della mail (stesso iframe gia' usato in "Storico
-     * invii email") mentre si scrive, invece di scoprirlo solo dopo
-     * l'invio. Il PDF allegato non cambia (resta sempre showPrices=false),
-     * qui si modifica solo il testo del corpo email: la seconda scheda lo
-     * mostra in sola lettura, cosi' si controlla anche l'allegato prima di
-     * spedirlo e non solo la mail che lo accompagna.
-     *
-     * @return array<Forms\Components\Component>
-     */
-    /**
      * Le copie che chi sta guardando puo' allegare, gia' etichettate.
      *
      * Il tecnico ne ha una sola (ServiceReportPolicy::copieEmailConsentite):
-     * il campo allora non compare nemmeno, e resta il ->default().
+     * il radio allora non compare, lo step "Copia" dice solo quale parte e
+     * il valore lo mette il ->default().
      *
      * @return array<string, string>
      */
@@ -1522,6 +1611,26 @@ class ServiceReportResource extends Resource
             : [ServiceReportPolicy::COPIA_SENZA_ARTICOLI];
 
         return array_intersect_key($etichette, array_flip($consentite));
+    }
+
+    /**
+     * La copia che verra' allegata davvero, dato quello che e' arrivato dal
+     * form: se non e' fra quelle consentite a chi sta spedendo si ricade
+     * sulla piu' scarna.
+     *
+     * Sta qui e non dentro ->action() perche' anche il riepilogo dell'ultimo
+     * passo deve nominare la stessa copia che poi parte, non quella
+     * digitata: altrimenti al tecnico che si ritrovasse 'con_prezzi' nella
+     * richiesta il wizard annuncerebbe i prezzi e l'invio manderebbe
+     * tutt'altro.
+     */
+    public static function copiaEmailConsentita(ServiceReport $record, mixed $copia): string
+    {
+        $copie = array_keys(static::copieEmailConsentite($record));
+
+        return in_array($copia, $copie, true)
+            ? $copia
+            : ServiceReportPolicy::COPIA_SENZA_ARTICOLI;
     }
 
     /**
@@ -1607,102 +1716,195 @@ class ServiceReportResource extends Resource
         return 'Il cliente ha piu\' indirizzi salvati: scegli tra i suggerimenti o digitane uno nuovo. Puoi selezionarne piu\' di uno.';
     }
 
-    protected static function sendEmailFormSchema(ServiceReport $record): array
+    /**
+     * L'invio come procedura guidata: prima COSA esce, poi A CHI, poi cosa
+     * c'e' scritto, e alla fine si rilegge tutto insieme.
+     *
+     * Era un modale unico con tutto in colonna, e la scelta piu' pesante —
+     * quale copia si allega, cioe' se i prezzi escono dall'azienda — stava
+     * in cima come un radio qualsiasi, sopra il testo email e le anteprime.
+     * A step invece ogni scelta arriva da sola con la sua anteprima
+     * accanto, e l'ultimo passo e' un riepilogo: si conferma dopo aver
+     * letto cosa parte, non prima.
+     *
+     * L'elenco degli step resta STATICO per tutta la durata del modale
+     * (cambia solo il contenuto): un closure sull'intero array spezza
+     * l'idratazione Livewire — vedi ConfigureMachineAction.
+     *
+     * @return array<Forms\Components\Wizard\Step>
+     */
+    protected static function sendEmailWizardSteps(ServiceReport $record): array
     {
         $copie = static::copieEmailConsentite($record);
         $suggerimenti = static::indirizziSuggeriti($record);
+        // Il tecnico ne ha una sola: niente da scegliere, ma lo step resta
+        // per fargli vedere lo stesso cosa firmera' il cliente.
+        $unaSola = count($copie) === 1;
 
         return [
-            // Una sola copia consentita (il tecnico) = niente da scegliere:
-            // il campo sparisce e il valore lo mette il ->default(). Con tre
-            // resta una scelta esplicita, senza preselezionare la piu'
-            // generosa.
-            Forms\Components\Radio::make('copia')
-                ->label('Copia da allegare')
-                ->options($copie)
-                ->default(array_key_first($copie))
-                ->required()
-                ->live()
-                ->visible(count($copie) > 1)
-                ->helperText('Il cliente riceve esattamente questa copia.'),
-            Forms\Components\TagsInput::make('recipient_emails')
-                ->label('Email destinatario')
-                ->helperText(static::aiutoDestinatari($record))
-                ->suggestions($suggerimenti)
-                ->splitKeys([',', ' ', 'Tab', 'Enter'])
-                ->required()
-                ->rules([fn () => static::emailListValidationRule()])
-                ->default(fn () => array_filter([$record->customer?->primaryEmail()])),
-            Forms\Components\TagsInput::make('cc_emails')
-                ->label('CC (opzionale)')
-                ->helperText('Anche qui puoi aggiungere piu\' indirizzi, ad es. le altre email del cliente.')
-                ->suggestions($suggerimenti)
-                ->splitKeys([',', ' ', 'Tab', 'Enter'])
-                ->rules([fn () => static::emailListValidationRule()]),
-            Forms\Components\RichEditor::make('custom_message')
-                ->label('Testo email (modificabile)')
-                ->toolbarButtons(['bold', 'italic', 'bulletList', 'orderedList', 'link', 'undo', 'redo'])
-                ->helperText('Questo testo viene inviato realmente nella mail. Il rapportino allegato non mostra mai i prezzi.')
-                ->live(debounce: 500)
-                ->default(fn () => static::defaultServiceReportEmailBody($record)),
-            // Due anteprime, ma una alla volta: impilate erano due iframe
-            // da 60vh in colonna e il pulsante "Invia" finiva fuori
-            // schermo. La mail resta la scheda aperta di default perche' e'
-            // l'unica cosa che si sta ancora modificando.
-            Forms\Components\Tabs::make('anteprime')
-                ->tabs([
-                    Forms\Components\Tabs\Tab::make('Anteprima email')
-                        ->icon('heroicon-o-envelope')
-                        ->schema([
-                            Forms\Components\Placeholder::make('email_preview')
-                                ->hiddenLabel()
-                                ->content(fn (Get $get): HtmlString => new HtmlString(
-                                    // Vedi App\Support\OutsideLivewireRender: questo
-                                    // ->content() e' un Placeholder reattivo (->live() su
-                                    // custom_message sopra), quindi il ->render() qui sotto
-                                    // parte SEMPRE mentre Livewire sta ridisegnando il
-                                    // pannello — senza il fix, i commenti di tracciamento
-                                    // <!--[if BLOCK]><![endif]--> di Livewire finiscono
-                                    // ogni volta nell'anteprima (bug segnalato 2026-08-20).
-                                    '<iframe srcdoc="'.e(OutsideLivewireRender::run(fn () => (new ServiceReportMail($record, '', is_string($get('custom_message')) ? $get('custom_message') : null))->render())).'" style="width:100%;height:60vh;border:0;border-radius:0.5rem;background:#fff;"></iframe>'
-                                )),
-                        ]),
-                    Forms\Components\Tabs\Tab::make('Anteprima rapportino')
-                        ->icon('heroicon-o-document-text')
-                        ->schema([
-                            Forms\Components\Placeholder::make('pdf_preview')
-                                ->hiddenLabel()
-                                // Stesso identico PDF che viene allegato: la
-                                // route con ?prezzi=0 rende 'pdf.service-report'
-                                // con showPrices=false, come fa ->action() qui
-                                // sopra. E' l'unica copia che il cliente vede,
-                                // i prezzi non ci vanno mai (vedi il controller).
-                                //
-                                // wire:ignore perche' il pannello si ridisegna
-                                // a ogni tasto nel testo email (->live() su
-                                // custom_message): senza, l'iframe rischia di
-                                // rigenerare il PDF a ogni battuta.
-                                // wire:key sulla copia scelta: l'iframe si
-                                // rigenera quando cambia la copia, ma
-                                // wire:ignore lo lascia in pace mentre si
-                                // scrive nel testo email (->live() su
-                                // custom_message ridisegna tutto il pannello).
-                                ->content(function (Get $get) use ($record, $copie): HtmlString {
-                                    $copia = is_string($get('copia')) ? $get('copia') : array_key_first($copie);
-                                    $flag = static::copiaEmailFlags($copia);
-                                    $url = route('service-reports.pdf', [
-                                        $record,
-                                        'prezzi' => $flag['showPrices'] ? 1 : 0,
-                                        'articoli' => $flag['showArticoli'] ? 1 : 0,
-                                    ]);
+            Forms\Components\Wizard\Step::make('Copia')
+                ->icon('heroicon-o-document-text')
+                ->description('Cosa vede il cliente')
+                ->schema([
+                    Forms\Components\Radio::make('copia')
+                        ->label('Copia da allegare')
+                        ->options($copie)
+                        ->descriptions(static::copieEmailDescrizioni())
+                        ->default(array_key_first($copie))
+                        ->required()
+                        ->live()
+                        ->visible(! $unaSola)
+                        ->helperText('Il cliente riceve esattamente questa copia.'),
+                    Forms\Components\Placeholder::make('copia_unica')
+                        ->hiddenLabel()
+                        ->visible($unaSola)
+                        ->content(new HtmlString(
+                            '<p class="text-sm text-gray-500 dark:text-gray-400">Parte la copia <strong>'
+                            .e(reset($copie))
+                            .'</strong>. Le copie con articoli o prezzi le manda l\'ufficio.</p>'
+                        )),
+                    // Stesso identico PDF che verra' allegato: la route
+                    // rende 'pdf.service-report' con gli stessi due flag che
+                    // ->action() passa a Pdf::loadView().
+                    //
+                    // wire:ignore + wire:key sulla copia scelta: l'iframe si
+                    // rigenera quando cambia la copia e resta fermo per
+                    // qualunque altro ridisegno del pannello.
+                    Forms\Components\Placeholder::make('pdf_preview')
+                        ->label('Anteprima dell\'allegato')
+                        ->content(function (Get $get) use ($record, $copie): HtmlString {
+                            $copia = is_string($get('copia')) ? $get('copia') : array_key_first($copie);
+                            $flag = static::copiaEmailFlags($copia);
+                            $url = route('service-reports.pdf', [
+                                $record,
+                                'prezzi' => $flag['showPrices'] ? 1 : 0,
+                                'articoli' => $flag['showArticoli'] ? 1 : 0,
+                            ]);
 
-                                    return new HtmlString(
-                                        '<div wire:ignore wire:key="pdf-'.e($copia).'"><iframe src="'.e($url).'" style="width:100%;height:60vh;border:0;border-radius:0.5rem;background:#fff;"></iframe></div>'
-                                    );
-                                }),
-                        ]),
+                            return new HtmlString(
+                                '<div wire:ignore wire:key="pdf-'.e($copia).'"><iframe src="'.e($url).'" style="width:100%;height:55vh;border:0;border-radius:0.5rem;background:#fff;"></iframe></div>'
+                            );
+                        }),
+                ]),
+            Forms\Components\Wizard\Step::make('Destinatari')
+                ->icon('heroicon-o-users')
+                ->description('A chi arriva')
+                ->schema([
+                    Forms\Components\TagsInput::make('recipient_emails')
+                        ->label('Email destinatario')
+                        ->helperText(static::aiutoDestinatari($record))
+                        ->suggestions($suggerimenti)
+                        ->splitKeys([',', ' ', 'Tab', 'Enter'])
+                        ->required()
+                        ->rules([fn () => static::emailListValidationRule()])
+                        ->default(fn () => array_filter([$record->customer?->primaryEmail()])),
+                    Forms\Components\TagsInput::make('cc_emails')
+                        ->label('CC (opzionale)')
+                        ->helperText('Anche qui puoi aggiungere piu\' indirizzi, ad es. le altre email del cliente.')
+                        ->suggestions($suggerimenti)
+                        ->splitKeys([',', ' ', 'Tab', 'Enter'])
+                        ->rules([fn () => static::emailListValidationRule()]),
+                ]),
+            Forms\Components\Wizard\Step::make('Testo')
+                ->icon('heroicon-o-envelope')
+                ->description('Cosa c\'e\' scritto nella mail')
+                ->schema([
+                    Forms\Components\RichEditor::make('custom_message')
+                        ->label('Testo email (modificabile)')
+                        ->toolbarButtons(['bold', 'italic', 'bulletList', 'orderedList', 'link', 'undo', 'redo'])
+                        ->helperText('Questo testo viene inviato realmente nella mail. Il rapportino resta in allegato, nella copia scelta al primo passo.')
+                        ->live(debounce: 500)
+                        ->default(fn () => static::defaultServiceReportEmailBody($record)),
+                    Forms\Components\Placeholder::make('email_preview')
+                        ->label('Anteprima email')
+                        ->content(fn (Get $get): HtmlString => new HtmlString(
+                            // Vedi App\Support\OutsideLivewireRender: questo
+                            // ->content() e' un Placeholder reattivo (->live() su
+                            // custom_message sopra), quindi il ->render() qui sotto
+                            // parte SEMPRE mentre Livewire sta ridisegnando il
+                            // pannello — senza il fix, i commenti di tracciamento
+                            // <!--[if BLOCK]><![endif]--> di Livewire finiscono
+                            // ogni volta nell'anteprima (bug segnalato 2026-08-20).
+                            '<iframe srcdoc="'.e(OutsideLivewireRender::run(fn () => (new ServiceReportMail($record, '', is_string($get('custom_message')) ? $get('custom_message') : null))->render())).'" style="width:100%;height:50vh;border:0;border-radius:0.5rem;background:#fff;"></iframe>'
+                        )),
+                ]),
+            Forms\Components\Wizard\Step::make('Riepilogo')
+                ->icon('heroicon-o-paper-airplane')
+                ->description('Controlla e invia')
+                ->schema([
+                    Forms\Components\Placeholder::make('riepilogo_invio')
+                        ->hiddenLabel()
+                        ->content(fn (Get $get): HtmlString => static::renderRiepilogoInvio($record, [
+                            'copia' => $get('copia'),
+                            'recipient_emails' => $get('recipient_emails'),
+                            'cc_emails' => $get('cc_emails'),
+                        ])),
                 ]),
         ];
+    }
+
+    /**
+     * Cosa cambia davvero fra una copia e l'altra, detto accanto al radio:
+     * i nomi da soli ("con articoli") non dicono se i prezzi escono.
+     *
+     * @return array<string, string>
+     */
+    protected static function copieEmailDescrizioni(): array
+    {
+        return [
+            ServiceReportPolicy::COPIA_SENZA_ARTICOLI => 'Solo il lavoro svolto: e\' la copia che il cliente firma in cantiere.',
+            ServiceReportPolicy::COPIA_CON_ARTICOLI => 'Aggiunge l\'elenco di ricambi e materiali montati, senza nessun importo.',
+            ServiceReportPolicy::COPIA_CON_PREZZI => 'Ricambi con prezzo unitario e totale. Gli importi escono dall\'azienda: mandala solo a chi li deve vedere.',
+        ];
+    }
+
+    /**
+     * L'ultimo passo: quello che parte davvero, non quello che si e'
+     * digitato. Gli indirizzi passano dallo stesso destinatariConsentiti()
+     * che usa ->action(), quindi il pagante filtrato via non compare qui
+     * come se stesse per ricevere la mail; e i destinatari interni del
+     * tenant, che nessun campo del form mostra, si vedono prima di spedire
+     * e non solo nel "Storico invii email".
+     *
+     * Prende i dati grezzi invece di un Forms\Get proprio per essere
+     * verificabile senza montare il form.
+     *
+     * @param  array{copia?: mixed, recipient_emails?: mixed, cc_emails?: mixed}  $dati
+     */
+    public static function renderRiepilogoInvio(ServiceReport $record, array $dati): HtmlString
+    {
+        $copie = static::copieEmailConsentite($record);
+        $copia = static::copiaEmailConsentita($record, $dati['copia'] ?? null);
+        $flag = static::copiaEmailFlags($copia);
+
+        $a = static::destinatariConsentiti($record, (array) ($dati['recipient_emails'] ?? []));
+        $cc = static::destinatariConsentiti($record, (array) ($dati['cc_emails'] ?? []));
+        $interni = array_values(array_filter($record->tenant?->notificationRecipients('service_report') ?? []));
+
+        $righe = [
+            ['label' => 'Copia allegata', 'value' => $copie[$copia], 'strong' => true],
+            ['label' => 'A', 'value' => $a ? implode(', ', $a) : 'nessun destinatario valido'],
+        ];
+
+        if ($cc !== []) {
+            $righe[] = ['label' => 'CC', 'value' => implode(', ', $cc)];
+        }
+
+        if ($interni !== []) {
+            $righe[] = ['label' => 'In copia (interni)', 'value' => implode(', ', $interni)];
+        }
+
+        $righe[] = ['label' => 'Oggetto', 'value' => "Rapportino di intervento {$record->number}"];
+
+        return new HtmlString(view('filament.partials.invio-rapportino-riepilogo', [
+            'righe' => $righe,
+            'avviso' => match (true) {
+                $a === [] => 'Nessun destinatario valido: torna al passo "Destinatari". Il rapportino va a chi ha ricevuto l\'intervento, non a chi paga.',
+                $flag['showPrices'] => 'Questa copia contiene i prezzi.',
+                default => null,
+            },
+            'avvisoGrave' => $a === [],
+        ])->render());
     }
 
     protected static function emailListValidationRule(): \Closure

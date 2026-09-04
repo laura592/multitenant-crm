@@ -45,6 +45,7 @@ return [
         // Goppion Caffe' SPA — 16 clienti, vale per tutti
         782 => [
             'nome' => 'Goppion',
+            'manutenzione_suffisso' => 'GOPPION',
             'chiamata' => 'CHIORDGOP',
             'manodopera' => 'OREGOPPION',
         ],
@@ -60,6 +61,7 @@ return [
         // Hts 1892 SPA — 7 clienti
         942 => [
             'nome' => 'HTS',
+            'manutenzione_suffisso' => 'HTS',
             'chiamata' => 'CHIVEHTS',
             'manodopera' => 'OREHTS',
         ],
@@ -67,6 +69,7 @@ return [
         // Danieli Management SRL
         561 => [
             'nome' => 'Danieli',
+            'manutenzione_suffisso' => 'DAN',
             'chiamata' => 'CHIDAN',
             'manodopera' => 'OREDAN',
         ],
@@ -91,6 +94,12 @@ return [
         'chiamata_festiva' => 'CHIFE',
         'manodopera' => 'ORE',
         'manodopera_festiva' => 'OREFEST',
+        // La manutenzione ordinaria non ha un codice standard: dipende dal
+        // MODELLO della macchina (Material::maintenance_code). Qui c'e' solo
+        // il suffisso dei paganti con listino proprio, che si appiccica al
+        // codice del modello: F3 + GOPPION = F3GOPPION, gia' a catalogo.
+        // Se la variante non esiste (F4GOPPION non c'e') si ricade sul
+        // codice base, invece di mettere in riga un articolo inventato.
         'lavaggio' => 'LAV2',
         'lavaggio_ulteriore_via' => 'ULTVIA',
         // Gli impianti acqua non si contano a vie: la voce da fatturare e'

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\ServiceReportResource;
 use App\Filament\Resources\ServiceReportResource\Pages\ListServiceReports;
 use App\Mail\ServiceReportMail;
 use App\Models\Customer;
@@ -10,6 +11,7 @@ use App\Models\ServiceReport;
 use App\Models\ServiceReportMaterial;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Policies\ServiceReportPolicy;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
@@ -101,11 +103,11 @@ class RapportinoInvioCopieTest extends TestCase
     public function test_il_tecnico_ha_una_copia_sola_l_ufficio_tre(): void
     {
         [$report, $tenant] = $this->scenario();
-        $policy = app(\App\Policies\ServiceReportPolicy::class);
+        $policy = app(ServiceReportPolicy::class);
 
         $tecnico = $this->comeRuolo($tenant, 'dipendente');
         $this->assertSame(
-            [\App\Policies\ServiceReportPolicy::COPIA_SENZA_ARTICOLI],
+            [ServiceReportPolicy::COPIA_SENZA_ARTICOLI],
             $policy->copieEmailConsentite($tecnico, $report),
         );
         $this->assertFalse($policy->puoScrivereAlPagante($tecnico, $report));
@@ -163,6 +165,84 @@ class RapportinoInvioCopieTest extends TestCase
 
         Mail::assertSent(ServiceReportMail::class);
         $this->assertSame('in_gestionale', $report->fresh()->status);
+    }
+
+    /**
+     * L'invio e' una procedura guidata: la copia si sceglie da sola al primo
+     * passo, non in fondo a una colonna di campi.
+     */
+    public function test_l_invio_e_una_procedura_guidata(): void
+    {
+        [$report, $tenant] = $this->scenario();
+        $this->comeRuolo($tenant, 'amministrazione');
+
+        $steps = (fn () => static::sendEmailWizardSteps($report))
+            ->call(new ServiceReportResource);
+
+        $this->assertSame(
+            ['Copia', 'Destinatari', 'Testo', 'Riepilogo'],
+            array_map(fn ($step) => $step->getLabel(), $steps),
+        );
+    }
+
+    /**
+     * Il modale si monta davvero: i quattro passi, le descrizioni che dicono
+     * cosa cambia fra una copia e l'altra, e l'anteprima dell'allegato
+     * puntata sulla copia piu' scarna finche' non se ne sceglie un'altra.
+     */
+    public function test_il_modale_di_invio_si_monta_coi_quattro_passi(): void
+    {
+        [$report, $tenant] = $this->scenario();
+        $this->comeRuolo($tenant, 'amministrazione');
+
+        $html = Livewire::test(ListServiceReports::class)
+            ->mountTableAction('send', $report)
+            ->assertOk()
+            ->html();
+
+        $this->assertStringContainsString('Cosa vede il cliente', $html);
+        $this->assertStringContainsString('Controlla e invia', $html);
+        $this->assertStringContainsString('Gli importi escono dall', $html);
+        $this->assertStringContainsString('prezzi=0&amp;articoli=0', $html);
+    }
+
+    /**
+     * Il riepilogo dell'ultimo passo dice quello che parte davvero: gli
+     * indirizzi passano dallo stesso filtro dell'invio, quindi al tecnico il
+     * pagante non compare nemmeno come destinatario in attesa.
+     */
+    public function test_il_riepilogo_mostra_quello_che_parte_davvero(): void
+    {
+        [$report, $tenant] = $this->scenario();
+        $this->comeRuolo($tenant, 'dipendente');
+
+        $riepilogo = ServiceReportResource::renderRiepilogoInvio($report, [
+            'copia' => 'con_prezzi',
+            'recipient_emails' => ['bar@porto.it', 'amministrazione@dersut.it'],
+        ])->toHtml();
+
+        $this->assertStringContainsString('bar@porto.it', $riepilogo);
+        $this->assertStringNotContainsString('amministrazione@dersut.it', $riepilogo);
+        // 'con_prezzi' non e' fra le copie del tecnico: il riepilogo non deve
+        // annunciare una copia che l'invio poi declassa.
+        $this->assertStringNotContainsString('prezzi', $riepilogo);
+    }
+
+    /**
+     * All'ufficio invece la copia coi prezzi e' concessa, e il riepilogo la
+     * segnala: e' l'ultimo punto in cui ci si puo' fermare.
+     */
+    public function test_il_riepilogo_avvisa_quando_escono_i_prezzi(): void
+    {
+        [$report, $tenant] = $this->scenario();
+        $this->comeRuolo($tenant, 'amministrazione');
+
+        $riepilogo = ServiceReportResource::renderRiepilogoInvio($report, [
+            'copia' => 'con_prezzi',
+            'recipient_emails' => ['bar@porto.it'],
+        ])->toHtml();
+
+        $this->assertStringContainsString('Questa copia contiene i prezzi.', $riepilogo);
     }
 
     public function test_l_ufficio_scrive_al_pagante_e_sceglie_la_copia(): void

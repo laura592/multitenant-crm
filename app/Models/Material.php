@@ -18,6 +18,7 @@ class Material extends Model
     public const SOURCE_EUREKA = 'eureka';
 
     protected $fillable = [
+        'maintenance_code',
         'tenant_id',
         'source',
         'supplier_id',

@@ -78,14 +78,50 @@ class SchedaAnagraficaPdf
      *                                                       modulo quando non ci stanno tutte, invece di stamparne cinque e
      *                                                       lasciar credere che siano tutte li'.
      */
+    /**
+     * Prefisso dei nomi di campo.
+     *
+     * In un PDF con un modulo solo non serve. Stampandone tanti in un file
+     * unico serve eccome: i nomi sono fissi ("mac1_modello", "rag_sociale"),
+     * e in AcroForm due widget con lo stesso nome sono LO STESSO campo —
+     * scrivendo nella scheda del terzo cliente cambierebbe anche quella del
+     * primo. Il prefisso li tiene separati.
+     */
+    private string $prefisso = '';
+
     public function __construct(
         private array $valori = [],
         private ?Tenant $tenant = null,
         private array $conteggi = [],
     ) {}
 
-    /** Byte del PDF. */
-    public function render(): string
+    /**
+     * Le schede di piu' clienti in un PDF solo, da stampare e spedire.
+     *
+     * @param  iterable<int, array{valori: array<string, string>, conteggi: array<string, int>}>  $schede
+     */
+    public static function moltiClienti(iterable $schede, ?Tenant $tenant = null): string
+    {
+        $pdf = new self([], $tenant);
+        $pdf->apri();
+
+        foreach ($schede as $i => $scheda) {
+            $pdf->valori = $scheda['valori'];
+            $pdf->conteggi = $scheda['conteggi'] ?? [];
+            // Un prefisso per scheda: vedi $prefisso.
+            $pdf->prefisso = 'c'.($i + 1).'_';
+
+            $pdf->pagina1();
+            $pdf->pagina2();
+            $pdf->pagina3();
+            $pdf->pagina4();
+        }
+
+        return $pdf->conNeedAppearances($pdf->pdf->Output('', 'S'));
+    }
+
+    /** Prepara il documento: configurazione comune a una scheda e a un pacco. */
+    private function apri(): void
     {
         $this->pdf = new TCPDF('P', 'pt', 'A4', true, 'UTF-8', false);
         $this->pdf->SetCreator('CRM Alex');
@@ -109,6 +145,12 @@ class SchedaAnagraficaPdf
             'textColor' => [0, 0, 0],
         ]);
 
+    }
+
+    /** Byte del PDF. */
+    public function render(): string
+    {
+        $this->apri();
         $this->pagina1();
         $this->pagina2();
         $this->pagina3();
@@ -272,7 +314,7 @@ class SchedaAnagraficaPdf
         }
 
         $this->pdf->SetFont('helvetica', '', 9);
-        $this->pdf->TextField($nome, $w, $h, $prop, $opt, $x, $this->top($base, $h));
+        $this->pdf->TextField($this->prefisso.$nome, $w, $h, $prop, $opt, $x, $this->top($base, $h));
     }
 
     private function spunta(string $nome, float $x, float $base, ?string $etichetta = null, float $lato = 10, float $corpoEtichetta = 7.4): void
@@ -286,7 +328,7 @@ class SchedaAnagraficaPdf
         // tenerlo rientrato per non coprire il bordo.
         $this->pdf->SetFont('helvetica', '', 9);
         $this->pdf->CheckBox(
-            $nome, $lato, ($this->valori[$nome] ?? '') !== '',
+            $this->prefisso.$nome, $lato, ($this->valori[$nome] ?? '') !== '',
             [], ['f' => 4],
             'Yes', $x, $this->top($base, $lato),
         );
@@ -306,7 +348,7 @@ class SchedaAnagraficaPdf
         // Come in spunta(): il bersaglio cliccabile e' l'intero pallino.
         $this->pdf->SetFont('helvetica', '', 9);
         $this->pdf->RadioButton(
-            $gruppo, $lato,
+            $this->prefisso.$gruppo, $lato,
             [], ['f' => 4],
             $valore, ($this->valori[$gruppo] ?? null) === $valore,
             $x, $this->top($base, $lato),

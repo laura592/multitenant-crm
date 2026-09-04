@@ -135,6 +135,7 @@ class LavaggioFields
             'lavaggio_ult_key' => null,
             'sanificazione_key' => null,
             'sanificazioni_count' => null,
+            'manutenzione_key' => null,
             'vie_count' => null,
         ];
 
@@ -153,6 +154,12 @@ class LavaggioFields
         $baseRow = $rows->first(fn ($row) => in_array($row->material?->code, self::codiciTariffa('lavaggio'), true));
         $ultRow = $rows->first(fn ($row) => in_array($row->material?->code, self::codiciTariffa('lavaggio_ulteriore_via'), true));
         $sanifRow = $rows->first(fn ($row) => in_array($row->material?->code, self::codiciTariffa('sanificazione'), true));
+        // La manutenzione non ha un elenco di codici noti: si riconosce
+        // risolvendo quello dovuto per la macchina di QUESTO rapportino.
+        $codiceManutenzione = TariffeIntervento::manutenzione($record->machineUnit, $record->customer);
+        $manutRow = $codiceManutenzione
+            ? $rows->first(fn ($row) => $row->material?->code === $codiceManutenzione)
+            : null;
 
         return [
             // Prefisso "record-": il repeater ->relationship() tiene le righe
@@ -166,6 +173,7 @@ class LavaggioFields
             'lavaggio_ult_key' => $ultRow ? "record-{$ultRow->id}" : null,
             'sanificazione_key' => $sanifRow ? "record-{$sanifRow->id}" : null,
             'sanificazioni_count' => $sanifRow ? (int) $sanifRow->quantity : null,
+            'manutenzione_key' => $manutRow ? "record-{$manutRow->id}" : null,
             // Vince sempre il numero digitato dal tecnico, ora che c'e' una
             // colonna che lo conserva: le righe materiali non bastano a
             // ricostruirlo, perche' 1 via e 2 vie generano entrambe il solo
@@ -221,13 +229,16 @@ class LavaggioFields
         // ancora spento cancellerebbe le righe invece di scriverle.
         $set($su.'_sanificazione_count', $sanificazioni ?: null);
 
-        // Il toggle si accende comunque, anche per i soli impianti acqua: il
-        // lavoro sugli impianti e' stato fatto, cambia solo quale voce si
-        // fattura.
-        $set($su.'_lavaggio_vie_eseguito', true);
-
+        // Ogni interruttore segue il suo: gli impianti a vie accendono il
+        // lavaggio, quelli acqua la sanificazione. Un rapportino puo'
+        // accenderne uno solo, o entrambi.
         if ($totaleVie >= 1) {
+            $set($su.'_lavaggio_vie_eseguito', true);
             $set($su.'lavaggio_vie_count', $totaleVie);
+        }
+
+        if ($sanificazioni >= 1) {
+            $set($su.'_sanificazione_eseguita', true);
         }
 
         self::syncLavaggioViaMaterials($set, $get, $su);
@@ -270,34 +281,22 @@ class LavaggioFields
             }
         }
 
-        $eseguito = (bool) $get($su.'_lavaggio_vie_eseguito');
+        // Due interruttori distinti (04/09/2026): lavare le vie di un
+        // impianto bevande e sanificare un impianto acqua sono due lavori
+        // diversi, con due voci diverse, e capita di farne uno solo.
+        $lavaggio = (bool) $get($su.'_lavaggio_vie_eseguito');
+        $sanificazione = (bool) $get($su.'_sanificazione_eseguita');
         $vieCount = (int) $get($su.'lavaggio_vie_count');
-        $sanificazioni = (int) $get($su.'_sanificazione_count');
-
-        // Il toggle vale per tutto il lavoro sugli impianti, acqua compresa:
-        // spento significa "non e' stato fatto", quindi via ogni riga
-        // generata da qui — LAV2/ULTVIA come SANIFICAZIONE — e via i
-        // conteggi, che altrimenti resterebbero a raccontare un lavoro che
-        // il rapportino non dice piu' di aver fatto.
-        if (! $eseguito) {
-            $set($su.'materialsUsed', $materialsUsed);
-            $set($su.'_lavaggio_base_material_key', null);
-            $set($su.'_lavaggio_ult_material_key', null);
-            $set($su.'_sanificazione_material_key', null);
-            $set($su.'lavaggio_vie_count', null);
-            $set($su.'_sanificazione_count', null);
-
-            return;
-        }
+        // Il conteggio lo scrive syncVieDaImpianti() contando gli impianti
+        // acqua del rapportino. Acceso a mano, senza impianti collegati (il
+        // cliente che un piano non ce l'ha), vale uno.
+        $sanificazioni = max(1, (int) $get($su.'_sanificazione_count'));
 
         $tariffe = TariffeIntervento::per(Customer::find($get($su.'customer_id')));
 
-        // Gli impianti acqua non si contano a vie: una riga a corpo per
-        // impianto, indipendente dal numero di vie degli altri impianti sullo
-        // stesso rapportino.
         $newSanifKey = null;
 
-        if ($sanificazioni >= 1) {
+        if ($sanificazione) {
             $sanifMaterial = Material::where('code', $tariffe['sanificazione'] ?? self::SANIFICAZIONE_MATERIAL_CODE)->first();
 
             $sanifGiaPresente = collect($materialsUsed)->contains(
@@ -308,50 +307,45 @@ class LavaggioFields
                 $newSanifKey = (string) Str::uuid();
                 $materialsUsed[$newSanifKey] = ['material_id' => $sanifMaterial->id, 'quantity' => $sanificazioni];
             }
+        } else {
+            $set($su.'_sanificazione_count', null);
         }
 
         $set($su.'_sanificazione_material_key', $newSanifKey);
 
-        // Toggle acceso ma nessuna via: e' il caso del rapportino di soli
-        // impianti acqua. La sanificazione qui sopra e' gia' a posto, le
-        // righe a vie non devono nascere, e lavaggio_vie_count — che e' una
-        // colonna vera — non deve restare in DB col numero di un lavaggio
-        // che non c'e'.
-        if ($vieCount < 1) {
-            $set($su.'materialsUsed', $materialsUsed);
-            $set($su.'_lavaggio_base_material_key', null);
-            $set($su.'_lavaggio_ult_material_key', null);
-            $set($su.'lavaggio_vie_count', null);
-
-            return;
-        }
-
-        $baseMaterial = Material::where('code', $tariffe['lavaggio'] ?? self::LAVAGGIO_VIE_BASE_MATERIAL_CODE)->first();
-        $ultMaterial = Material::where('code', $tariffe['lavaggio_ulteriore_via'] ?? self::LAVAGGIO_VIE_ULTERIORE_MATERIAL_CODE)->first();
-
         $newBaseKey = null;
         $newUltKey = null;
 
-        if ($baseMaterial) {
-            $baseAlreadyPresent = collect($materialsUsed)->contains(
-                fn (array $item) => ($item['material_id'] ?? null) === $baseMaterial->id
-            );
+        if ($lavaggio && $vieCount >= 1) {
+            $baseMaterial = Material::where('code', $tariffe['lavaggio'] ?? self::LAVAGGIO_VIE_BASE_MATERIAL_CODE)->first();
+            $ultMaterial = Material::where('code', $tariffe['lavaggio_ulteriore_via'] ?? self::LAVAGGIO_VIE_ULTERIORE_MATERIAL_CODE)->first();
 
-            if (! $baseAlreadyPresent) {
-                $newBaseKey = (string) Str::uuid();
-                $materialsUsed[$newBaseKey] = ['material_id' => $baseMaterial->id, 'quantity' => 1];
+            if ($baseMaterial) {
+                $baseGiaPresente = collect($materialsUsed)->contains(
+                    fn (array $item) => ($item['material_id'] ?? null) === $baseMaterial->id
+                );
+
+                if (! $baseGiaPresente) {
+                    $newBaseKey = (string) Str::uuid();
+                    $materialsUsed[$newBaseKey] = ['material_id' => $baseMaterial->id, 'quantity' => 1];
+                }
             }
-        }
 
-        if ($ultMaterial && $vieCount > 2) {
-            $ultAlreadyPresent = collect($materialsUsed)->contains(
-                fn (array $item) => ($item['material_id'] ?? null) === $ultMaterial->id
-            );
+            if ($ultMaterial && $vieCount > 2) {
+                $ultGiaPresente = collect($materialsUsed)->contains(
+                    fn (array $item) => ($item['material_id'] ?? null) === $ultMaterial->id
+                );
 
-            if (! $ultAlreadyPresent) {
-                $newUltKey = (string) Str::uuid();
-                $materialsUsed[$newUltKey] = ['material_id' => $ultMaterial->id, 'quantity' => $vieCount - 2];
+                if (! $ultGiaPresente) {
+                    $newUltKey = (string) Str::uuid();
+                    $materialsUsed[$newUltKey] = ['material_id' => $ultMaterial->id, 'quantity' => $vieCount - 2];
+                }
             }
+        } else {
+            // Spento il lavaggio, via anche il conteggio: e' una colonna
+            // vera, senza questo resterebbe in DB il numero di vie di un
+            // lavaggio che il rapportino non dice piu' di aver fatto.
+            $set($su.'lavaggio_vie_count', null);
         }
 
         $set($su.'materialsUsed', $materialsUsed);
