@@ -79,7 +79,13 @@
                     <tr>
                         <td class="code">{{ $macchina->serial_number ?: '—' }}</td>
                         <td>{{ $macchina->display_name }}</td>
-                        <td class="code">{{ $macchina->material?->maintenance_code ?: '—' }}</td>
+                        {{-- Il codice che finirebbe davvero in rapportino: quello
+                             della macchina se ce l'ha, altrimenti quello del
+                             modello, e con la variante del pagante gia' applicata
+                             (F2 -> F2GOPPION). Prima qui si leggeva il codice
+                             grezzo del modello, che sui clienti Goppion, HTS e
+                             Danieli era la tariffa sbagliata. --}}
+                        <td class="code">{{ \App\Support\TariffeIntervento::manutenzione($macchina, $macchina->currentCustomer) ?: '—' }}</td>
                         <td>{{ \App\Support\DisplayName::titleCase($macchina->currentCustomer?->company_name) ?: '—' }}</td>
                         <td>{{ $macchina->currentCustomer?->city ?: '—' }}</td>
                         <td>{{ $etichetteCategoria[$macchina->type] ?? '—' }}</td>
@@ -92,8 +98,11 @@
     @endif
 
     <p class="footer-note">
-        Il codice manutenzione e' quello del modello a catalogo: dice quale voce
-        va in rapportino su questa macchina.
+        Il codice manutenzione dice quale voce va in rapportino su questa
+        macchina. Viene dal modello a catalogo, salvo quando la singola macchina
+        ne dichiara uno suo, e porta gia' il suffisso di chi paga: GOPPION, HTS
+        o DAN. Dove il suffisso manca, quella variante a catalogo non esiste e
+        vale la tariffa piena.
     </p>
 </body>
 </html>

@@ -41,7 +41,10 @@ class ListMachineUnits extends ListRecords
         // ricerca compresa. Senza limit: il PDF non e' paginato come
         // l'elenco, chi stampa vuole il foglio intero.
         $macchine = $this->getFilteredSortedTableQuery()
-            ->with(['currentCustomer', 'material', 'product'])
+            // billingCustomer su due livelli: il codice manutenzione cambia
+            // col pagante, che puo' stare sulla singola macchina o
+            // sull'anagrafica del cliente. Senza, una query per riga.
+            ->with(['currentCustomer.billingCustomer', 'billingCustomer', 'material', 'product'])
             ->get();
 
         $titolo = $this->descrizioneSelezione($macchine);
