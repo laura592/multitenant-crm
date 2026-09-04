@@ -45,6 +45,21 @@ class AuditLog extends Activity
             Material::class => 'Materiale',
             Supplier::class => 'Fornitore',
             User::class => 'Utente',
+            // Dal 04/09/2026: quello su cui lavorano i tecnici. Prima un
+            // rapportino corretto o un'ora ritoccata non lasciavano traccia.
+            ServiceReport::class => 'Rapportino',
+            ServiceReportMaterial::class => 'Riga materiale (rapportino)',
+            ServiceReportProduct::class => 'Riga ricambio (rapportino)',
+            MachineUnit::class => 'Macchina',
+            MachineUnitPlacement::class => 'Collocazione macchina',
+            MaintenanceSchedule::class => 'Piano manutenzione',
+            Lavaggio::class => 'Lavaggio',
+            MaterialOrder::class => 'Ordine materiali',
+            MaterialOrderItem::class => 'Riga ordine materiali',
+            TimeEntry::class => 'Timbratura',
+            LeaveRequest::class => 'Richiesta ferie/permesso',
+            InformationRequest::class => 'Richiesta informazioni',
+            InformationRequestNote::class => 'Nota richiesta informazioni',
         ];
     }
 
@@ -70,6 +85,13 @@ class AuditLog extends Activity
             $subject === null => null,
             $subject instanceof Tenant => $subject->id,
             $subject instanceof ProductPrice => $subject->product?->tenant_id,
+            // Le righe figlie non hanno tenant_id proprio: senza questi tre
+            // casi finirebbero a NULL, che per SharedAcrossTenants significa
+            // "catalogo condiviso" — cioe' la riga di un rapportino di un
+            // partner leggibile dall'audit di tutti gli altri.
+            $subject instanceof ServiceReportMaterial,
+            $subject instanceof ServiceReportProduct => $subject->serviceReport?->tenant_id,
+            $subject instanceof MaterialOrderItem => $subject->order?->tenant_id,
             default => $subject->tenant_id ?? null,
         };
     }

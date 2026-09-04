@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\LogsAuditTrail;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class MaterialOrder extends Model
 {
-    use BelongsToTenant, HasUuids;
+    use BelongsToTenant, HasUuids, LogsAuditTrail;
 
     protected $fillable = [
         'tenant_id',

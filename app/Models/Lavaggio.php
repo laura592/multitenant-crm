@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\LogsAuditTrail;
 use App\Support\DisplayName;
 use App\Support\LavaggioDescrizione;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -19,7 +20,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class Lavaggio extends Model
 {
-    use BelongsToTenant, HasUuids;
+    use BelongsToTenant, HasUuids, LogsAuditTrail;
 
     protected $table = 'lavaggi';
 

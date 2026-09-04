@@ -3,13 +3,14 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\LogsAuditTrail;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class LeaveRequest extends Model
 {
-    use BelongsToTenant, HasUuids;
+    use BelongsToTenant, HasUuids, LogsAuditTrail;
 
     public const TYPE_FERIE = 'ferie';
     public const TYPE_PERMESSO = 'permesso';

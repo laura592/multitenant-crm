@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\LogsAuditTrail;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,7 +16,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  */
 class MachineUnitPlacement extends Model
 {
-    use BelongsToTenant, HasUuids, SoftDeletes;
+    use BelongsToTenant, HasUuids, LogsAuditTrail, SoftDeletes;
 
     protected $fillable = [
         'tenant_id',

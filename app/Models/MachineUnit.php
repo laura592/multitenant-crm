@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\LogsAuditTrail;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -17,7 +18,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  */
 class MachineUnit extends Model
 {
-    use BelongsToTenant, HasUuids, SoftDeletes;
+    use BelongsToTenant, HasUuids, LogsAuditTrail, SoftDeletes;
 
     public const STATUS_IN_MAGAZZINO = 'in_magazzino';
 

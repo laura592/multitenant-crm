@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\LogsAuditTrail;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,7 +14,7 @@ use Illuminate\Support\Collection;
 
 class ServiceReport extends Model
 {
-    use BelongsToTenant, HasUuids, SoftDeletes;
+    use BelongsToTenant, HasUuids, LogsAuditTrail, SoftDeletes;
 
     public const TYPE_INSTALLAZIONE = 'installazione';
 

@@ -20,10 +20,13 @@ use Illuminate\Support\Carbon;
 
 /**
  * Epic 6 (ticket 6.3): consultazione di sola lettura dell'audit log
- * (spatie/laravel-activitylog) su tutti i modelli sensibili tracciati
- * (App\Models\AuditLog::subjectLabels() - Tenant, Customer, Product,
- * ProductPrice, Material, Supplier, User; NON Quote/QuoteProduct, dominio di
- * un'altra sessione di lavoro). Una Resource unica con filtri e' piu'
+ * (spatie/laravel-activitylog) su tutti i modelli sensibili tracciati.
+ * L'elenco aggiornato e' App\Models\AuditLog::subjectLabels(), che dal
+ * 04/09/2026 copre anche il lavoro dei tecnici (rapportini e loro righe,
+ * macchine, piani, lavaggi, ordini materiali, ore, ferie, richieste
+ * informazioni) e non solo anagrafiche e catalogo. Restano fuori
+ * Quote/QuoteProduct, dominio di un'altra sessione di lavoro.
+ * Una Resource unica con filtri e' piu'
  * pratica di N relation manager separati perche' i modelli tracciati sono
  * eterogenei e senza una relazione comune se non il subject polimorfico.
  *
