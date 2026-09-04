@@ -58,7 +58,10 @@ class EditServiceReport extends EditRecord
             '_chiamata_material_key' => $defaults['chiamata_key'],
             'add_manodopera_material' => $defaults['manodopera_key'] !== null,
             '_manodopera_material_key' => $defaults['manodopera_key'],
-            '_lavaggio_vie_eseguito' => $defaults['lavaggio_base_key'] !== null || $defaults['sanificazione_key'] !== null,
+            // Solo le righe a vie: la sanificazione ha il suo interruttore
+            // dal 04/09/2026. Restato indietro alla separazione, accendeva
+            // "Lavaggio eseguito" su rapportini di sola sanificazione.
+            '_lavaggio_vie_eseguito' => $defaults['lavaggio_base_key'] !== null,
             // Colonna vera, gia' presente in $data: la si sovrascrive lo
             // stesso perche' resolveLavaggioShortcutDefaults() la ritorna
             // tale e quale quando c'e', e col ripiego calcolato dalle righe

@@ -216,4 +216,35 @@ class LavaggioRicambiAutomaticiTest extends TestCase
             ->first(fn (array $r) => Material::find($r['material_id'])?->code === 'ULTVIA');
         $this->assertSame(1, (int) $ultvia['quantity']);
     }
+
+    /**
+     * Riaprendo un rapportino di sola sanificazione, "Lavaggio eseguito"
+     * deve essere spento: non ci sono vie lavate. Il default della Resource
+     * non basta a garantirlo — sulla pagina di modifica vince quello che
+     * inietta EditServiceReport::mutateFormDataBeforeFill(), ed e' li' che la
+     * separazione dei due interruttori era rimasta indietro.
+     */
+    public function test_riaprendo_una_sanificazione_il_lavaggio_resta_spento(): void
+    {
+        [$cliente, $piano, $utente] = $this->scenario(vie: 1, bevanda: MaintenanceSchedule::BEVERAGE_ACQUA);
+
+        $report = \App\Models\ServiceReport::create([
+            'tenant_id' => $piano->tenant_id, 'customer_id' => $cliente->id,
+            'technician_id' => $utente->id, 'intervention_type' => ServiceReport::TYPE_SANIFICAZIONE,
+            'intervention_date' => now(), 'work_performed' => 'Sanificato impianto acqua',
+        ]);
+        \App\Models\ServiceReportMaterial::create([
+            'service_report_id' => $report->id,
+            'material_id' => Material::where('code', 'SANIFICAZIONE')->value('id'),
+            'quantity' => 1,
+        ]);
+
+        $stato = Livewire::test(
+            \App\Filament\Resources\ServiceReportResource\Pages\EditServiceReport::class,
+            ['record' => $report->getRouteKey()],
+        )->instance()->form->getRawState();
+
+        $this->assertTrue((bool) ($stato['_sanificazione_eseguita'] ?? false));
+        $this->assertFalse((bool) ($stato['_lavaggio_vie_eseguito'] ?? false));
+    }
 }
