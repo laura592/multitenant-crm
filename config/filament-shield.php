@@ -11,7 +11,7 @@ return [
         'navigation_group' => true,
         'sub_navigation_position' => null,
         'is_globally_searchable' => false,
-        'show_model_path' => true,
+        'show_model_path' => false,
         'is_scoped_to_tenant' => true,
         'cluster' => null,
     ],
@@ -46,8 +46,9 @@ return [
             'update',
             'restore',
             'restore_any',
-            'replicate',
-            'reorder',
+            // 'replicate' e 'reorder' non ci sono: il pannello non ha ne'
+            // ReplicateAction ne' ReorderAction, e nessun ruolo li aveva.
+            // Erano 48 caselle che non accendevano niente (04/09/2026).
             'delete',
             'delete_any',
             'force_delete',
@@ -84,6 +85,9 @@ return [
             'DettaglioScaduto',
             'AnalisiContabili',
             'CashFlow',
+            // Dettaglio di "Chi paga per chi": non e' un privilegio separato,
+            // segue page_PagantiMacchine (vedi DettaglioPagante::canAccess).
+            'DettaglioPagante',
         ],
 
         'widgets' => [

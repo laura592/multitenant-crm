@@ -140,6 +140,9 @@ class RolePermissions
                 'widget_TimbraWidget',
                 'page_RiepilogoOre',
                 'page_ClientiVicini',
+                // Chi paga per chi: e' la lettura dei paganti delle
+                // macchine, quindi la vede chi vede le macchine.
+                'page_PagantiMacchine',
             ],
             'amministrazione' => [
                 // Profilo ufficio: la gestione amministrativa del personale,
@@ -187,6 +190,9 @@ class RolePermissions
                 ...self::expand('material', self::UFFICIO),
                 'widget_TimbraWidget',
                 'page_RiepilogoOre',
+                // Chi paga per chi: e' la lettura dei paganti delle
+                // macchine, quindi la vede chi vede le macchine.
+                'page_PagantiMacchine',
             ],
             'admin' => [
                 ...self::expand('brand', self::MANAGE),
@@ -239,6 +245,9 @@ class RolePermissions
                 'widget_CreaPreventivoWidget',
                 'page_RiepilogoOre',
                 'page_ClientiVicini',
+                // Chi paga per chi: e' la lettura dei paganti delle
+                // macchine, quindi la vede chi vede le macchine.
+                'page_PagantiMacchine',
                 'page_NotificationSettings',
                 'page_GestionaleSyncReview',
                 // Scaduto clienti: strumento di chi segue incassi e solleciti.
@@ -280,6 +289,9 @@ class RolePermissions
                 'widget_CreaPreventivoWidget',
                 'page_RiepilogoOre',
                 'page_ClientiVicini',
+                // Chi paga per chi: e' la lettura dei paganti delle
+                // macchine, quindi la vede chi vede le macchine.
+                'page_PagantiMacchine',
                 'page_NotificationSettings',
                 'page_GestionaleSyncReview',
                 // Scaduto clienti: strumento di chi segue incassi e solleciti.
@@ -293,8 +305,34 @@ class RolePermissions
         return ['dipendente', 'amministrazione', 'partner', 'admin', 'amministratore'];
     }
 
+    /**
+     * Le sole risorse col soft delete: solo su queste "ripristina" ed
+     * "elimina definitivamente" vogliono dire qualcosa. Sulle altre la
+     * riga sparisce e basta, e concedere restore_brand accendeva un
+     * permesso che nessuna azione del pannello legge mai.
+     *
+     * Tenuta in fase con MODELLI_COL_CESTINO in RoleResource, che nasconde
+     * le stesse caselle nella schermata dei privilegi: se le due liste
+     * divergono, ruoli:sincronizza riproporrebbe a ogni giro i permessi che
+     * la schermata toglie.
+     */
+    private const COL_CESTINO = [
+        'customer',
+        'machine::unit',
+        'quote',
+        'quote::group',
+        'service::report',
+        'tenant',
+    ];
+
+    private const SOLO_COL_CESTINO = ['restore', 'restore_any', 'force_delete', 'force_delete_any'];
+
     private static function expand(string $resource, array $prefixes): array
     {
+        if (! in_array($resource, self::COL_CESTINO, true)) {
+            $prefixes = array_diff($prefixes, self::SOLO_COL_CESTINO);
+        }
+
         return array_map(fn (string $prefix) => "{$prefix}_{$resource}", $prefixes);
     }
 }

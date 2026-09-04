@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Models\Customer;
 use App\Models\MachineUnit;
 use App\Support\DisplayName;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Pages\Page;
 use Filament\Tables;
 use Filament\Tables\Concerns\InteractsWithTable;
@@ -34,6 +35,12 @@ use Illuminate\Database\Eloquent\Builder;
  */
 class PagantiMacchine extends Page implements HasTable
 {
+    // HasPageShield da' alla pagina un permesso suo, page_PagantiMacchine,
+    // che compare fra i privilegi del ruolo. Prima il cancello era il
+    // permesso sulle macchine: funzionava, ma chi assegna i ruoli non
+    // trovava la voce nell'elenco e non poteva concederla o toglierla.
+    use HasPageShield;
+
     use InteractsWithTable;
 
     protected static ?string $navigationIcon = 'heroicon-o-building-office-2';
@@ -49,16 +56,6 @@ class PagantiMacchine extends Page implements HasTable
     protected static string $view = 'filament.pages.paganti-macchine';
 
     protected static ?string $slug = 'chi-paga';
-
-    public static function canAccess(): bool
-    {
-        return auth()->user()?->can('viewAny', MachineUnit::class) ?? false;
-    }
-
-    public static function shouldRegisterNavigation(): bool
-    {
-        return static::canAccess();
-    }
 
     public function getSubheading(): ?string
     {

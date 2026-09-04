@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use BezhanSalleh\FilamentShield\Contracts\HasShieldPermissions;
 use BezhanSalleh\FilamentShield\Forms\ShieldSelectAllToggle;
 use App\Filament\Resources\RoleResource\Pages;
+use BezhanSalleh\FilamentShield\Facades\FilamentShield;
 use BezhanSalleh\FilamentShield\Support\Utils;
 use BezhanSalleh\FilamentShield\Traits\HasShieldFormComponents;
 use Filament\Facades\Filament;
@@ -91,6 +92,190 @@ class RoleResource extends Resource implements HasShieldPermissions
      * su una risorsa (modifica, elimina, ecc.) sono irraggiungibili dall'utente,
      * quindi la checkbox list si autocorregge in tempo reale.
      */
+    /**
+     * Le 24 risorse in un'unica colonna erano sette schermate di scroll, con
+     * l'ordine alfabetico del nome del model: "Automezzo" accanto a "Utente",
+     * "Listino" lontano da "Materiale". Qui sono divise per area come in
+     * sidebar, cosi' chi assegna un ruolo apre l'area che gli interessa e
+     * vede tre o quattro riquadri invece di ventiquattro.
+     *
+     * L'ordine delle aree e' quello dei NavigationGroup del pannello: non e'
+     * alfabetico, segue il flusso del lavoro (prima si vende, poi si
+     * interviene, poi si amministra).
+     */
+    private const AREE = [
+        'Vendite',
+        'Catalogo',
+        'Interventi tecnici',
+        'Magazzino',
+        'Personale',
+        'Amministrazione',
+        'Impostazioni',
+    ];
+
+    public static function getTabFormComponentForResources(): Component
+    {
+        return Forms\Components\Tabs\Tab::make('resources')
+            ->label(__('filament-shield::filament-shield.resources'))
+            ->visible(fn (): bool => (bool) Utils::isResourceEntityEnabled())
+            ->badge(static::getResourceTabBadgeCount())
+            ->schema([
+                Forms\Components\Placeholder::make('promemoria_visualizza')
+                    ->hiddenLabel()
+                    ->content(new HtmlString(
+                        '<p class="text-sm text-gray-500 dark:text-gray-400">Senza <strong>Vedere l\'elenco</strong> e <strong>Aprire la scheda</strong> le altre azioni non sono raggiungibili: restano disattivate finche\' non spunti quelle due.</p>'
+                    )),
+                Forms\Components\Tabs::make('aree')
+                    ->contained(false)
+                    ->tabs(static::schedeDelleAree())
+                    ->columnSpan('full'),
+            ]);
+    }
+
+    /**
+     * Una scheda per area, con dentro i riquadri delle sue risorse. Le aree
+     * senza risorse non compaiono, e quello che non ha un NavigationGroup
+     * (o ne ha uno che non conosciamo) finisce in coda sotto "Altro" invece
+     * di sparire.
+     *
+     * @return array<int, Forms\Components\Tabs\Tab>
+     */
+    protected static function schedeDelleAree(): array
+    {
+        $perArea = collect(FilamentShield::getResources())
+            ->sortBy(fn (array $entity) => static::etichettaRisorsa($entity))
+            ->groupBy(fn (array $entity) => static::areaDi($entity['fqcn']));
+
+        $ordine = collect(self::AREE)->push('Altro');
+
+        return $ordine
+            ->filter(fn (string $area) => $perArea->has($area))
+            ->map(fn (string $area) => Forms\Components\Tabs\Tab::make($area)
+                ->badge($perArea[$area]->count())
+                ->schema([
+                    Forms\Components\Grid::make()
+                        ->schema(
+                            $perArea[$area]
+                                ->map(fn (array $entity) => static::riquadroRisorsa($entity))
+                                ->all()
+                        )
+                        ->columns(static::shield()->getGridColumns()),
+                ]))
+            ->values()
+            ->all();
+    }
+
+    protected static function riquadroRisorsa(array $entity): Component
+    {
+        return Forms\Components\Section::make(static::etichettaRisorsa($entity))
+            ->compact()
+            ->collapsible()
+            ->columnSpan(static::shield()->getSectionColumnSpan())
+            ->schema([
+                static::getCheckBoxListComponentForResource($entity),
+            ]);
+    }
+
+    protected static function etichettaRisorsa(array $entity): string
+    {
+        return strval(
+            static::shield()->hasLocalizedPermissionLabels()
+                ? FilamentShield::getLocalizedResourceLabel($entity['fqcn'])
+                : $entity['model']
+        );
+    }
+
+    /** Il gruppo di sidebar della risorsa, o "Altro" se non ne ha uno noto. */
+    protected static function areaDi(string $fqcn): string
+    {
+        $area = method_exists($fqcn, 'getNavigationGroup')
+            ? (string) $fqcn::getNavigationGroup()
+            : '';
+
+        return in_array($area, self::AREE, true) ? $area : 'Altro';
+    }
+
+    /**
+     * Le sole risorse col soft delete. Sulle altre "ripristina" ed "elimina
+     * definitivamente" sono caselle che non accendono niente: nascoste.
+     * Da tenere in fase con RolePermissions::COL_CESTINO.
+     */
+    private const COL_CESTINO = [
+        'customer',
+        'machine::unit',
+        'quote',
+        'quote::group',
+        'service::report',
+        'tenant',
+    ];
+
+    private const SOLO_COL_CESTINO = ['restore', 'restore_any', 'force_delete', 'force_delete_any'];
+
+    /**
+     * In italiano e dette come le vive chi usa il pannello: la traduzione del
+     * pacchetto lascia queste chiavi commentate, quindi Shield ripiegava su
+     * "View Any", "Force Delete Any" e simili.
+     */
+    private const ETICHETTE = [
+        'view_any' => 'Vedere l\'elenco',
+        'view' => 'Aprire la scheda',
+        'create' => 'Creare',
+        'update' => 'Modificare',
+        'delete' => 'Cestinare',
+        'delete_any' => 'Cestinare in blocco',
+        'restore' => 'Ripristinare dal cestino',
+        'restore_any' => 'Ripristinare in blocco',
+        'force_delete' => 'Eliminare per sempre',
+        'force_delete_any' => 'Eliminare per sempre in blocco',
+    ];
+
+    /**
+     * Ordine di lettura: prima cosa si vede, poi cosa si tocca, poi cosa si
+     * distrugge. L'ordine dei prefissi in config e' quello del pacchetto.
+     */
+    private const ORDINE = [
+        'view_any', 'view', 'create', 'update',
+        'delete', 'delete_any', 'restore', 'restore_any',
+        'force_delete', 'force_delete_any',
+    ];
+
+    /** @return array<string, string> */
+    public static function getResourcePermissionOptions(array $entity): array
+    {
+        $risorsa = $entity['resource'];
+        $conCestino = in_array($risorsa, self::COL_CESTINO, true);
+
+        // I prefissi in vigore per questa risorsa: quelli di config, salvo
+        // che la risorsa non ne dichiari di suoi con HasShieldPermissions.
+        $attivi = Utils::getResourcePermissionPrefixes($entity['fqcn']);
+
+        $opzioni = [];
+
+        foreach (self::ORDINE as $prefisso) {
+            if (! in_array($prefisso, $attivi, true)) {
+                continue;
+            }
+
+            if (! $conCestino && in_array($prefisso, self::SOLO_COL_CESTINO, true)) {
+                continue;
+            }
+
+            $opzioni["{$prefisso}_{$risorsa}"] = self::ETICHETTE[$prefisso];
+        }
+
+        // Un prefisso che la risorsa dichiara ma che qui non abbiamo tradotto
+        // non deve sparire dalla schermata: finirebbe fuori da ogni controllo.
+        foreach ($attivi as $prefisso) {
+            $nome = "{$prefisso}_{$risorsa}";
+
+            if (! array_key_exists($nome, $opzioni) && ! array_key_exists($prefisso, self::ETICHETTE)) {
+                $opzioni[$nome] = Str::headline($prefisso);
+            }
+        }
+
+        return $opzioni;
+    }
+
     public static function getCheckBoxListComponentForResource(array $entity): Component
     {
         $permissionsArray = static::getResourcePermissionOptions($entity);
@@ -118,7 +303,7 @@ class RoleResource extends Resource implements HasShieldPermissions
                     && $value !== $viewKey
                     && ! (collect($state ?? [])->contains($viewAnyKey) && collect($state ?? [])->contains($viewKey))
             )
-            ->helperText('Senza "Visualizza" le altre azioni non sono raggiungibili: restano disattivate finche\' non la selezioni.');
+;
     }
 
     /**
