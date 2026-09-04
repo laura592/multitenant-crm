@@ -17,7 +17,7 @@ use Tests\TestCase;
  */
 class QuoteFormTest extends TestCase
 {
-    use RefreshDatabase, AssignsPermissionRoles;
+    use AssignsPermissionRoles, RefreshDatabase;
 
     public function test_create_page_hides_line_items_section(): void
     {

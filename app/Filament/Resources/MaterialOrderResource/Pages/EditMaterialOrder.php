@@ -22,7 +22,7 @@ class EditMaterialOrder extends EditRecord
             Actions\Action::make('pdf')
                 ->label('PDF')
                 ->icon('heroicon-o-document-arrow-down')
-                ->action(fn () => MaterialOrderResource::streamPdf($this->record)),
+                ->action(fn () => MaterialOrderResource::streamPdf($this->record, $this)),
             Actions\Action::make('excel')
                 ->label('Excel')
                 ->icon('heroicon-o-table-cells')

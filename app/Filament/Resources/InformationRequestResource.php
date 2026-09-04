@@ -2,7 +2,7 @@
 
 namespace App\Filament\Resources;
 
-use App\Filament\Concerns\StreamsPdfDownloads;
+use App\Filament\Concerns\ApreStampeInNuovaScheda;
 use App\Filament\Forms\CustomerContactFields;
 use App\Filament\Forms\CustomerFiscalFields;
 use App\Filament\Forms\ItalianAddressFields;
@@ -22,11 +22,10 @@ use Filament\Tables\Table;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\HtmlString;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class InformationRequestResource extends Resource
 {
-    use StreamsPdfDownloads;
+    use ApreStampeInNuovaScheda;
 
     protected static ?string $model = InformationRequest::class;
 
@@ -352,7 +351,7 @@ class InformationRequestResource extends Resource
                             ->afterOrEqual('from')
                             ->required(),
                     ])
-                    ->action(fn (array $data) => static::stampaAppuntamenti($data)),
+                    ->action(fn (array $data, $livewire) => static::stampaAppuntamenti($data, $livewire)),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('status')
@@ -422,12 +421,10 @@ class InformationRequestResource extends Resource
     }
 
     /**
-     * Il PDF si genera qui e si scarica dallo stream dell'azione: nessuna
-     * route dedicata, cosi' resta dietro l'autenticazione del pannello e
-     * dentro lo scope del tenant corrente (stesso approccio di
-     * RiepilogoOre/MaterialOrderResource).
+     * Il PDF si genera qui, con il tenant corrente gia' risolto, e si apre in
+     * una scheda nuova invece di scaricarsi (vedi ApreStampeInNuovaScheda).
      */
-    protected static function stampaAppuntamenti(array $data): ?StreamedResponse
+    protected static function stampaAppuntamenti(array $data, $livewire): void
     {
         $from = Carbon::parse($data['from'])->startOfDay();
         $to = Carbon::parse($data['to'])->endOfDay();
@@ -439,7 +436,7 @@ class InformationRequestResource extends Resource
             ->orderBy('appointment_at')
             ->get();
 
-        return static::streamPdfDownload(
+        static::apriPdfInNuovaScheda(
             fn () => OutsideLivewireRender::run(fn () => Pdf::loadView('pdf.appuntamenti', [
                 'requests' => $requests,
                 'from' => $from,
@@ -447,6 +444,7 @@ class InformationRequestResource extends Resource
                 'tenant' => Filament::getTenant(),
             ])),
             'appuntamenti-'.$from->format('Y-m-d').'-'.$to->format('Y-m-d').'.pdf',
+            $livewire,
         );
     }
 

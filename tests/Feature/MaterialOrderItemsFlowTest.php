@@ -3,12 +3,14 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\MaterialOrderResource;
+use App\Filament\Resources\MaterialOrderResource\Pages\EditMaterialOrder;
 use App\Filament\Resources\MaterialOrderResource\RelationManagers\ItemsRelationManager;
 use App\Models\Material;
 use App\Models\MaterialOrder;
 use App\Models\Tenant;
 use App\Models\User;
 use Filament\Facades\Filament;
+use Filament\Tables\Actions\DeleteAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\Concerns\AssignsPermissionRoles;
@@ -16,7 +18,7 @@ use Tests\TestCase;
 
 class MaterialOrderItemsFlowTest extends TestCase
 {
-    use RefreshDatabase, AssignsPermissionRoles;
+    use AssignsPermissionRoles, RefreshDatabase;
 
     private Tenant $tenant;
 
@@ -101,7 +103,7 @@ class MaterialOrderItemsFlowTest extends TestCase
 
         $component = Livewire::test(ItemsRelationManager::class, [
             'ownerRecord' => $order,
-            'pageClass' => \App\Filament\Resources\MaterialOrderResource\Pages\EditMaterialOrder::class,
+            'pageClass' => EditMaterialOrder::class,
         ]);
         $component->assertOk();
         $component->assertSee('Raccordi grigi');
@@ -113,7 +115,7 @@ class MaterialOrderItemsFlowTest extends TestCase
         $component->call('updateTableColumnState', 'quantity', $item1->getKey(), 9);
         $this->assertSame(9, $item1->fresh()->quantity);
 
-        $component->callTableAction(\Filament\Tables\Actions\DeleteAction::class, $item1);
+        $component->callTableAction(DeleteAction::class, $item1);
         $this->assertDatabaseMissing('material_order_items', ['id' => $item1->id]);
         $this->assertDatabaseHas('material_order_items', ['id' => $order->items()->where('material_id', $m2->id)->first()->id]);
     }
@@ -124,7 +126,6 @@ class MaterialOrderItemsFlowTest extends TestCase
         $material = Material::create(['code' => 'PI0108S', 'category' => 'Raccordi grigi', 'type' => 'Terminale diritto', 'tube_diameter' => '1/4']);
         MaterialOrderResource::addSelectedMaterialsToOrder($order, [$material->id => 3]);
 
-        $pdf = MaterialOrderResource::streamPdf($order->fresh());
-        $this->assertNotNull($pdf);
+        $this->assertNotNull(MaterialOrderResource::urlPdf($order->fresh()));
     }
 }

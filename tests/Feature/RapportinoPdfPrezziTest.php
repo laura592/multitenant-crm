@@ -9,10 +9,10 @@ use App\Models\ServiceReportMaterial;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Support\RolePermissions;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
@@ -75,6 +75,7 @@ class RapportinoPdfPrezziTest extends TestCase
         // scrivania non si riconoscerebbero.
         $this->assertStringContainsString('rapportino-RT-2026-0001-senza-prezzi.pdf', $risposta->headers->get('content-disposition'));
     }
+
     /** Il nome del file non basta: i prezzi devono sparire dal documento. */
     public function test_la_copia_senza_prezzi_non_contiene_importi(): void
     {
@@ -159,17 +160,22 @@ class RapportinoPdfPrezziTest extends TestCase
     }
 
     /** Il permesso non deve finire per sbaglio ai ruoli sbagliati. */
-    public function test_solo_amministrazione_vede_i_prezzi(): void
+    public function test_solo_amministrazione_e_admin_vedono_i_prezzi(): void
     {
-        // "amministratore" e' il titolare: legge i numeri dalle pagine
-        // contabili, non stampa listini sui rapportini. "admin" l'ha avuto
-        // fino al 02/09/2026, poi tolto: la scelta della copia col listino
-        // e' di chi fattura, non di chiunque amministri il pannello.
-        foreach (['dipendente', 'partner', 'amministratore', 'admin'] as $ruolo) {
+        // La regola chiesta dall'ufficio: la copia col listino e' di
+        // "amministrazione" e di "admin". "amministratore" e' il titolare:
+        // legge i numeri dalle pagine contabili, non stampa listini sui
+        // rapportini.
+        //
+        // Il 03/09/2026 il permesso era sparito da "admin" dentro un commit
+        // sui preventivi, e questo test era stato riscritto per accettarlo.
+        // Rimesso il 04/09/2026: la regola non era mai cambiata.
+        foreach (['dipendente', 'partner', 'amministratore'] as $ruolo) {
             $this->assertNotContains('view_prices_service::report', RolePermissions::for($ruolo), $ruolo);
         }
 
-        $this->assertContains('view_prices_service::report', RolePermissions::for('amministrazione'));
+        foreach (['amministrazione', 'admin'] as $ruolo) {
+            $this->assertContains('view_prices_service::report', RolePermissions::for($ruolo), $ruolo);
+        }
     }
-
 }

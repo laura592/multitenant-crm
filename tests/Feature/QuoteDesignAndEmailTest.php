@@ -5,9 +5,9 @@ namespace Tests\Feature;
 use App\Filament\Resources\QuoteResource;
 use App\Mail\QuoteMail;
 use App\Models\Customer;
-use App\Models\PaymentMethod;
 use App\Models\Product;
 use App\Models\Quote;
+use App\Models\QuoteGroup;
 use App\Models\QuoteProduct;
 use App\Models\Tenant;
 use App\Models\User;
@@ -19,7 +19,7 @@ use Tests\TestCase;
 
 class QuoteDesignAndEmailTest extends TestCase
 {
-    use RefreshDatabase, AssignsPermissionRoles;
+    use AssignsPermissionRoles, RefreshDatabase;
 
     private function makeQuote(): Quote
     {
@@ -139,7 +139,7 @@ class QuoteDesignAndEmailTest extends TestCase
     public function test_view_page_shows_global_offer_block_when_quote_is_grouped(): void
     {
         $quote = $this->makeQuote();
-        $group = \App\Models\QuoteGroup::create([
+        $group = QuoteGroup::create([
             'tenant_id' => $quote->tenant_id,
             'customer_id' => $quote->customer_id,
             'status' => 'inviato',

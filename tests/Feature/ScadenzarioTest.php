@@ -14,7 +14,7 @@ use Tests\TestCase;
 
 class ScadenzarioTest extends TestCase
 {
-    use RefreshDatabase, AssignsPermissionRoles;
+    use AssignsPermissionRoles, RefreshDatabase;
 
     /**
      * I piani di manutenzione sono uno strumento operativo dei tecnici sul

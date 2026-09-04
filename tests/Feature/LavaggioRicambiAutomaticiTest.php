@@ -3,11 +3,13 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\ServiceReportResource\Pages\CreateServiceReport;
+use App\Filament\Resources\ServiceReportResource\Pages\EditServiceReport;
 use App\Models\Customer;
 use App\Models\MachineUnit;
 use App\Models\MaintenanceSchedule;
 use App\Models\Material;
 use App\Models\ServiceReport;
+use App\Models\ServiceReportMaterial;
 use App\Models\Tenant;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -228,19 +230,19 @@ class LavaggioRicambiAutomaticiTest extends TestCase
     {
         [$cliente, $piano, $utente] = $this->scenario(vie: 1, bevanda: MaintenanceSchedule::BEVERAGE_ACQUA);
 
-        $report = \App\Models\ServiceReport::create([
+        $report = ServiceReport::create([
             'tenant_id' => $piano->tenant_id, 'customer_id' => $cliente->id,
             'technician_id' => $utente->id, 'intervention_type' => ServiceReport::TYPE_SANIFICAZIONE,
             'intervention_date' => now(), 'work_performed' => 'Sanificato impianto acqua',
         ]);
-        \App\Models\ServiceReportMaterial::create([
+        ServiceReportMaterial::create([
             'service_report_id' => $report->id,
             'material_id' => Material::where('code', 'SANIFICAZIONE')->value('id'),
             'quantity' => 1,
         ]);
 
         $stato = Livewire::test(
-            \App\Filament\Resources\ServiceReportResource\Pages\EditServiceReport::class,
+            EditServiceReport::class,
             ['record' => $report->getRouteKey()],
         )->instance()->form->getRawState();
 

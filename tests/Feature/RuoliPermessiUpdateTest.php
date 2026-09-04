@@ -156,6 +156,7 @@ class RuoliPermessiUpdateTest extends TestCase
             ->pluck('name')
             ->all();
     }
+
     /**
      * Cancellare e' di chi amministra.
      *
@@ -170,7 +171,7 @@ class RuoliPermessiUpdateTest extends TestCase
     {
         foreach (['dipendente', 'amministrazione', 'amministratore', 'partner'] as $ruolo) {
             $conDelete = array_values(array_filter(
-                \App\Support\RolePermissions::for($ruolo),
+                RolePermissions::for($ruolo),
                 fn (string $permesso) => str_contains($permesso, 'delete'),
             ));
 
@@ -178,9 +179,8 @@ class RuoliPermessiUpdateTest extends TestCase
         }
 
         $this->assertNotEmpty(array_filter(
-            \App\Support\RolePermissions::for('admin'),
+            RolePermissions::for('admin'),
             fn (string $permesso) => str_contains($permesso, 'delete'),
         ), 'admin deve poter cancellare');
     }
-
 }

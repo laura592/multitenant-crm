@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\MachineUnitResource;
 use App\Filament\Resources\MachineUnitResource\Pages\ListMachineUnits;
 use App\Models\Customer;
 use App\Models\MachineUnit;
@@ -60,9 +61,14 @@ class RiepilogoMacchinePdfTest extends TestCase
     {
         $this->scenario();
 
-        Livewire::test(ListMachineUnits::class)
-            ->callAction('stampa_riepilogo')
-            ->assertFileDownloaded('riepilogo-macchine-'.now()->format('Y-m-d').'.pdf');
+        $componente = Livewire::test(ListMachineUnits::class)->callAction('stampa_riepilogo');
+
+        // JSON_UNESCAPED_SLASHES: senza, l'URL nel JSON e' "stampe\/..." e il
+        // confronto fallirebbe per le barre sfuggite, non per il codice.
+        $effetti = json_encode($componente->effects, JSON_UNESCAPED_SLASHES);
+
+        $this->assertStringContainsString('window.open', $effetti, 'la stampa non deve scaricarsi');
+        $this->assertStringContainsString('/stampe/', $effetti);
     }
 
     /**
@@ -78,8 +84,8 @@ class RiepilogoMacchinePdfTest extends TestCase
             'tenant' => $tenant,
             'data' => now(),
             'titolo' => 'Parco macchine completo',
-            'etichetteStato' => \App\Filament\Resources\MachineUnitResource::statusLabels(),
-            'etichetteCategoria' => \App\Filament\Resources\MachineUnitResource::typeLabels(),
+            'etichetteStato' => MachineUnitResource::statusLabels(),
+            'etichetteCategoria' => MachineUnitResource::typeLabels(),
         ])->render();
 
         $this->assertStringContainsString('SN-PORTO-1', $html);

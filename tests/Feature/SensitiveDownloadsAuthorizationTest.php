@@ -13,6 +13,7 @@ use App\Models\Tenant;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Filament\Facades\Filament;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\Concerns\AssignsPermissionRoles;
@@ -51,7 +52,7 @@ use Tests\TestCase;
  */
 class SensitiveDownloadsAuthorizationTest extends TestCase
 {
-    use RefreshDatabase, AssignsPermissionRoles;
+    use AssignsPermissionRoles, RefreshDatabase;
 
     private Tenant $tenant;
 
@@ -83,11 +84,14 @@ class SensitiveDownloadsAuthorizationTest extends TestCase
     {
         $order = $this->makeOrderWithItem($this->tenant);
 
-        // response()->streamDownload() non imposta un content-type esplicito
-        // (dompdf/Excel non lo dichiarano su questa response), quindi la
-        // verifica corretta e' sul content-disposition/nome file generato,
-        // non su un header content-type che qui resta assente.
-        $pdfResponse = MaterialOrderResource::streamPdf($order->fresh());
+        // Il PDF non si scarica piu': viene parcheggiato e aperto in una
+        // scheda (vedi ApreStampeInNuovaScheda). Si verifica quindi che
+        // l'URL parcheggiato serva davvero il documento di QUESTO ordine —
+        // controllo piu' stretto di prima, che si fermava alla response.
+        $url = MaterialOrderResource::urlPdf($order->fresh());
+        $this->assertNotNull($url);
+
+        $pdfResponse = $this->get($url);
         $this->assertSame(200, $pdfResponse->getStatusCode());
         $this->assertStringContainsString("{$order->number}.pdf", $pdfResponse->headers->get('content-disposition'));
 
@@ -120,7 +124,7 @@ class SensitiveDownloadsAuthorizationTest extends TestCase
         // "forgiata" a mano), il binding fallisce perche' la query di
         // MaterialOrderResource resta scoped al tenant corrente
         // (App\Models\Concerns\BelongsToTenant).
-        $this->expectException(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+        $this->expectException(ModelNotFoundException::class);
 
         Livewire::test(EditMaterialOrder::class, ['record' => $foreignOrder->getRouteKey()]);
     }
@@ -193,7 +197,7 @@ class SensitiveDownloadsAuthorizationTest extends TestCase
             'clock_in' => $today->copy()->setTime(8, 0), 'clock_out' => $today->copy()->setTime(17, 0),
         ]);
 
-        $page = new RiepilogoOre();
+        $page = new RiepilogoOre;
         $page->mount();
         $page->month = $today->month;
         $page->year = $today->year;

@@ -3,7 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Exports\MaterialOrderExport;
-use App\Filament\Concerns\StreamsPdfDownloads;
+use App\Filament\Concerns\ApreStampeInNuovaScheda;
 use App\Filament\Resources\MaterialOrderResource\Pages;
 use App\Filament\Resources\MaterialOrderResource\RelationManagers;
 use App\Models\Material;
@@ -19,7 +19,7 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class MaterialOrderResource extends Resource
 {
-    use StreamsPdfDownloads;
+    use ApreStampeInNuovaScheda;
 
     protected static ?string $model = MaterialOrder::class;
 
@@ -96,7 +96,7 @@ class MaterialOrderResource extends Resource
                     ->label('PDF')
                     ->icon('heroicon-o-document-arrow-down')
                     ->color('gray')
-                    ->action(fn (MaterialOrder $record) => static::streamPdf($record)),
+                    ->action(fn (MaterialOrder $record, $livewire) => static::streamPdf($record, $livewire)),
                 Tables\Actions\ActionGroup::make([
                     Tables\Actions\Action::make('excel')
                         ->label('Excel')
@@ -360,12 +360,19 @@ class MaterialOrderResource extends Resource
         ]);
     }
 
-    public static function streamPdf(MaterialOrder $record)
+    public static function streamPdf(MaterialOrder $record, $livewire): void
     {
-        return static::streamPdfDownload(
+        static::apriPdfInNuovaScheda(
             fn () => static::buildPdf($record),
-            "{$record->number}.pdf"
+            "{$record->number}.pdf",
+            $livewire,
         );
+    }
+
+    /** L'URL della stampa, gia' parcheggiata: usato dai test e da streamPdf(). */
+    public static function urlPdf(MaterialOrder $record): ?string
+    {
+        return static::urlStampa(fn () => static::buildPdf($record), "{$record->number}.pdf");
     }
 
     public static function streamExcel(MaterialOrder $record)

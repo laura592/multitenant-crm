@@ -4,7 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Exports\DailyTimeDetailExport;
 use App\Exports\MonthlyTimeSummaryExport;
-use App\Filament\Concerns\StreamsPdfDownloads;
+use App\Filament\Concerns\ApreStampeInNuovaScheda;
 use App\Filament\Resources\TimeEntryResource;
 use App\Models\LeaveRequest;
 use App\Models\TimeEntry;
@@ -29,7 +29,7 @@ use Maatwebsite\Excel\Facades\Excel;
  */
 class RiepilogoOre extends Page implements HasForms
 {
-    use HasPageShield, InteractsWithForms, StreamsPdfDownloads;
+    use ApreStampeInNuovaScheda, HasPageShield, InteractsWithForms;
 
     protected static ?string $navigationIcon = 'heroicon-o-document-chart-bar';
 
@@ -285,14 +285,15 @@ class RiepilogoOre extends Page implements HasForms
             Action::make('exportPdf')
                 ->label('Esporta PDF (riepilogo)')
                 ->icon('heroicon-o-document-arrow-down')
-                ->action(fn () => static::streamPdfDownload(
+                ->action(fn () => static::apriPdfInNuovaScheda(
                     fn () => Pdf::loadView('pdf.riepilogo-ore', [
                         'rows' => $this->getRows(),
                         'month' => $this->month,
                         'year' => $this->year,
                         'tenant' => Filament::getTenant(),
                     ]),
-                    "riepilogo-ore-{$this->year}-{$this->month}.pdf"
+                    "riepilogo-ore-{$this->year}-{$this->month}.pdf",
+                    $this,
                 )),
             // Dettaglio giorno per giorno, in aggiunta al riepilogo mensile
             // aggregato: serve per verificare una singola giornata invece di
@@ -309,14 +310,15 @@ class RiepilogoOre extends Page implements HasForms
                 ->label('Esporta PDF (dettaglio giorni)')
                 ->color('gray')
                 ->icon('heroicon-o-document-arrow-down')
-                ->action(fn () => static::streamPdfDownload(
+                ->action(fn () => static::apriPdfInNuovaScheda(
                     fn () => Pdf::loadView('pdf.dettaglio-ore', [
                         'rows' => $this->getDailyDetailRows(),
                         'month' => $this->month,
                         'year' => $this->year,
                         'tenant' => Filament::getTenant(),
                     ]),
-                    "dettaglio-ore-{$this->year}-{$this->month}.pdf"
+                    "dettaglio-ore-{$this->year}-{$this->month}.pdf",
+                    $this,
                 )),
         ];
     }

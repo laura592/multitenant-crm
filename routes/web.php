@@ -1,10 +1,11 @@
 <?php
 
 use App\Http\Controllers\CustomerSchedaAnagraficaController;
-use App\Http\Controllers\QuoteController;
 use App\Http\Controllers\PaganteStampaController;
+use App\Http\Controllers\QuoteController;
 use App\Http\Controllers\RiepilogoRapportiniController;
 use App\Http\Controllers\ServiceReportController;
+use App\Http\Controllers\StampaTemporaneaController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -31,4 +32,10 @@ Route::middleware(['auth'])->group(function () {
     Route::get('quotes/{quote}/pdf', [QuoteController::class, 'pdf'])->name('quotes.pdf');
     Route::get('customers/{customer}/scheda-anagrafica', CustomerSchedaAnagraficaController::class)
         ->name('customers.scheda-anagrafica');
+
+    // Stampe generate dentro un'azione del pannello, che dipendono dallo
+    // stato della pagina (filtri, ricerca, mese scelto) e quindi non hanno un
+    // URL proprio: l'azione le parcheggia e apre questa rotta in una scheda
+    // nuova. Vedi App\Support\Pdf\StampaTemporanea.
+    Route::get('stampe/{chiave}', StampaTemporaneaController::class)->name('stampe.temporanea');
 });

@@ -2,9 +2,11 @@
 
 namespace App\Filament\Pages;
 
+use App\Filament\Concerns\ApreStampeInNuovaScheda;
 use App\Models\EurekaPartitaAperta;
 use App\Support\DisplayName;
 use App\Support\OutsideLivewireRender;
+use App\Support\Pdf\StampaTemporanea;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Actions;
 use Filament\Facades\Filament;
@@ -49,7 +51,7 @@ use Illuminate\Support\Carbon;
  */
 class ScadutoClienti extends Page implements HasTable
 {
-    use InteractsWithTable;
+    use ApreStampeInNuovaScheda, InteractsWithTable;
 
     protected static ?string $navigationIcon = 'heroicon-o-phone-arrow-up-right';
 
@@ -174,9 +176,12 @@ class ScadutoClienti extends Page implements HasTable
                         'attesaMassima' => $righe ? max(array_map(fn ($r) => $r['giorni'] ?? 0, $righe)) : null,
                     ]));
 
-                    return response()->streamDownload(
-                        fn () => print ($pdf->output()),
-                        'scaduto-clienti-'.now()->format('Y-m-d').'.pdf',
+                    // In una scheda nuova, non scaricato: l'elenco resta
+                    // dov'era con la sua ricerca, che e' anche quella che
+                    // questa stampa segue.
+                    static::apriUrlInNuovaScheda(
+                        StampaTemporanea::parcheggia($pdf->output(), 'scaduto-clienti-'.now()->format('Y-m-d').'.pdf'),
+                        $this,
                     );
                 }),
         ];

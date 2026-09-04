@@ -22,7 +22,7 @@ use Tests\TestCase;
  */
 class LeaveRequestApprovalPageTest extends TestCase
 {
-    use RefreshDatabase, AssignsPermissionRoles;
+    use AssignsPermissionRoles, RefreshDatabase;
 
     private Tenant $tenant;
 

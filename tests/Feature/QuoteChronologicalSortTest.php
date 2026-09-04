@@ -25,7 +25,7 @@ use Tests\TestCase;
  */
 class QuoteChronologicalSortTest extends TestCase
 {
-    use RefreshDatabase, AssignsPermissionRoles;
+    use AssignsPermissionRoles, RefreshDatabase;
 
     public function test_quotes_list_defaults_to_number_order_even_when_created_at_and_date_tie(): void
     {

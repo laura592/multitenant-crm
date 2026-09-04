@@ -6,6 +6,9 @@ use App\Filament\Resources\InformationRequestResource;
 use App\Models\Customer;
 use App\Models\InformationRequest;
 use App\Models\Tenant;
+use Filament\Resources\Pages\ListRecords;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -21,10 +24,10 @@ class RichiesteContattiTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function colonna(string $nome): \Filament\Tables\Columns\TextColumn
+    private function colonna(string $nome): TextColumn
     {
         $tabella = InformationRequestResource::table(
-            \Filament\Tables\Table::make(new \Filament\Resources\Pages\ListRecords),
+            Table::make(new ListRecords),
         );
 
         return collect($tabella->getColumns())->first(fn ($c) => $c->getName() === $nome);

@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\ServiceReport;
 use App\Models\Tenant;
 use App\Models\User;
+use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
@@ -17,7 +18,7 @@ use Tests\TestCase;
 
 class ServiceReportGestionaleSyncTest extends TestCase
 {
-    use RefreshDatabase, AssignsPermissionRoles;
+    use AssignsPermissionRoles, RefreshDatabase;
 
     private function makeTenantWithEurekaCredentials(): Tenant
     {
@@ -73,7 +74,7 @@ class ServiceReportGestionaleSyncTest extends TestCase
         $report = $this->makeSignedReport($tenant, $tech, $customer, $product);
 
         $this->actingAs($this->ufficio($tenant));
-        \Filament\Facades\Filament::setTenant($tenant);
+        Filament::setTenant($tenant);
 
         Livewire::test(ListServiceReports::class)
             ->callTableAction('invia_gestionale', $report);
@@ -106,7 +107,7 @@ class ServiceReportGestionaleSyncTest extends TestCase
         $report = $this->makeSignedReport($tenant, $tech, $customer, $product);
 
         $this->actingAs($this->ufficio($tenant));
-        \Filament\Facades\Filament::setTenant($tenant);
+        Filament::setTenant($tenant);
 
         Livewire::test(ListServiceReports::class)
             ->callTableAction('invia_gestionale', $report);
@@ -151,7 +152,7 @@ class ServiceReportGestionaleSyncTest extends TestCase
         $report->materialsUsed()->create(['material_id' => $material->id, 'quantity' => 2]);
 
         $this->actingAs($this->ufficio($tenant));
-        \Filament\Facades\Filament::setTenant($tenant);
+        Filament::setTenant($tenant);
 
         Livewire::test(ListServiceReports::class)
             ->callTableAction('invia_gestionale', $report);

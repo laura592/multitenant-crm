@@ -14,7 +14,7 @@ use Tests\TestCase;
 
 class QuotePdfRouteTest extends TestCase
 {
-    use RefreshDatabase, AssignsPermissionRoles;
+    use AssignsPermissionRoles, RefreshDatabase;
 
     private function makeQuote(?Tenant $tenant = null): Quote
     {

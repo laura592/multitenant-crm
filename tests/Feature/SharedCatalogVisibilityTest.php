@@ -21,7 +21,7 @@ use Tests\TestCase;
  */
 class SharedCatalogVisibilityTest extends TestCase
 {
-    use RefreshDatabase, AssignsPermissionRoles;
+    use AssignsPermissionRoles, RefreshDatabase;
 
     public function test_shared_catalog_is_visible_in_the_panel_for_a_partner_tenant(): void
     {

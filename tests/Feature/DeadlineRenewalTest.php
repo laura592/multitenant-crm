@@ -23,7 +23,7 @@ use Tests\TestCase;
  */
 class DeadlineRenewalTest extends TestCase
 {
-    use RefreshDatabase, AssignsPermissionRoles;
+    use AssignsPermissionRoles, RefreshDatabase;
 
     private Tenant $tenant;
 

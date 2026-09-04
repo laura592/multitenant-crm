@@ -21,7 +21,7 @@ use Tests\TestCase;
  */
 class ServiceReportPdfCrossTenantTest extends TestCase
 {
-    use RefreshDatabase, AssignsPermissionRoles;
+    use AssignsPermissionRoles, RefreshDatabase;
 
     private function makeReport(Tenant $tenant): ServiceReport
     {

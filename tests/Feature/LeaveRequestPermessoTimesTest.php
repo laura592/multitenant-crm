@@ -14,7 +14,7 @@ use Tests\TestCase;
 
 class LeaveRequestPermessoTimesTest extends TestCase
 {
-    use RefreshDatabase, AssignsPermissionRoles;
+    use AssignsPermissionRoles, RefreshDatabase;
 
     /**
      * Il permesso e' sempre in un solo giorno: "Dalle"/"Alle" sostituiscono

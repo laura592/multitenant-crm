@@ -14,7 +14,7 @@ use Tests\TestCase;
 
 class ProductCreationTest extends TestCase
 {
-    use RefreshDatabase, AssignsPermissionRoles;
+    use AssignsPermissionRoles, RefreshDatabase;
 
     /**
      * Il ruolo "partner" (es. Gifar) vede il catalogo condiviso Franke in

@@ -195,6 +195,12 @@ class RolePermissions
                 ...self::expand('product::family', self::MANAGE),
                 ...self::expand('customer', self::FULL_MANAGE),
                 ...self::expand('quote', self::FULL_MANAGE),
+                // Stampa la copia con i prezzi: vedi la nota su
+                // view_prices_service::report in testa alla classe. La riga
+                // era andata persa in una riscrittura del file, e
+                // ruoli:sincronizza — che allinea al codice — l'ha
+                // correttamente tolta anche dal database (04/09/2026).
+                'view_prices_service::report',
                 ...self::expand('quote::group', self::FULL_MANAGE),
                 ...self::expand('information::request', self::MANAGE),
                 ...self::expand('service::report', self::FULL_MANAGE),

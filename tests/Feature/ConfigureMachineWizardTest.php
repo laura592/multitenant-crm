@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Filament\Resources\QuoteResource\Pages\CreateQuote;
 use App\Filament\Resources\QuoteResource\Pages\EditQuote;
 use App\Filament\Resources\QuoteResource\RelationManagers\QuoteProductsRelationManager;
+use App\Models\Category;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\ProductFamily;
@@ -372,8 +373,8 @@ class ConfigureMachineWizardTest extends TestCase
             'slot_name' => 'addon',
             'label' => 'Accessori aggiuntivi',
         ]);
-        $catA = \App\Models\Category::create(['name' => 'Macinini']);
-        $catB = \App\Models\Category::create(['name' => 'Dosatori']);
+        $catA = Category::create(['name' => 'Macinini']);
+        $catB = Category::create(['name' => 'Dosatori']);
 
         $addon1 = Product::create(['sku' => 'ADD1', 'type' => Product::TYPE_ACCESSORY, 'name' => 'Macinino 1', 'category_id' => $catA->id]);
         $addon2 = Product::create(['sku' => 'ADD2', 'type' => Product::TYPE_ACCESSORY, 'name' => 'Dosatore 1', 'category_id' => $catB->id]);

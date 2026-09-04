@@ -110,5 +110,4 @@ class ServiceReportLavaggioSyncTest extends TestCase
             Lavaggio::where('service_report_id', $report->id)->pluck('maintenance_schedule_id')->sort()->values()->all()
         );
     }
-
 }

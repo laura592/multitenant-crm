@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\QuoteResource\Pages\EditQuote;
 use App\Filament\Resources\QuoteResource\RelationManagers\QuoteProductsRelationManager;
 use App\Models\Customer;
 use App\Models\Product;
@@ -33,7 +34,7 @@ class QuoteProductEmptyFieldsTest extends TestCase
 
         Livewire::test(QuoteProductsRelationManager::class, [
             'ownerRecord' => $quote,
-            'pageClass' => \App\Filament\Resources\QuoteResource\Pages\EditQuote::class,
+            'pageClass' => EditQuote::class,
         ])
             ->callTableAction('edit', $riga, data: [
                 'quantity' => 1,
@@ -57,7 +58,7 @@ class QuoteProductEmptyFieldsTest extends TestCase
 
         Livewire::test(QuoteProductsRelationManager::class, [
             'ownerRecord' => $quote,
-            'pageClass' => \App\Filament\Resources\QuoteResource\Pages\EditQuote::class,
+            'pageClass' => EditQuote::class,
         ])->callTableAction('edit', $riga, data: [
             'quantity' => 1,
             'price' => 100,

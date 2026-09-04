@@ -2,16 +2,20 @@
 
 namespace App\Filament\Resources\MachineUnitResource\Pages;
 
+use App\Filament\Concerns\ApreStampeInNuovaScheda;
 use App\Filament\Resources\MachineUnitResource;
 use App\Models\MachineUnit;
+use App\Support\DisplayName;
+use App\Support\Pdf\StampaTemporanea;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Actions;
 use Filament\Facades\Filament;
 use Filament\Resources\Pages\ListRecords;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ListMachineUnits extends ListRecords
 {
+    use ApreStampeInNuovaScheda;
+
     protected static string $resource = MachineUnitResource::class;
 
     protected function getHeaderActions(): array
@@ -25,13 +29,13 @@ class ListMachineUnits extends ListRecords
                 ->label('Stampa riepilogo')
                 ->icon('heroicon-o-printer')
                 ->color('gray')
-                ->action(fn (): StreamedResponse => $this->riepilogoPdf()),
+                ->action(fn () => $this->riepilogoPdf()),
             Actions\CreateAction::make()
                 ->extraAttributes(['data-tour' => 'machine-units-create']),
         ];
     }
 
-    private function riepilogoPdf(): StreamedResponse
+    private function riepilogoPdf(): void
     {
         // getFilteredSortedTableQuery(): quello che la tabella sta mostrando,
         // ricerca compresa. Senza limit: il PDF non e' paginato come
@@ -51,9 +55,11 @@ class ListMachineUnits extends ListRecords
             'etichetteCategoria' => MachineUnitResource::typeLabels(),
         ])->setPaper('a4', 'landscape');
 
-        return response()->streamDownload(
-            fn () => print($pdf->output()),
-            'riepilogo-macchine-'.now()->format('Y-m-d').'.pdf',
+        // In una scheda nuova, non scaricato: l'elenco resta dov'era coi
+        // suoi filtri, che sono anche quelli che questa stampa segue.
+        static::apriUrlInNuovaScheda(
+            StampaTemporanea::parcheggia($pdf->output(), 'riepilogo-macchine-'.now()->format('Y-m-d').'.pdf'),
+            $this,
         );
     }
 
@@ -67,7 +73,7 @@ class ListMachineUnits extends ListRecords
         $clienti = $macchine->pluck('currentCustomer.company_name')->filter()->unique();
 
         if ($clienti->count() === 1 && $macchine->every(fn (MachineUnit $m) => $m->currentCustomer !== null)) {
-            return \App\Support\DisplayName::titleCase($clienti->first());
+            return DisplayName::titleCase($clienti->first());
         }
 
         return filled($this->getTableSearch()) || array_filter($this->getTableFilterState('status') ?? [])

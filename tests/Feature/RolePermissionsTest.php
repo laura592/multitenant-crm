@@ -12,6 +12,7 @@ use App\Models\Tenant;
 use App\Models\TimeEntry;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Support\RolePermissions;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\AssignsPermissionRoles;
 use Tests\TestCase;
@@ -30,7 +31,7 @@ use Tests\TestCase;
  */
 class RolePermissionsTest extends TestCase
 {
-    use RefreshDatabase, AssignsPermissionRoles;
+    use AssignsPermissionRoles, RefreshDatabase;
 
     private Tenant $tenant;
 
@@ -305,6 +306,7 @@ class RolePermissionsTest extends TestCase
             $this->actingAs($user)->get("/admin/{$this->tenant->slug}/{$path}")->assertForbidden();
         }
     }
+
     /**
      * L'ufficio legge i preventivi e basta: servono a rispondere al telefono
      * e a controllare cosa e' stato promesso, non a rifarli (richiesta
@@ -312,7 +314,7 @@ class RolePermissionsTest extends TestCase
      */
     public function test_amministrazione_legge_i_preventivi_ma_non_li_tocca(): void
     {
-        $permessi = \App\Support\RolePermissions::for('amministrazione');
+        $permessi = RolePermissions::for('amministrazione');
 
         foreach (['view_any_quote', 'view_quote', 'view_any_quote::group', 'view_quote::group'] as $consentito) {
             $this->assertContains($consentito, $permessi, $consentito);
@@ -323,5 +325,4 @@ class RolePermissionsTest extends TestCase
             $this->assertNotContains($vietato, $permessi, $vietato);
         }
     }
-
 }

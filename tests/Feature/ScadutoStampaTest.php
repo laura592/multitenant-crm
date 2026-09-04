@@ -22,13 +22,18 @@ class ScadutoStampaTest extends TestCase
 {
     use AssignsPermissionRoles, RefreshDatabase;
 
-    public function test_la_pagina_scaduto_stampa_un_pdf(): void
+    public function test_la_pagina_scaduto_apre_il_pdf_in_una_scheda_nuova(): void
     {
         $this->scenario();
 
-        Livewire::test(ScadutoClienti::class)
-            ->callAction('stampa')
-            ->assertFileDownloaded('scaduto-clienti-'.now()->format('Y-m-d').'.pdf');
+        $componente = Livewire::test(ScadutoClienti::class)->callAction('stampa');
+
+        // JSON_UNESCAPED_SLASHES: senza, l'URL nel JSON e' "stampe\/..." e il
+        // confronto fallirebbe per le barre sfuggite, non per il codice.
+        $effetti = json_encode($componente->effects, JSON_UNESCAPED_SLASHES);
+
+        $this->assertStringContainsString('window.open', $effetti, 'la stampa non deve scaricarsi');
+        $this->assertStringContainsString('/stampe/', $effetti);
     }
 
     /**
