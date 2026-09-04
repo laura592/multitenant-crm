@@ -47,6 +47,26 @@ class RolePermissions
     // se stamparlo con o senza. Il PDF allegato alla mail non ha prezzi per
     // nessuno. Applicato da ServiceReportPolicy::viewPrices().
     //
+    // send_email_service::report: il pulsante "Invia", che manda il rapportino
+    // al cliente. Ce l'hanno tutti, tecnici compresi.
+    //
+    // send_email_completo_service::report e' quello che fa la differenza
+    // (indicazione dell'ufficio, 04/09/2026). Chi NON ce l'ha manda una cosa
+    // sola: la copia SENZA articoli, al cliente del luogo di intervento. Chi
+    // ce l'ha sceglie fra tre copie — senza articoli, con articoli, con
+    // articoli e prezzi — e puo' scrivere anche al pagante.
+    //
+    // Il tecnico fa firmare l'intervento, non l'elenco dei ricambi; e se paga
+    // un altro (Dersut, Martellozzo...) al pagante ci parla l'ufficio.
+    // Applicato da ServiceReportPolicy::sendEmail() e copieEmailConsentite().
+    //
+    // send_to_gestionale_service::report, stessa natura: non e' un'azione su
+    // una Resource ma il pulsante "Invia a gestionale", che crea su Eureka un
+    // documento non piu' cancellabile. Ai dipendenti e' tolto (indicazione
+    // dell'ufficio, 04/09/2026): il tecnico compila il rapportino, a mandarlo
+    // al gestionale ci pensa chi fattura. Applicato da
+    // ServiceReportPolicy::sendToGestionale().
+    //
     // Solo "amministrazione", piu' lo staff master che con is_super_admin
     // scavalca comunque ogni permesso (indicazione dell'ufficio, 03/09/2026;
     // il 02/09 l'aveva anche "admin", tolto perche' la scelta della copia
@@ -97,6 +117,11 @@ class RolePermissions
                 // solo partner e admin/staff master.
                 ...self::expand('information::request', self::MANAGE_NO_DELETE),
                 ...self::expand('service::report', self::MANAGE_NO_DELETE),
+                // Manda il rapportino al cliente, ma solo la copia senza
+                // articoli e solo al luogo di intervento: scegliere quale
+                // copia allegare, e scrivere al pagante, sono dell'ufficio
+                // (send_email_completo_service::report).
+                'send_email_service::report',
                 ...self::expand('maintenance::schedule', self::MANAGE_NO_DELETE),
                 ...self::expand('machine::unit', self::MANAGE_NO_DELETE),
                 ...self::expand('lavaggio', self::MANAGE_NO_DELETE),
@@ -128,6 +153,17 @@ class RolePermissions
                 ...self::expand('quote', self::VIEW),
                 ...self::expand('quote::group', self::VIEW),
                 ...self::expand('service::report', self::UFFICIO),
+                // Invio a Eureka: crea un documento che non si puo' piu'
+                // cancellare, nemmeno in ambiente di test. Non e' un gesto
+                // da campo (vedi la nota su send_to_gestionale piu' sotto).
+                'send_to_gestionale_service::report',
+                // L'invio al cliente e' un gesto verso l'esterno: parte a
+                // nome dell'azienda e non si richiama indietro.
+                'send_email_service::report',
+                // Sceglie quale delle tre copie allegare (senza articoli,
+                // con articoli, con articoli e prezzi) e puo' spedire anche
+                // al pagante, non solo al luogo di intervento.
+                'send_email_completo_service::report',
                 // Stampa la copia con i prezzi quando serve: vedi la nota su
                 // view_prices_service::report piu' sotto.
                 'view_prices_service::report',
@@ -162,6 +198,17 @@ class RolePermissions
                 ...self::expand('quote::group', self::FULL_MANAGE),
                 ...self::expand('information::request', self::MANAGE),
                 ...self::expand('service::report', self::FULL_MANAGE),
+                // Invio a Eureka: crea un documento che non si puo' piu'
+                // cancellare, nemmeno in ambiente di test. Non e' un gesto
+                // da campo (vedi la nota su send_to_gestionale piu' sotto).
+                'send_to_gestionale_service::report',
+                // L'invio al cliente e' un gesto verso l'esterno: parte a
+                // nome dell'azienda e non si richiama indietro.
+                'send_email_service::report',
+                // Sceglie quale delle tre copie allegare (senza articoli,
+                // con articoli, con articoli e prezzi) e puo' spedire anche
+                // al pagante, non solo al luogo di intervento.
+                'send_email_completo_service::report',
                 ...self::expand('maintenance::schedule', self::MANAGE),
                 ...self::expand('deadline', self::MANAGE),
                 ...self::expand('vehicle', self::MANAGE),
@@ -202,6 +249,13 @@ class RolePermissions
                 ...self::expand('quote::group', self::MANAGE_NO_DELETE),
                 ...self::expand('information::request', self::MANAGE_NO_DELETE),
                 ...self::expand('service::report', self::MANAGE_NO_DELETE),
+                // Invio a Eureka: crea un documento che non si puo' piu'
+                // cancellare, nemmeno in ambiente di test. Non e' un gesto
+                // da campo (vedi la nota su send_to_gestionale piu' sotto).
+                'send_to_gestionale_service::report',
+                // L'invio al cliente e' un gesto verso l'esterno: parte a
+                // nome dell'azienda e non si richiama indietro.
+                'send_email_service::report',
                 ...self::expand('maintenance::schedule', self::MANAGE_NO_DELETE),
                 ...self::expand('deadline', self::MANAGE_NO_DELETE),
                 ...self::expand('vehicle', self::MANAGE_NO_DELETE),

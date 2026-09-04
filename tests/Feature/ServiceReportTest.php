@@ -29,7 +29,12 @@ class ServiceReportTest extends TestCase
 {
     use AssignsPermissionRoles, RefreshDatabase;
 
-    public function test_technician_can_create_report_with_signature_and_parts_then_send_it(): void
+    /**
+     * Il giro completo, con la divisione dei ruoli decisa il 04/09/2026: il
+     * tecnico compila, firma e stampa; a spedire al cliente e' l'ufficio, che
+     * e' l'unico ad avere send_email_service::report.
+     */
+    public function test_technician_compiles_and_signs_then_the_office_sends_it(): void
     {
         Storage::fake('public');
         Mail::fake();
@@ -75,7 +80,13 @@ class ServiceReportTest extends TestCase
         // PDF scaricabile
         $this->get(route('service-reports.pdf', $report))->assertOk();
 
-        // invio email dall'azione della tabella
+        // invio email dall'azione della tabella: non piu' il tecnico
+        $ufficio = User::create([
+            'tenant_id' => $tenant->id, 'name' => 'Ufficio', 'email' => 'ufficio@gifar.it', 'password' => bcrypt('password'),
+        ]);
+        $this->giveRole($ufficio, $tenant, 'amministrazione');
+        $this->actingAs($ufficio);
+
         Livewire::test(ListServiceReports::class)
             ->callTableAction('send', $report, data: ['recipient_emails' => ['cliente@test.it']]);
 

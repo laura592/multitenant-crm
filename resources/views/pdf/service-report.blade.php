@@ -117,6 +117,11 @@
         // (download, prezzi ok) e l'azione "Invia" in ServiceReportResource
         // (email, $showPrices = false).
         $showPrices ??= true;
+        // La copia "senza articoli" nasce per l'invio al cliente da parte del
+        // tecnico (04/09/2026): il cliente firma di aver ricevuto
+        // l'intervento, non l'elenco dei ricambi montati, che e' materia di
+        // chi fattura. Nel download interno resta tutto.
+        $showArticoli ??= true;
     @endphp
 
     {{-- Solo numero e data qui, come semplice testo (niente piu' un box a
@@ -224,7 +229,7 @@
         <div class="text-box" style="margin-bottom: 14px;"><p>{{ $report->notes }}</p></div>
     @endif
 
-    @if($report->materialsUsed->isNotEmpty())
+    @if($showArticoli && $report->materialsUsed->isNotEmpty())
         <div class="section-title">Ricambi/materiali utilizzati</div>
         <table class="items" style="margin-bottom: 14px;">
             <thead><tr><th class="center">Quantità</th><th>Materiale</th>@if($showPrices)<th class="numeric">Prezzo unit.</th><th class="numeric">Importo</th>@endif</tr></thead>
@@ -251,7 +256,7 @@
 
     {{-- Rapportini compilati prima del passaggio a Materiali avevano i ricambi
          salvati come Product (partsUsed) — sezione solo per lo storico. --}}
-    @if($report->partsUsed->isNotEmpty())
+    @if($showArticoli && $report->partsUsed->isNotEmpty())
         <div class="section-title">Ricambi/materiali utilizzati</div>
         <table class="items" style="margin-bottom: 14px;">
             <thead><tr><th class="center">Quantità</th><th>Prodotto</th>@if($showPrices)<th class="numeric">Prezzo</th>@endif</tr></thead>

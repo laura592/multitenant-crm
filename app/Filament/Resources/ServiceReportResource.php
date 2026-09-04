@@ -15,6 +15,7 @@ use App\Models\MaintenanceSchedule;
 use App\Models\Material;
 use App\Models\Product;
 use App\Models\ServiceReport;
+use App\Policies\ServiceReportPolicy;
 use App\Support\DisplayName;
 use App\Support\OutsideLivewireRender;
 use App\Support\Rapportini\LavaggioFields;
@@ -1264,6 +1265,9 @@ class ServiceReportResource extends Resource
                     Tables\Actions\Action::make('send')
                         ->label('Invia')
                         ->icon('heroicon-o-paper-airplane')
+                        // Ai dipendenti non compare: vedi
+                        // ServiceReportPolicy::sendEmail().
+                        ->visible(fn (ServiceReport $record): bool => auth()->user()?->can('sendEmail', $record) ?? false)
                         ->modalWidth('4xl')
                         ->form(fn (ServiceReport $record) => static::sendEmailFormSchema($record))
                         ->action(function (array $data, ServiceReport $record) {
@@ -1275,10 +1279,34 @@ class ServiceReportResource extends Resource
                             // <!--[if BLOCK]><![endif]--> che Livewire
                             // inietta attorno a ogni @if quando il rendering
                             // parte da dentro un'azione Livewire come questa.
-                            $pdf = OutsideLivewireRender::run(fn () => Pdf::loadView('pdf.service-report', ['report' => $record, 'showPrices' => false]));
+                            // La copia arriva dal form, ma non ci si fida: si
+                            // ricontrolla che sia fra quelle consentite a chi
+                            // sta spedendo. Un radio nascosto (il tecnico) e'
+                            // comunque un campo che viaggia nella richiesta.
+                            $copie = array_keys(static::copieEmailConsentite($record));
+                            $copia = in_array($data['copia'] ?? null, $copie, true)
+                                ? $data['copia']
+                                : ServiceReportPolicy::COPIA_SENZA_ARTICOLI;
+                            $flag = static::copiaEmailFlags($copia);
 
-                            $recipientEmails = array_values(array_filter($data['recipient_emails'] ?? []));
-                            $ccEmails = array_values(array_filter($data['cc_emails'] ?? []));
+                            $pdf = OutsideLivewireRender::run(fn () => Pdf::loadView('pdf.service-report', [
+                                'report' => $record,
+                                'showPrices' => $flag['showPrices'],
+                                'showArticoli' => $flag['showArticoli'],
+                            ]));
+
+                            $recipientEmails = static::destinatariConsentiti($record, $data['recipient_emails'] ?? []);
+                            $ccEmails = static::destinatariConsentiti($record, $data['cc_emails'] ?? []);
+
+                            if ($recipientEmails === []) {
+                                Notification::make()
+                                    ->title('Nessun destinatario valido')
+                                    ->body('Il rapportino va a chi ha ricevuto l\'intervento, non a chi paga.')
+                                    ->danger()
+                                    ->send();
+
+                                return;
+                            }
 
                             $email = $record->emails()->create([
                                 'user_id' => auth()->id(),
@@ -1313,7 +1341,11 @@ class ServiceReportResource extends Resource
                         })
                         ->icon('heroicon-o-arrow-up-tray')
                         ->disabled(fn (ServiceReport $record): bool => $record->gestionale_sync_status === 'queued')
-                        ->visible(fn (ServiceReport $record): bool => in_array($record->status, ServiceReport::CLOSED_STATUSES, true) && ($record->tenant?->hasGestionaleEurekaCredentials() ?? false))
+                        // Ai dipendenti il pulsante non compare: il permesso
+                        // non e' loro (ServiceReportPolicy::sendToGestionale).
+                        ->visible(fn (ServiceReport $record): bool => in_array($record->status, ServiceReport::CLOSED_STATUSES, true)
+                            && ($record->tenant?->hasGestionaleEurekaCredentials() ?? false)
+                            && (auth()->user()?->can('sendToGestionale', $record) ?? false))
                         ->requiresConfirmation()
                         ->modalDescription('Invia questo rapportino a Eureka come scheda lavoro. Non è possibile cancellare un documento una volta creato, nemmeno in ambiente di test.')
                         ->action(function (ServiceReport $record) {
@@ -1454,13 +1486,138 @@ class ServiceReportResource extends Resource
      *
      * @return array<Forms\Components\Component>
      */
+    /**
+     * Le copie che chi sta guardando puo' allegare, gia' etichettate.
+     *
+     * Il tecnico ne ha una sola (ServiceReportPolicy::copieEmailConsentite):
+     * il campo allora non compare nemmeno, e resta il ->default().
+     *
+     * @return array<string, string>
+     */
+    protected static function copieEmailConsentite(ServiceReport $record): array
+    {
+        $etichette = [
+            ServiceReportPolicy::COPIA_SENZA_ARTICOLI => 'Senza articoli — solo l\'intervento',
+            ServiceReportPolicy::COPIA_CON_ARTICOLI => 'Con articoli, senza prezzi',
+            ServiceReportPolicy::COPIA_CON_PREZZI => 'Con articoli e prezzi',
+        ];
+
+        $user = auth()->user();
+
+        // Gate::allows() non serve: copieEmailConsentite() torna un elenco,
+        // non un si'/no. Si chiama il policy direttamente.
+        $consentite = $user
+            ? app(ServiceReportPolicy::class)->copieEmailConsentite($user, $record)
+            : [ServiceReportPolicy::COPIA_SENZA_ARTICOLI];
+
+        return array_intersect_key($etichette, array_flip($consentite));
+    }
+
+    /**
+     * Come si traduce una copia nei due flag della view PDF.
+     *
+     * @return array{showPrices: bool, showArticoli: bool}
+     */
+    public static function copiaEmailFlags(?string $copia): array
+    {
+        return match ($copia) {
+            ServiceReportPolicy::COPIA_CON_PREZZI => ['showPrices' => true, 'showArticoli' => true],
+            ServiceReportPolicy::COPIA_CON_ARTICOLI => ['showPrices' => false, 'showArticoli' => true],
+            // Default deliberatamente il piu' scarno: una copia sconosciuta
+            // non deve far uscire prezzi per errore.
+            default => ['showPrices' => false, 'showArticoli' => false],
+        };
+    }
+
+    /**
+     * Gli indirizzi proposti. Quelli del pagante ci sono solo per chi puo'
+     * scrivergli: al tecnico non vengono nemmeno suggeriti, cosi' non deve
+     * ricordarsi di evitarli.
+     *
+     * @return array<int, string>
+     */
+    protected static function indirizziSuggeriti(ServiceReport $record): array
+    {
+        $indirizzi = $record->customer?->emails ?? [];
+
+        if (static::puoScrivereAlPagante($record)) {
+            $indirizzi = array_merge($indirizzi, $record->customer?->billingCustomer?->emails ?? []);
+        }
+
+        return array_values(array_unique(array_filter($indirizzi)));
+    }
+
+    /**
+     * Toglie dagli indirizzi digitati quelli del pagante, per chi non puo'
+     * scrivergli.
+     *
+     * Il campo e' a testo libero: nascondere il suggerimento non basta,
+     * l'indirizzo di Dersut si puo' sempre digitare a mano. Si filtra qui,
+     * dove la mail parte davvero.
+     *
+     * @param  array<int, ?string>  $indirizzi
+     * @return array<int, string>
+     */
+    protected static function destinatariConsentiti(ServiceReport $record, array $indirizzi): array
+    {
+        $indirizzi = array_values(array_filter($indirizzi));
+
+        if (static::puoScrivereAlPagante($record)) {
+            return $indirizzi;
+        }
+
+        $delPagante = array_map(
+            'mb_strtolower',
+            array_filter($record->customer?->billingCustomer?->emails ?? [])
+        );
+
+        return array_values(array_filter(
+            $indirizzi,
+            fn (string $email) => ! in_array(mb_strtolower($email), $delPagante, true),
+        ));
+    }
+
+    protected static function puoScrivereAlPagante(ServiceReport $record): bool
+    {
+        $user = auth()->user();
+
+        return $user !== null && app(ServiceReportPolicy::class)->puoScrivereAlPagante($user, $record);
+    }
+
+    protected static function aiutoDestinatari(ServiceReport $record): string
+    {
+        $pagante = $record->customer?->billingCustomer;
+
+        if ($pagante && ! static::puoScrivereAlPagante($record)) {
+            return 'Il rapportino va a chi ha ricevuto l\'intervento. La fattura la paga '
+                .$pagante->company_name.', ma a loro scrive l\'ufficio: non aggiungerli qui.';
+        }
+
+        return 'Il cliente ha piu\' indirizzi salvati: scegli tra i suggerimenti o digitane uno nuovo. Puoi selezionarne piu\' di uno.';
+    }
+
     protected static function sendEmailFormSchema(ServiceReport $record): array
     {
+        $copie = static::copieEmailConsentite($record);
+        $suggerimenti = static::indirizziSuggeriti($record);
+
         return [
+            // Una sola copia consentita (il tecnico) = niente da scegliere:
+            // il campo sparisce e il valore lo mette il ->default(). Con tre
+            // resta una scelta esplicita, senza preselezionare la piu'
+            // generosa.
+            Forms\Components\Radio::make('copia')
+                ->label('Copia da allegare')
+                ->options($copie)
+                ->default(array_key_first($copie))
+                ->required()
+                ->live()
+                ->visible(count($copie) > 1)
+                ->helperText('Il cliente riceve esattamente questa copia.'),
             Forms\Components\TagsInput::make('recipient_emails')
                 ->label('Email destinatario')
-                ->helperText('Il cliente ha piu\' indirizzi salvati: scegli tra i suggerimenti o digitane uno nuovo. Puoi selezionarne piu\' di uno.')
-                ->suggestions(fn () => $record->customer?->emails ?? [])
+                ->helperText(static::aiutoDestinatari($record))
+                ->suggestions($suggerimenti)
                 ->splitKeys([',', ' ', 'Tab', 'Enter'])
                 ->required()
                 ->rules([fn () => static::emailListValidationRule()])
@@ -1468,7 +1625,7 @@ class ServiceReportResource extends Resource
             Forms\Components\TagsInput::make('cc_emails')
                 ->label('CC (opzionale)')
                 ->helperText('Anche qui puoi aggiungere piu\' indirizzi, ad es. le altre email del cliente.')
-                ->suggestions(fn () => $record->customer?->emails ?? [])
+                ->suggestions($suggerimenti)
                 ->splitKeys([',', ' ', 'Tab', 'Enter'])
                 ->rules([fn () => static::emailListValidationRule()]),
             Forms\Components\RichEditor::make('custom_message')
@@ -1514,9 +1671,24 @@ class ServiceReportResource extends Resource
                                 // a ogni tasto nel testo email (->live() su
                                 // custom_message): senza, l'iframe rischia di
                                 // rigenerare il PDF a ogni battuta.
-                                ->content(new HtmlString(
-                                    '<div wire:ignore><iframe src="'.e(route('service-reports.pdf', [$record, 'prezzi' => 0])).'" style="width:100%;height:60vh;border:0;border-radius:0.5rem;background:#fff;"></iframe></div>'
-                                )),
+                                // wire:key sulla copia scelta: l'iframe si
+                                // rigenera quando cambia la copia, ma
+                                // wire:ignore lo lascia in pace mentre si
+                                // scrive nel testo email (->live() su
+                                // custom_message ridisegna tutto il pannello).
+                                ->content(function (Get $get) use ($record, $copie): HtmlString {
+                                    $copia = is_string($get('copia')) ? $get('copia') : array_key_first($copie);
+                                    $flag = static::copiaEmailFlags($copia);
+                                    $url = route('service-reports.pdf', [
+                                        $record,
+                                        'prezzi' => $flag['showPrices'] ? 1 : 0,
+                                        'articoli' => $flag['showArticoli'] ? 1 : 0,
+                                    ]);
+
+                                    return new HtmlString(
+                                        '<div wire:ignore wire:key="pdf-'.e($copia).'"><iframe src="'.e($url).'" style="width:100%;height:60vh;border:0;border-radius:0.5rem;background:#fff;"></iframe></div>'
+                                    );
+                                }),
                         ]),
                 ]),
         ];

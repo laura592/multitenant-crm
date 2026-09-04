@@ -52,6 +52,74 @@ class ServiceReportPolicy
     }
 
     /**
+     * Chi puo' mandare un rapportino a Eureka.
+     *
+     * Non e' un salvataggio: crea sul gestionale un documento che non si puo'
+     * piu' cancellare, nemmeno in ambiente di test, e da quel momento il
+     * rapportino qui e' bloccato (isSuEureka()). Il tecnico lo compila, a
+     * mandarlo ci pensa chi fattura — indicazione dell'ufficio, 04/09/2026.
+     *
+     * Il controllo vive qui e non solo nel pulsante: e' la stessa ragione per
+     * cui viewPrices() e' una policy e non un ->visible().
+     */
+    public function sendToGestionale(User $user, ServiceReport $serviceReport): bool
+    {
+        return $this->view($user, $serviceReport)
+            && $user->can('send_to_gestionale_service::report');
+    }
+
+    /** Copie allegabili all'email, in ordine di quanto mostrano. */
+    public const COPIA_SENZA_ARTICOLI = 'senza_articoli';
+
+    public const COPIA_CON_ARTICOLI = 'con_articoli';
+
+    public const COPIA_CON_PREZZI = 'con_prezzi';
+
+    /**
+     * Chi puo' mandare il rapportino al cliente via email.
+     *
+     * Tutti, tecnici compresi: quello che cambia col ruolo non e' se si
+     * manda, ma COSA si manda e A CHI — vedi copieConsentite() e
+     * puoScrivereAlPagante() qui sotto.
+     */
+    public function sendEmail(User $user, ServiceReport $serviceReport): bool
+    {
+        return $this->view($user, $serviceReport)
+            && $user->can('send_email_service::report');
+    }
+
+    /**
+     * Quali copie del rapportino questa persona puo' allegare.
+     *
+     * Il tecnico ne ha una sola, e senza scelta: quella senza articoli. Fa
+     * firmare al cliente di aver ricevuto l'intervento, non l'elenco dei
+     * ricambi montati, che e' materia di chi fattura (indicazione
+     * dell'ufficio, 04/09/2026).
+     *
+     * @return array<int, string>
+     */
+    public function copieEmailConsentite(User $user, ServiceReport $serviceReport): array
+    {
+        if (! $user->can('send_email_completo_service::report')) {
+            return [self::COPIA_SENZA_ARTICOLI];
+        }
+
+        return [self::COPIA_SENZA_ARTICOLI, self::COPIA_CON_ARTICOLI, self::COPIA_CON_PREZZI];
+    }
+
+    /**
+     * Se puo' spedire anche all'indirizzo di chi paga, quando a pagare e' un
+     * altro (Dersut, Martellozzo...).
+     *
+     * Il tecnico no: scrive al luogo dove ha lavorato, e basta. Col pagante
+     * ci parla l'ufficio, che sa cosa e' gia' stato concordato.
+     */
+    public function puoScrivereAlPagante(User $user, ServiceReport $serviceReport): bool
+    {
+        return $user->can('send_email_completo_service::report');
+    }
+
+    /**
      * Determine whether the user can create models.
      */
     public function create(User $user): bool

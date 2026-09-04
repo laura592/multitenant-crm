@@ -43,14 +43,20 @@ class ServiceReportController extends Controller
         $conPrezzi = $request->boolean('prezzi', true)
             && Gate::allows('viewPrices', $serviceReport);
 
+        // ?articoli=0 toglie la sezione ricambi: e' la copia che il tecnico
+        // manda al cliente. Non serve permesso — puo' solo togliere roba —
+        // ed e' la stessa che l'anteprima nel modale di invio mostra.
+        $conArticoli = $request->boolean('articoli', true);
+
         $pdf = Pdf::loadView('pdf.service-report', [
             'report' => $serviceReport->load(['customer', 'technician', 'machineProduct', 'machineMaterial', 'machineUnit.product', 'partsUsed.product', 'materialsUsed.material', 'tenant']),
             'showPrices' => $conPrezzi,
+            'showArticoli' => $conArticoli,
         ]);
 
         // Il nome del file dice quale copia e': con due stampe aperte sulla
         // scrivania non si distinguerebbero.
-        $suffisso = $conPrezzi ? '' : '-senza-prezzi';
+        $suffisso = ($conPrezzi ? '' : '-senza-prezzi').($conArticoli ? '' : '-senza-articoli');
 
         return $pdf->stream("rapportino-{$serviceReport->number}{$suffisso}.pdf");
     }

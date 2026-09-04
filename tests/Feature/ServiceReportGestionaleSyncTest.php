@@ -43,6 +43,23 @@ class ServiceReportGestionaleSyncTest extends TestCase
         ]);
     }
 
+    /**
+     * Chi preme "Invia a gestionale". Dal 04/09/2026 non e' il tecnico: il
+     * permesso send_to_gestionale_service::report e' dell'ufficio (vedi
+     * ServiceReportPolicy::sendToGestionale). Qui l'attore e' comunque di
+     * contorno — cio' che si verifica e' il payload verso Eureka.
+     */
+    private function ufficio(Tenant $tenant): User
+    {
+        $user = User::create([
+            'tenant_id' => $tenant->id, 'name' => 'Ufficio',
+            'email' => 'ufficio'.uniqid().'@alex.it', 'password' => bcrypt('password'),
+        ]);
+        $this->giveRole($user, $tenant, 'amministrazione');
+
+        return $user;
+    }
+
     public function test_send_is_blocked_when_customer_has_no_gestionale_code(): void
     {
         Http::fake();
@@ -55,7 +72,7 @@ class ServiceReportGestionaleSyncTest extends TestCase
 
         $report = $this->makeSignedReport($tenant, $tech, $customer, $product);
 
-        $this->actingAs($tech);
+        $this->actingAs($this->ufficio($tenant));
         \Filament\Facades\Filament::setTenant($tenant);
 
         Livewire::test(ListServiceReports::class)
@@ -88,7 +105,7 @@ class ServiceReportGestionaleSyncTest extends TestCase
 
         $report = $this->makeSignedReport($tenant, $tech, $customer, $product);
 
-        $this->actingAs($tech);
+        $this->actingAs($this->ufficio($tenant));
         \Filament\Facades\Filament::setTenant($tenant);
 
         Livewire::test(ListServiceReports::class)
@@ -133,7 +150,7 @@ class ServiceReportGestionaleSyncTest extends TestCase
         $report = $this->makeSignedReport($tenant, $tech, $customer, $product);
         $report->materialsUsed()->create(['material_id' => $material->id, 'quantity' => 2]);
 
-        $this->actingAs($tech);
+        $this->actingAs($this->ufficio($tenant));
         \Filament\Facades\Filament::setTenant($tenant);
 
         Livewire::test(ListServiceReports::class)

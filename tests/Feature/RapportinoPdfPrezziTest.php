@@ -126,6 +126,38 @@ class RapportinoPdfPrezziTest extends TestCase
         $this->assertStringContainsString('-senza-prezzi.pdf', $risposta->headers->get('content-disposition'));
     }
 
+    /**
+     * Mandare a Eureka crea un documento non piu' cancellabile e blocca il
+     * rapportino qui: il tecnico lo compila, a spedirlo ci pensa chi fattura
+     * (indicazione dell'ufficio, 04/09/2026).
+     */
+    /**
+     * Chi puo' fare cosa con un rapportino finito. Il tecnico lo manda al
+     * cliente (copia senza articoli, e basta), ma non lo spedisce a Eureka
+     * ne' sceglie cosa allegare.
+     */
+    public function test_i_permessi_di_invio_stanno_dove_devono(): void
+    {
+        $atteso = [
+            // permesso => ruoli che ce l'hanno
+            'send_email_service::report' => ['dipendente', 'amministrazione', 'admin', 'amministratore'],
+            'send_email_completo_service::report' => ['amministrazione', 'admin'],
+            'send_to_gestionale_service::report' => ['amministrazione', 'admin', 'amministratore'],
+        ];
+
+        foreach ($atteso as $permesso => $ammessi) {
+            foreach (RolePermissions::roles() as $ruolo) {
+                $ha = in_array($permesso, RolePermissions::for($ruolo), true);
+
+                $this->assertSame(
+                    in_array($ruolo, $ammessi, true),
+                    $ha,
+                    "{$ruolo} / {$permesso}",
+                );
+            }
+        }
+    }
+
     /** Il permesso non deve finire per sbaglio ai ruoli sbagliati. */
     public function test_solo_amministrazione_vede_i_prezzi(): void
     {
