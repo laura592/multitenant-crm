@@ -608,16 +608,16 @@ class SchedaAnagraficaPdf
         $y -= 18;
         $y = $this->sezione('E - Macchine e impianti presenti', $y, 'facoltativa: compilare se già noto');
         $y -= 11;
-        $this->nota('Serve a collegare ogni matricola alla sede giusta e a distinguere le macchine del cliente da quelle in comodato o a noleggio da Alex.', self::ML, $y);
+        $this->nota('Serve a collegare ogni matricola alla sede giusta e a dire chi paga per ciascuna: la colonna vuota significa che paga il cliente.', self::ML, $y);
         $y -= 10;
 
-        // "Proprieta'" e "chi paga" erano la stessa informazione detta due
-        // volte: se la macchina e' in comodato o a noleggio il canone lo paga
-        // il soggetto della sezione A, se e' del cliente non c'e' canone. Una
-        // colonna sola, e lo spazio recuperato va al modello, che si troncava.
+        // Una colonna sola per "chi paga", e lo spazio recuperato va al
+        // modello, che si troncava. La colonna arriva compilata dal CRM
+        // (pagante per macchina, dagli installati di Eureka) e resta
+        // correggibile: vuota vuol dire che paga il cliente.
         $intestazioni = [
             ['SEDE N.', 0.07], ['TIPO / MODELLO', 0.30], ['MATRICOLA', 0.18],
-            ['PROPRIETÀ', 0.21], ['NOTE', 0.24],
+            ['CHI PAGA', 0.21], ['NOTE', 0.24],
         ];
         $col = $this->colonne(array_column($intestazioni, 1), 4);
 

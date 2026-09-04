@@ -228,4 +228,49 @@ class SchedaAnagraficaTest extends TestCase
             ->get(route('customers.scheda-anagrafica', $this->cliente()))
             ->assertForbidden();
     }
+    /**
+     * Chi paga si scrive macchina per macchina, non una volta sola in cima.
+     *
+     * Su "Patatrac Caffe' di Martellozzo Elio" il pagante dell'anagrafica
+     * diceva Martellozzo, ma delle cinque macchine due le paga Martellozzo,
+     * due Dersut e il forno il cliente: una riga sola non poteva dirlo, e la
+     * colonna restava vuota perche' il dato non c'era. Ora arriva dagli
+     * installati di Eureka (segnalato dall'ufficio, 04/09/2026).
+     */
+    public function test_la_colonna_chi_paga_segue_la_singola_macchina(): void
+    {
+        $tenant = Tenant::create(['name' => 'Alex', 'slug' => 'alex', 'is_master' => true]);
+        $torrefattore = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'MARTELLOZZO LORENZO & C. SAS']);
+        $cliente = Customer::create([
+            'tenant_id' => $tenant->id, 'company_name' => 'PATATRAC CAFFE',
+            'billing_customer_id' => $torrefattore->id,
+        ]);
+
+        MachineUnit::create([
+            'tenant_id' => $tenant->id, 'current_customer_id' => $cliente->id,
+            'serial_number' => 'AAA-1', 'model_name' => 'Impianto Spina',
+            'billing_customer_id' => $torrefattore->id,
+        ]);
+        MachineUnit::create([
+            'tenant_id' => $tenant->id, 'current_customer_id' => $cliente->id,
+            'serial_number' => 'BBB-2', 'model_name' => 'Forno',
+        ]);
+
+        $valori = SchedaAnagraficaData::for($cliente);
+
+        $righe = [];
+        for ($n = 1; $n <= SchedaAnagraficaData::MAX_MACCHINE; $n++) {
+            if (($valori["mac{$n}_matricola"] ?? '') === '') {
+                continue;
+            }
+            $righe[$valori["mac{$n}_matricola"]] = $valori["mac{$n}_proprieta"] ?? '';
+        }
+
+        $this->assertSame('MARTELLOZZO LORENZO & C. SAS', $righe['AAA-1']);
+        // Il forno lo paga il cliente: la colonna resta vuota, e il vuoto e'
+        // l'informazione — ripetere il nome su ogni riga toglierebbe risalto
+        // alle poche che fanno eccezione.
+        $this->assertSame('', $righe['BBB-2']);
+    }
+
 }

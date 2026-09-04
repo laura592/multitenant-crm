@@ -155,10 +155,16 @@ class SchedaAnagraficaData
     /**
      * Le macchine installate presso le sedi elencate sopra, con il numero di
      * sede accanto: e' la colonna che rende la tabella collegabile ai blocchi
-     * della sezione D. Proprieta' e "chi paga" restano in bianco: nel CRM non
-     * c'e' un campo che dica se una matricola e' venduta o in comodato, e
-     * scriverlo a caso su un modulo da firmare sarebbe peggio che lasciarlo
-     * compilare al cliente.
+     * della sezione D.
+     *
+     * La colonna "chi paga" era in bianco perche' il CRM non sapeva chi
+     * pagasse una singola matricola. Ora lo sa: gli installati di Eureka
+     * portano il pagante per macchina, e su 567 e' valorizzato.
+     *
+     * Riempirla non e' un dettaglio: il pagante scritto sull'anagrafica vale
+     * per il cliente intero, e su Patatrac era falso su tre macchine su
+     * cinque — due le paga Martellozzo, due Dersut, e il forno il cliente.
+     * Una riga sola in cima alla scheda non poteva dirlo.
      *
      * @param  Collection<int, Customer>  $sedi
      * @return array<string, string>
@@ -172,7 +178,7 @@ class SchedaAnagraficaData
 
         $unita = MachineUnit::query()
             ->whereIn('current_customer_id', array_keys($numeroPerSede))
-            ->with('product', 'material')
+            ->with('product', 'material', 'billingCustomer')
             ->orderBy('current_customer_id')
             ->orderBy('serial_number')
             ->limit(self::MAX_MACCHINE)
@@ -187,6 +193,12 @@ class SchedaAnagraficaData
                 ?: $macchina->product?->name
                 ?: $macchina->material?->display_label);
             $valori["mac{$n}_matricola"] = (string) $macchina->serial_number;
+            // Vuoto quando paga il cliente stesso: e' il caso normale, e
+            // ripeterlo su ogni riga toglierebbe risalto alle poche che
+            // fanno eccezione.
+            $valori["mac{$n}_proprieta"] = $macchina->billingCustomer
+                ? self::nome($macchina->billingCustomer)
+                : '';
         }
 
         return $valori;
