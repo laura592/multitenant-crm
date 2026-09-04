@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Customer;
 use App\Models\MachineUnit;
 use App\Models\Material;
 use App\Models\Tenant;
@@ -14,10 +15,13 @@ use Illuminate\Database\Seeder;
  * Eureka le contiene), perche' sono arrivate e non sono ancora state
  * installate da nessuna parte.
  *
- * Entrano tutte come status "in magazzino" e senza cliente: e' esattamente
- * quello che dicono le foto (scatole ancora chiuse su pallet, piu' qualche
- * macchina disimballata in showroom), e chi le installera' cambiera' stato
- * dalla scheda macchina.
+ * Stanno tutte presso "Alex di Signorato Alessandro" (Fossalta di Piave),
+ * cioe' la nostra sede: e' quello che dicono le foto, scatole ancora chiuse
+ * su pallet piu' qualche macchina disimballata in showroom. La sede e' un
+ * cliente come gli altri, quindi vale la convenzione del parco macchine —
+ * chi ha un cliente e' "installata", "in magazzino" resta a chi non sta da
+ * nessuna parte — e lo spostamento passa da moveTo(), che apre anche la riga
+ * di storico posizionamenti.
  *
  * Occhio a una cosa, guardando le foto: per lo stesso modello ci sono sia
  * l'etichetta del cartone sia la targhetta della macchina, ma NON sono lo
@@ -36,6 +40,14 @@ use Illuminate\Database\Seeder;
  */
 class MatricoleMagazzinoSettembre2026Seeder extends Seeder
 {
+    /**
+     * La nostra sede a Fossalta di Piave, presa dall'id perche' e' quello che
+     * identifica il cliente in modo stabile: "Alex di Signorato Alessandro"
+     * come ragione sociale somiglia troppo al tenant Alex e ad altre
+     * anagrafiche per cercarlo a nome.
+     */
+    private const SEDE = '019f8a7e-25ef-7099-b12f-fac33666a233';
+
     /**
      * @var array<int, array{serial: string, model: string, material: ?string, notes: string}>
      */
@@ -166,7 +178,10 @@ class MatricoleMagazzinoSettembre2026Seeder extends Seeder
             $this->command?->warn('Codici articolo non trovati a catalogo: '.$mancanti->implode(', '));
         }
 
+        $sede = Customer::withoutGlobalScopes()->findOrFail(self::SEDE);
+
         $creati = 0;
+        $spostati = 0;
 
         foreach (self::MACCHINE as $riga) {
             $unit = MachineUnit::withoutGlobalScopes()->firstOrCreate(
@@ -184,8 +199,18 @@ class MatricoleMagazzinoSettembre2026Seeder extends Seeder
             );
 
             $creati += (int) $unit->wasRecentlyCreated;
+
+            // Solo se non sta gia' da qualche parte: se nel frattempo la
+            // macchina e' stata installata da un cliente vero, riportarla in
+            // sede sarebbe una bugia — e moveTo() chiuderebbe per davvero il
+            // posizionamento buono.
+            if ($unit->current_customer_id === null) {
+                $unit->moveTo($sede, 'Arrivo in sede, censita dalle foto di targhetta del 04/09/2026.');
+                $spostati++;
+            }
         }
 
         $this->command?->info("Matricole magazzino: {$creati} create, ".(count(self::MACCHINE) - $creati).' gia\' presenti.');
+        $this->command?->info("Assegnate a {$sede->company_name}: {$spostati}.");
     }
 }
