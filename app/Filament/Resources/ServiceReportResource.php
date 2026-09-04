@@ -368,9 +368,20 @@ class ServiceReportResource extends Resource
                         ->default(fn () => request()->query('customer_id'))
                         // La macchina tracciata sotto e' filtrata per cliente:
                         // cambiando cliente la selezione fatta in precedenza non
-                        // ha piu' senso.
+                        // ha piu' senso. Nemmeno il pagante: quello scritto sul
+                        // rapportino apparteneva al cliente di prima, e su un
+                        // rapportino gia' chiuso e' congelato, quindi da solo
+                        // non se ne andrebbe mai (vedi
+                        // ServiceReport::freezeInvoiceRecipient(), che riscrive
+                        // solo quando il campo e' vuoto). Svuotandolo qui il
+                        // campo torna a mostrare il pagante abituale del cliente
+                        // nuovo, e chi compila lo vede subito invece di
+                        // scoprirlo in fattura. La stessa pulizia e' ripetuta
+                        // sul modello, per le modifiche che non passano da
+                        // questo form.
                         ->afterStateUpdated(function (Forms\Set $set) {
                             $set('machine_unit_id', null);
+                            $set('billing_customer_id', null);
                         })
                         ->createOptionForm([
                             Forms\Components\TextInput::make('company_name')->label('Ragione sociale'),

@@ -4,6 +4,8 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\LogsAuditTrail;
+use App\Support\Gestionale\ConfrontoRapportini;
+use App\Support\Gestionale\RegistroSync;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -156,6 +158,35 @@ class ServiceReport extends Model
         // l'ultima visita. Anche su delete/soft-delete: se si cancella l'ultimo rapportino
         // che aveva chiuso il piano, la scadenza deve ricadere sul precedente (o sparire).
         static::saved(function (self $report) {
+            // Cambiare il CLIENTE del rapportino e' un'altra cosa dal
+            // cambiare il pagante di un cliente: qui non si sta riscrivendo
+            // la storia, si sta correggendo a chi appartiene il documento
+            // (tipicamente il cliente sbagliato scelto dall'autocomplete).
+            // Il pagante congelato apparteneva al cliente precedente e non
+            // c'entra piu' niente: si butta e si ricalcola sul nuovo.
+            //
+            // Se pero' il pagante e' stato scelto esplicitamente nello
+            // stesso salvataggio, quella e' una decisione presa CON il
+            // cliente nuovo gia' davanti: si rispetta.
+            if ($report->wasChanged('customer_id') && ! $report->wasChanged('billing_customer_id')) {
+                $report->forceFill(['billing_customer_id' => null])->saveQuietly();
+                $report->unsetRelation('billingCustomer');
+            }
+
+            // Le relazioni gia' caricate puntano ancora ai vecchi id, e
+            // freezeInvoiceRecipient() qui sotto legge proprio customer e
+            // machineUnit: senza scaricarle ricongela sul cliente di prima,
+            // che e' esattamente il bug che si sta chiudendo. Capita davvero
+            // perche' e' questo stesso hook, al salvataggio precedente, ad
+            // aver caricato customer per congelare.
+            if ($report->wasChanged('customer_id')) {
+                $report->unsetRelation('customer');
+            }
+
+            if ($report->wasChanged('machine_unit_id')) {
+                $report->unsetRelation('machineUnit');
+            }
+
             // Alla chiusura il pagante si fissa sul documento: da li' in poi
             // il rapportino ricorda chi pagava quando e' stato fatto, e non
             // cambia piu' se domani il cliente passa a un altro torrefattore.
@@ -542,7 +573,7 @@ class ServiceReport extends Model
         // quella del filtro).
         self::scartaProposteOrfane();
 
-        \App\Support\Gestionale\RegistroSync::movimento('doppioni', 'rapportini uniti', [
+        RegistroSync::movimento('doppioni', 'rapportini uniti', [
             'nostro' => $this->number,
             'importato' => $importato->number,
             'scheda' => $this->gestionale_number,
@@ -633,7 +664,7 @@ class ServiceReport extends Model
     {
         $nostro = trim((string) $nostro);
         // La boilerplate di Eureka non e' contenuto: non va fusa.
-        $importato = \App\Support\Gestionale\ConfrontoRapportini::testoUtile($importato);
+        $importato = ConfrontoRapportini::testoUtile($importato);
 
         if ($importato === '' || $nostro === $importato) {
             return $nostro !== '' ? $nostro : null;
