@@ -849,8 +849,16 @@ class ServiceReportResource extends Resource
                                 ->label('Lavaggio eseguito')
                                 ->live()
                                 ->dehydrated(false)
-                                ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['lavaggio_base_key'] !== null)
-                                ->helperText('Aggiunge da sola LAVAGGIO 2 VIE (sempre) + ULTERIORE VIA LAVATA per le vie oltre la seconda. Gli impianti acqua non passano di qui: prendono SANIFICAZIONE IMPIANTO ACQUA, una per impianto.')
+                                // Acceso anche da una sola SANIFICAZIONE: il
+                                // toggle dice che il lavoro sugli impianti e'
+                                // stato fatto, non quale voce si fattura.
+                                ->default(function (?ServiceReport $record) {
+                                    $defaults = LavaggioFields::resolveLavaggioShortcutDefaults($record);
+
+                                    return $defaults['lavaggio_base_key'] !== null
+                                        || $defaults['sanificazione_key'] !== null;
+                                })
+                                ->helperText('Aggiunge da sola LAVAGGIO 2 VIE (sempre) + ULTERIORE VIA LAVATA per le vie oltre la seconda. Per gli impianti acqua, che non si contano a vie, aggiunge invece SANIFICAZIONE IMPIANTO ACQUA, una per impianto.')
                                 ->afterStateUpdated(fn (Forms\Set $set, Get $get) => LavaggioFields::syncLavaggioViaMaterials($set, $get)),
                             // Unico campo della sezione che e' una colonna
                             // vera (service_reports.lavaggio_vie_count), non

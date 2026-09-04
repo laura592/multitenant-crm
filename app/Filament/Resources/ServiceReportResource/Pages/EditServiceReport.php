@@ -58,7 +58,7 @@ class EditServiceReport extends EditRecord
             '_chiamata_material_key' => $defaults['chiamata_key'],
             'add_manodopera_material' => $defaults['manodopera_key'] !== null,
             '_manodopera_material_key' => $defaults['manodopera_key'],
-            '_lavaggio_vie_eseguito' => $defaults['lavaggio_base_key'] !== null,
+            '_lavaggio_vie_eseguito' => $defaults['lavaggio_base_key'] !== null || $defaults['sanificazione_key'] !== null,
             // Colonna vera, gia' presente in $data: la si sovrascrive lo
             // stesso perche' resolveLavaggioShortcutDefaults() la ritorna
             // tale e quale quando c'e', e col ripiego calcolato dalle righe

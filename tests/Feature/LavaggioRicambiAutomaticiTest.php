@@ -139,8 +139,37 @@ class LavaggioRicambiAutomaticiTest extends TestCase
         $this->assertContains('SANIFICAZIONE', $codici, 'un impianto acqua deve portare la sanificazione');
         $this->assertNotContains('LAV2', $codici, 'un impianto acqua non si fattura a vie');
         $this->assertNotContains('ULTVIA', $codici);
-        // Niente vie: il toggle "Lavaggio eseguito" resta spento.
-        $this->assertFalse((bool) ($stato['_lavaggio_vie_eseguito'] ?? false));
+        // Il toggle si accende comunque: il lavoro e' stato fatto, cambia
+        // solo la voce da fatturare. Ma senza vie da contare.
+        $this->assertTrue((bool) ($stato['_lavaggio_vie_eseguito'] ?? false));
+        $this->assertNull($stato['lavaggio_vie_count'] ?? null);
+    }
+
+    /**
+     * Spegnere "Lavaggio eseguito" toglie tutto il generato, sanificazione
+     * compresa: il toggle vale per l'intero lavoro sugli impianti.
+     */
+    public function test_spegnere_il_toggle_toglie_anche_la_sanificazione(): void
+    {
+        [$cliente, $piano, $utente] = $this->scenario(vie: 1, bevanda: MaintenanceSchedule::BEVERAGE_ACQUA);
+
+        $form = Livewire::test(CreateServiceReport::class)
+            ->fillForm([
+                'customer_id' => $cliente->id,
+                'technician_id' => $utente->id,
+                'intervention_type' => ServiceReport::TYPE_SANIFICAZIONE,
+                'lavaggio_impianti' => [['maintenance_schedule_id' => $piano->id]],
+            ]);
+
+        $this->assertContains('SANIFICAZIONE', $this->codiciNelForm($form->instance()->form->getRawState()));
+
+        $form->set('data._lavaggio_vie_eseguito', false);
+
+        $this->assertNotContains(
+            'SANIFICAZIONE',
+            $this->codiciNelForm($form->instance()->form->getRawState()),
+            'spento il toggle, la voce non deve restare in elenco',
+        );
     }
 
     /**

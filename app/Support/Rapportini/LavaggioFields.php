@@ -221,8 +221,12 @@ class LavaggioFields
         // ancora spento cancellerebbe le righe invece di scriverle.
         $set($su.'_sanificazione_count', $sanificazioni ?: null);
 
+        // Il toggle si accende comunque, anche per i soli impianti acqua: il
+        // lavoro sugli impianti e' stato fatto, cambia solo quale voce si
+        // fattura.
+        $set($su.'_lavaggio_vie_eseguito', true);
+
         if ($totaleVie >= 1) {
-            $set($su.'_lavaggio_vie_eseguito', true);
             $set($su.'lavaggio_vie_count', $totaleVie);
         }
 
@@ -270,12 +274,27 @@ class LavaggioFields
         $vieCount = (int) $get($su.'lavaggio_vie_count');
         $sanificazioni = (int) $get($su.'_sanificazione_count');
 
+        // Il toggle vale per tutto il lavoro sugli impianti, acqua compresa:
+        // spento significa "non e' stato fatto", quindi via ogni riga
+        // generata da qui — LAV2/ULTVIA come SANIFICAZIONE — e via i
+        // conteggi, che altrimenti resterebbero a raccontare un lavoro che
+        // il rapportino non dice piu' di aver fatto.
+        if (! $eseguito) {
+            $set($su.'materialsUsed', $materialsUsed);
+            $set($su.'_lavaggio_base_material_key', null);
+            $set($su.'_lavaggio_ult_material_key', null);
+            $set($su.'_sanificazione_material_key', null);
+            $set($su.'lavaggio_vie_count', null);
+            $set($su.'_sanificazione_count', null);
+
+            return;
+        }
+
         $tariffe = TariffeIntervento::per(Customer::find($get($su.'customer_id')));
 
-        // La sanificazione degli impianti acqua vive per conto suo: non
-        // dipende dal toggle "Lavaggio eseguito" ne' dal numero di vie, e un
-        // rapportino puo' avere solo impianti acqua (nessuna via lavata) o
-        // entrambe le cose insieme.
+        // Gli impianti acqua non si contano a vie: una riga a corpo per
+        // impianto, indipendente dal numero di vie degli altri impianti sullo
+        // stesso rapportino.
         $newSanifKey = null;
 
         if ($sanificazioni >= 1) {
@@ -293,13 +312,15 @@ class LavaggioFields
 
         $set($su.'_sanificazione_material_key', $newSanifKey);
 
-        if (! $eseguito || $vieCount < 1) {
+        // Toggle acceso ma nessuna via: e' il caso del rapportino di soli
+        // impianti acqua. La sanificazione qui sopra e' gia' a posto, le
+        // righe a vie non devono nascere, e lavaggio_vie_count — che e' una
+        // colonna vera — non deve restare in DB col numero di un lavaggio
+        // che non c'e'.
+        if ($vieCount < 1) {
             $set($su.'materialsUsed', $materialsUsed);
             $set($su.'_lavaggio_base_material_key', null);
             $set($su.'_lavaggio_ult_material_key', null);
-            // Spegnere il toggle azzera anche il conteggio: il campo e' una
-            // colonna vera, senza questo resterebbe in DB il numero di vie
-            // del lavaggio appena tolto dal rapportino.
             $set($su.'lavaggio_vie_count', null);
 
             return;
