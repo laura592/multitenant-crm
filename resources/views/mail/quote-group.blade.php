@@ -3,6 +3,12 @@
 	$tenant = $group->tenant ?: $group->customer?->tenant;
 	$resolvedSubject = trim((string) ($subjectText ?? "Offerta {$group->number}"));
 	$renderedBody = trim((string) ($emailBody ?? ''));
+	// Il corpo ora arriva in HTML dal rich editor, ma le offerte inviate
+	// prima hanno il testo salvato a righe: senza tag si continua a
+	// convertire gli a capo, altrimenti si stampa il markup cosi' com'e'.
+	$bodyHtml = $renderedBody === ''
+		? ''
+		: ($renderedBody !== strip_tags($renderedBody) ? $renderedBody : nl2br(e($renderedBody)));
 	// Si saluta il cliente, non chi paga (vedi QuoteResource).
 	$recipient = $group->customer;
 	$customerName = \App\Support\DisplayName::titleCase($recipient?->company_name) ?: \App\Support\DisplayName::titleCase($recipient?->full_name);
@@ -15,7 +21,7 @@
 />
 
 <x-mail.box>
-{!! nl2br(e($renderedBody)) !!}
+{!! $bodyHtml !!}
 </x-mail.box>
 
 @if($quotes->isNotEmpty())

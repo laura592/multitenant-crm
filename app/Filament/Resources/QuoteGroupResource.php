@@ -158,9 +158,13 @@ class QuoteGroupResource extends Resource
                 ->required()
                 ->live(debounce: 400)
                 ->default(fn (QuoteGroup $record) => static::defaultGroupEmailSubject($record)),
-            Forms\Components\Textarea::make('email_body')
+            // Stessa toolbar dell'invio del singolo preventivo
+            // (QuoteResource::sendEmailFormSchema): qui era rimasta una
+            // textarea, quindi grassetto ed elenchi non erano disponibili
+            // solo sull'offerta globale.
+            Forms\Components\RichEditor::make('email_body')
                 ->label('Anteprima completa email (modificabile)')
-                ->rows(14)
+                ->toolbarButtons(['bold', 'italic', 'bulletList', 'orderedList', 'link', 'undo', 'redo'])
                 ->helperText('Questo testo viene inviato realmente nella mail. Puoi modificarlo liberamente.')
                 ->default(fn (QuoteGroup $record) => static::defaultGroupEmailBody($record)),
             Forms\Components\Placeholder::make('automatic_sections_preview')
@@ -189,16 +193,12 @@ class QuoteGroupResource extends Resource
         $tenant = $record->tenant ?: $record->customer?->tenant;
         $signatureLines = static::commercialSignatureLines($tenant);
 
-        return implode("\n", [
-            "Gentile {$customerName},",
-            '',
-            'siamo lieti di inviarle la nostra offerta con le soluzioni proposte.',
-            '',
-            'Di seguito trova il riepilogo delle soluzioni incluse; in allegato i preventivi in formato PDF.',
-            '',
-            'Restiamo a disposizione per qualsiasi chiarimento.',
-            '',
-            ...$signatureLines,
+        return implode('', [
+            '<p>Gentile '.e($customerName).',</p>',
+            '<p>siamo lieti di inviarle la nostra offerta con le soluzioni proposte.</p>',
+            '<p>Di seguito trova il riepilogo delle soluzioni incluse; in allegato i preventivi in formato PDF.</p>',
+            '<p>Restiamo a disposizione per qualsiasi chiarimento.</p>',
+            '<p>'.implode('<br>', array_map(fn (string $line) => e($line), $signatureLines)).'</p>',
         ]);
     }
 
