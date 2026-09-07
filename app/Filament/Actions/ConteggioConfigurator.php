@@ -43,6 +43,30 @@ class ConteggioConfigurator
         'SU03 CL' => 'SU03 CL — dentro l\'unità di raffreddamento SU03 EC',
     ];
 
+    /**
+     * Il conteggio e' un articolo Franke, ordinato col suo numero d'ordine dal
+     * listino Franke: su una Bianchi, una Dalla Corte o una Brema non esiste
+     * proprio. Prima il passo compariva su qualunque macchina e offriva
+     * AC200/AC125/SU03 CL anche dove non si montano (segnalazione
+     * dell'ufficio, 07/09/2026).
+     */
+    protected const MARCA = 'Franke';
+
+    /**
+     * Tutto lo stato che questo passo scrive, coi valori di partenza. Elenco
+     * unico perche' "dimentica" ci passa sopra: aggiungendo un campo al passo
+     * e scordandolo qui, quel campo sopravviverebbe al cambio di macchina — ed
+     * e' esattamente il test che lo impedisce.
+     */
+    public const STATO_INIZIALE = [
+        'alloggiamento' => null,
+        'con_lettore' => 'no',
+        'conteggio_product_id' => null,
+        'aggiungi_su03' => true,
+        'interruttore_chiave' => false,
+        'gettoni' => 0,
+    ];
+
     protected const SKU_INTERRUTTORE = 'OPT-CHIAVE-VENDITA';
 
     protected const SKU_GETTONI = 'OPT-GETTONI-100';
@@ -60,6 +84,7 @@ class ConteggioConfigurator
     {
         return Step::make('Sistema di conteggio')
             ->description('Facoltativo: carte, gettoniera o cambiamonete')
+            ->visible(fn (Forms\Get $get) => static::siPuoMontare($get))
             ->schema([
                 Forms\Components\Radio::make('alloggiamento')
                     ->label('Alloggiamento')
@@ -192,6 +217,48 @@ class ConteggioConfigurator
             && ProductFamily::find($famiglia)?->name === FrankeAccountingHousingsSeeder::FAMIGLIA;
     }
 
+    /**
+     * Su questa macchina un sistema di conteggio si puo' montare?
+     *
+     * Vale per le Franke e basta. Quando si sta quotando un conteggio da solo
+     * — cliente che la macchina ce l'ha gia' — di macchina scelta non ce n'e'
+     * una, ma la famiglia stessa e' Franke, quindi il passo ci vuole: e' anzi
+     * l'unico che conta.
+     */
+    public static function siPuoMontare(Forms\Get $get): bool
+    {
+        return static::siPuoMontareSu($get('machine_product_id'), $get('product_family_id'));
+    }
+
+    /**
+     * La stessa regola, senza il form intorno: Get e Set vogliono un
+     * componente Filament e non si costruiscono a mano, quindi la decisione
+     * vive qui dove si puo' interrogare con due id.
+     */
+    public static function siPuoMontareSu(?string $macchinaId, ?string $famigliaId): bool
+    {
+        if (filled($famigliaId)
+            && ProductFamily::find($famigliaId)?->name === FrankeAccountingHousingsSeeder::FAMIGLIA) {
+            return true;
+        }
+
+        return Product::with('brand')->find($macchinaId)?->brand?->name === self::MARCA;
+    }
+
+    /**
+     * Riporta il passo a com'era.
+     *
+     * Serve quando si cambia macchina a meta' wizard: nascondere il passo non
+     * basta, perche' il riepilogo legge lo stato vivo del form e non i dati
+     * sottomessi.
+     */
+    public static function dimentica(Forms\Set $set): void
+    {
+        foreach (self::STATO_INIZIALE as $campo => $valore) {
+            $set($campo, $valore);
+        }
+    }
+
     /** La macchina scelta nel wizard e' della famiglia A300? */
     protected static function eUnaA300(Forms\Get $get): bool
     {
@@ -292,6 +359,15 @@ class ConteggioConfigurator
      */
     public static function righeRiepilogo(Forms\Get $get): Collection
     {
+        // Il passo nascosto non viene sottomesso (Filament scarta lo stato dei
+        // componenti nascosti), quindi le righe create sono gia' giuste. Il
+        // riepilogo pero' legge lo stato vivo, non i dati sottomessi: senza
+        // questa riga, cambiando da una Franke a una Bianchi si vedeva ancora
+        // l'alloggiamento in elenco e nel totale.
+        if (! static::siPuoMontare($get)) {
+            return collect();
+        }
+
         $sistema = Product::find($get('conteggio_product_id'));
 
         if (! $sistema) {

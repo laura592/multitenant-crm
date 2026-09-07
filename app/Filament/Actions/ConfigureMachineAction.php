@@ -105,7 +105,10 @@ class ConfigureMachineAction
                         ->label('Famiglia')
                         ->options(fn () => ProductFamily::query()->orderBy('name')->pluck('name', 'id'))
                         ->live()
-                        ->afterStateUpdated(fn (Forms\Set $set) => $set('machine_product_id', null))
+                        ->afterStateUpdated(function (Forms\Set $set) {
+                            $set('machine_product_id', null);
+                            ConteggioConfigurator::dimentica($set);
+                        })
                         ->required(),
                     Forms\Components\Select::make('machine_product_id')
                         ->label('Variante apparecchio base')
@@ -115,6 +118,17 @@ class ConfigureMachineAction
                             ->get()
                             ->mapWithKeys(fn (Product $p) => [$p->id => static::formatOptionLabel($p)]))
                         ->live()
+                        // Cambiando macchina si dimentica il conteggio: il
+                        // passo si nasconde da solo sulle marche che non sono
+                        // Franke, ma riepilogo e creazione righe leggono lo
+                        // stato, non il passo, e senza questo l'alloggiamento
+                        // scelto su una Franke finiva in preventivo su una
+                        // Bianchi.
+                        ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set) {
+                            if (! ConteggioConfigurator::siPuoMontare($get)) {
+                                ConteggioConfigurator::dimentica($set);
+                            }
+                        })
                         // Scegliendo la famiglia "Sistemi di conteggio" non
                         // c'e' un apparecchio base da scegliere qui: la
                         // variante si sceglie nello step dedicato, guidata.

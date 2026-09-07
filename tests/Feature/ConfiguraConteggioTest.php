@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Filament\Actions\ConteggioConfigurator;
 use App\Filament\Resources\QuoteResource\Pages\EditQuote;
+use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Customer;
 use App\Models\Product;
@@ -64,10 +65,17 @@ class ConfiguraConteggioTest extends TestCase
 
         $this->seed(FrankeAccountingHousingsSeeder::class);
 
+        // La marca conta: il sistema di conteggio e' un articolo Franke e il
+        // passo del wizard si mostra solo sulle macchine Franke. In catalogo
+        // ogni macchina ce l'ha (33 Franke, le altre Bianchi/Dalla Corte/Jura),
+        // qui mancava e basta.
+        $franke = Brand::create(['name' => 'Franke']);
+
         $famiglia = ProductFamily::create(['name' => 'A600']);
         $this->macchina = Product::create([
             'sku' => 'A600-1G-H1', 'type' => Product::TYPE_MACHINE, 'name' => 'A600 1G H1',
             'product_family_id' => $famiglia->id, 'source' => Product::SOURCE_FRANKE,
+            'brand_id' => $franke->id,
         ]);
         ProductPrice::create(['product_id' => $this->macchina->id, 'price' => 8255, 'valid_from' => '2026-01-01']);
 
@@ -173,6 +181,80 @@ class ConfiguraConteggioTest extends TestCase
 
         $this->assertCount(1, $righe, 'Nessuna riga macchina: non ne e\' stata scelta una.');
         $this->assertSame($sistema->id, $righe->first()->product_id);
+    }
+
+    /**
+     * Segnalazione dell'ufficio (07/09/2026): il passo "Sistema di conteggio"
+     * usciva su qualunque macchina, e offriva AC200, AC125 e SU03 CL anche su
+     * una Bianchi, dove non si montano. E' hardware Franke, ordinato col
+     * numero d'ordine del listino Franke.
+     */
+    public function test_il_conteggio_si_offre_solo_sulle_franke(): void
+    {
+        $talia = $this->macchinaBianchi();
+
+        $this->assertTrue(
+            ConteggioConfigurator::siPuoMontareSu($this->macchina->id, null),
+            'Sulla A600 Franke il conteggio ci va.',
+        );
+
+        $this->assertFalse(
+            ConteggioConfigurator::siPuoMontareSu($talia->id, null),
+            'Sulla Bianchi no.',
+        );
+
+        $this->assertFalse(
+            ConteggioConfigurator::siPuoMontareSu(null, null),
+            'Senza macchina scelta nemmeno.',
+        );
+    }
+
+    /** Il conteggio da solo resta raggiungibile: li' la famiglia e' Franke. */
+    public function test_il_conteggio_da_solo_si_offre_lo_stesso(): void
+    {
+        $famiglia = ProductFamily::query()->where('name', 'Sistemi di conteggio')->firstOrFail();
+
+        $this->assertTrue(ConteggioConfigurator::siPuoMontareSu(null, $famiglia->id));
+    }
+
+    /**
+     * Nascondere il passo non basta da solo: il riepilogo legge lo stato vivo
+     * del form, non i dati sottomessi, e "dimentica" ripulisce quello stato.
+     * Se domani il passo guadagna un campo e nessuno lo aggiunge a
+     * STATO_INIZIALE, quel campo sopravvive al cambio di macchina: e' il caso
+     * che questo test chiude.
+     */
+    public function test_dimentica_copre_ogni_campo_del_passo(): void
+    {
+        $campiDelPasso = collect(ConteggioConfigurator::step()->getChildComponents())
+            ->map(fn ($componente) => $componente->getName())
+            ->filter()
+            ->values();
+
+        $this->assertNotEmpty($campiDelPasso, 'Se il passo non ha campi, il test non sta guardando niente.');
+
+        foreach ($campiDelPasso as $campo) {
+            $this->assertArrayHasKey(
+                $campo,
+                ConteggioConfigurator::STATO_INIZIALE,
+                "Il campo \"{$campo}\" resterebbe addosso al preventivo cambiando macchina.",
+            );
+        }
+    }
+
+    private function macchinaBianchi(): Product
+    {
+        $bianchi = Brand::create(['name' => 'Bianchi']);
+        $famiglia = ProductFamily::create(['name' => 'Bianchi Talia']);
+
+        $talia = Product::create([
+            'sku' => 'TALIA-1', 'type' => Product::TYPE_MACHINE, 'name' => 'Talia',
+            'product_family_id' => $famiglia->id, 'source' => 'terzo',
+            'brand_id' => $bianchi->id,
+        ]);
+        ProductPrice::create(['product_id' => $talia->id, 'price' => 4200, 'valid_from' => '2026-01-01']);
+
+        return $talia;
     }
 
     public function test_the_accounting_products_are_a_family_of_their_own(): void
