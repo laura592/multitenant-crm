@@ -2,6 +2,7 @@
 
 namespace App\Filament\Actions;
 
+use App\Support\Assistenza\ContrattoAssistenza;
 use App\Models\Product;
 use App\Models\ProductFamily;
 use App\Models\ProductOptionSlot;
@@ -128,6 +129,10 @@ class ConfigureMachineAction
                             if (! ConteggioConfigurator::siPuoMontare($get)) {
                                 ConteggioConfigurator::dimentica($set);
                             }
+
+                            if (! ContrattoAssistenza::perMacchina(static::currentMachine($get))) {
+                                $set('contratto_assistenza', '');
+                            }
                         })
                         // Scegliendo la famiglia "Sistemi di conteggio" non
                         // c'e' un apparecchio base da scegliere qui: la
@@ -177,6 +182,21 @@ class ConfigureMachineAction
             $steps[] = ConteggioConfigurator::step();
         }
 
+        // Il contratto di assistenza si sceglie per macchina e vive sulla sua
+        // riga: a differenza del conteggio c'e' anche in "Modifica
+        // configurazione". Solo sulle Franke, come i due contratti.
+        $steps[] = Step::make('Contratto di assistenza')
+            ->description('Facoltativo: il canone è annuale e non entra nel totale')
+            ->visible(fn (Forms\Get $get) => ContrattoAssistenza::perMacchina(static::currentMachine($get)))
+            ->schema([
+                Forms\Components\Radio::make('contratto_assistenza')
+                    ->label('Contratto')
+                    ->options(fn (Forms\Get $get) => static::opzioniContratto($get))
+                    ->descriptions(fn (Forms\Get $get) => static::descrizioniContratto($get))
+                    ->default('')
+                    ->live(),
+            ]);
+
         // Bug reale segnalato: il riepilogo era un testo fisso, senza
         // elencare cosa si sta per aggiungere ne' un totale - si confermava
         // "alla cieca". Ora mostra ogni riga (macchina, incluse
@@ -198,6 +218,92 @@ class ConfigureMachineAction
             ]);
 
         return $steps;
+    }
+
+    /**
+     * Il contratto da salvare sulla riga macchina: solo uno dei due tipi, e
+     * solo su una Franke — lo stato del form puo' portarsi dietro una scelta
+     * fatta prima di cambiare macchina.
+     */
+    protected static function contrattoScelto(Product $machine, array $data): ?string
+    {
+        $tipo = $data['contratto_assistenza'] ?? null;
+
+        return isset(ContrattoAssistenza::TIPI[$tipo]) && ContrattoAssistenza::perMacchina($machine) ? $tipo : null;
+    }
+
+    /**
+     * Le opzioni scelte finora nel wizard, col loro prezzo di listino: la
+     * stessa selezione del riepilogo (resolveSelection), quindi il canone
+     * proposto e' calcolato su quello che poi viene salvato.
+     *
+     * @return Collection<int, array{prodotto: Product, prezzo: float}>
+     */
+    protected static function opzioniScelte(Forms\Get $get, Product $machine): Collection
+    {
+        $resolved = static::resolveSelection($machine, fn (string $key) => $get($key));
+
+        $ids = $resolved['autoIncludedIds']
+            ->merge(collect($resolved['selectedBySlot'])->flatten())
+            ->filter()->unique()->values();
+
+        return Product::whereIn('id', $ids)->get()
+            ->map(fn (Product $p) => ['prodotto' => $p, 'prezzo' => (float) ($p->getCurrentPrice()?->price ?? 0)])
+            ->values();
+    }
+
+    /** @return array{base: float, canone: float}|null */
+    protected static function contrattoCalcolato(Forms\Get $get, string $tipo): ?array
+    {
+        $machine = static::currentMachine($get);
+
+        if (! $machine) {
+            return null;
+        }
+
+        return ContrattoAssistenza::calcola(
+            $tipo,
+            $machine,
+            (float) ($machine->getCurrentPrice()?->price ?? 0),
+            static::opzioniScelte($get, $machine),
+        );
+    }
+
+    /** @return array<string, string> */
+    protected static function opzioniContratto(Forms\Get $get): array
+    {
+        $opzioni = ['' => 'Nessun contratto'];
+
+        foreach (ContrattoAssistenza::TIPI as $tipo => $def) {
+            $calcolo = static::contrattoCalcolato($get, $tipo);
+            $canone = $calcolo ? '€ '.number_format($calcolo['canone'], 2, ',', '.').' l\'anno' : '';
+
+            $opzioni[$tipo] = trim($def['nome'].' — '.$canone, ' —')
+                .(ContrattoAssistenza::attivabileDalSecondoAnno($tipo) ? ' · attivabile dal secondo anno' : '');
+        }
+
+        return $opzioni;
+    }
+
+    /** @return array<string, string> */
+    protected static function descrizioniContratto(Forms\Get $get): array
+    {
+        $machine = static::currentMachine($get);
+        $base = fn (string $tipo) => '€ '.number_format(static::contrattoCalcolato($get, $tipo)['base'] ?? 0, 2, ',', '.');
+
+        $full = "10% del listino Franke di macchina, sistema latte e optional ({$base(ContrattoAssistenza::FULL)}). "
+            .'Due manutenzioni l\'anno, due interventi di cortesia, ricambi, manodopera e trasferta compresi. Rinnovabile fino a 5 anni.';
+
+        if (ContrattoAssistenza::serveTrattamentoAcqua(ContrattoAssistenza::FULL, $machine)) {
+            $full .= ' Richiede un sistema di trattamento acqua dedicato (Brita o Balugani): se non c\'è, va aggiunto al preventivo.';
+        }
+
+        return [
+            '' => 'Il cliente può attivarlo anche più avanti.',
+            ContrattoAssistenza::FULL => $full,
+            ContrattoAssistenza::EASY => "5% del listino Franke di macchina e sistema latte, senza gli altri optional ({$base(ContrattoAssistenza::EASY)}). "
+                .'Due manutenzioni l\'anno con kit PM Kit-1. Si attiva dal secondo anno di vita della macchina, finita la garanzia.',
+        ];
     }
 
     protected static function currentMachine(Forms\Get $get): ?Product
@@ -254,11 +360,25 @@ class ConfigureMachineAction
         $subtotal = $rows->sum('price');
         $discount = min(100, max(0, (float) ($get('configuration_discount') ?? 0)));
 
+        $tipo = $get('contratto_assistenza');
+        $contratto = isset(ContrattoAssistenza::TIPI[$tipo])
+            && ContrattoAssistenza::perMacchina(static::currentMachine($get))
+            && ($calcolo = static::contrattoCalcolato($get, $tipo))
+                ? [
+                    'nome' => ContrattoAssistenza::nome($tipo),
+                    'canone' => $calcolo['canone'],
+                    'nota' => ContrattoAssistenza::attivabileDalSecondoAnno($tipo)
+                        ? 'attivabile dal secondo anno, non compreso nel totale'
+                        : 'non compreso nel totale',
+                ]
+                : null;
+
         return new \Illuminate\Support\HtmlString(view('filament.partials.configure-machine-summary', [
             'rows' => $rows,
             'subtotal' => $subtotal,
             'discount' => $discount,
             'total' => $subtotal - ($subtotal * $discount / 100),
+            'contratto' => $contratto,
         ])->render());
     }
 
@@ -489,6 +609,7 @@ class ConfigureMachineAction
             'price' => $machine->getCurrentPrice()?->price ?? 0,
             'discount' => $configurationDiscount,
             'tax' => 22,
+            'contratto_assistenza' => static::contrattoScelto($machine, $data),
         ]);
 
         Product::whereIn('id', $selectedIds)->get()->each(function (Product $product) use ($quote, $baseLine, $configurationDiscount) {
@@ -541,6 +662,7 @@ class ConfigureMachineAction
             'product_id' => $machine->id,
             'price' => $machine->getCurrentPrice()?->price ?? 0,
             'discount' => $configurationDiscount,
+            'contratto_assistenza' => static::contrattoScelto($machine, $data),
         ]);
 
         $record->options()->delete();
@@ -605,6 +727,7 @@ class ConfigureMachineAction
             'product_family_id' => $machine->product_family_id,
             'machine_product_id' => $machine->id,
             'configuration_discount' => $record->discount,
+            'contratto_assistenza' => $record->contratto_assistenza ?? '',
         ];
 
         $selectedIds = $record->options()->pluck('product_id');

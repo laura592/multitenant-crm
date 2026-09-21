@@ -24,3 +24,12 @@
         </tr>
     </tfoot>
 </table>
+
+{{-- Il canone del contratto e' annuale: accanto al totale, mai dentro. --}}
+@if(! empty($contratto))
+    <div class="mt-3 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-sm dark:border-primary-500/30 dark:bg-primary-500/10">
+        <span class="font-semibold">{{ $contratto['nome'] }}:</span>
+        {{ number_format($contratto['canone'], 2, ',', '.') }} € l'anno
+        <span class="text-gray-500 dark:text-gray-400">— {{ $contratto['nota'] }}</span>
+    </div>
+@endif

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ContrattoAssistenzaController;
 use App\Http\Controllers\FatturaEurekaController;
 use App\Http\Controllers\CustomerSchedaAnagraficaController;
 use App\Http\Controllers\PaganteStampaController;
@@ -34,6 +35,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('service-reports/riepilogo', RiepilogoRapportiniController::class)->name('service-reports.riepilogo');
     Route::get('paganti/{pagante}/macchine', PaganteStampaController::class)->name('paganti.stampa');
     Route::get('quotes/{quote}/pdf', [QuoteController::class, 'pdf'])->name('quotes.pdf');
+    Route::get('quotes/{quote}/contratti/{quoteProduct}', ContrattoAssistenzaController::class)->name('quotes.contratto');
     Route::get('customers/{customer}/scheda-anagrafica', CustomerSchedaAnagraficaController::class)
         ->name('customers.scheda-anagrafica');
 

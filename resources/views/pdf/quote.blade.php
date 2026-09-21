@@ -192,6 +192,36 @@
         </table>
     </div>
 
+    {{-- Contratti di assistenza: canone annuo, fuori dal totale di proposito.
+         Il totale e' quello che si paga una volta; il canone si paga ogni anno
+         e sommarlo lo falserebbe. Vedi App\Support\Assistenza\ContrattoAssistenza. --}}
+    @php
+        $contratti = $quote->quoteProducts->whereNull('parent_quote_product_id')
+            ->map(function ($base) {
+                $c = \App\Support\Assistenza\ContrattoAssistenza::dellaRiga($base);
+
+                return $c ? ['macchina' => $base->product?->name, ...$c] : null;
+            })
+            ->filter()
+            ->values();
+    @endphp
+    @if($contratti->isNotEmpty())
+        <div class="notes-box" style="background:#eef4ff; border-color:#bfd3f2; border-left-color:#020F30;">
+            <h2 style="color:#020F30;">Contratto di assistenza</h2>
+            @foreach($contratti as $c)
+                <p>
+                    <strong>{{ $c['nome'] }}</strong> per {{ $c['macchina'] }}:
+                    <strong>€ {{ number_format($c['canone'], 2, ',', '.') }} + IVA l'anno</strong>
+                    ({{ number_format($c['percentuale'], 0, ',', '.') }}% del listino Franke di € {{ number_format($c['base'], 2, ',', '.') }}).
+                    @if(\App\Support\Assistenza\ContrattoAssistenza::attivabileDalSecondoAnno($c['tipo']))
+                        Attivabile dal secondo anno di vita della macchina, alla scadenza della garanzia.
+                    @endif
+                </p>
+            @endforeach
+            <p style="margin-top:4px; font-size:9px; color:#4b5563;">Canone annuale, non compreso nel totale del preventivo.</p>
+        </div>
+    @endif
+
     @if($quote->notes)
         <div class="notes-box">
             <h2>Descrizione attrezzatura</h2>

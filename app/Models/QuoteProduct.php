@@ -21,6 +21,7 @@ class QuoteProduct extends Model
         'discount',
         'tax',
         'total',
+        'contratto_assistenza',
     ];
 
     protected $casts = [

@@ -9,6 +9,7 @@ use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\QuoteProduct;
+use App\Support\Assistenza\ContrattoAssistenza;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\RelationManagers\RelationManager;
@@ -159,6 +160,17 @@ class QuoteProductsRelationManager extends RelationManager
                 Tables\Columns\TextColumn::make('tax')->label('IVA')->suffix('%'),
                 Tables\Columns\TextColumn::make('total')->label('Totale')->money('EUR')
                     ->summarize(Sum::make()->label('Totale complessivo')->money('EUR')),
+                // Canone annuo del contratto: accanto, mai dentro il totale.
+                Tables\Columns\TextColumn::make('contratto_assistenza')
+                    ->label('Contratto')
+                    ->state(function (QuoteProduct $record): ?string {
+                        $c = $record->isBase() ? ContrattoAssistenza::dellaRiga($record) : null;
+
+                        return $c ? $c['nome'].' · € '.number_format($c['canone'], 2, ',', '.').'/anno' : null;
+                    })
+                    ->badge()
+                    ->color('info')
+                    ->placeholder(''),
             ])
             ->headerActions([
                 Tables\Actions\CreateAction::make()
@@ -166,6 +178,13 @@ class QuoteProductsRelationManager extends RelationManager
             ])
             ->actions([
                 ConfigureMachineAction::makeEdit(),
+                Tables\Actions\Action::make('contratto_pdf')
+                    ->label('Contratto')
+                    ->icon('heroicon-o-document-text')
+                    ->color('gray')
+                    ->visible(fn (QuoteProduct $record) => $record->isBase() && ContrattoAssistenza::dellaRiga($record) !== null)
+                    ->url(fn (QuoteProduct $record) => route('quotes.contratto', [$record->quote_id, $record]))
+                    ->openUrlInNewTab(),
                 Tables\Actions\ActionGroup::make([
                     Tables\Actions\EditAction::make()
                         ->after(fn (RelationManager $livewire) => $this->ricalcolaEAvvisa($livewire)),
