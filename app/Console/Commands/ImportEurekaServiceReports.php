@@ -11,6 +11,7 @@ use App\Models\ServiceReport;
 use App\Models\ServiceReportMaterial;
 use App\Models\Tenant;
 use App\Support\Gestionale\RegistroSync;
+use App\Support\Gestionale\RiabbinaImportati;
 use App\Models\User;
 use App\Support\EurekaClient;
 use Illuminate\Console\Command;
@@ -38,6 +39,9 @@ use Illuminate\Support\Facades\DB;
 class ImportEurekaServiceReports extends Command
 {
     /** Il codice articolo Eureka della sanificazione impianto acqua. */
+    /** @var array<int, string> id dei rapportini creati da questo giro */
+    private array $creatiInQuestoGiro = [];
+
     public const ARTICOLO_SANIFICAZIONE = 'SANIFICAZIONE';
 
     protected $signature = 'eureka:import-service-reports
@@ -427,12 +431,35 @@ class ImportEurekaServiceReports extends Command
                         $report->number = ServiceReport::nextNumberForTenant($tenant->id, (int) substr($interventionDate, 0, 4));
                         $report->gestionale_number = $gestionaleNumber;
                         $report->save();
+                        $this->creatiInQuestoGiro[] = $report->id;
                         if ($detail) {
                             $this->syncDetailRows($tenant, $report, $detail, $materialCache);
                         }
                     });
                 }
             }
+        }
+
+        // Le schede nuove che sono rapportini gia' fatti nel CRM si uniscono a
+        // quelli, e i numeri si ricompattano: vedi RiabbinaImportati. Alla
+        // fine del giro e non scheda per scheda, perche' due schede gemelle
+        // devono vedersi a vicenda per capire che il caso e' ambiguo.
+        if (! $dryRun && $this->creatiInQuestoGiro !== []) {
+            $abbinamento = RiabbinaImportati::esegui(
+                ServiceReport::withoutGlobalScopes()->whereIn('id', $this->creatiInQuestoGiro)
+                    ->with(['machineUnit', 'materialsUsed.material'])->get()
+            );
+
+            foreach ($abbinamento['uniti'] as $u) {
+                $this->line("  <info>UNITO</info> {$u['scheda']} → {$u['rapportino']} ({$u['motivo']})");
+            }
+            foreach ($abbinamento['ambigui'] as $a) {
+                $this->line("  <comment>DA DECIDERE</comment> {$a['scheda']}: candidati {$a['candidati']}");
+            }
+            $this->line('  Numeri: '.$abbinamento['rinumerazione']);
+
+            $created -= count($abbinamento['uniti']);
+            $updated += count($abbinamento['uniti']);
         }
 
         $this->info(sprintf(

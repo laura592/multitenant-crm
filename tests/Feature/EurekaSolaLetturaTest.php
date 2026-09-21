@@ -10,6 +10,7 @@ use App\Support\Gestionale\GestionaleEurekaException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -45,7 +46,7 @@ class EurekaSolaLetturaTest extends TestCase
         return ['POST' => ['post'], 'PUT' => ['put'], 'PATCH' => ['patch'], 'DELETE' => ['delete']];
     }
 
-    /** @dataProvider scritture */
+    #[DataProvider('scritture')]
     public function test_nessuna_scrittura_verso_eureka_parte(string $metodo): void
     {
         try {

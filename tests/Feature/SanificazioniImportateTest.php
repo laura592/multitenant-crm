@@ -60,6 +60,28 @@ class SanificazioniImportateTest extends TestCase
         $this->assertSame(ServiceReport::TYPE_RIPARAZIONE, $this->rapportino()->intervention_type);
     }
 
+    /**
+     * Il caso che ha fatto nascere l'abbinamento all'import (21/09/2026): il
+     * tecnico ha gia' il rapportino nel CRM, l'ufficio l'ha riscritto su
+     * Eureka. L'import non crea un secondo rapportino: aggiorna quello.
+     */
+    public function test_l_import_aggiorna_il_rapportino_del_tecnico_invece_di_crearne_un_altro(): void
+    {
+        [$tenant, $cliente, $tecnico] = $this->base();
+        $nostro = ServiceReport::create([
+            'tenant_id' => $tenant->id, 'customer_id' => $cliente->id, 'technician_id' => $tecnico->id,
+            'intervention_type' => ServiceReport::TYPE_RIPARAZIONE, 'intervention_date' => '2026-09-18', 'status' => 'bozza',
+        ]);
+
+        $this->importaSenzaBase($tecnico, lavorazione: '', righe: [['codice' => 'SANIFICAZIONE']]);
+
+        $this->assertSame(1, ServiceReport::withTrashed()->count(), 'Nessun rapportino in piu\', nemmeno archiviato.');
+        $nostro->refresh();
+        $this->assertSame(self::EUREKA_ID, (int) $nostro->eureka_service_report_id);
+        $this->assertSame('in_gestionale', $nostro->status);
+        $this->assertSame('RT-2026-0001', $nostro->number);
+    }
+
     public function test_il_comando_corregge_solo_le_riparazioni_con_la_riga(): void
     {
         [$tenant, $cliente, $tecnico] = $this->base();
@@ -120,6 +142,12 @@ class SanificazioniImportateTest extends TestCase
     private function importa(string $lavorazione, array $righe): void
     {
         [, , $tecnico] = $this->base();
+
+        $this->importaSenzaBase($tecnico, $lavorazione, $righe);
+    }
+
+    private function importaSenzaBase(User $tecnico, string $lavorazione, array $righe): void
+    {
         $id = self::EUREKA_ID;
 
         Http::fake(function ($request) use ($id, $lavorazione, $righe) {
