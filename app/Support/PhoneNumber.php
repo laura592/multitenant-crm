@@ -33,4 +33,31 @@ class PhoneNumber
 
         return '+39'.$digits;
     }
+
+    /**
+     * Da leggere, non da salvare: un numero italiano senza "+39", i
+     * cellulari a gruppi (347 123 4567); gli stranieri col loro prefisso.
+     */
+    public static function display(?string $value): ?string
+    {
+        $numero = self::normalizeItalian($value);
+
+        if (blank($numero) || ! str_starts_with($numero, '+39')) {
+            return $numero;
+        }
+
+        $nazionale = substr($numero, 3);
+
+        return preg_match('/^3\d{9}$/', $nazionale)
+            ? substr($nazionale, 0, 3).' '.substr($nazionale, 3, 3).' '.substr($nazionale, 6)
+            : $nazionale;
+    }
+
+    /** Solo i cellulari italiani hanno WhatsApp con certezza: numero per wa.me, senza "+". */
+    public static function whatsapp(?string $value): ?string
+    {
+        $numero = self::normalizeItalian($value);
+
+        return $numero && preg_match('/^\+393\d{8,9}$/', $numero) ? ltrim($numero, '+') : null;
+    }
 }

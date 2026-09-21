@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\CustomerResource\Pages;
 
+use App\Filament\Actions\ContattaCliente;
 use App\Filament\Concerns\RedirectsCancelToView;
 use App\Filament\Resources\CustomerResource;
 use Filament\Actions;
@@ -16,6 +17,7 @@ class EditCustomer extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
+            ContattaCliente::perPagina($this->record),
             Actions\DeleteAction::make(),
         ];
     }

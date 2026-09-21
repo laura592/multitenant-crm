@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Actions\ContattaCliente;
 use App\Filament\Concerns\ApreStampeInNuovaScheda;
 use App\Filament\Forms\CustomerContactFields;
 use App\Filament\Forms\CustomerFiscalFields;
@@ -12,6 +13,7 @@ use App\Models\Customer;
 use App\Models\InformationRequest;
 use App\Support\DisplayName;
 use App\Support\OutsideLivewireRender;
+use App\Support\PhoneNumber;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Facades\Filament;
 use Filament\Forms;
@@ -32,7 +34,6 @@ class InformationRequestResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-inbox-arrow-down';
 
     protected static ?string $navigationGroup = 'Vendite';
-
 
     protected static ?int $navigationSort = 2;
 
@@ -116,12 +117,15 @@ class InformationRequestResource extends Resource
                                 return '— (seleziona un cliente)';
                             }
 
+                            // Cliccabili: dal telefono si chiama, dal PC si apre la mail.
+                            $link = fn (string $href, string $testo) => '<a class="text-primary-600 underline" href="'.e($href).'">'.e($testo).'</a>';
+
                             return new HtmlString(collect([
-                                $customer->primaryEmail() ? "✉️ {$customer->primaryEmail()}" : null,
-                                $customer->primaryPhone() ? "📞 {$customer->primaryPhone()}" : null,
-                                $customer->city
+                                ...collect($customer->emails)->map(fn ($m) => '✉️ '.$link("mailto:{$m}", $m)),
+                                ...collect($customer->phones)->map(fn ($n) => '📞 '.$link("tel:{$n}", PhoneNumber::display($n))),
+                                e($customer->city
                                     ? trim($customer->city.($customer->province ? " ({$customer->province})" : ''))
-                                    : ($customer->province ?: null),
+                                    : ($customer->province ?: '')) ?: null,
                             ])->filter()->implode('&emsp;') ?: '— (nessun contatto salvato)');
                         }),
                     Forms\Components\Select::make('status')
@@ -245,9 +249,11 @@ class InformationRequestResource extends Resource
                 Tables\Columns\TextColumn::make('customer_phone')
                     ->label('Telefono')
                     ->getStateUsing(fn (InformationRequest $record) => $record->customer?->phones ?: null)
+                    ->formatStateUsing(fn (?string $state) => PhoneNumber::display($state))
                     ->listWithLineBreaks()
                     ->placeholder('—')
                     ->copyable()
+                    ->copyableState(fn (?string $state) => PhoneNumber::display($state))
                     ->copyMessage('Telefono copiato')
                     ->icon('heroicon-o-phone')
                     ->toggleable(),
@@ -361,6 +367,7 @@ class InformationRequestResource extends Resource
                     ->options(static::statusLabels()),
             ])
             ->actions([
+                ContattaCliente::perTabella(fn (InformationRequest $record) => $record->customer),
                 Tables\Actions\ActionGroup::make([
                     // Fissare/spostare l'appuntamento è l'azione più frequente su una
                     // richiesta già presa in carico: un modal rapido evita di aprire

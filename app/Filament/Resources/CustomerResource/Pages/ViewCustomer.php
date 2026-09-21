@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\CustomerResource\Pages;
 
+use App\Filament\Actions\ContattaCliente;
 use App\Filament\Resources\CustomerResource;
 use Filament\Actions;
 use Filament\Resources\Pages\ViewRecord;
@@ -13,6 +14,7 @@ class ViewCustomer extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            ContattaCliente::perPagina($this->record),
             // Il modulo che il cliente deve firmare, gia' compilato con quello
             // che sappiamo di lui: vedi App\Support\Pdf\SchedaAnagraficaPdf.
             Actions\Action::make('scheda_anagrafica')

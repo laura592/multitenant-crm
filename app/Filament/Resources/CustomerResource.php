@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Actions\ContattaCliente;
 use App\Filament\Forms\CustomerContactFields;
 use App\Filament\Forms\CustomerFiscalFields;
 use App\Filament\Forms\ItalianAddressFields;
@@ -11,10 +12,11 @@ use App\Filament\Resources\CustomerResource\RelationManagers\MacchinariRelationM
 use App\Filament\Resources\CustomerResource\RelationManagers\QuotesRelationManager;
 use App\Filament\Resources\CustomerResource\RelationManagers\ServiceReportsRelationManager;
 use App\Models\Customer;
-use App\Support\Pdf\SchedaAnagraficaData;
-use App\Support\Pdf\SchedaAnagraficaPdf;
 use App\Support\DisplayName;
 use App\Support\Gestionale\EurekaClient;
+use App\Support\Pdf\SchedaAnagraficaData;
+use App\Support\Pdf\SchedaAnagraficaPdf;
+use App\Support\PhoneNumber;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -36,7 +38,6 @@ class CustomerResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-users';
 
     protected static ?string $navigationGroup = 'Vendite';
-
 
     protected static ?int $navigationSort = 1;
 
@@ -185,10 +186,20 @@ class CustomerResource extends Resource
                     ->listWithLineBreaks()
                     ->searchable(query: fn ($query, string $search) => $query
                         ->whereRaw('JSON_SEARCH(emails, "one", ?) IS NOT NULL', ["%{$search}%"])),
+                // Visibile di default (21/09/2026): il telefono e' il dato che
+                // si cerca di piu' nell'elenco, non va aperto il cliente per
+                // leggerlo. Per chiamare c'e' "Contatta" in fondo alla riga.
                 Tables\Columns\TextColumn::make('phones')
                     ->label('Telefoni')
+                    ->formatStateUsing(fn (?string $state) => PhoneNumber::display($state))
                     ->listWithLineBreaks()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->placeholder('—')
+                    ->copyable()
+                    ->copyableState(fn (?string $state) => PhoneNumber::display($state))
+                    ->copyMessage('Telefono copiato')
+                    ->searchable(query: fn ($query, string $search) => $query
+                        ->whereRaw('JSON_SEARCH(phones, "one", ?) IS NOT NULL', ['%'.preg_replace('/\D/', '', $search).'%']))
+                    ->toggleable(),
                 Tables\Columns\TextColumn::make('website')
                     ->label('Sito web')
                     ->placeholder('—')
@@ -246,6 +257,7 @@ class CustomerResource extends Resource
                 Tables\Filters\TrashedFilter::make(),
             ])
             ->actions([
+                ContattaCliente::perTabella(fn (Customer $record) => $record),
                 Tables\Actions\ViewAction::make()
                     ->color('gray'),
                 Tables\Actions\ActionGroup::make([
@@ -374,7 +386,7 @@ class CustomerResource extends Resource
                         // aperto nel visualizzatore del browser il modulo
                         // perde i campi precompilati.
                         return response()->streamDownload(
-                            fn () => print($byte),
+                            fn () => print ($byte),
                             'schede-anagrafiche-'.now()->format('Y-m-d').'.pdf',
                             ['Content-Type' => 'application/pdf'],
                         );
