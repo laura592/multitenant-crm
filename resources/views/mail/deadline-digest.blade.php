@@ -7,13 +7,16 @@
 
 Queste sono le scadenze in avvicinamento o gia' scadute, da controllare.
 
-@component('mail::table')
-| Tipo | Collegata a | Scadenza | Stato |
-| :--- | :--- | :--- | :--- |
 @foreach($deadlines as $deadline)
-| {{ \App\Models\Deadline::typeLabels()[$deadline->type] ?? 'Altro' }} | {{ $deadline->relatedLabel() }} | {{ $deadline->due_date->format('d/m/Y') }} | {{ $deadline->due_date->isPast() ? 'Scaduta' : 'In avvicinamento' }} |
+<x-mail.due-card
+	:overdue="$deadline->due_date->isPast()"
+	:status="$deadline->due_date->isPast() ? 'Scaduta' : 'In avvicinamento'"
+	:date="$deadline->due_date->format('d/m/Y')"
+	:title="\App\Models\Deadline::typeLabels()[$deadline->type] ?? 'Altro'"
+>
+<p style="margin: 0; font-size: 14px; color: #3f3f46;">{{ $deadline->relatedLabel() }}</p>
+</x-mail.due-card>
 @endforeach
-@endcomponent
 
 <x-mail::button :url="\App\Filament\Resources\DeadlineResource::getUrl('index', tenant: $tenant)">
 Apri lo scadenzario

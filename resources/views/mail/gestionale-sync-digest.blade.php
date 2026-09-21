@@ -23,13 +23,10 @@
 Le funzioni che dipendono dagli endpoint qui sotto **non hanno prodotto risultati**: quello che manca in questo riepilogo potrebbe non essere "niente da segnalare", ma dati che non siamo riusciti a leggere. Un `403` significa che le nostre credenziali non hanno i diritti per quel modulo — va chiesto a chi gestisce Eureka.
 </x-mail.severity-panel>
 
-@component('mail::table')
-| Endpoint | Chiamate fallite | Risposte |
-| :--- | ---: | :--- |
+{{-- Elenco e non tabella: il percorso dell'endpoint non ha spazi, in una cella non andava a capo e allargava la mail oltre lo schermo del telefono. --}}
 @foreach($apiIssues as $issue)
-| {{ $issue['endpoint'] }} | {{ $issue['failures'] }} / {{ $issue['attempts'] }} | {{ $issue['statuses'] }} |
+<p style="margin: 0 0 10px; font-size: 14px; color: #3f3f46;"><span style="font-family: monospace; word-break: break-all; color: #18181b;">{{ $issue['endpoint'] }}</span><br>{{ $issue['failures'] }} chiamate fallite su {{ $issue['attempts'] }} &middot; {{ $issue['statuses'] }}</p>
 @endforeach
-@endcomponent
 @endif
 
 @if(count($summaryRows))
