@@ -37,6 +37,9 @@ use Illuminate\Support\Facades\DB;
  */
 class ImportEurekaServiceReports extends Command
 {
+    /** Il codice articolo Eureka della sanificazione impianto acqua. */
+    public const ARTICOLO_SANIFICAZIONE = 'SANIFICAZIONE';
+
     protected $signature = 'eureka:import-service-reports
         {--tenant=       : Slug tenant (default: tenant master)}
         {--customer=     : UUID cliente locale — limita l\'import a un solo cliente}
@@ -1064,8 +1067,33 @@ class ImportEurekaServiceReports extends Command
             str_contains($haystack, 'install') => ServiceReport::TYPE_INSTALLAZIONE,
             str_contains($haystack, 'garanzia') => ServiceReport::TYPE_GARANZIA,
             str_contains($haystack, 'manutenz') => ServiceReport::TYPE_MANUTENZIONE_ORDINARIA,
+            self::haArticoloSanificazione($detail) => ServiceReport::TYPE_SANIFICAZIONE,
             default => ServiceReport::TYPE_RIPARAZIONE,
         };
+    }
+
+    /**
+     * La sanificazione si riconosce dall'ARTICOLO, non dal testo.
+     *
+     * Prima non si riconosceva affatto: tutte le schede Eureka con la riga
+     * SANIFICAZIONE ("sanificazione impianto acqua", di solito con cartucce e
+     * filtri) finivano "riparazione" — 61 su 61 in produzione al 21/09/2026.
+     *
+     * La parola nel testo invece non basta: nei rapportini "sanificazione"
+     * si usa anche per il lavaggio dell'impianto birra (righe LAV2), che e'
+     * un'altra cosa. Viene dopo installazione, garanzia e manutenzione: una
+     * scheda che dice di essere altro resta quello, qui si toglie solo il
+     * ripiego su "riparazione".
+     */
+    public static function haArticoloSanificazione(array $detail): bool
+    {
+        foreach (($detail['dettaglio'] ?? []) as $riga) {
+            if (is_array($riga) && mb_strtoupper(trim((string) ($riga['codice'] ?? ''))) === self::ARTICOLO_SANIFICAZIONE) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function mapStatus(mixed $statoDocumento): string
