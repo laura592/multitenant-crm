@@ -59,8 +59,59 @@ final class RiabbinaImportati
         // Prima si decide tutto, a schede tutte presenti: cosi' due schede
         // gemelle si vedono a vicenda e l'esito non dipende dall'ordine.
         $decisioni = $schede->mapWithKeys(fn (ServiceReport $s) => [$s->id => AbbinamentoRapportini::perScheda($s)]);
+        $nelGiro = $schede->pluck('id')->flip();
+        $gestite = [];
+
+        // Gli ambigui con un solo rapportino candidato si guardano dal suo
+        // lato: piu' schede per un rapportino sono quasi sempre una visita
+        // divisa per impianto o un doppione scritto su Eureka.
+        $rapportiniConPiuSchede = $schede
+            ->map(fn (ServiceReport $s) => $decisioni[$s->id])
+            ->filter(fn (array $d) => $d['esito'] === AbbinamentoRapportini::AMBIGUO && $d['candidati']->count() === 1)
+            ->map(fn (array $d) => $d['candidati']->first())
+            ->unique('id');
+
+        foreach ($rapportiniConPiuSchede as $nostro) {
+            $candidate = self::schedeCandidate($nostro);
+            $r = AbbinamentoRapportini::piuSchede($nostro, $candidate);
+
+            if ($r['esito'] === AbbinamentoRapportini::AMBIGUO) {
+                continue;
+            }
+
+            // Il rapportino del tecnico si lega alla scheda principale; le
+            // altre schede restano, ognuna col suo rapportino, come su Eureka.
+            $altre = $r['altre']->pluck('gestionale_number')->implode(', ');
+            $esito['uniti'][] = [
+                'scheda' => (string) $r['principale']->gestionale_number,
+                'rapportino' => $nostro->number,
+                'motivo' => $r['esito'] === AbbinamentoRapportini::DIVISA
+                    ? "su Eureka la visita e' divisa per impianto: {$altre} tiene il suo rapportino"
+                    : "su Eureka ci sono due schede uguali: {$altre} tiene il suo rapportino",
+            ];
+
+            $gestite[$r['principale']->id] = true;
+            if (isset($nelGiro[$r['principale']->id])) {
+                $daCancellare[] = $r['principale']->id;
+            }
+
+            foreach ($r['altre'] as $altra) {
+                $gestite[$altra->id] = true;
+                if (isset($nelGiro[$altra->id])) {
+                    $esito['nuovi']++;
+                }
+            }
+
+            if (! $prova) {
+                self::unisci($nostro, $r['principale'], $esito['uniti'][array_key_last($esito['uniti'])]['motivo'], cancellaCopia: $compattabile && isset($nelGiro[$r['principale']->id]));
+            }
+        }
 
         foreach ($schede as $scheda) {
+            if (isset($gestite[$scheda->id])) {
+                continue;
+            }
+
             $d = $decisioni[$scheda->id];
 
             if ($d['esito'] === AbbinamentoRapportini::UNICO) {
@@ -150,6 +201,26 @@ final class RiabbinaImportati
                 'motivo' => $motivo,
             ]);
         });
+    }
+
+    /**
+     * Le schede Eureka ancora senza rapportino che somigliano a questo
+     * rapportino, anche fuori dal giro: la gemella puo' essere entrata prima.
+     *
+     * @return Collection<int, ServiceReport>
+     */
+    private static function schedeCandidate(ServiceReport $nostro): Collection
+    {
+        return ServiceReport::withoutGlobalScopes()
+            ->whereNull('deleted_at')
+            ->where('tenant_id', $nostro->tenant_id)
+            ->where('source', ServiceReport::SOURCE_EUREKA)
+            ->where('customer_id', $nostro->customer_id)
+            ->whereDate('intervention_date', $nostro->intervention_date->toDateString())
+            ->with(['machineUnit', 'materialsUsed.material'])
+            ->get()
+            ->filter(fn (ServiceReport $s) => ConfrontoRapportini::confidenza($nostro, $s) !== null)
+            ->values();
     }
 
     private static function proponi(?ServiceReport $nostro, ServiceReport $copia): void

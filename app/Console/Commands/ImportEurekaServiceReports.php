@@ -238,6 +238,17 @@ class ImportEurekaServiceReports extends Command
                 ($detail ? ($detail['sl_matricola'] ?? null) : null)
                 ?? ($summary['matricola'] ?? null)
             );
+            // Una matricola di soli zeri ("000000", "0000000"...) e' il
+            // segnaposto di Eureka per "matricola sconosciuta", non una
+            // matricola: cercarla trovava la prima macchina con lo stesso
+            // segnaposto, di un cliente qualunque. E' cosi' che la sanificazione
+            // dell'acqua di Strana Coppia (SL-767, 21/09/2026) era finita su un
+            // macinadosatore di un altro cliente — 71 rapportini cosi' — e che
+            // quel macinadosatore si era preso "SPINA 3 VIE" come modello.
+            if ($machineSerial !== null && trim($machineSerial, "0 \t") === '') {
+                $machineSerial = null;
+            }
+
             $machineUnit = $machineSerial
                 ? MachineUnit::query()
                     ->where('tenant_id', $tenant->id)
