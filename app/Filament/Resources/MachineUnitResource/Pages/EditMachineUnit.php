@@ -23,6 +23,7 @@ class EditMachineUnit extends EditRecord
             MachineUnitResource::cercaEurekaAction(Actions\Action::make('cerca_eureka')),
             MachineUnitResource::createServiceReportAction(Actions\Action::make('create_service_report')),
             MachineUnitResource::spostaAction(Actions\Action::make('sposta')),
+            MachineUnitResource::annullaSpostamentoAction(Actions\Action::make('annulla_spostamento')),
             Actions\DeleteAction::make(),
         ];
     }

@@ -141,8 +141,8 @@ class MachineUnitResource extends Resource
                     Forms\Components\Select::make('billing_customer_id')
                         ->label('Fatturare a')
                         ->relationship('billingCustomer', 'company_name')
-                        ->getOptionLabelFromRecordUsing(fn (Customer $record) => DisplayName::titleCase($record->full_name))
-                        ->searchable(['company_name', 'first_name', 'last_name'])
+                        ->getOptionLabelFromRecordUsing(fn (Customer $record) => DisplayName::customerOption($record))
+                        ->searchable(['company_name', 'first_name', 'last_name', 'city'])
                         ->preload()
                         ->helperText('Lascia vuoto se paga il cliente presso cui è installata questa macchina.')
                         ->extraAttributes(['data-tour' => 'machine-units-field-billing']),
@@ -252,6 +252,7 @@ class MachineUnitResource extends Resource
                     static::cercaEurekaAction(Tables\Actions\Action::make('cerca_eureka')),
                     static::createServiceReportAction(Tables\Actions\Action::make('create_service_report')),
                     static::spostaAction(Tables\Actions\Action::make('sposta')),
+                    static::annullaSpostamentoAction(Tables\Actions\Action::make('annulla_spostamento')),
                     Tables\Actions\EditAction::make(),
                     Tables\Actions\DeleteAction::make(),
                     Tables\Actions\RestoreAction::make(),
@@ -351,8 +352,10 @@ class MachineUnitResource extends Resource
                 Forms\Components\Select::make('customer_id')
                     ->label('Nuovo cliente')
                     ->helperText('Lascia vuoto per riportare la macchina in magazzino/rimuoverla.')
+                    // Il paese fra parentesi: tante ragioni sociali si ripetono
+                    // fra punti vendita diversi (DisplayName::customerOption).
                     ->options(fn () => Customer::query()->orderBy('company_name')->get()->mapWithKeys(
-                        fn (Customer $customer) => [$customer->id => DisplayName::titleCase($customer->full_name) ?: 'Cliente senza nome']
+                        fn (Customer $customer) => [$customer->id => DisplayName::customerOption($customer) ?: 'Cliente senza nome']
                     ))
                     ->searchable(),
                 Forms\Components\Textarea::make('notes')->label('Note sullo spostamento'),
@@ -363,6 +366,41 @@ class MachineUnitResource extends Resource
 
                 Notification::make()
                     ->title($customer ? 'Macchina spostata presso '.DisplayName::titleCase($customer->company_name) : 'Macchina rientrata in magazzino')
+                    ->success()
+                    ->send();
+            });
+    }
+
+    /**
+     * "Sposta" fatto per sbaglio (cliente sbagliato, macchina sbagliata):
+     * rimette la macchina dov'era prima, senza lasciare nello storico un
+     * passaggio mai avvenuto.
+     */
+    public static function annullaSpostamentoAction(MountableAction $action): MountableAction
+    {
+        return $action
+            ->label('Annulla ultimo spostamento')
+            ->icon('heroicon-o-arrow-uturn-left')
+            ->color('danger')
+            ->visible(fn (MachineUnit $record): bool => $record->canUndoLastMove())
+            ->requiresConfirmation()
+            ->modalHeading('Annullare l\'ultimo spostamento?')
+            ->modalDescription(function (MachineUnit $record): string {
+                $open = $record->placements()->whereNull('removed_at')->latest('placed_at')->first();
+                $dove = $open?->customer ? DisplayName::customerOption($open->customer) : 'magazzino';
+
+                return "La macchina torna dov'era prima dello spostamento a {$dove}"
+                    .($open ? ' del '.$open->placed_at->format('d/m/Y H:i') : '').'. La riga sbagliata sparisce dallo storico.';
+            })
+            ->modalSubmitActionLabel('Annulla spostamento')
+            ->action(function (MachineUnit $record) {
+                $record->undoLastMove();
+                $record->refresh();
+
+                Notification::make()
+                    ->title($record->currentCustomer
+                        ? 'Macchina rimessa presso '.DisplayName::customerOption($record->currentCustomer)
+                        : 'Macchina rimessa in magazzino')
                     ->success()
                     ->send();
             });

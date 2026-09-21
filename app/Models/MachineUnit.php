@@ -136,6 +136,64 @@ class MachineUnit extends Model
     }
 
     /**
+     * Annulla l'ultimo "Sposta" fatto per sbaglio: toglie il posizionamento
+     * appena aperto (o, se la macchina era stata rimandata in magazzino,
+     * niente) e riapre quello che lo spostamento aveva chiuso, come se lo
+     * spostamento non ci fosse mai stato. Lo storico resta nell'audit.
+     *
+     * Solo l'ultimo: annullarne uno piu' vecchio riscriverebbe una storia
+     * su cui nel frattempo possono essere nati rapportini e lavaggi.
+     */
+    public function undoLastMove(): bool
+    {
+        $open = $this->placements()->whereNull('removed_at')->latest('placed_at')->first();
+
+        // Il posizionamento che lo spostamento ha chiuso: moveTo() chiude e
+        // apre nello stesso istante. Se non ce n'e' uno chiuso in quel
+        // momento la macchina veniva dal magazzino, e li' deve tornare: non
+        // si riapre un cliente di prima del magazzino.
+        $closed = $this->placements()
+            ->whereNotNull('removed_at')
+            ->when($open, fn ($q) => $q->whereBetween('removed_at', [
+                $open->placed_at->copy()->subMinute(),
+                $open->placed_at->copy()->addMinute(),
+            ]))
+            ->latest('removed_at')
+            ->first();
+
+        if (! $open && ! $closed) {
+            return false;
+        }
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($open, $closed) {
+            $open?->delete();
+            $closed?->update(['removed_at' => null]);
+
+            $this->update([
+                'current_customer_id' => $closed?->customer_id,
+                'status' => $closed?->customer_id ? self::STATUS_INSTALLATA : self::STATUS_IN_MAGAZZINO,
+            ]);
+        });
+
+        return true;
+    }
+
+    /**
+     * Si annulla solo uno spostamento recente (30 giorni): serve a
+     * correggere un errore appena fatto, non a riscrivere posizionamenti
+     * vecchi o importati da Eureka con la data del DDT.
+     */
+    public function canUndoLastMove(): bool
+    {
+        $lastMove = collect([
+            $this->placements()->whereNull('removed_at')->max('placed_at'),
+            $this->placements()->max('removed_at'),
+        ])->filter()->max();
+
+        return $lastMove !== null && \Illuminate\Support\Carbon::parse($lastMove)->gt(now()->subDays(30));
+    }
+
+    /**
      * Accetta la proposta di collegamento trovata dal sync
      * (GestionaleSyncRunner::proposeMachineUnitLinks()).
      *

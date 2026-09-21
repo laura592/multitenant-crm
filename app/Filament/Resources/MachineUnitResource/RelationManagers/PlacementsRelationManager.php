@@ -11,6 +11,8 @@ use Filament\Tables\Table;
  * Storico sola lettura: gli spostamenti si creano solo tramite l'azione
  * "Sposta" sulla lista principale (MachineUnit::moveTo()), mai qui a mano,
  * per non rompere l'invariante "un solo posizionamento aperto alla volta".
+ * Uno spostamento sbagliato si toglie con "Annulla ultimo spostamento"
+ * (MachineUnit::undoLastMove()), in cima alla pagina della macchina.
  */
 class PlacementsRelationManager extends RelationManager
 {
@@ -24,7 +26,7 @@ class PlacementsRelationManager extends RelationManager
             ->recordTitleAttribute('id')
             ->columns([
                 Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->placeholder('Magazzino')
-                    ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
+                    ->formatStateUsing(fn ($state, $record) => DisplayName::customerOption($record->customer)),
                 Tables\Columns\TextColumn::make('placed_at')->label('Dal')->dateTime('d/m/Y H:i'),
                 Tables\Columns\TextColumn::make('removed_at')->label('Al')->dateTime('d/m/Y H:i')->placeholder('In corso'),
                 Tables\Columns\TextColumn::make('notes')->label('Note')->limit(50)->tooltip(fn ($state) => $state),
