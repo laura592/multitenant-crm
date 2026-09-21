@@ -32,6 +32,7 @@ use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
+use Filament\Actions\MountableAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Support\Exceptions\Halt;
@@ -421,14 +422,7 @@ class ServiceReportResource extends Resource
                     Forms\Components\Select::make('intervention_type')
                         ->label('Tipo intervento')
                         ->extraAttributes(['data-tour' => 'service-reports-field-type'])
-                        ->options([
-                            ServiceReport::TYPE_INSTALLAZIONE => 'Installazione',
-                            ServiceReport::TYPE_MANUTENZIONE_ORDINARIA => 'Manutenzione ordinaria',
-                            ServiceReport::TYPE_MANUTENZIONE_STRAORDINARIA => 'Manutenzione straordinaria',
-                            ServiceReport::TYPE_RIPARAZIONE => 'Riparazione',
-                            ServiceReport::TYPE_GARANZIA => 'Garanzia',
-                            ServiceReport::TYPE_SANIFICAZIONE => 'Sanificazione',
-                        ])
+                        ->options(static::interventionTypeLabels())
                         ->required()
                         // La riga "manodopera" (ore lavorate) non si aggiunge piu'
                         // da sola cambiando questo campo: vedi il toggle
@@ -1592,6 +1586,24 @@ class ServiceReportResource extends Resource
                 ]),
             ])
             ->bulkActions([
+                Tables\Actions\BulkAction::make('fai_firmare')
+                    ->label('Fai firmare')
+                    ->icon('heroicon-o-pencil-square')
+                    ->color('success')
+                    ->deselectRecordsAfterCompletion()
+                    ->action(function (\Illuminate\Support\Collection $records, $livewire) {
+                        if ($records->pluck('customer_id')->unique()->count() > 1) {
+                            Notification::make()
+                                ->title('Scegli rapportini di un solo cliente')
+                                ->body('La firma e\' del cliente: si firmano insieme solo i rapportini dello stesso cliente.')
+                                ->warning()
+                                ->send();
+
+                            return;
+                        }
+
+                        $livewire->redirect(Pages\FirmaRapportini::urlPer($records->whereNull('customer_signature_path')));
+                    }),
                 // Fuori dal BulkActionGroup di proposito: e' l'unica azione di
                 // massa che si usa spesso (chiudere in blocco i rapportini di
                 // una giornata), tenerla dentro il menu "..." significava tre
@@ -2024,6 +2036,8 @@ class ServiceReportResource extends Resource
         return [
             'index' => Pages\ListServiceReports::route('/'),
             'create' => Pages\CreateServiceReport::route('/create'),
+            // Prima di '/{record}': altrimenti "firma" verrebbe letto come id.
+            'firma' => Pages\FirmaRapportini::route('/firma'),
             'view' => Pages\ViewServiceReport::route('/{record}'),
             'edit' => Pages\EditServiceReport::route('/{record}/edit'),
         ];
@@ -2052,6 +2066,43 @@ class ServiceReportResource extends Resource
     protected static function vedeFatturazione(): bool
     {
         return auth()->user()?->can('view_prices_service::report') ?? false;
+    }
+
+    /**
+     * "Fai firmare" su un rapportino gia' salvato senza firma: porta alla
+     * firma in blocco (FirmaRapportini), gia' con gli altri rapportini di
+     * oggi dello stesso cliente.
+     */
+    public static function faiFirmareAction(MountableAction $action): MountableAction
+    {
+        return $action
+            ->label('Fai firmare')
+            ->icon('heroicon-o-pencil-square')
+            ->color('success')
+            ->visible(fn (ServiceReport $record) => blank($record->customer_signature_path)
+                && ! $record->isLocked()
+                && (auth()->user()?->can('update', $record) ?? false))
+            ->url(fn (ServiceReport $record) => Pages\FirmaRapportini::urlPer(
+                ServiceReport::query()
+                    ->where('customer_id', $record->customer_id)
+                    ->whereNull('customer_signature_path')
+                    ->whereDate('intervention_date', $record->intervention_date)
+                    ->get()
+                    ->push($record)
+                    ->unique('id')
+            ));
+    }
+
+    public static function interventionTypeLabels(): array
+    {
+        return [
+            ServiceReport::TYPE_INSTALLAZIONE => 'Installazione',
+            ServiceReport::TYPE_MANUTENZIONE_ORDINARIA => 'Manutenzione ordinaria',
+            ServiceReport::TYPE_MANUTENZIONE_STRAORDINARIA => 'Manutenzione straordinaria',
+            ServiceReport::TYPE_RIPARAZIONE => 'Riparazione',
+            ServiceReport::TYPE_GARANZIA => 'Garanzia',
+            ServiceReport::TYPE_SANIFICAZIONE => 'Sanificazione',
+        ];
     }
 
     public static function statusLabels(): array

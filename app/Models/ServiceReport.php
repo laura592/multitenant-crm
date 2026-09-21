@@ -147,6 +147,16 @@ class ServiceReport extends Model
             }
         });
 
+        // "Firmato il" sul PDF: prima signed_at non lo scriveva nessuno e la
+        // data della firma non compariva mai. Si segna quando arriva la firma
+        // del cliente (dal modulo o dalla firma in blocco) e si toglie se la
+        // firma viene cancellata.
+        static::saving(function (self $report) {
+            if ($report->isDirty('customer_signature_path') && ! $report->isDirty('signed_at')) {
+                $report->signed_at = filled($report->customer_signature_path) ? now() : null;
+            }
+        });
+
         // Le FK cascadeOnDelete() del DB non scattano piu' su un soft delete
         // (e' un UPDATE, non una DELETE): replichiamo la cascata a mano su
         // ricambi/materiali usati ed email.
@@ -297,9 +307,20 @@ class ServiceReport extends Model
         // piu' "da lavaggio", o macchina/cliente cambiati (piano non piu' tra
         // quelli correnti). Lavaggio::booted() ricalcola da solo il piano
         // interessato alla cancellazione.
+        //
+        // Le righe senza piano vanno tolte anche loro: NOT IN su SQL non
+        // prende mai i NULL, e cosi' restavano orfane accanto a quelle giuste
+        // ogni volta che un piano veniva diviso o cancellato (45 righe in
+        // produzione al 21/09/2026, vedi lavaggi:pulisci-doppi).
         $stale = Lavaggio::where('service_report_id', $this->id);
         if ($qualifies) {
-            $stale->whereNotIn('maintenance_schedule_id', $scheduleIds);
+            $stale->where(fn ($q) => $q
+                ->where(fn ($q) => $q
+                    ->whereNull('maintenance_schedule_id')
+                    // una nota vera ("5 Vie (Selz)", dall'import storico)
+                    // dice cosa e' stato lavato anche senza piano: resta.
+                    ->where('descrizione', 'like', 'Generato da rapportino%'))
+                ->orWhereNotIn('maintenance_schedule_id', $scheduleIds));
         }
         $stale->get()->each->delete();
 
@@ -312,6 +333,18 @@ class ServiceReport extends Model
                 'service_report_id' => $this->id,
                 'maintenance_schedule_id' => $schedule->id,
             ]);
+
+            // Lo stesso lavaggio gia' segnato a mano sul piano, stesso
+            // giorno: si aggancia al rapportino invece di farne un gemello.
+            if (! $lavaggio->exists && $this->intervention_date) {
+                $lavaggio = Lavaggio::query()
+                    ->whereNull('service_report_id')
+                    ->where('maintenance_schedule_id', $schedule->id)
+                    ->whereDate('data', $this->intervention_date)
+                    ->first()
+                    ?->fill(['service_report_id' => $this->id])
+                    ?? $lavaggio;
+            }
 
             // Non risovrascrivere una descrizione gia' personalizzata (a
             // mano, o importata da uno storico con piu' dettaglio del

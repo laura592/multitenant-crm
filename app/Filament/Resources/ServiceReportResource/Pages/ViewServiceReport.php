@@ -19,6 +19,7 @@ class ViewServiceReport extends ViewRecord
                 ->icon('heroicon-o-arrow-left')
                 ->color('gray')
                 ->url(fn () => ServiceReportResource::getUrl('index')),
+            ServiceReportResource::faiFirmareAction(Actions\Action::make('fai_firmare')),
             // Stesse due action "pdf" della tabella (ServiceReportResource::table()),
             // qui per non dover tornare all'elenco solo per stampare.
             //

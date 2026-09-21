@@ -6,9 +6,13 @@ use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\LogsAuditTrail;
 use App\Support\DisplayName;
 use App\Support\LavaggioDescrizione;
+use App\Filament\Resources\MaintenanceScheduleResource;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Lavaggio periodico di una macchina presso un cliente (es. "5 vie + apertura",
@@ -96,6 +100,70 @@ class Lavaggio extends Model
     public function setDescrizioneAttribute(?string $value): void
     {
         $this->attributes['descrizione'] = LavaggioDescrizione::normalize($value);
+    }
+
+    /**
+     * Una riga per visita e per impianto. I lavaggi restano uno per piano
+     * (birra, vino, bibite hanno vie e scadenze proprie anche sullo stesso
+     * impianto spina), ma nello storico del cliente la stessa visita
+     * appariva ripetuta per ogni bevanda. Qui si tiene una riga
+     * rappresentante per (cliente, data, impianto); le altre si leggono con
+     * visitSiblings().
+     */
+    public function scopePerVisita(Builder $query): Builder
+    {
+        $representatives = DB::table('lavaggi as l')
+            ->leftJoin('maintenance_schedules as ms', 'ms.id', '=', 'l.maintenance_schedule_id')
+            ->selectRaw('MIN(l.id)')
+            ->groupBy('l.customer_id', 'l.data', DB::raw(self::impiantoSql()));
+
+        return $query->whereIn($query->getModel()->qualifyColumn('id'), $representatives);
+    }
+
+    /**
+     * L'impianto della visita: la macchina del piano, o quella scritta sul
+     * lavaggio se il piano non ce l'ha.
+     */
+    private static function impiantoSql(): string
+    {
+        return "COALESCE(ms.machine_unit_id, l.machine_unit_id, '')";
+    }
+
+    /**
+     * I lavaggi della stessa visita (stesso cliente, data e impianto),
+     * questo compreso.
+     *
+     * @return Collection<int, self>
+     */
+    public function visitSiblings(): Collection
+    {
+        $impianto = $this->maintenanceSchedule?->machine_unit_id ?? $this->machine_unit_id;
+
+        return self::query()
+            ->with('maintenanceSchedule')
+            ->where('customer_id', $this->customer_id)
+            ->whereDate('data', $this->data)
+            ->get()
+            ->filter(fn (self $l) => ($l->maintenanceSchedule?->machine_unit_id ?? $l->machine_unit_id) === $impianto)
+            ->values();
+    }
+
+    /**
+     * "Birra 2 vie · Vino 2 vie · Bibite 1 via": cosa e' stato lavato in
+     * questa visita, una voce per piano.
+     */
+    public function visitLinesLabel(): string
+    {
+        return $this->visitSiblings()
+            ->map(function (self $l) {
+                $label = MaintenanceScheduleResource::beverageLabels()[$l->maintenanceSchedule?->beverage_type] ?? null;
+                $vie = $l->lines_washed ? $l->lines_washed.($l->lines_washed === 1 ? ' via' : ' vie') : null;
+
+                return trim(($label ?? ($vie ? 'Lavaggio' : '')).' '.($vie ?? ''));
+            })
+            ->filter()
+            ->unique()
+            ->implode(' · ') ?: '—';
     }
 
     public function customer(): BelongsTo

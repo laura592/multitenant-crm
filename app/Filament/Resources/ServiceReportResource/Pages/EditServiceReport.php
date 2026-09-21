@@ -18,6 +18,7 @@ class EditServiceReport extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
+            ServiceReportResource::faiFirmareAction(Actions\Action::make('fai_firmare')),
             Actions\DeleteAction::make(),
         ];
     }

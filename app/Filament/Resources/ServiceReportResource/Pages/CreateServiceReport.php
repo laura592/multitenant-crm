@@ -5,6 +5,7 @@ namespace App\Filament\Resources\ServiceReportResource\Pages;
 use App\Support\Rapportini\LavaggioFields;
 use App\Filament\Resources\ServiceReportResource;
 use App\Models\Lavaggio;
+use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
 
@@ -33,6 +34,21 @@ class CreateServiceReport extends CreateRecord
      */
     public ?string $sourceLavaggioId = null;
 
+    /**
+     * Firma in blocco: con "Salva e nuovo (stesso cliente)" il prossimo
+     * rapportino riparte da cliente, data, tecnico e tipo di questo, e alla
+     * fine "Salva e fai firmare" porta alla firma di tutti quelli della
+     * visita (FirmaRapportini).
+     *
+     * @var array<string, mixed>
+     */
+    public array $stessaVisita = [];
+
+    /** @var array<int, string> */
+    public array $rapportiniVisita = [];
+
+    public bool $firmaDopo = false;
+
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         $this->lavaggioImpianti = $data['lavaggio_impianti'] ?? [];
@@ -46,10 +62,57 @@ class CreateServiceReport extends CreateRecord
      */
     protected function getCreatedNotification(): ?Notification
     {
+        if ($this->firmaDopo) {
+            return null;
+        }
+
+        $n = count($this->rapportiniVisita);
+
         return Notification::make()
             ->success()
-            ->title('Rapportino creato')
-            ->body('Il rapportino è stato salvato.');
+            ->title("Rapportino {$this->getRecord()?->number} salvato")
+            ->body($n > 1
+                ? "{$n} rapportini in questa visita. Quando hai finito, \"Salva e fai firmare\" li fa firmare tutti insieme."
+                : 'Il rapportino è stato salvato.');
+    }
+
+    protected function getFormActions(): array
+    {
+        return [
+            $this->getCreateFormAction(),
+            // Al cliente si fa firmare una volta sola: anche dopo un solo
+            // rapportino e' il modo piu' pulito di raccogliere la firma.
+            Action::make('createAndSign')
+                ->label('Salva e fai firmare')
+                ->icon('heroicon-o-pencil-square')
+                ->color('success')
+                ->action(function () {
+                    $this->firmaDopo = true;
+                    $this->create();
+                    $this->firmaDopo = false;
+                }),
+            $this->getCreateAnotherFormAction()
+                ->label('Salva e nuovo (stesso cliente)')
+                ->icon('heroicon-o-document-duplicate'),
+            $this->getCancelFormAction(),
+        ];
+    }
+
+    protected function getRedirectUrl(): string
+    {
+        if ($this->firmaDopo && $this->getRecord()) {
+            return FirmaRapportini::getUrl([
+                'cliente' => $this->getRecord()->customer_id,
+                // I rapportini di questa visita: quelli salvati con "Salva e
+                // nuovo" dello stesso cliente, piu' questo.
+                'rapportini' => \App\Models\ServiceReport::whereKey($this->rapportiniVisita)
+                    ->where('customer_id', $this->getRecord()->customer_id)
+                    ->pluck('id')
+                    ->all(),
+            ]);
+        }
+
+        return parent::getRedirectUrl();
     }
 
     /**
@@ -87,6 +150,10 @@ class CreateServiceReport extends CreateRecord
 
         $this->sourceLavaggioId = request()->query('lavaggio_id');
 
+        if ($this->stessaVisita !== []) {
+            $this->form->fill(array_merge($this->form->getRawState(), $this->stessaVisita));
+        }
+
         $this->callHook('afterFill');
     }
 
@@ -107,6 +174,14 @@ class CreateServiceReport extends CreateRecord
         $record = $this->getRecord();
 
         LavaggioFields::syncLavaggioImpianti($record, $this->lavaggioImpianti);
+
+        $this->stessaVisita = array_filter([
+            'customer_id' => $record->customer_id,
+            'intervention_date' => $record->intervention_date?->toDateString(),
+            'technician_id' => $record->technician_id,
+            'intervention_type' => $record->intervention_type,
+        ]);
+        $this->rapportiniVisita[] = $record->id;
 
         $this->linkSourceLavaggio($record);
     }

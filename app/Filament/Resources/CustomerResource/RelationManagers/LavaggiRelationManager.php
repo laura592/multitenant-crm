@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\CustomerResource\RelationManagers;
 
 use App\Filament\Resources\MaintenanceScheduleResource;
+use App\Filament\Resources\ServiceReportResource;
 use App\Models\Customer;
 use App\Models\Lavaggio;
 use App\Models\MaintenanceSchedule;
@@ -11,6 +12,8 @@ use Filament\Forms\Form;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 
 class LavaggiRelationManager extends RelationManager
@@ -83,9 +86,17 @@ class LavaggiRelationManager extends RelationManager
         return $table
             ->recordTitleAttribute('descrizione')
             ->defaultSort('data', 'desc')
+            // Una riga per visita e impianto: i lavaggi restano uno per
+            // piano (birra, vino, bibite), ma la stessa visita non si ripete
+            // piu' per ogni bevanda. Vedi Lavaggio::scopePerVisita().
+            ->modifyQueryUsing(fn (Builder $query) => $query->perVisita()->with(['maintenanceSchedule', 'serviceReport', 'machineUnit']))
+            ->description('Una riga per visita e impianto. Il dettaglio per bevanda e le scadenze sono nei piani lavaggio.')
             ->columns([
                 Tables\Columns\TextColumn::make('data')->label('Data')->date()->sortable(),
-                Tables\Columns\TextColumn::make('lines_washed')->label('Vie lavate')->placeholder('—'),
+                Tables\Columns\TextColumn::make('lavato')
+                    ->label('Lavato')
+                    ->state(fn (Lavaggio $record) => $record->visitLinesLabel())
+                    ->wrap(),
                 Tables\Columns\IconColumn::make('filtro_sostituito')
                     ->label('Filtro sostituito')
                     ->boolean()
@@ -94,7 +105,10 @@ class LavaggiRelationManager extends RelationManager
                     ->label('Macchina')
                     ->state(fn (Lavaggio $record) => $record->machineLabel())
                     ->wrap(),
-                Tables\Columns\TextColumn::make('descrizione')->label('Note')->searchable(),
+                Tables\Columns\TextColumn::make('descrizione')->label('Note')->searchable()
+                    ->url(fn (Lavaggio $record) => $record->serviceReport
+                        ? ServiceReportResource::getUrl('view', ['record' => $record->serviceReport])
+                        : null),
                 Tables\Columns\TextColumn::make('fatturare_a')
                     ->label('Fatturare a')
                     ->state(fn (Lavaggio $record) => $record->billingLabel())
@@ -105,13 +119,21 @@ class LavaggiRelationManager extends RelationManager
             ])
             ->actions([
                 Tables\Actions\ActionGroup::make([
-                    Tables\Actions\EditAction::make(),
-                    Tables\Actions\DeleteAction::make(),
+                    // Si modifica solo una visita di un solo piano: con piu'
+                    // bevande il dettaglio si corregge sul piano lavaggio.
+                    Tables\Actions\EditAction::make()
+                        ->visible(fn (Lavaggio $record) => $record->visitSiblings()->count() === 1),
+                    Tables\Actions\DeleteAction::make()
+                        ->modalDescription(fn (Lavaggio $record) => ($n = $record->visitSiblings()->count()) > 1
+                            ? "Vengono eliminati i {$n} lavaggi di questa visita ({$record->visitLinesLabel()})."
+                            : null)
+                        ->using(fn (Lavaggio $record) => $record->visitSiblings()->each->delete()),
                 ]),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->using(fn (Collection $records) => $records->each(fn (Lavaggio $record) => $record->visitSiblings()->each->delete())),
                 ]),
             ])
             ->emptyStateHeading('Nessun lavaggio registrato')
