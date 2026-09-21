@@ -23,7 +23,7 @@
 
     <table class="doc-meta">
         <tr>
-            <td><span class="label">Documento</span><br><span class="value">Offerta caffè</span></td>
+            <td><span class="label">Documento</span><br><span class="value">Offerta caffè{{ $numero ? ' n. '.$numero : '' }}</span></td>
             <td class="to-right">
                 <span class="label">Data</span><br><span class="value">{{ $data->format('d/m/Y') }}</span>
                 @if($validaFino)

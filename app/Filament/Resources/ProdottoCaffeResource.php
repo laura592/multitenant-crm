@@ -2,8 +2,8 @@
 
 namespace App\Filament\Resources;
 
-use App\Filament\Resources\ProdottoCaffeResource\Pages;
 use App\Filament\Forms\MoneyInput;
+use App\Filament\Resources\ProdottoCaffeResource\Pages;
 use App\Models\ProdottoCaffe;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -12,8 +12,8 @@ use Filament\Tables;
 use Filament\Tables\Table;
 
 /**
- * Il listino da cui nasce l'offerta caffe' (azione "Offerta caffè" sulla
- * scheda cliente). Nel pannello e non in un file di configurazione perche'
+ * Il listino da cui si scelgono i caffe' delle offerte caffe' (vedi
+ * OffertaCaffeResource). Nel pannello e non in un file di configurazione perche'
  * i prezzi del caffe' cambiano, e cambiarli non deve voler dire un deploy.
  */
 class ProdottoCaffeResource extends Resource
@@ -28,9 +28,11 @@ class ProdottoCaffeResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-beaker';
 
-    protected static ?string $navigationGroup = 'Vendite';
+    // Nel Catalogo e non in Vendite accanto a Offerte caffe': e' un'anagrafica
+    // di prezzi, si tocca quando cambia il listino (21/09/2026).
+    protected static ?string $navigationGroup = 'Catalogo';
 
-    protected static ?int $navigationSort = 20;
+    protected static ?int $navigationSort = 5;
 
     protected static ?string $navigationLabel = 'Listino caffè';
 

@@ -154,8 +154,8 @@ class RolePermissions
                 // controllare cosa e' stato promesso, non a rifarli — quelli
                 // restano di chi li scrive.
                 ...self::expand('quote', self::VIEW),
-                // Il listino in sola lettura basta per stampare l'offerta
-                // caffe': i prezzi li cambia chi gestisce il catalogo.
+                // Il listino in sola lettura basta per fare e mandare le
+                // offerte caffe': i prezzi li cambia chi gestisce il catalogo.
                 ...self::expand('prodotto::caffe', self::VIEW),
                 ...self::expand('quote::group', self::VIEW),
                 ...self::expand('service::report', self::UFFICIO),
@@ -234,8 +234,8 @@ class RolePermissions
                 ...self::expand('time::entry', self::MANAGE),
                 ...self::expand('leave::request', self::MANAGE),
                 ...self::expand('payment::method', self::MANAGE),
-                // Listino caffe': da li' nasce l'offerta caffe' sulla scheda
-                // cliente, che e' un documento a parte dal preventivo.
+                // Listino caffe': chi lo legge fa anche le offerte caffe'
+                // (OffertaCaffePolicy usa questo stesso permesso).
                 ...self::expand('prodotto::caffe', self::MANAGE),
                 ...self::expand('machine::unit', self::FULL_MANAGE),
                 ...self::expand('lavaggio', self::MANAGE),

@@ -144,6 +144,11 @@ class Tenant extends Model implements HasName
         return $this->hasMany(Quote::class);
     }
 
+    public function offerteCaffe(): HasMany
+    {
+        return $this->hasMany(OffertaCaffe::class);
+    }
+
     public function quoteGroups(): HasMany
     {
         return $this->hasMany(QuoteGroup::class);

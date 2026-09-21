@@ -18,6 +18,9 @@ class QuoteMail extends Mailable
         public Quote $quote,
         public string $pdfContent,
         public ?string $customMessage = null,
+        // L'offerta caffe' allegata allo stesso invio, se richiesta.
+        public ?string $offertaCaffePdf = null,
+        public ?string $offertaCaffeNomeFile = null,
     ) {}
 
     public function envelope(): Envelope
@@ -40,9 +43,12 @@ class QuoteMail extends Mailable
 
     public function attachments(): array
     {
-        return [
+        return array_values(array_filter([
             Attachment::fromData(fn () => $this->pdfContent, "preventivo-{$this->quote->number}.pdf")
                 ->withMime('application/pdf'),
-        ];
+            $this->offertaCaffePdf !== null
+                ? Attachment::fromData(fn () => $this->offertaCaffePdf, $this->offertaCaffeNomeFile ?? 'offerta-caffe.pdf')->withMime('application/pdf')
+                : null,
+        ]));
     }
 }

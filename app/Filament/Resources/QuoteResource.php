@@ -6,6 +6,7 @@ use App\Filament\Forms\CustomerContactFields;
 use App\Filament\Forms\CustomerFiscalFields;
 use App\Filament\Forms\ItalianAddressFields;
 use App\Filament\Forms\MoneyInput;
+use App\Filament\Forms\OffertaCaffeFields;
 use App\Filament\Resources\QuoteResource\Pages;
 use App\Filament\Resources\QuoteResource\RelationManagers\QuoteProductsRelationManager;
 use App\Mail\QuoteMail;
@@ -14,6 +15,7 @@ use App\Models\PaymentMethod;
 use App\Models\Quote;
 use App\Models\QuoteGroup;
 use App\Support\DisplayName;
+use App\Support\Pdf\OffertaCaffePdf;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Facades\Filament;
 use Filament\Forms;
@@ -43,6 +45,9 @@ class QuoteResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-document-text';
 
     protected static ?string $navigationGroup = 'Vendite';
+
+
+    protected static ?int $navigationSort = 3;
 
     protected static ?string $navigationLabel = 'Preventivi';
 
@@ -705,6 +710,7 @@ class QuoteResource extends Resource
                 // pannello: l'utente lo trova gia' pronto e lo personalizza
                 // solo se serve, invece di scrivere da zero ad ogni invio.
                 ->default(fn (Quote $record) => static::defaultQuoteEmailBody($record)),
+            ...OffertaCaffeFields::allegatoAllInvio(fn (?Quote $record = null) => $record?->customer, 'custom_message'),
         ];
     }
 
@@ -759,6 +765,7 @@ class QuoteResource extends Resource
     public static function sendQuoteEmail(Quote $record, array $data): void
     {
         $pdf = static::buildPdf($record);
+        $offertaCaffe = OffertaCaffeFields::daAllegare($data);
 
         $email = $record->emails()->create([
             'user_id' => Auth::id(),
@@ -772,7 +779,17 @@ class QuoteResource extends Resource
         try {
             Mail::to($data['recipient_email'])
                 ->cc(static::ccRecipients($record, $data))
-                ->send(new QuoteMail($record, $pdf->output(), $data['custom_message'] ?? null));
+                ->send(new QuoteMail(
+                    $record,
+                    $pdf->output(),
+                    $data['custom_message'] ?? null,
+                    $offertaCaffe ? OffertaCaffePdf::perOfferta($offertaCaffe)->output() : null,
+                    $offertaCaffe ? OffertaCaffePdf::nomeFile($offertaCaffe) : null,
+                ));
+
+            if ($offertaCaffe) {
+                OffertaCaffeResource::registraInvio($offertaCaffe, $data['recipient_email'], $data['cc_email'] ?? null, "Preventivo {$record->number}", $data['custom_message'] ?? null, inviataCon: "Preventivo {$record->number}");
+            }
 
             if ($record->status === 'bozza') {
                 $record->update(['status' => 'inviato']);

@@ -26,6 +26,9 @@ class QuoteGroupMail extends Mailable
         public array $pdfContents,
         public ?string $emailBody = null,
         public ?string $subjectText = null,
+        // L'offerta caffe' allegata allo stesso invio, se richiesta.
+        public ?string $offertaCaffePdf = null,
+        public ?string $offertaCaffeNomeFile = null,
     ) {}
 
     public function envelope(): Envelope
@@ -51,11 +54,18 @@ class QuoteGroupMail extends Mailable
 
     public function attachments(): array
     {
-        return $this->quotes->map(function (Quote $quote) {
+        $allegati = $this->quotes->map(function (Quote $quote) {
             return Attachment::fromData(
                 fn () => $this->pdfContents[$quote->id] ?? '',
                 "preventivo-{$quote->number}.pdf"
             )->withMime('application/pdf');
         })->all();
+
+        if ($this->offertaCaffePdf !== null) {
+            $allegati[] = Attachment::fromData(fn () => $this->offertaCaffePdf, $this->offertaCaffeNomeFile ?? 'offerta-caffe.pdf')
+                ->withMime('application/pdf');
+        }
+
+        return $allegati;
     }
 }

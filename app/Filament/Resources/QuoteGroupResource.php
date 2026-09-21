@@ -2,12 +2,14 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Forms\OffertaCaffeFields;
 use App\Filament\Resources\QuoteGroupResource\Pages;
 use App\Filament\Resources\QuoteGroupResource\RelationManagers\QuotesRelationManager;
 use App\Mail\QuoteGroupMail;
 use App\Models\Quote;
 use App\Models\QuoteGroup;
 use App\Support\DisplayName;
+use App\Support\Pdf\OffertaCaffePdf;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -36,6 +38,9 @@ class QuoteGroupResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
 
     protected static ?string $navigationGroup = 'Vendite';
+
+
+    protected static ?int $navigationSort = 4;
 
     protected static ?string $navigationLabel = 'Offerte';
 
@@ -173,8 +178,10 @@ class QuoteGroupResource extends Resource
                     static::buildAutomaticSectionsPreviewHtml(
                         $record,
                         is_string($get('subject')) ? $get('subject') : null,
+                        (bool) $get('allega_offerta_caffe'),
                     )
                 )),
+            ...OffertaCaffeFields::allegatoAllInvio(fn (?QuoteGroup $record = null) => $record?->customer, 'email_body'),
         ];
     }
 
@@ -220,7 +227,7 @@ class QuoteGroupResource extends Resource
         ]));
     }
 
-    protected static function buildAutomaticSectionsPreviewHtml(QuoteGroup $record, ?string $subject): string
+    protected static function buildAutomaticSectionsPreviewHtml(QuoteGroup $record, ?string $subject, bool $conOffertaCaffe = false): string
     {
         $resolvedSubject = filled(trim((string) $subject))
             ? trim((string) $subject)
@@ -249,7 +256,9 @@ class QuoteGroupResource extends Resource
                 .'</tr>';
         })->implode('');
 
-        $attachments = $quotes->map(fn ($quote): string => 'preventivo-'.$quote->number.'.pdf')->implode(', ');
+        $attachments = $quotes->map(fn ($quote): string => 'preventivo-'.$quote->number.'.pdf')
+            ->when($conOffertaCaffe, fn ($nomi) => $nomi->push('offerta caffè'))
+            ->implode(', ');
 
         return '<div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-100">'
             .'<div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.04em;">Oggetto</div>'
@@ -283,6 +292,8 @@ class QuoteGroupResource extends Resource
         ]);
 
         try {
+            $offertaCaffe = OffertaCaffeFields::daAllegare($data);
+
             $pdfContents = $quotes->mapWithKeys(fn ($quote) => [
                 $quote->id => QuoteResource::buildPdf($quote)->output(),
             ])->all();
@@ -296,8 +307,14 @@ class QuoteGroupResource extends Resource
                         $pdfContents,
                         $data['email_body'] ?? static::defaultGroupEmailBody($record),
                         $data['subject'] ?? static::defaultGroupEmailSubject($record),
+                        $offertaCaffe ? OffertaCaffePdf::perOfferta($offertaCaffe)->output() : null,
+                        $offertaCaffe ? OffertaCaffePdf::nomeFile($offertaCaffe) : null,
                     ))->subject($data['subject'] ?? static::defaultGroupEmailSubject($record))
                 );
+
+            if ($offertaCaffe) {
+                OffertaCaffeResource::registraInvio($offertaCaffe, $data['recipient_email'], $data['cc_email'] ?? null, $data['subject'] ?? null, $data['email_body'] ?? null, inviataCon: "Offerta {$record->number}");
+            }
 
             if ($record->status === 'bozza') {
                 $record->update(['status' => 'inviato', 'sent_at' => now()]);

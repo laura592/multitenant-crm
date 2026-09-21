@@ -3,6 +3,7 @@
 namespace App\Support\Pdf;
 
 use App\Models\Customer;
+use App\Models\OffertaCaffe;
 use App\Models\ProdottoCaffe;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Barryvdh\DomPDF\PDF as DomPdf;
@@ -38,12 +39,29 @@ final class OffertaCaffePdf
             ->all();
     }
 
+    public static function perOfferta(OffertaCaffe $offerta): DomPdf
+    {
+        return self::crea(
+            $offerta->customer,
+            $offerta->righe ?? [],
+            $offerta->valida_fino,
+            $offerta->note,
+            $offerta->number,
+            $offerta->date,
+        );
+    }
+
+    public static function nomeFile(OffertaCaffe $offerta): string
+    {
+        return "offerta-caffe-{$offerta->number}.pdf";
+    }
+
     /**
      * @param  array<int, array{gruppo?: ?string, nome?: ?string, formato?: ?string, prezzo?: mixed}>  $righe
      */
-    public static function crea(Customer $cliente, array $righe, ?CarbonInterface $validaFino = null, ?string $note = null): DomPdf
+    public static function crea(Customer $cliente, array $righe, ?CarbonInterface $validaFino = null, ?string $note = null, ?string $numero = null, ?CarbonInterface $data = null): DomPdf
     {
-        return Pdf::loadView('pdf.offerta-caffe', self::datiVista($cliente, $righe, $validaFino, $note))
+        return Pdf::loadView('pdf.offerta-caffe', self::datiVista($cliente, $righe, $validaFino, $note, $numero, $data))
             ->setPaper('a4');
     }
 
@@ -53,12 +71,13 @@ final class OffertaCaffePdf
      *
      * @return array<string, mixed>
      */
-    public static function datiVista(Customer $cliente, array $righe, ?CarbonInterface $validaFino = null, ?string $note = null): array
+    public static function datiVista(Customer $cliente, array $righe, ?CarbonInterface $validaFino = null, ?string $note = null, ?string $numero = null, ?CarbonInterface $data = null): array
     {
         return [
             'cliente' => $cliente,
             'tenant' => Filament::getTenant() ?? $cliente->tenant,
-            'data' => now(),
+            'numero' => $numero,
+            'data' => $data ?? now(),
             'validaFino' => $validaFino,
             'note' => filled($note) ? trim($note) : null,
             'gruppi' => self::perGruppo($righe),
