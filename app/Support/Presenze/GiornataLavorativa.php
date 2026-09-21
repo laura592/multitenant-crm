@@ -31,7 +31,8 @@ final class GiornataLavorativa
         $contratto = max(0.0, $contratto);
 
         // Sotto il contratto non cambia niente, trasferta o no: le ore che
-        // mancano restano mancanti come in qualunque altro giorno.
+        // mancano restano mancanti come in qualunque altro giorno — 6 ore in
+        // trasferta sono 6 ordinarie (confermato dall'ufficio, 21/09/2026).
         $ordinarie = min($lavorate, $contratto);
         $oltre = $lavorate - $ordinarie;
 

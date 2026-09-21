@@ -32,6 +32,20 @@ class TrasfertaTest extends TestCase
         }
     }
 
+    /**
+     * Sotto il contratto la trasferta non copre le ore mancanti: 6 ore in
+     * trasferta restano 6 ordinarie, come in qualunque altro giorno.
+     * Confermato dall'ufficio il 21/09/2026.
+     */
+    public function test_sotto_il_contratto_le_ore_mancanti_restano_mancanti(): void
+    {
+        $giornata = GiornataLavorativa::ripartisci(6, 8, trasferta: true);
+
+        $this->assertEquals(6, $giornata->ordinarie);
+        $this->assertEquals(0, $giornata->coperteDaTrasferta);
+        $this->assertEquals(0, $giornata->straordinario);
+    }
+
     /** Senza trasferta niente cambia: dalla nona ora e' straordinario come prima. */
     public function test_senza_trasferta_il_conto_e_quello_di_sempre(): void
     {
