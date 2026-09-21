@@ -28,7 +28,7 @@ use Illuminate\Support\Collection;
 class CategorizzaDocumenti extends Command
 {
     /** @var array<string, string> id => categoria */
-    private const DOCUMENTI = [
+    public const DOCUMENTI = [
         '01a032ee-e744-71af-a584-6a947c6d394c' => PriceList::ALTRO, // Manuale Alex CRM
         '01a06153-2dcf-70ca-bd0f-5017c15e67d6' => PriceList::ALTRO, // Scheda Cliente
         '019f8d92-1ca7-732f-a373-ce27927d4b20' => PriceList::CATALOGO, // John Guest - Raccordi ad innesto rapido

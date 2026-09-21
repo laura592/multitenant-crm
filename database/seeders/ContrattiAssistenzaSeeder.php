@@ -7,6 +7,7 @@ use App\Models\Tenant;
 use App\Support\Assistenza\ContrattoAssistenza;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
  * Carica in Documenti i due modelli dei contratti di assistenza
@@ -37,9 +38,16 @@ class ContrattiAssistenzaSeeder extends Seeder
 
             $sorgente = __DIR__."/contratti/{$tipo}-service.pdf";
             $cartella = PriceList::cartella($categoria);
-            $percorso = $cartella.'/'.PriceList::nomeFileLibero($nome, $cartella);
+            $contenuto = file_get_contents($sorgente);
 
-            Storage::disk('public')->put($percorso, file_get_contents($sorgente));
+            // Se lo stesso PDF e' gia' sul server (caricato a mano) si usa
+            // quello, invece di metterne accanto una copia -2.
+            $percorso = $cartella.'/'.Str::slug($nome).'.pdf';
+
+            if (! Storage::disk('public')->exists($percorso) || Storage::disk('public')->get($percorso) !== $contenuto) {
+                $percorso = $cartella.'/'.PriceList::nomeFileLibero($nome, $cartella);
+                Storage::disk('public')->put($percorso, $contenuto);
+            }
 
             PriceList::create([
                 'tenant_id' => $tenantId,
