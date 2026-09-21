@@ -5,9 +5,10 @@
             Eureka non risponde in questo momento. Riprova fra qualche minuto.
         </p>
     @elseif($esito === 'vuoto')
-        <p>Questa scheda <strong>non è ancora fatturata</strong>.</p>
+        <p>Su Eureka <strong>nessuna fattura è collegata</strong> a questa scheda.</p>
         <p class="text-gray-500 dark:text-gray-400">
-            Eureka la collega alla fattura quando la fattura viene emessa: riapri questa finestra più avanti.
+            Se è recente, la fattura non è ancora stata emessa: riapri questa finestra più avanti.
+            Se è vecchia, può essere stata fatturata a mano senza partire dalla scheda, oppure essere il doppione di un'altra scheda.
         </p>
     @else
         <ul class="divide-y divide-gray-200 dark:divide-white/10 rounded-lg border border-gray-200 dark:border-white/10">

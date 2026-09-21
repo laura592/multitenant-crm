@@ -108,7 +108,7 @@ class AllineaFattureRapportiniEureka extends Command
         $this->table(['', 'Rapportini'], [
             ['Controllati', $conti['controllati']],
             ['Fatturati da questo giro', $conti['fatturati_ora']],
-            ['Non ancora fatturati', $conti['ancora_da_fatturare']],
+            ['Senza fattura collegata', $conti['ancora_da_fatturare']],
             ['Eureka non ha risposto (si riprova)', $conti['senza_risposta']],
         ]);
 

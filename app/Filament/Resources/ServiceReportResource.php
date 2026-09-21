@@ -54,6 +54,9 @@ class ServiceReportResource extends Resource
 
     protected static ?string $navigationGroup = 'Interventi tecnici';
 
+
+    protected static ?int $navigationSort = 1;
+
     protected static ?string $navigationLabel = 'Rapportini tecnici';
 
     protected static ?string $modelLabel = 'Rapportino';
@@ -1294,7 +1297,13 @@ class ServiceReportResource extends Resource
                     ->placeholder(fn (ServiceReport $record): string => match (true) {
                         $record->idSchedaEureka() === null => '—',
                         $record->eureka_fatture_controllate_il === null => 'non controllato',
-                        default => 'da fatturare',
+                        // Non "da fatturare": il dato dice solo che su Eureka
+                        // nessuna fattura e' collegata alla scheda. Sul vero la
+                        // maggior parte sono doppioni di schede fatturate, schede
+                        // senza importo o fatture fatte a mano senza partire dalla
+                        // scheda (verificato il 21/09/2026: 17 su 150 senza
+                        // nessuna fattura al cliente nel periodo).
+                        default => 'nessuna fattura collegata',
                     })
                     ->sortable()
                     ->toggleable(),
@@ -1363,7 +1372,7 @@ class ServiceReportResource extends Resource
                     ->visible(fn (): bool => self::vedeFatturazione())
                     ->options([
                         'fatturati' => 'Fatturati',
-                        'da_fatturare' => 'Su Eureka, non ancora fatturati',
+                        'da_fatturare' => 'Su Eureka, senza fattura collegata',
                     ])
                     ->query(fn (Builder $query, array $data) => match ($data['value'] ?? null) {
                         'fatturati' => $query->whereNotNull('eureka_fatturato_il'),
