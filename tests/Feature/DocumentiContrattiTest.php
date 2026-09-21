@@ -40,7 +40,7 @@ class DocumentiContrattiTest extends TestCase
     private function carica(string $categoria, array $extra = []): PriceList
     {
         $percorso = 'price-lists/'.uniqid().'.pdf';
-        Storage::disk('public')->put($percorso, file_get_contents(base_path('tests/fixtures/contratti/easy-service.pdf')));
+        Storage::disk('public')->put($percorso, file_get_contents(base_path('database/seeders/contratti/easy-service.pdf')));
 
         return PriceList::create([
             'tenant_id' => $this->tenant->id, 'category' => $categoria, 'name' => 'Modello', 'file_path' => $percorso, ...$extra,
@@ -125,7 +125,7 @@ class DocumentiContrattiTest extends TestCase
             ->callAction('create', [
                 'category' => PriceList::CONTRATTO_EASY,
                 'name' => 'Easy-Service rev. settembre 2026',
-                'file_path' => [UploadedFile::fake()->createWithContent('easy.pdf', file_get_contents(base_path('tests/fixtures/contratti/easy-service.pdf')))],
+                'file_path' => [UploadedFile::fake()->createWithContent('easy.pdf', file_get_contents(base_path('database/seeders/contratti/easy-service.pdf')))],
             ])
             ->assertHasNoActionErrors();
 
@@ -219,7 +219,7 @@ class DocumentiContrattiTest extends TestCase
             ->callAction('create', [
                 'category' => PriceList::LISTINO,
                 'name' => 'Liebherr listino 2026',
-                'file_path' => [UploadedFile::fake()->createWithContent('scan0001.pdf', file_get_contents(base_path('tests/fixtures/contratti/easy-service.pdf')))],
+                'file_path' => [UploadedFile::fake()->createWithContent('scan0001.pdf', file_get_contents(base_path('database/seeders/contratti/easy-service.pdf')))],
             ])
             ->assertHasNoActionErrors();
 
