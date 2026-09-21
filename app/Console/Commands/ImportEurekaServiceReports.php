@@ -343,6 +343,15 @@ class ImportEurekaServiceReports extends Command
                     continue;
                 }
 
+                // Eureka non ha un tipo intervento: mapInterventionType() lo
+                // indovina dal testo e ripiega su "riparazione", ed e' cosi'
+                // che la scheda torna indietro anche quando nel CRM e' una
+                // sanificazione. Quello che il CRM ha segnato come
+                // sanificazione resta sanificazione.
+                if ($existing->intervention_type === ServiceReport::TYPE_SANIFICAZIONE) {
+                    unset($payload['intervention_type']);
+                }
+
                 $existing->fill($payload);
 
                 if (! $existing->isDirty()) {
