@@ -154,6 +154,9 @@ class RolePermissions
                 // controllare cosa e' stato promesso, non a rifarli — quelli
                 // restano di chi li scrive.
                 ...self::expand('quote', self::VIEW),
+                // Il listino in sola lettura basta per stampare l'offerta
+                // caffe': i prezzi li cambia chi gestisce il catalogo.
+                ...self::expand('prodotto::caffe', self::VIEW),
                 ...self::expand('quote::group', self::VIEW),
                 ...self::expand('service::report', self::UFFICIO),
                 // Invio a Eureka: crea un documento che non si puo' piu'
@@ -231,6 +234,9 @@ class RolePermissions
                 ...self::expand('time::entry', self::MANAGE),
                 ...self::expand('leave::request', self::MANAGE),
                 ...self::expand('payment::method', self::MANAGE),
+                // Listino caffe': da li' nasce l'offerta caffe' sulla scheda
+                // cliente, che e' un documento a parte dal preventivo.
+                ...self::expand('prodotto::caffe', self::MANAGE),
                 ...self::expand('machine::unit', self::FULL_MANAGE),
                 ...self::expand('lavaggio', self::MANAGE),
                 // Unico ruolo (oltre allo staff master is_super_admin) che puo'
@@ -289,6 +295,7 @@ class RolePermissions
                 ...self::expand('time::entry', self::MANAGE_NO_DELETE),
                 ...self::expand('leave::request', self::MANAGE_NO_DELETE),
                 ...self::expand('payment::method', self::MANAGE_NO_DELETE),
+                ...self::expand('prodotto::caffe', self::MANAGE_NO_DELETE),
                 ...self::expand('machine::unit', self::MANAGE_NO_DELETE),
                 ...self::expand('lavaggio', self::MANAGE_NO_DELETE),
                 ...self::expand('user', self::MANAGE_NO_DELETE),
