@@ -6,6 +6,9 @@
         </p>
     @elseif($esito === 'vuoto')
         <p>Su Eureka <strong>nessuna fattura è collegata</strong> a questa scheda.</p>
+        @if(! empty($motivo))
+            <p>Il motivo più probabile: <strong>{{ $motivo }}</strong>.</p>
+        @endif
         <p class="text-gray-500 dark:text-gray-400">
             Se è recente, la fattura non è ancora stata emessa: riapri questa finestra più avanti.
             Se è vecchia, può essere stata fatturata a mano senza partire dalla scheda, oppure essere il doppione di un'altra scheda.

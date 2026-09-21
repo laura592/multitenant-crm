@@ -37,6 +37,7 @@ use Filament\Resources\Resource;
 use Filament\Support\Exceptions\Halt;
 use Filament\Tables;
 use Filament\Tables\Table;
+use App\Support\Gestionale\SenzaFatturaCollegata;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
@@ -1290,21 +1291,34 @@ class ServiceReportResource extends Resource
                 Tables\Columns\TextColumn::make('eureka_fatturato_il')
                     ->label('Fatturato')
                     ->visible(fn (): bool => self::vedeFatturazione())
-                    ->state(fn (ServiceReport $record): ?string => $record->etichettaFatturaEureka())
+                    // Senza fattura collegata si dice il perche', con la prova:
+                    // "doppione di RT-2025-0892", "probabile FT 479 del
+                    // 07/11/2025". "Nessuna fattura collegata" da solo non
+                    // vuol dire "da fatturare" — dei 150 del 21/09/2026 lo
+                    // erano forse 17. Vedi SenzaFatturaCollegata. Il motivo e'
+                    // il valore e non il segnaposto, perche' il colore Filament
+                    // lo applica solo al valore.
+                    ->state(fn (ServiceReport $record): ?string => match (true) {
+                        $record->eureka_fatturato_il !== null => $record->etichettaFatturaEureka(),
+                        $record->eureka_fatture_controllate_il === null => null,
+                        default => SenzaFatturaCollegata::descrizione($record->eureka_fattura_motivo, $record->eureka_fattura_indizio)
+                            ?? 'nessuna fattura collegata',
+                    })
                     ->description(fn (ServiceReport $record): ?string => count($record->eureka_fatture ?? []) > 1
                         ? 'e altre '.(count($record->eureka_fatture) - 1)
                         : null)
-                    ->placeholder(fn (ServiceReport $record): string => match (true) {
-                        $record->idSchedaEureka() === null => '—',
-                        $record->eureka_fatture_controllate_il === null => 'non controllato',
-                        // Non "da fatturare": il dato dice solo che su Eureka
-                        // nessuna fattura e' collegata alla scheda. Sul vero la
-                        // maggior parte sono doppioni di schede fatturate, schede
-                        // senza importo o fatture fatte a mano senza partire dalla
-                        // scheda (verificato il 21/09/2026: 17 su 150 senza
-                        // nessuna fattura al cliente nel periodo).
-                        default => 'nessuna fattura collegata',
+                    ->placeholder(fn (ServiceReport $record): string => $record->idSchedaEureka() === null ? '—' : 'non controllato')
+                    ->color(fn (ServiceReport $record): ?string => $record->eureka_fatturato_il !== null ? null : match ($record->eureka_fattura_motivo) {
+                        SenzaFatturaCollegata::DA_VERIFICARE => 'danger',
+                        SenzaFatturaCollegata::DOPPIONE => 'warning',
+                        default => 'gray',
                     })
+                    ->weight(fn (ServiceReport $record) => $record->eureka_fattura_motivo === SenzaFatturaCollegata::DA_VERIFICARE && $record->eureka_fatturato_il === null
+                        ? \Filament\Support\Enums\FontWeight::Bold
+                        : null)
+                    // "probabile FT 479 del 07/11/2025" e' lungo: a capo, non
+                    // tagliato sul bordo della tabella.
+                    ->wrap()
                     ->sortable()
                     ->toggleable(),
                 Tables\Columns\IconColumn::make('gestionale_sync_status')
@@ -1372,14 +1386,22 @@ class ServiceReportResource extends Resource
                     ->visible(fn (): bool => self::vedeFatturazione())
                     ->options([
                         'fatturati' => 'Fatturati',
-                        'da_fatturare' => 'Su Eureka, senza fattura collegata',
+                        // Il primo da guardare: quelli che il CRM non sa spiegare.
+                        SenzaFatturaCollegata::DA_VERIFICARE => 'Da verificare',
+                        SenzaFatturaCollegata::DOPPIONE => 'Doppioni (da sistemare su Eureka)',
+                        SenzaFatturaCollegata::FATTURA_NON_COLLEGATA => 'Fatturati senza collegare la scheda',
+                        'da_fatturare' => 'Tutti senza fattura collegata',
                     ])
                     ->query(fn (Builder $query, array $data) => match ($data['value'] ?? null) {
                         'fatturati' => $query->whereNotNull('eureka_fatturato_il'),
                         // Solo quelli controllati: "mai chiesto a Eureka" non e'
-                        // "da fatturare", e mescolarli darebbe falsi allarmi.
+                        // "senza fattura", e mescolarli darebbe falsi allarmi.
                         'da_fatturare' => $query->whereNull('eureka_fatturato_il')
                             ->whereNotNull('eureka_fatture_controllate_il'),
+                        SenzaFatturaCollegata::DA_VERIFICARE,
+                        SenzaFatturaCollegata::DOPPIONE,
+                        SenzaFatturaCollegata::FATTURA_NON_COLLEGATA => $query->whereNull('eureka_fatturato_il')
+                            ->where('eureka_fattura_motivo', $data['value']),
                         default => $query,
                     }),
                 Tables\Filters\TrashedFilter::make(),

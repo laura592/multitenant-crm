@@ -42,7 +42,13 @@ final class FattureRapportino
         $rapportino->registraFattureEureka($fatture);
 
         if ($fatture === []) {
-            return ['esito' => 'vuoto', 'fatture' => []];
+            SenzaFatturaCollegata::aggiorna($rapportino);
+
+            return [
+                'esito' => 'vuoto',
+                'fatture' => [],
+                'motivo' => SenzaFatturaCollegata::descrizione($rapportino->eureka_fattura_motivo, $rapportino->eureka_fattura_indizio),
+            ];
         }
 
         return [

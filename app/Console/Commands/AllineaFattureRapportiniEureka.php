@@ -7,6 +7,7 @@ use App\Models\Tenant;
 use App\Support\Gestionale\EurekaClient;
 use App\Support\Gestionale\FattureRapportino;
 use App\Support\Gestionale\RegistroSync;
+use App\Support\Gestionale\SenzaFatturaCollegata;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -34,7 +35,8 @@ class AllineaFattureRapportiniEureka extends Command
     protected $signature = 'eureka:allinea-fatture-rapportini
                             {--tenant= : slug del tenant, di default quello master}
                             {--tutti : ricontrolla anche i rapportini gia\' fatturati}
-                            {--dry-run : chiede a Eureka ma non scrive niente}';
+                            {--dry-run : chiede a Eureka ma non scrive niente}
+                            {--solo-classifica : non chiede a Eureka, rifa\' solo la classificazione}';
 
     protected $description = 'Annota su ogni rapportino la fattura Eureka su cui e\' finita la sua scheda';
 
@@ -51,6 +53,13 @@ class AllineaFattureRapportiniEureka extends Command
         }
 
         $dryRun = (bool) $this->option('dry-run');
+
+        if ($this->option('solo-classifica')) {
+            $this->classifica($tenant);
+
+            return self::SUCCESS;
+        }
+
         $client = new EurekaClient($tenant);
 
         $daControllare = $this->daControllare($tenant);
@@ -116,6 +125,10 @@ class AllineaFattureRapportiniEureka extends Command
             $this->warn('--dry-run: niente e\' stato scritto.');
         }
 
+        if (! $dryRun) {
+            $conti['motivi'] = $this->classifica($tenant);
+        }
+
         RegistroSync::esito(self::OPERAZIONE, $conti);
 
         if ($conti['senza_risposta'] > 0) {
@@ -125,6 +138,40 @@ class AllineaFattureRapportiniEureka extends Command
         // Fallisce solo se Eureka non ha risposto a niente: qualche buco si
         // recupera la notte dopo, un giro tutto a vuoto va guardato.
         return $conti['controllati'] === 0 && $conti['senza_risposta'] > 0 ? self::FAILURE : self::SUCCESS;
+    }
+
+    /**
+     * Perche' ogni rapportino senza fattura collegata non ce l'ha (vedi
+     * SenzaFatturaCollegata). Si rifa' ogni notte su tutti: un "recente"
+     * invecchia, e le fatture importate alle 05:45 possono trasformare un
+     * "da verificare" in "fatturato senza collegare la scheda".
+     *
+     * @return array<string, int>
+     */
+    private function classifica(Tenant $tenant): array
+    {
+        $conti = array_fill_keys(array_keys(SenzaFatturaCollegata::etichette()), 0);
+
+        ServiceReport::query()
+            ->withoutGlobalScopes()
+            ->whereNull('deleted_at')
+            ->where('tenant_id', $tenant->id)
+            ->whereNull('eureka_fatturato_il')
+            ->whereNotNull('eureka_fatture_controllate_il')
+            ->chunkById(200, function (Collection $rapportini) use (&$conti) {
+                foreach ($rapportini as $rapportino) {
+                    SenzaFatturaCollegata::aggiorna($rapportino);
+                    $conti[$rapportino->eureka_fattura_motivo] = ($conti[$rapportino->eureka_fattura_motivo] ?? 0) + 1;
+                }
+            }, 'id');
+
+        $this->newLine();
+        $this->info('Senza fattura collegata, perche\':');
+        $this->table(['Motivo', 'Rapportini'], collect(SenzaFatturaCollegata::etichette())
+            ->map(fn (string $etichetta, string $motivo) => [$etichetta, $conti[$motivo] ?? 0])
+            ->values()->all());
+
+        return $conti;
     }
 
     /** I rapportini che hanno una scheda su Eureka e, di norma, nessuna fattura ancora. */

@@ -395,6 +395,12 @@ class ServiceReport extends Model
             'eureka_fatture_controllate_il' => now(),
         ];
 
+        // Trovata la fattura, il "perche' non c'e'" non serve piu'. Senza
+        // fattura invece motivo e indizio li decide SenzaFatturaCollegata.
+        if ($fatture !== []) {
+            $valori += ['eureka_fattura_motivo' => null, 'eureka_fattura_indizio' => null];
+        }
+
         static::withTrashed()->whereKey($this->getKey())->toBase()->update($valori);
 
         $this->forceFill([
