@@ -75,6 +75,7 @@ concentrato ha causato un disservizio dell'API del fornitore.
 | 05:30 | `eureka:import-partite-aperte` | lo scadenzario (prima delle fatture: è la pagina su cui si agisce la mattina) |
 | 05:45 | `eureka:import-fatture` | le fatture registrate |
 | 06:15 | `eureka:import-kpi-contabili` | fatturato mensile e cash flow |
+| 06:45 | `eureka:allinea-fatture-rapportini` | su quale fattura è finito ogni rapportino (colonna «Fatturato») |
 | lun 06:00 | `eureka:sweep-materials-catalog` | i materiali nuovi a catalogo |
 
 ## 4. Quando è rimasto indietro

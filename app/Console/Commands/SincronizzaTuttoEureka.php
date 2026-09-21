@@ -133,6 +133,8 @@ class SincronizzaTuttoEureka extends Command
             ] + $prova],
             'partite-aperte' => ['eureka:import-partite-aperte', ['--tenant' => $tenant]],
             'fatture' => ['eureka:import-fatture', ['--tenant' => $tenant]],
+            // Dopo i rapportini: le schede appena importate devono esserci.
+            'fatture-rapportini' => ['eureka:allinea-fatture-rapportini', ['--tenant' => $tenant] + $prova],
             'kpi' => ['eureka:import-kpi-contabili', ['--tenant' => $tenant]],
             'paganti' => ['eureka:apply-machine-billing-payer', ['--tenant' => $tenant] + $prova],
             // Per ultimo: le proposte di doppione confrontano i nostri

@@ -42,9 +42,15 @@ class SincronizzaTuttoTest extends TestCase
 
         $this->assertSame([
             'catalogo', 'prezzi', 'rapportini',
-            'partite-aperte', 'fatture', 'kpi', 'paganti',
+            'partite-aperte', 'fatture', 'fatture-rapportini', 'kpi', 'paganti',
             'anagrafiche',
         ], $ordine);
+
+        $this->assertLessThan(
+            array_search('fatture-rapportini', $ordine, true),
+            array_search('rapportini', $ordine, true),
+            'le fatture dei rapportini dopo i rapportini: le schede appena importate devono esserci',
+        );
 
         $this->assertLessThan(
             array_search('rapportini', $ordine, true),

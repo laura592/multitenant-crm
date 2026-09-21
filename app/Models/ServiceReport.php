@@ -134,6 +134,9 @@ class ServiceReport extends Model
         'departure_at' => 'datetime',
         'signed_at' => 'datetime',
         'gestionale_synced_at' => 'datetime',
+        'eureka_fatture' => 'array',
+        'eureka_fatturato_il' => 'date',
+        'eureka_fatture_controllate_il' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -367,6 +370,46 @@ class ServiceReport extends Model
         $id = $this->eureka_service_report_id ?? $this->gestionale_scheda_lavoro_id;
 
         return is_numeric($id) ? (int) $id : null;
+    }
+
+    /**
+     * Annota le fatture Eureka della scheda, come le ha restituite
+     * /show/q/sl_fattura (lista vuota = non ancora fatturata).
+     *
+     * Scrive senza passare dal modello: non e' una modifica del rapportino ma
+     * una lettura dal gestionale, fatta ogni notte su migliaia di righe.
+     * Salvando normalmente ognuna finirebbe nel registro modifiche e
+     * cambierebbe "ultima modifica", e i rapportini su Eureka sono comunque
+     * bloccati (isLocked).
+     *
+     * @param  array<int, array<string, mixed>>  $fatture
+     */
+    public function registraFattureEureka(array $fatture): void
+    {
+        $fatture = array_values(array_filter($fatture, 'is_array'));
+        $data = $fatture[0]['data_fattura'] ?? null;
+
+        $valori = [
+            'eureka_fatture' => $fatture === [] ? null : json_encode($fatture),
+            'eureka_fatturato_il' => $data ? \Illuminate\Support\Carbon::parse($data)->toDateString() : null,
+            'eureka_fatture_controllate_il' => now(),
+        ];
+
+        static::withTrashed()->whereKey($this->getKey())->toBase()->update($valori);
+
+        $this->forceFill([
+            'eureka_fatture' => $fatture === [] ? null : $fatture,
+            'eureka_fatturato_il' => $valori['eureka_fatturato_il'],
+            'eureka_fatture_controllate_il' => $valori['eureka_fatture_controllate_il'],
+        ])->syncOriginalAttributes(['eureka_fatture', 'eureka_fatturato_il', 'eureka_fatture_controllate_il']);
+    }
+
+    /** "FT 267 del 30/06/2026", la piu' recente; null se non fatturato. */
+    public function etichettaFatturaEureka(): ?string
+    {
+        $f = $this->eureka_fatture[0] ?? null;
+
+        return $f ? \App\Support\Gestionale\FattureRapportino::etichetta($f) : null;
     }
 
     /**

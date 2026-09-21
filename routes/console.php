@@ -110,3 +110,14 @@ Schedule::command('queue:work --queue=default,eureka-bulk --stop-when-empty --ma
 Schedule::command('eureka:import-partite-aperte', ['--tenant' => 'alex'])->dailyAt('05:30');
 Schedule::command('eureka:import-fatture', ['--tenant' => 'alex'])->dailyAt('05:45');
 Schedule::command('eureka:import-kpi-contabili', ['--tenant' => 'alex'])->dailyAt('06:15');
+
+// La fattura su cui e' finita la scheda di ogni rapportino non ancora
+// fatturato: colonna "Fatturato" e filtro nell'elenco rapportini. Dopo
+// l'import rapportini delle 04:00, cosi' le schede nuove ci sono gia', e
+// lontano dagli import contabili per non accavallarsi sui 500 di Eureka. La
+// prima volta sono ~3.700 schede (6 minuti), poi solo le non fatturate:
+// ~170, venti secondi.
+Schedule::command('eureka:allinea-fatture-rapportini', ['--tenant' => 'alex'])
+    ->dailyAt('06:45')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/eureka-import.log'));

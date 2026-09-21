@@ -37,6 +37,10 @@ final class FattureRapportino
             return ['esito' => 'errore', 'fatture' => []];
         }
 
+        // Quello che si e' appena saputo va anche nell'elenco, senza
+        // aspettare il giro di stanotte (eureka:allinea-fatture-rapportini).
+        $rapportino->registraFattureEureka($fatture);
+
         if ($fatture === []) {
             return ['esito' => 'vuoto', 'fatture' => []];
         }
@@ -52,7 +56,7 @@ final class FattureRapportino
     }
 
     /** "FT 267 del 30/06/2026" */
-    private static function etichetta(array $f): string
+    public static function etichetta(array $f): string
     {
         $data = filled($f['data_fattura'] ?? null)
             ? ' del '.Carbon::parse($f['data_fattura'])->format('d/m/Y')

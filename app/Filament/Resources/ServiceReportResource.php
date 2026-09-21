@@ -1281,6 +1281,23 @@ class ServiceReportResource extends Resource
                     ->badge()
                     ->formatStateUsing(fn (string $state) => self::statusLabels()[$state] ?? ucfirst($state))
                     ->color(fn (string $state) => self::statusColors()[$state] ?? 'gray'),
+                // La fattura Eureka su cui e' finita la scheda, annotata ogni
+                // notte da eureka:allinea-fatture-rapportini. Per l'ufficio:
+                // ai tecnici la fatturazione non serve, e la colonna non c'e'.
+                Tables\Columns\TextColumn::make('eureka_fatturato_il')
+                    ->label('Fatturato')
+                    ->visible(fn (): bool => self::vedeFatturazione())
+                    ->state(fn (ServiceReport $record): ?string => $record->etichettaFatturaEureka())
+                    ->description(fn (ServiceReport $record): ?string => count($record->eureka_fatture ?? []) > 1
+                        ? 'e altre '.(count($record->eureka_fatture) - 1)
+                        : null)
+                    ->placeholder(fn (ServiceReport $record): string => match (true) {
+                        $record->idSchedaEureka() === null => '—',
+                        $record->eureka_fatture_controllate_il === null => 'non controllato',
+                        default => 'da fatturare',
+                    })
+                    ->sortable()
+                    ->toggleable(),
                 Tables\Columns\IconColumn::make('gestionale_sync_status')
                     ->label('Eureka')
                     // Icona invece del badge testuale per risparmiare
@@ -1341,6 +1358,21 @@ class ServiceReportResource extends Resource
                 Tables\Filters\SelectFilter::make('technician_id')
                     ->label('Tecnico')
                     ->relationship('technician', 'name'),
+                Tables\Filters\SelectFilter::make('fatturazione')
+                    ->label('Fatturazione')
+                    ->visible(fn (): bool => self::vedeFatturazione())
+                    ->options([
+                        'fatturati' => 'Fatturati',
+                        'da_fatturare' => 'Su Eureka, non ancora fatturati',
+                    ])
+                    ->query(fn (Builder $query, array $data) => match ($data['value'] ?? null) {
+                        'fatturati' => $query->whereNotNull('eureka_fatturato_il'),
+                        // Solo quelli controllati: "mai chiesto a Eureka" non e'
+                        // "da fatturare", e mescolarli darebbe falsi allarmi.
+                        'da_fatturare' => $query->whereNull('eureka_fatturato_il')
+                            ->whereNotNull('eureka_fatture_controllate_il'),
+                        default => $query,
+                    }),
                 Tables\Filters\TrashedFilter::make(),
             ])
             ->actions([
@@ -1978,6 +2010,16 @@ class ServiceReportResource extends Resource
      * (conta come "chiuso" esattamente come "inviato") — per marcare in blocco
      * lo storico gia' passato in amministrazione.
      */
+    /**
+     * Chi vede colonna e filtro "Fatturato": chi vede i prezzi dei rapportini
+     * (amministrazione e admin). E' lavoro d'ufficio, e la fattura dietro e'
+     * spesso la riepilogativa di chi paga.
+     */
+    protected static function vedeFatturazione(): bool
+    {
+        return auth()->user()?->can('view_prices_service::report') ?? false;
+    }
+
     public static function statusLabels(): array
     {
         return [
