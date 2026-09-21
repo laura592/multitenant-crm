@@ -367,8 +367,8 @@ class InformationRequestResource extends Resource
                     ->options(static::statusLabels()),
             ])
             ->actions([
-                ContattaCliente::perTabella(fn (InformationRequest $record) => $record->customer),
                 Tables\Actions\ActionGroup::make([
+                    ContattaCliente::perTabella(fn (InformationRequest $record) => $record->customer),
                     // Fissare/spostare l'appuntamento è l'azione più frequente su una
                     // richiesta già presa in carico: un modal rapido evita di aprire
                     // tutto il form di modifica solo per questo.

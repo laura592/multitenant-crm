@@ -257,10 +257,10 @@ class CustomerResource extends Resource
                 Tables\Filters\TrashedFilter::make(),
             ])
             ->actions([
-                ContattaCliente::perTabella(fn (Customer $record) => $record),
                 Tables\Actions\ViewAction::make()
                     ->color('gray'),
                 Tables\Actions\ActionGroup::make([
+                    ContattaCliente::perTabella(fn (Customer $record) => $record),
                     Tables\Actions\Action::make('scheda_anagrafica')
                         ->label('Scheda anagrafica')
                         ->icon('heroicon-o-document-arrow-down')

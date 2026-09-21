@@ -23,15 +23,17 @@ use Illuminate\Database\Eloquent\Model;
  */
 class ContattaCliente
 {
-    /** @param  Closure(?Model): ?Customer  $cliente */
+    /**
+     * Nelle tabelle le voci stanno in cima al menu "⋮" della riga, come
+     * sezione a parte: un secondo pulsante col telefono accanto alla
+     * colonna Telefono sembrava un doppione (21/09/2026).
+     *
+     * @param  Closure(?Model): ?Customer  $cliente
+     */
     public static function perTabella(Closure $cliente): TableActionGroup
     {
         return TableActionGroup::make(self::voci(TableAction::class, $cliente))
-            ->label('Contatta')
-            ->icon('heroicon-o-phone')
-            ->color('success')
-            ->tooltip('Contatta il cliente')
-            ->visible(fn (?Model $record = null) => self::haContatti($cliente($record)));
+            ->dropdown(false);
     }
 
     /** Nelle pagine di un record il cliente e' gia' noto: niente closure. */
