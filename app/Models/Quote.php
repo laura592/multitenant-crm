@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Mail\CustomerGestionaleReviewMail;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\HasClientLink;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,7 +15,7 @@ use Illuminate\Support\Facades\Mail;
 
 class Quote extends Model
 {
-    use BelongsToTenant, HasUuids, SoftDeletes;
+    use BelongsToTenant, HasClientLink, HasUuids, SoftDeletes;
 
     protected $casts = [
         'date' => 'date',
@@ -24,6 +25,8 @@ class Quote extends Model
         'tax_total' => 'decimal:2',
         'total' => 'decimal:2',
         'rental_monthly_fee' => 'decimal:2',
+        'client_first_viewed_at' => 'datetime',
+        'client_last_viewed_at' => 'datetime',
     ];
 
     protected $fillable = [
@@ -237,6 +240,37 @@ class Quote extends Model
     public function emails(): HasMany
     {
         return $this->hasMany(QuoteEmail::class)->latest();
+    }
+
+    /**
+     * Le risposte del cliente dal link nella mail: quelle date su questo
+     * preventivo e, se fa parte di un'offerta globale, anche quelle date
+     * sull'offerta intera (domande, richiamate, rifiuto di tutte le
+     * soluzioni) - dal preventivo si vede cosi' tutta la conversazione.
+     *
+     * @return \Illuminate\Support\Collection<int, QuoteResponse>
+     */
+    public function clientResponses(): \Illuminate\Support\Collection
+    {
+        return QuoteResponse::withoutGlobalScope('tenant')
+            ->where(function ($query) {
+                $query->where('quote_id', $this->id);
+
+                if ($this->quote_group_id) {
+                    $query->orWhere(fn ($q) => $q->where('quote_group_id', $this->quote_group_id)->whereNull('quote_id'));
+                }
+            })
+            ->latest()
+            ->get();
+    }
+
+    /**
+     * Accettato o rifiutato: il cliente ha gia' deciso, dalla pagina restano
+     * solo domande e richiamate.
+     */
+    public function isDecided(): bool
+    {
+        return in_array($this->status, ['accettato', 'rifiutato'], true);
     }
 
     /**

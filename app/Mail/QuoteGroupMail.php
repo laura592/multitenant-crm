@@ -29,6 +29,8 @@ class QuoteGroupMail extends Mailable
         // L'offerta caffe' allegata allo stesso invio, se richiesta.
         public ?string $offertaCaffePdf = null,
         public ?string $offertaCaffeNomeFile = null,
+        // Vedi QuoteMail::$clientUrl.
+        public ?string $clientUrl = null,
     ) {}
 
     public function envelope(): Envelope
@@ -48,6 +50,7 @@ class QuoteGroupMail extends Mailable
                 'quotes' => $this->quotes,
                 'emailBody' => $this->emailBody,
                 'subjectText' => $this->subjectText,
+                'clientUrl' => $this->clientUrl,
             ],
         );
     }

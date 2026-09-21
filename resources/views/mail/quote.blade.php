@@ -14,6 +14,10 @@
 {!! $customMessage ?? '' !!}
 </x-mail.box>
 
+@if(! empty($clientUrl))
+<x-mail.client-response-cta :url="$clientUrl" :tenant="$tenant" />
+@endif
+
 <x-slot:footer>
 <x-mail.footer-tenant :tenant="$tenant" />
 </x-slot:footer>

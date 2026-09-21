@@ -21,6 +21,9 @@ class QuoteMail extends Mailable
         // L'offerta caffe' allegata allo stesso invio, se richiesta.
         public ?string $offertaCaffePdf = null,
         public ?string $offertaCaffeNomeFile = null,
+        // Il link alla pagina dove il cliente accetta/rifiuta/chiede
+        // (QuoteClientController); null = mail senza risposta online.
+        public ?string $clientUrl = null,
     ) {}
 
     public function envelope(): Envelope
@@ -37,6 +40,7 @@ class QuoteMail extends Mailable
             with: [
                 'quote' => $this->quote,
                 'customMessage' => $this->customMessage,
+                'clientUrl' => $this->clientUrl,
             ],
         );
     }

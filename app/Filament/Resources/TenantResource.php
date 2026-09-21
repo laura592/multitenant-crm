@@ -78,6 +78,14 @@ class TenantResource extends Resource
             Forms\Components\Section::make('Indirizzo')
                 ->columns(3)
                 ->schema(ItalianAddressFields::schema()),
+            Forms\Components\Section::make('Contatto per i clienti')
+                ->description('Chi il cliente chiama dalla pagina del preventivo (link nella mail). Se vuoto si usa il telefono dell\'azienda. I messaggi scritti dal cliente arrivano a chi e\' impostato in Notifiche.')
+                ->columns(2)
+                ->collapsible()
+                ->schema([
+                    Forms\Components\TextInput::make('client_contact_name')->label('Nome')->maxLength(255),
+                    Forms\Components\TextInput::make('client_contact_phone')->label('Telefono / cellulare')->tel()->maxLength(50),
+                ]),
             Forms\Components\Section::make('Branding')
                 ->columns(2)
                 ->schema([

@@ -34,6 +34,12 @@
         .totals-table .discount-row th, .totals-table .discount-row td { color: #047857; font-weight: bold; }
         .totals-table .subtotal-row th, .totals-table .subtotal-row td { font-weight: bold; font-size: 10.5px; border-top: 2px solid #020F30; }
         .totals-table .total-row th, .totals-table .total-row td { background: #f3f4f6; border-color: #d1d5db; color: #111827; font-weight: bold; }
+
+        .acceptance { width: 100%; border-collapse: collapse; margin-top: 18px; page-break-inside: avoid; }
+        .acceptance td { border: 1px solid #e5e7eb; border-top: none; padding: 8px 10px; vertical-align: top; background: #f9fafb; font-size: 9.5px; }
+        .acceptance .sig { width: 44%; text-align: center; background: #fff; }
+        .acceptance .sig img { max-height: 70px; max-width: 220px; }
+        .acceptance .sig-name { border-top: 1px solid #9ca3af; margin-top: 4px; padding-top: 3px; font-size: 9px; color: #374151; }
     </style>
 </head>
 <body>
@@ -227,6 +233,32 @@
             <h2>Descrizione attrezzatura</h2>
             {!! $quote->notes !!}
         </div>
+    @endif
+
+    {{-- Firma del cliente dal link nella mail (QuoteClientController):
+         il preventivo accettato online porta la firma come quello firmato
+         su carta. --}}
+    @php
+        $signaturePath = isset($acceptance) && $acceptance?->signature_path
+            ? \Illuminate\Support\Facades\Storage::disk('local')->path($acceptance->signature_path)
+            : null;
+    @endphp
+    @if($signaturePath && file_exists($signaturePath))
+        <div class="section-title" style="margin-top:18px; margin-bottom:0;">Per accettazione</div>
+        <table class="acceptance">
+            <tr>
+                <td>
+                    Il cliente conferma il presente preventivo alle condizioni indicate.<br><br>
+                    <strong>Firmato da:</strong> {{ $acceptance->signer_name }}<br>
+                    <strong>Data:</strong> {{ $acceptance->created_at->timezone(config('app.timezone'))->format('d/m/Y \a\l\l\e H:i') }}<br>
+                    <span style="color:#6b7280; font-size:8.5px;">Firma raccolta online dal link inviato via email.</span>
+                </td>
+                <td class="sig">
+                    <img src="{{ $signaturePath }}" alt="Firma">
+                    <div class="sig-name">{{ $acceptance->signer_name }}</div>
+                </td>
+            </tr>
+        </table>
     @endif
 
     <div class="footer-note">{{ $tenant?->legal_name ?: $tenant?->name }} &mdash; Questo documento non costituisce fattura</div>

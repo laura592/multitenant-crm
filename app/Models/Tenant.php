@@ -45,6 +45,9 @@ class Tenant extends Model implements HasName
         'is_active',
         'logo_path',
         'primary_color',
+        'client_contact_name',
+        'client_contact_phone',
+        'notify_quote_response_emails',
     ];
 
     protected $casts = [
@@ -62,6 +65,7 @@ class Tenant extends Model implements HasName
         'notify_gestionale_sync_digest_emails' => 'array',
         'notify_gestionale_sync_failed_emails' => 'array',
         'notify_service_report_emails' => 'array',
+        'notify_quote_response_emails' => 'array',
     ];
 
     protected static function booted(): void
@@ -239,6 +243,10 @@ class Tenant extends Model implements HasName
             // rapportino non aveva alcuna lista fissa, solo un CC manuale a
             // ogni invio, quindi il default resta "nessuno".
             'service_report' => $this->normalizedRecipients($this->notify_service_report_emails),
+            // Il cliente ha risposto dal link nella mail del preventivo
+            // (conferma, domanda, richiamata, "per ora no"). Finche' la
+            // lista e' vuota vanno a chi riceve gia' la copia dei preventivi.
+            'quote_response' => $this->normalizedRecipients($this->notify_quote_response_emails, $this->normalizedRecipients($this->notify_quote_emails, $legacy)),
             default => $legacy,
         };
     }

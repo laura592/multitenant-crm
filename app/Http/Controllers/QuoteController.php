@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Filament\Resources\QuoteResource;
 use App\Models\Quote;
+use App\Models\QuoteResponse;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Gate;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -27,5 +29,25 @@ class QuoteController extends Controller
         Gate::authorize('view', $quote);
 
         return QuoteResource::buildPdf($quote)->stream("preventivo-{$quote->number}.pdf");
+    }
+
+    /**
+     * Firma e PDF accettato di una risposta del cliente: stanno sul disco
+     * privato, si aprono solo da chi puo' vedere il preventivo.
+     */
+    public function responseFile(QuoteResponse $quoteResponse, string $file)
+    {
+        app(PermissionRegistrar::class)->setPermissionsTeamId(auth()->user()?->tenant_id);
+
+        $quote = $quoteResponse->quote()->withoutGlobalScope('tenant')->first();
+        abort_unless($quote, 404);
+        Gate::authorize('view', $quote);
+
+        $path = $file === 'firma' ? $quoteResponse->signature_path : $quoteResponse->accepted_pdf_path;
+        abort_unless($path && Storage::disk('local')->exists($path), 404);
+
+        return Storage::disk('local')->response($path, $file === 'firma'
+            ? "firma-{$quote->number}.png"
+            : "preventivo-{$quote->number}-accettato.pdf");
     }
 }

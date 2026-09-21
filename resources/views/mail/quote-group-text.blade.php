@@ -32,3 +32,8 @@ ALLEGATI
 - preventivo-{{ $quote->number }}.pdf
 @endforeach
 @endif
+@if(! empty($clientUrl))
+
+Vedi e scegli la soluzione online:
+{{ $clientUrl }}
+@endif

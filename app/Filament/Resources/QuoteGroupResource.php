@@ -181,6 +181,12 @@ class QuoteGroupResource extends Resource
                         (bool) $get('allega_offerta_caffe'),
                     )
                 )),
+            // Link alla pagina dove il cliente accetta firmando, rifiuta, fa
+            // una domanda o chiede di essere richiamato (QuoteClientController):
+            // tanti preventivi restavano "Inviato" senza piu' notizie.
+            Forms\Components\Toggle::make('client_link')
+                ->label('Includi il link per rispondere online (accetta e firma, rifiuta, domanda, richiamata)')
+                ->default(true),
             ...OffertaCaffeFields::allegatoAllInvio(fn (?QuoteGroup $record = null) => $record?->customer, 'email_body'),
         ];
     }
@@ -309,6 +315,7 @@ class QuoteGroupResource extends Resource
                         $data['subject'] ?? static::defaultGroupEmailSubject($record),
                         $offertaCaffe ? OffertaCaffePdf::perOfferta($offertaCaffe)->output() : null,
                         $offertaCaffe ? OffertaCaffePdf::nomeFile($offertaCaffe) : null,
+                        ($data['client_link'] ?? true) ? $record->clientUrl() : null,
                     ))->subject($data['subject'] ?? static::defaultGroupEmailSubject($record))
                 );
 

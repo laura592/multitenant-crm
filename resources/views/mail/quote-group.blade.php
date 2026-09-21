@@ -65,6 +65,10 @@
 
 @endif
 
+@if(! empty($clientUrl))
+<x-mail.client-response-cta :url="$clientUrl" :tenant="$tenant" :multiple="$quotes->count() > 1" />
+@endif
+
 <x-slot:footer>
 <x-mail.footer-tenant :tenant="$tenant" />
 </x-slot:footer>

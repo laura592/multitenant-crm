@@ -49,6 +49,7 @@ class NotificationSettings extends Page implements HasForms
             'notify_gestionale_sync_digest_emails' => $tenant?->notificationRecipients('gestionale_sync_digest') ?? [],
             'notify_gestionale_sync_failed_emails' => $tenant?->notificationRecipients('gestionale_sync_failed') ?? [],
             'notify_service_report_emails' => $tenant?->notificationRecipients('service_report') ?? [],
+            'notify_quote_response_emails' => $tenant?->notificationRecipients('quote_response') ?? [],
         ]);
     }
 
@@ -83,6 +84,13 @@ class NotificationSettings extends Page implements HasForms
                     ->splitKeys([',', 'Tab'])
                     ->color('primary')
                     ->helperText('In copia all invio dei preventivi ai clienti.'),
+                TagsInput::make('notify_quote_response_emails')
+                    ->label('Risposte dei clienti ai preventivi')
+                    ->placeholder('indirizzo@esempio.it')
+                    ->nestedRecursiveRules(['email'])
+                    ->splitKeys([',', 'Tab'])
+                    ->color('success')
+                    ->helperText('Quando un cliente, dal link nella mail, conferma il preventivo, fa una domanda, chiede di essere richiamato o risponde "per ora no".'),
                 TagsInput::make('notify_quote_group_emails')
                     ->label('Offerte globali')
                     ->placeholder('indirizzo@esempio.it')
@@ -151,6 +159,7 @@ class NotificationSettings extends Page implements HasForms
         $gestionaleSyncDigestRecipients = array_values(array_unique(array_filter((array) ($state['notify_gestionale_sync_digest_emails'] ?? []))));
         $gestionaleSyncFailedRecipients = array_values(array_unique(array_filter((array) ($state['notify_gestionale_sync_failed_emails'] ?? []))));
         $serviceReportRecipients = array_values(array_unique(array_filter((array) ($state['notify_service_report_emails'] ?? []))));
+        $quoteResponseRecipients = array_values(array_unique(array_filter((array) ($state['notify_quote_response_emails'] ?? []))));
 
         $tenant?->update([
             'notify_information_request_emails' => $informationRecipients,
@@ -163,6 +172,7 @@ class NotificationSettings extends Page implements HasForms
             'notify_gestionale_sync_digest_emails' => $gestionaleSyncDigestRecipients,
             'notify_gestionale_sync_failed_emails' => $gestionaleSyncFailedRecipients,
             'notify_service_report_emails' => $serviceReportRecipients,
+            'notify_quote_response_emails' => $quoteResponseRecipients,
             // Manteniamo valorizzata la lista legacy finche' esiste codice
             // esterno che potrebbe ancora leggerla direttamente.
             'notify_staff_emails' => array_values(array_unique(array_filter(array_merge(

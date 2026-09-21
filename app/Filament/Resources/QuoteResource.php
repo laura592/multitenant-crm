@@ -15,6 +15,7 @@ use App\Models\InformationRequest;
 use App\Models\PaymentMethod;
 use App\Models\Quote;
 use App\Models\QuoteGroup;
+use App\Models\QuoteResponse;
 use App\Support\DisplayName;
 use App\Support\Pdf\OffertaCaffePdf;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -30,6 +31,7 @@ use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Tabs as InfolistTabs;
 use Filament\Infolists\Components\Tabs\Tab as InfolistTab;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Components\ViewEntry;
 use Filament\Infolists\Infolist;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
@@ -239,6 +241,28 @@ class QuoteResource extends Resource
                                 ->visible(fn (Quote $record) => $record->quoteProducts->isNotEmpty()),
                         ]),
                 ]),
+            // Cosa ha fatto il cliente dal link nella mail (QuoteClientController).
+            InfolistSection::make('Risposta del cliente')
+                ->columnSpanFull()
+                ->visible(fn (Quote $record) => (bool) ($record->public_token || $record->quoteGroup?->public_token))
+                ->headerActions([
+                    InfolistAction::make('clientLink')
+                        ->label('Link cliente')
+                        ->icon('heroicon-o-link')
+                        ->color('gray')
+                        ->modalHeading('Link per il cliente')
+                        ->modalDescription('Lo stesso link della mail: si puo\' mandare anche su WhatsApp.')
+                        ->modalContent(fn (Quote $record) => new HtmlString(
+                            '<input readonly onclick="this.select()" value="'.e($record->clientUrl()).'" class="w-full rounded-lg border-gray-300 text-sm dark:bg-white/5">'
+                        ))
+                        ->modalSubmitAction(false)
+                        ->modalCancelActionLabel('Chiudi'),
+                ])
+                ->schema([
+                    ViewEntry::make('client_responses')
+                        ->hiddenLabel()
+                        ->view('filament.infolists.quote-client-responses'),
+                ]),
             InfolistSection::make('Storico invii email')
                 ->columnSpanFull()
                 ->extraAttributes([
@@ -269,7 +293,7 @@ class QuoteResource extends Resource
                                     ->color('gray')
                                     ->modalHeading(fn ($record) => "Anteprima email — {$record->recipient_email}")
                                     ->modalContent(fn ($record) => new HtmlString(
-                                        '<iframe srcdoc="'.e((new QuoteMail($record->quote, '', $record->message))->render()).'" style="width:100%;height:70vh;border:0;border-radius:0.5rem;background:#fff;"></iframe>'
+                                        '<iframe srcdoc="'.e((new QuoteMail($record->quote, '', $record->message, clientUrl: $record->quote->public_token ? $record->quote->clientUrl() : null))->render()).'" style="width:100%;height:70vh;border:0;border-radius:0.5rem;background:#fff;"></iframe>'
                                     ))
                                     ->modalSubmitAction(false)
                                     ->modalCancelActionLabel('Chiudi')
@@ -570,6 +594,16 @@ class QuoteResource extends Resource
                     ->formatStateUsing(fn (string $state) => static::statusLabels()[$state] ?? ucfirst($state))
                     ->color(fn (string $state) => static::statusColors()[$state] ?? 'gray'),
                 Tables\Columns\TextColumn::make('total')->label('Totale')->money('EUR')->sortable(),
+                // Il cliente ha aperto il link nella mail? (vedi HasClientLink)
+                Tables\Columns\TextColumn::make('client_last_viewed_at')
+                    ->label('Visto')
+                    ->since()
+                    ->tooltip(fn (Quote $record) => $record->client_view_count
+                        ? "Aperto {$record->client_view_count} volte, l'ultima il ".$record->client_last_viewed_at?->format('d/m/Y H:i')
+                        : null)
+                    ->placeholder('—')
+                    ->sortable()
+                    ->toggleable(),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('status')
@@ -713,7 +747,27 @@ class QuoteResource extends Resource
         return Pdf::loadView('pdf.quote', [
             'quote' => $record,
             'tenant' => $record->tenant,
+            'acceptance' => static::onlineAcceptance($record),
         ]);
+    }
+
+    /**
+     * La conferma firmata dal cliente dal link nella mail, se c'e': il PDF
+     * del preventivo accettato porta la firma nel riquadro "Per
+     * accettazione" (vedi QuoteClientController::accept).
+     */
+    public static function onlineAcceptance(Quote $record): ?QuoteResponse
+    {
+        if ($record->status !== 'accettato') {
+            return null;
+        }
+
+        return QuoteResponse::withoutGlobalScope('tenant')
+            ->where('quote_id', $record->id)
+            ->where('type', QuoteResponse::TYPE_ACCEPTED)
+            ->whereNotNull('signature_path')
+            ->latest()
+            ->first();
     }
 
     public static function duplicateAsAlternativeAction(): Tables\Actions\Action
@@ -817,6 +871,12 @@ class QuoteResource extends Resource
                 // pannello: l'utente lo trova gia' pronto e lo personalizza
                 // solo se serve, invece di scrivere da zero ad ogni invio.
                 ->default(fn (Quote $record) => static::defaultQuoteEmailBody($record)),
+            // Link alla pagina dove il cliente accetta firmando, rifiuta, fa
+            // una domanda o chiede di essere richiamato (QuoteClientController):
+            // tanti preventivi restavano "Inviato" senza piu' notizie.
+            Forms\Components\Toggle::make('client_link')
+                ->label('Includi il link per rispondere online (accetta e firma, rifiuta, domanda, richiamata)')
+                ->default(true),
             ...OffertaCaffeFields::allegatoAllInvio(fn (?Quote $record = null) => $record?->customer, 'custom_message'),
         ];
     }
@@ -892,6 +952,7 @@ class QuoteResource extends Resource
                     $data['custom_message'] ?? null,
                     $offertaCaffe ? OffertaCaffePdf::perOfferta($offertaCaffe)->output() : null,
                     $offertaCaffe ? OffertaCaffePdf::nomeFile($offertaCaffe) : null,
+                    ($data['client_link'] ?? true) ? $record->clientUrl() : null,
                 ));
 
             if ($offertaCaffe) {

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\HasClientLink;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,7 +12,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class QuoteGroup extends Model
 {
-    use BelongsToTenant, HasUuids, SoftDeletes;
+    use BelongsToTenant, HasClientLink, HasUuids, SoftDeletes;
 
     protected $fillable = [
         'tenant_id',
@@ -24,6 +25,8 @@ class QuoteGroup extends Model
 
     protected $casts = [
         'sent_at' => 'datetime',
+        'client_first_viewed_at' => 'datetime',
+        'client_last_viewed_at' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -76,6 +79,11 @@ class QuoteGroup extends Model
     public function emails(): HasMany
     {
         return $this->hasMany(QuoteGroupEmail::class);
+    }
+
+    public function responses(): HasMany
+    {
+        return $this->hasMany(QuoteResponse::class)->latest();
     }
 
     public function chosenQuote(): ?Quote

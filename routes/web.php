@@ -4,6 +4,7 @@ use App\Http\Controllers\ContrattoAssistenzaController;
 use App\Http\Controllers\FatturaEurekaController;
 use App\Http\Controllers\CustomerSchedaAnagraficaController;
 use App\Http\Controllers\PaganteStampaController;
+use App\Http\Controllers\QuoteClientController;
 use App\Http\Controllers\QuoteController;
 use App\Http\Controllers\RiepilogoRapportiniController;
 use App\Http\Controllers\ServiceReportController;
@@ -27,6 +28,20 @@ Route::get('/login', fn () => redirect()->route('filament.admin.auth.login'))->n
 // stesso messaggio invece di un errore grezzo.
 Route::get('/sessione-scaduta', fn () => response()->view('errors.419', [], 419))->name('session.expired');
 
+// La pagina che il cliente apre dal link nella mail del preventivo: niente
+// login, il token nel link e' la chiave (vedi QuoteClientController). Il
+// throttle sulle risposte e' un freno a chi provasse a martellare il form.
+Route::prefix('preventivo/{token}')
+    ->where(['token' => '[A-Za-z0-9]{32,64}'])
+    ->middleware(\App\Http\Middleware\NoIndex::class)
+    ->group(function () {
+        Route::get('/', [QuoteClientController::class, 'show'])->name('client.quote.show');
+        Route::get('pdf/{quoteId}', [QuoteClientController::class, 'pdf'])->name('client.quote.pdf');
+        Route::post('/', [QuoteClientController::class, 'store'])
+            ->middleware('throttle:10,1')
+            ->name('client.quote.respond');
+    });
+
 Route::middleware(['auth'])->group(function () {
     Route::get('service-reports/{serviceReport}/pdf', [ServiceReportController::class, 'pdf'])->name('service-reports.pdf');
     Route::get('service-reports/{serviceReport}/fatture/{idFattura}', FatturaEurekaController::class)
@@ -35,6 +50,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('service-reports/riepilogo', RiepilogoRapportiniController::class)->name('service-reports.riepilogo');
     Route::get('paganti/{pagante}/macchine', PaganteStampaController::class)->name('paganti.stampa');
     Route::get('quotes/{quote}/pdf', [QuoteController::class, 'pdf'])->name('quotes.pdf');
+    Route::get('quote-responses/{quoteResponse}/{file}', [QuoteController::class, 'responseFile'])
+        ->whereIn('file', ['firma', 'pdf'])
+        ->name('quote-responses.file');
     Route::get('quotes/{quote}/contratti/{quoteProduct}', ContrattoAssistenzaController::class)->name('quotes.contratto');
     Route::get('customers/{customer}/scheda-anagrafica', CustomerSchedaAnagraficaController::class)
         ->name('customers.scheda-anagrafica');
