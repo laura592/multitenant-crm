@@ -357,6 +357,19 @@ class ServiceReport extends Model
     }
 
     /**
+     * L'id della scheda lavoro su Eureka, da qualunque strada ci sia arrivato:
+     * importata (eureka_service_report_id) o inviata da qui
+     * (gestionale_scheda_lavoro_id). E' la chiave per chiedere a Eureka le
+     * fatture della scheda.
+     */
+    public function idSchedaEureka(): ?int
+    {
+        $id = $this->eureka_service_report_id ?? $this->gestionale_scheda_lavoro_id;
+
+        return is_numeric($id) ? (int) $id : null;
+    }
+
+    /**
      * Un rapportino non e' piu' modificabile da CRM quando esiste su Eureka:
      * li' e' ormai (anche) la fonte autorevole, e una modifica lato CRM
      * andrebbe fuori sincrono col gestionale senza che nessuno se ne accorga.

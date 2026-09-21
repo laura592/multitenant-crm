@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\ServiceReportResource\Pages;
 
 use App\Filament\Resources\ServiceReportResource;
+use App\Support\Gestionale\FattureRapportino;
 use Filament\Actions;
 use Filament\Resources\Pages\ViewRecord;
 
@@ -42,6 +43,20 @@ class ViewServiceReport extends ViewRecord
                 ->visible(fn (): bool => auth()->user()?->can('view', $this->record) ?? false)
                 ->url(fn () => route('service-reports.pdf', [$this->record, 'prezzi' => 0]))
                 ->openUrlInNewTab(),
+            // La fattura Eureka su cui e' finita la scheda. Ha i prezzi, e
+            // spesso e' la riepilogativa di chi paga con gli interventi di
+            // altri locali: la vede solo chi vede i prezzi. Eureka si
+            // interroga all'apertura del modale, non al caricamento pagina.
+            Actions\Action::make('fattura_eureka')
+                ->label('Fattura')
+                ->icon('heroicon-o-receipt-percent')
+                ->color('gray')
+                ->visible(fn (): bool => $this->record->idSchedaEureka() !== null
+                    && (auth()->user()?->can('viewPrices', $this->record) ?? false))
+                ->modalHeading('Fattura su Eureka')
+                ->modalContent(fn () => view('filament.modals.fatture-eureka', FattureRapportino::per($this->record)))
+                ->modalSubmitAction(false)
+                ->modalCancelActionLabel('Chiudi'),
             // ->visible() esplicito e indipendente dal Gate: EditAction usa
             // di default ServiceReportPolicy::update(), che nega gia' la
             // modifica sui rapportini bloccati (Eureka o "completato"), ma

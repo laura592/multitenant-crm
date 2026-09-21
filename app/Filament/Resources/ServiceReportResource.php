@@ -1371,6 +1371,18 @@ class ServiceReportResource extends Resource
                         ->visible(fn (ServiceReport $record): bool => auth()->user()?->can('view', $record) ?? false)
                         ->url(fn (ServiceReport $record) => route('service-reports.pdf', [$record, 'prezzi' => 0]))
                         ->openUrlInNewTab(),
+                    // Vedi ViewServiceReport: stessa azione, qui per non dover
+                    // aprire il rapportino solo per cercare la sua fattura.
+                    Tables\Actions\Action::make('fattura_eureka')
+                        ->label('Fattura')
+                        ->icon('heroicon-o-receipt-percent')
+                        ->color('gray')
+                        ->visible(fn (ServiceReport $record): bool => $record->idSchedaEureka() !== null
+                            && (auth()->user()?->can('viewPrices', $record) ?? false))
+                        ->modalHeading('Fattura su Eureka')
+                        ->modalContent(fn (ServiceReport $record) => view('filament.modals.fatture-eureka', \App\Support\Gestionale\FattureRapportino::per($record)))
+                        ->modalSubmitAction(false)
+                        ->modalCancelActionLabel('Chiudi'),
                     Tables\Actions\Action::make('send')
                         ->label('Invia')
                         ->icon('heroicon-o-paper-airplane')

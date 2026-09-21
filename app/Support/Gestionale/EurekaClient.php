@@ -845,4 +845,53 @@ class EurekaClient
             return [];
         }
     }
+
+    /**
+     * Le fatture su cui e' finita una scheda lavoro (/show/q/sl_fattura),
+     * dalla piu' recente. Documentata dal fornitore il 21/09/2026.
+     *
+     * Lista vuota = la scheda non e' ancora fatturata, e va richiesta piu'
+     * avanti. NULL = Eureka non ha risposto: le due cose restano distinte,
+     * perche' "non ancora fatturata" detto a chi ha la fattura in mano
+     * sarebbe una bugia.
+     *
+     * Una fattura spesso raccoglie piu' schede: quella di un torrefattore
+     * riepiloga gli interventi del mese su tutti i bar che paga.
+     *
+     * @return array<int, array{id_fattura: int, tipo_doc: string, numero_fattura: int, data_fattura: string, id_bolla: ?int, has_fe: int}>|null
+     */
+    public function fattureDellaScheda(int $idScheda): ?array
+    {
+        $risposta = $this->getJson('/show/q/sl_fattura?'.http_build_query(['q' => $idScheda]), timeout: 30);
+
+        return $risposta === null ? null : array_values(array_filter($risposta, 'is_array'));
+    }
+
+    /**
+     * Il PDF di una fattura (/report/fattura/{id}), gia' pronto: e' la copia
+     * di cortesia che stampa Eureka, "non valida ai fini fiscali".
+     *
+     * NULL se Eureka non risponde o se quello che torna non e' un PDF: un
+     * errore HTML servito come fattura sarebbe peggio di nessuna fattura.
+     */
+    public function pdfFattura(int $idFattura): ?string
+    {
+        $url = rtrim($this->baseUrl, '/').'/report/fattura/'.$idFattura;
+
+        try {
+            $response = Http::withBasicAuth($this->username, $this->password)
+                ->timeout(60)
+                ->get($url);
+
+            $this->recordCall($url, $response->status());
+        } catch (\Throwable) {
+            $this->recordCall($url, null);
+
+            return null;
+        }
+
+        $corpo = $response->body();
+
+        return $response->successful() && str_starts_with($corpo, '%PDF') ? $corpo : null;
+    }
 }

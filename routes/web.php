@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\FatturaEurekaController;
 use App\Http\Controllers\CustomerSchedaAnagraficaController;
 use App\Http\Controllers\PaganteStampaController;
 use App\Http\Controllers\QuoteController;
@@ -27,6 +28,9 @@ Route::get('/sessione-scaduta', fn () => response()->view('errors.419', [], 419)
 
 Route::middleware(['auth'])->group(function () {
     Route::get('service-reports/{serviceReport}/pdf', [ServiceReportController::class, 'pdf'])->name('service-reports.pdf');
+    Route::get('service-reports/{serviceReport}/fatture/{idFattura}', FatturaEurekaController::class)
+        ->whereNumber('idFattura')
+        ->name('service-reports.fattura-eureka');
     Route::get('service-reports/riepilogo', RiepilogoRapportiniController::class)->name('service-reports.riepilogo');
     Route::get('paganti/{pagante}/macchine', PaganteStampaController::class)->name('paganti.stampa');
     Route::get('quotes/{quote}/pdf', [QuoteController::class, 'pdf'])->name('quotes.pdf');
