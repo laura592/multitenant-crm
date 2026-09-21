@@ -36,6 +36,9 @@ class RiepilogoOre extends Page implements HasForms
 
     protected static ?string $navigationGroup = 'Personale';
 
+
+    protected static ?int $navigationSort = 2;
+
     protected static ?string $navigationLabel = 'Riepilogo ore';
 
     protected static string $view = 'filament.pages.riepilogo-ore';

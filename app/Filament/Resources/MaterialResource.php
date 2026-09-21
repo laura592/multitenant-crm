@@ -27,6 +27,9 @@ class MaterialResource extends Resource
 
     protected static ?string $navigationGroup = 'Magazzino';
 
+
+    protected static ?int $navigationSort = 1;
+
     protected static ?string $navigationLabel = 'Materiali';
 
     protected static ?string $modelLabel = 'Materiale';

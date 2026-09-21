@@ -40,6 +40,9 @@ class MachineUnitResource extends Resource
 
     protected static ?string $navigationGroup = 'Interventi tecnici';
 
+
+    protected static ?int $navigationSort = 3;
+
     protected static ?string $navigationLabel = 'Macchinari';
 
     protected static ?string $modelLabel = 'Macchinario';

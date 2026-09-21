@@ -21,6 +21,9 @@ class ProductFamilyResource extends Resource
 
     protected static ?string $navigationGroup = 'Catalogo';
 
+
+    protected static ?int $navigationSort = 2;
+
     protected static ?string $navigationLabel = 'Famiglie macchina';
 
     protected static ?string $modelLabel = 'Famiglia macchina';

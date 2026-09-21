@@ -27,6 +27,9 @@ class TimeEntryResource extends Resource
 
     protected static ?string $navigationGroup = 'Personale';
 
+
+    protected static ?int $navigationSort = 1;
+
     protected static ?string $navigationLabel = 'Presenze';
 
     protected static ?string $modelLabel = 'Timbratura';

@@ -37,6 +37,9 @@ class CustomerResource extends Resource
 
     protected static ?string $navigationGroup = 'Vendite';
 
+
+    protected static ?int $navigationSort = 1;
+
     protected static ?string $navigationLabel = 'Clienti';
 
     protected static ?string $modelLabel = 'Cliente';

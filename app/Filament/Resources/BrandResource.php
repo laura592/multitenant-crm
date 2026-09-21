@@ -23,6 +23,9 @@ class BrandResource extends Resource
 
     protected static ?string $navigationGroup = 'Catalogo';
 
+
+    protected static ?int $navigationSort = 4;
+
     protected static ?string $navigationLabel = 'Brand';
 
     protected static ?string $modelLabel = 'Brand';

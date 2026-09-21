@@ -29,6 +29,8 @@ class MaterialOrderResource extends Resource
     // "Interventi tecnici".
     protected static ?string $navigationGroup = 'Magazzino';
 
+    protected static ?int $navigationSort = 2;
+
     protected static ?string $navigationLabel = 'Ordini materiali';
 
     protected static ?string $modelLabel = 'Ordine materiali';

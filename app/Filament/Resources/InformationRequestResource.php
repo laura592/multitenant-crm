@@ -33,6 +33,9 @@ class InformationRequestResource extends Resource
 
     protected static ?string $navigationGroup = 'Vendite';
 
+
+    protected static ?int $navigationSort = 2;
+
     protected static ?string $navigationLabel = 'Richieste informazioni';
 
     protected static ?string $modelLabel = 'Richiesta informazioni';

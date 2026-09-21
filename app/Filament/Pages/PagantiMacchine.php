@@ -47,7 +47,7 @@ class PagantiMacchine extends Page implements HasTable
 
     protected static ?string $navigationGroup = 'Interventi tecnici';
 
-    protected static ?int $navigationSort = 9;
+    protected static ?int $navigationSort = 5;
 
     protected static ?string $navigationLabel = 'Chi paga per chi';
 

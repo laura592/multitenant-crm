@@ -27,6 +27,9 @@ class MaintenanceScheduleResource extends Resource
 
     protected static ?string $navigationGroup = 'Interventi tecnici';
 
+
+    protected static ?int $navigationSort = 2;
+
     protected static ?string $navigationLabel = 'Piani di manutenzione';
 
     protected static ?string $modelLabel = 'Piano di manutenzione';

@@ -32,6 +32,9 @@ class ClientiVicini extends Page
 
     protected static ?string $navigationGroup = 'Interventi tecnici';
 
+
+    protected static ?int $navigationSort = 4;
+
     protected static ?string $navigationLabel = 'Clienti vicini';
 
     protected static ?string $title = 'Clienti vicini';

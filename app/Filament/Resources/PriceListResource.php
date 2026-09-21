@@ -23,6 +23,9 @@ class PriceListResource extends Resource
 
     protected static ?string $navigationGroup = 'Magazzino';
 
+
+    protected static ?int $navigationSort = 4;
+
     protected static ?string $navigationLabel = 'Listini';
 
     protected static ?string $modelLabel = 'Listino';

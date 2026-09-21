@@ -199,11 +199,14 @@ class AdminPanelProvider extends PanelProvider
             // (scaduto clienti, scadenzario, automezzi).
             ->navigationGroups([
                 NavigationGroup::make('Vendite')->collapsed(),
-                NavigationGroup::make('Catalogo')->collapsed(),
                 NavigationGroup::make('Interventi tecnici')->collapsed(),
                 NavigationGroup::make('Magazzino')->collapsed(),
                 NavigationGroup::make('Personale')->collapsed(),
                 NavigationGroup::make('Amministrazione')->collapsed(),
+                // Anagrafiche di prodotto: si toccano quando entra un
+                // articolo nuovo, non ogni giorno (21/09/2026: prima stava
+                // al secondo posto, fra Vendite e gli interventi).
+                NavigationGroup::make('Catalogo')->collapsed(),
                 NavigationGroup::make('Impostazioni')->collapsed(),
             ])
             ->middleware([

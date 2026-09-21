@@ -28,6 +28,9 @@ class LeaveRequestResource extends Resource
 
     protected static ?string $navigationGroup = 'Personale';
 
+
+    protected static ?int $navigationSort = 3;
+
     protected static ?string $navigationLabel = 'Ferie e permessi';
 
     protected static ?string $modelLabel = 'Richiesta ferie/permesso';
