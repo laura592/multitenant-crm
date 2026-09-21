@@ -138,6 +138,23 @@ final class RiabbinaImportati
             $esito['nuovi']++;
         }
 
+        // Le schede rimaste col loro rapportino che sono l'altra meta' di una
+        // visita del tecnico ne prendono tecnico e note.
+        if (! $prova) {
+            foreach ($schede as $scheda) {
+                if (in_array($scheda->id, $daCancellare, true)) {
+                    continue;
+                }
+
+                $parte = ServiceReport::withoutGlobalScopes()->whereNull('deleted_at')->find($scheda->id);
+                $delTecnico = $parte ? self::rapportinoDelTecnico($parte) : null;
+
+                if ($delTecnico) {
+                    self::stessaVisita($delTecnico, $parte);
+                }
+            }
+        }
+
         if ($compattabile) {
             $restano = $schede->reject(fn (ServiceReport $s) => in_array($s->id, $daCancellare, true))->values();
             $esito['rinumerati'] = self::rinumera($restano, $numeriIniziali, $prova);
@@ -145,6 +162,70 @@ final class RiabbinaImportati
         }
 
         return $esito;
+    }
+
+    /**
+     * Il rapportino del tecnico di cui questa scheda Eureka e' l'altra meta':
+     * stesso cliente, stesso giorno, gia' legato a un'altra scheda. Se quel
+     * giorno i rapportini del tecnico sono due, di chi sia la visita non si
+     * sa: null, e la scheda resta com'e'.
+     */
+    public static function rapportinoDelTecnico(ServiceReport $parte): ?ServiceReport
+    {
+        if ($parte->source !== ServiceReport::SOURCE_EUREKA || ! $parte->eureka_service_report_id || ! $parte->intervention_date) {
+            return null;
+        }
+
+        $candidati = ServiceReport::withoutGlobalScopes()
+            ->whereNull('deleted_at')
+            ->where('tenant_id', $parte->tenant_id)
+            ->where('source', '!=', ServiceReport::SOURCE_EUREKA)
+            ->where('customer_id', $parte->customer_id)
+            ->whereDate('intervention_date', $parte->intervention_date->toDateString())
+            ->whereNotNull('eureka_service_report_id')
+            ->where('eureka_service_report_id', '!=', $parte->eureka_service_report_id)
+            ->get();
+
+        return $candidati->count() === 1 ? $candidati->first() : null;
+    }
+
+    /**
+     * La scheda Eureka che resta col suo rapportino accanto a quello del
+     * tecnico (visita divisa per impianto, o scheda doppia) e' la stessa
+     * visita: stesso tecnico, stesse note. L'import la creava vuota e col
+     * tecnico predefinito — Alessandro Signorato anche quando era andato
+     * Igor Capiotto, e le ore finivano sulla persona sbagliata (21/09/2026).
+     *
+     * Si puo' ripetere: il riferimento in testa alle note dice che e' gia'
+     * stato fatto, e i testi del tecnico non si copiano due volte.
+     */
+    public static function stessaVisita(ServiceReport $tecnico, ServiceReport $parte): bool
+    {
+        $riferimento = "Stessa visita del rapportino {$tecnico->number}: su Eureka la visita ha una scheda per impianto.";
+        $modifiche = [];
+
+        if ($tecnico->technician_id && $parte->technician_id !== $tecnico->technician_id) {
+            $modifiche['technician_id'] = $tecnico->technician_id;
+        }
+
+        if (! str_contains((string) $parte->notes, $riferimento)) {
+            $modifiche['notes'] = collect([$riferimento, trim((string) $tecnico->notes), trim((string) $parte->notes)])
+                ->filter()->unique()->implode("\n\n");
+        }
+
+        foreach (['problem_description', 'work_performed'] as $campo) {
+            if (blank($parte->{$campo}) && filled($tecnico->{$campo})) {
+                $modifiche[$campo] = $tecnico->{$campo};
+            }
+        }
+
+        if ($modifiche === []) {
+            return false;
+        }
+
+        $parte->forceFill($modifiche)->saveQuietly();
+
+        return true;
     }
 
     /**

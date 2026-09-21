@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Customer;
+use App\Models\MachineUnit;
 use App\Models\Material;
 use App\Models\ServiceReport;
 use App\Models\ServiceReportEmail;
@@ -173,7 +174,7 @@ class RiabbinaImportatiTest extends TestCase
         $cliente = Customer::create(['tenant_id' => $this->tenant->id, 'company_name' => 'Strana Coppia']);
         $tecnico = $this->rapportino('RT-2026-0804', '2026-09-18', matricola: null, cliente: $cliente,
             articoli: ['SANIFICAZIONE', 'CARTUCCAI MC2', 'LAV2', 'ULTVIA'], tipo: ServiceReport::TYPE_SANIFICAZIONE);
-        $impiantoSpina = \App\Models\MachineUnit::create([
+        $impiantoSpina = MachineUnit::create([
             'tenant_id' => $this->tenant->id, 'current_customer_id' => $cliente->id,
             'serial_number' => 'IMP-SPINA-014', 'model_name' => 'Impianto Spina (birra+vino+selz+bibite)',
         ]);
@@ -194,6 +195,65 @@ class RiabbinaImportatiTest extends TestCase
         );
         $this->assertSame(767, (int) $acqua->fresh()->eureka_service_report_id, 'L\'acqua tiene il suo rapportino.');
         $this->assertSame(['RT-2026-0804', 'RT-2026-0805'], $this->numeri(), 'Progressivi.');
+    }
+
+    /**
+     * La parte in piu' di una visita divisa e' la stessa visita: tecnico e
+     * note del rapportino del tecnico, non il tecnico predefinito dell'import
+     * (21/09/2026: Igor Capiotto finiva sotto Alessandro Signorato).
+     */
+    public function test_la_parte_divisa_prende_tecnico_e_note_del_tecnico(): void
+    {
+        $igor = User::create(['tenant_id' => $this->tenant->id, 'name' => 'Igor', 'email' => 'i@alex.it', 'password' => bcrypt('x')]);
+        $cliente = Customer::create(['tenant_id' => $this->tenant->id, 'company_name' => 'Beau Rivage']);
+        $tecnico = $this->rapportino('RT-2026-0799', '2026-09-16', matricola: null, cliente: $cliente,
+            articoli: ['LAV2', 'ULTVIA'], impianto: 'SPINA 5 VIE');
+        $tecnico->forceFill(['technician_id' => $igor->id, 'notes' => 'Cliente chiede richiamata', 'work_performed' => 'Lavaggio spina e cambio filtro'])->saveQuietly();
+        $spina = $this->rapportino('RT-2026-0800', '2026-09-16', eureka: 761, matricola: null, cliente: $cliente,
+            articoli: ['LAV2', 'ULTVIA'], impianto: 'SPINA 5 VIE');
+        $acqua = $this->rapportino('RT-2026-0801', '2026-09-16', eureka: 759, matricola: null, cliente: $cliente,
+            articoli: ['CARTUCCAI MC2'], impianto: 'IMPIANTOACQUA');
+        $acqua->forceFill(['notes' => 'Numero documento Eureka: 759'])->saveQuietly();
+
+        $this->esegui([$spina, $acqua]);
+
+        $acqua = ServiceReport::withoutGlobalScopes()->where('eureka_service_report_id', 759)->sole();
+        $this->assertSame($igor->id, $acqua->technician_id, 'Il tecnico della visita, non quello predefinito.');
+        $this->assertStringStartsWith('Stessa visita del rapportino RT-2026-0799', $acqua->notes);
+        $this->assertStringContainsString('Cliente chiede richiamata', $acqua->notes);
+        $this->assertStringContainsString('Numero documento Eureka: 759', $acqua->notes);
+        $this->assertSame('Lavaggio spina e cambio filtro', $acqua->work_performed);
+
+        // Il comando che sistema quelli gia' creati la trova gia' a posto.
+        $this->artisan('rapportini:sistema-visite-divise', ['--tenant' => 'alex'])
+            ->expectsOutputToContain('Niente da sistemare')
+            ->assertSuccessful();
+    }
+
+    public function test_il_comando_sistema_le_parti_gia_create(): void
+    {
+        $igor = User::create(['tenant_id' => $this->tenant->id, 'name' => 'Igor', 'email' => 'i@alex.it', 'password' => bcrypt('x')]);
+        $tecnico = $this->rapportino('RT-2026-0785', '2026-09-10', eureka: 998, matricola: null);
+        $tecnico->forceFill(['technician_id' => $igor->id, 'source' => ServiceReport::SOURCE_MANUALE, 'notes' => 'Perdita dal rubinetto'])->saveQuietly();
+        $parte = $this->rapportino('RT-2026-0818', '2026-09-10', eureka: 751, matricola: null);
+
+        $this->artisan('rapportini:sistema-visite-divise', ['--tenant' => 'alex', '--dry-run' => true])
+            ->expectsOutputToContain('RT-2026-0818')
+            ->assertSuccessful();
+        $this->assertSame($this->tecnico->id, $parte->fresh()->technician_id, 'In prova non scrive.');
+
+        $this->artisan('rapportini:sistema-visite-divise', ['--tenant' => 'alex'])
+            ->expectsConfirmation('Sistemo 1 rapportini?', 'yes')
+            ->assertSuccessful();
+
+        $parte->refresh();
+        $this->assertSame($igor->id, $parte->technician_id);
+        $this->assertStringContainsString('Perdita dal rubinetto', $parte->notes);
+
+        // Rilanciato non ricopia niente.
+        $this->artisan('rapportini:sistema-visite-divise', ['--tenant' => 'alex'])
+            ->expectsOutputToContain('Niente da sistemare')
+            ->assertSuccessful();
     }
 
     /** Due schede diverse sullo stesso impianto: non e' ne' divisa ne' doppia. Decide una persona. */
