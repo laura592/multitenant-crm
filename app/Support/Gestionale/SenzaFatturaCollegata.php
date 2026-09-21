@@ -23,9 +23,16 @@ use Illuminate\Support\Facades\DB;
  * 3. doppione: lo stesso cliente ha, entro 20 giorni, una scheda fatturata
  *    con lo stesso importo al centesimo (Luminance SL-902/904, gemelle di
  *    SL-907/908 fatturate con la FT 479).
- * 4. fattura_non_collegata: una fattura allo stesso cliente o a chi paga per
- *    lui, da 10 giorni prima a 75 dopo. Fatturata a mano, senza partire dalla
- *    scheda. E' un indizio, non una prova: per questo si scrive "probabile".
+ * 4. una fattura allo stesso cliente o a chi paga per lui, da 10 giorni
+ *    prima a 75 dopo. Qui conta COME e' stata fatta quella fattura:
+ *    - fattura_non_collegata: nessuna scheda collegata, e' fatta a mano.
+ *      Plausibile che dentro ci sia anche questa: si scrive "probabile".
+ *    - non_nella_fattura: e' fatta dalle schede, e questa non c'e'. Allora
+ *      NON e' un indizio che sia fatturata, anzi: chi l'ha fatta partiva
+ *      dalle schede e questa l'ha lasciata fuori. Va controllata dentro quella
+ *      fattura. (Verificato leggendo le fatture vere il 21/09/2026: su 58
+ *      casi cosi', l'intervento c'era in 19 e mancava negli altri 39.
+ *      All'inizio anche questi finivano sotto "probabile", ed era sbagliato.)
  * 5. da_verificare: nessuna delle quattro. Questi vanno guardati.
  */
 final class SenzaFatturaCollegata
@@ -37,6 +44,8 @@ final class SenzaFatturaCollegata
     public const DOPPIONE = 'doppione';
 
     public const FATTURA_NON_COLLEGATA = 'fattura_non_collegata';
+
+    public const NON_NELLA_FATTURA = 'non_nella_fattura';
 
     public const DA_VERIFICARE = 'da_verificare';
 
@@ -54,7 +63,8 @@ final class SenzaFatturaCollegata
             self::RECENTE => 'In attesa della fattura del mese',
             self::SENZA_IMPORTO => 'Senza importo',
             self::DOPPIONE => 'Doppione di una scheda fatturata',
-            self::FATTURA_NON_COLLEGATA => 'Fatturato senza collegare la scheda',
+            self::FATTURA_NON_COLLEGATA => 'Probabilmente fatturato a mano',
+            self::NON_NELLA_FATTURA => 'Da controllare nella fattura del periodo',
             self::DA_VERIFICARE => 'Da verificare',
         ];
     }
@@ -66,7 +76,8 @@ final class SenzaFatturaCollegata
             self::RECENTE => 'in attesa della fattura del mese',
             self::SENZA_IMPORTO => 'senza importo',
             self::DOPPIONE => 'doppione di '.($indizio ?? 'una scheda fatturata'),
-            self::FATTURA_NON_COLLEGATA => 'probabile '.($indizio ?? 'fattura non collegata'),
+            self::FATTURA_NON_COLLEGATA => 'probabile '.($indizio ?? 'fattura').' (fatta a mano)',
+            self::NON_NELLA_FATTURA => 'da controllare nella '.($indizio ?? 'fattura del periodo'),
             self::DA_VERIFICARE => 'da verificare',
             default => null,
         };
@@ -114,7 +125,11 @@ final class SenzaFatturaCollegata
         }
 
         if ($data !== null && ($fattura = self::fatturaAlCliente($rapportino, $data))) {
-            return [self::FATTURA_NON_COLLEGATA, $fattura];
+            [$etichetta, $numero, $del] = $fattura;
+
+            return self::fattaDalleSchede($rapportino->tenant_id, $numero, $del)
+                ? [self::NON_NELLA_FATTURA, $etichetta]
+                : [self::FATTURA_NON_COLLEGATA, $etichetta];
         }
 
         return [self::DA_VERIFICARE, null];
@@ -164,7 +179,30 @@ final class SenzaFatturaCollegata
      * "FT 479 del 07/11/2025". Chi paga puo' stare sull'anagrafica
      * (billing_customer_id) o sulla scheda Eureka (eureka_destinazione_code).
      */
-    private static function fatturaAlCliente(ServiceReport $r, Carbon $data): ?string
+    /**
+     * La fattura ha altre schede collegate? Allora e' stata fatta partendo
+     * dalle schede, e se questa non e' collegata non e' "probabilmente
+     * dentro": e' rimasta fuori, o e' finita altrove.
+     *
+     * Si guardano i rapportini con la fattura piu' recente in quella data
+     * (eureka_fatturato_il, indicizzato) e poi il numero nel JSON: basta,
+     * perche' una scheda su due fatture e' rarissima.
+     */
+    private static function fattaDalleSchede(string $tenantId, string $numero, Carbon $del): bool
+    {
+        return ServiceReport::query()
+            ->withoutGlobalScopes()
+            ->whereNull('deleted_at')
+            ->where('tenant_id', $tenantId)
+            ->whereDate('eureka_fatturato_il', $del->toDateString())
+            ->pluck('eureka_fatture')
+            ->contains(fn ($fatture) => collect(is_string($fatture) ? json_decode($fatture, true) : $fatture)
+                ->contains(fn ($f) => (string) ($f['numero_fattura'] ?? '') === ltrim($numero, '0')
+                    && str_starts_with((string) ($f['data_fattura'] ?? ''), $del->toDateString())));
+    }
+
+    /** @return array{0: string, 1: string, 2: Carbon}|null [etichetta, numero, data] */
+    private static function fatturaAlCliente(ServiceReport $r, Carbon $data): ?array
     {
         $cliente = $r->customer()->withoutGlobalScopes()->first(['id', 'billing_customer_id', 'gestionale_code']);
 
@@ -188,8 +226,12 @@ final class SenzaFatturaCollegata
             ->sortBy(fn ($f) => abs(Carbon::parse($f->data_doc)->diffInDays($data, false)))
             ->first();
 
-        return $fattura
-            ? 'FT '.$fattura->numero_doc.' del '.Carbon::parse($fattura->data_doc)->format('d/m/Y')
-            : null;
+        if (! $fattura) {
+            return null;
+        }
+
+        $del = Carbon::parse($fattura->data_doc);
+
+        return ['FT '.$fattura->numero_doc.' del '.$del->format('d/m/Y'), (string) $fattura->numero_doc, $del];
     }
 }

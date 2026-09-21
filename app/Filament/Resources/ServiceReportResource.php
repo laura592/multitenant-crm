@@ -1310,7 +1310,8 @@ class ServiceReportResource extends Resource
                     ->placeholder(fn (ServiceReport $record): string => $record->idSchedaEureka() === null ? '—' : 'non controllato')
                     ->color(fn (ServiceReport $record): ?string => $record->eureka_fatturato_il !== null ? null : match ($record->eureka_fattura_motivo) {
                         SenzaFatturaCollegata::DA_VERIFICARE => 'danger',
-                        SenzaFatturaCollegata::DOPPIONE => 'warning',
+                        SenzaFatturaCollegata::DOPPIONE,
+                        SenzaFatturaCollegata::NON_NELLA_FATTURA => 'warning',
                         default => 'gray',
                     })
                     ->weight(fn (ServiceReport $record) => $record->eureka_fattura_motivo === SenzaFatturaCollegata::DA_VERIFICARE && $record->eureka_fatturato_il === null
@@ -1389,7 +1390,8 @@ class ServiceReportResource extends Resource
                         // Il primo da guardare: quelli che il CRM non sa spiegare.
                         SenzaFatturaCollegata::DA_VERIFICARE => 'Da verificare',
                         SenzaFatturaCollegata::DOPPIONE => 'Doppioni (da sistemare su Eureka)',
-                        SenzaFatturaCollegata::FATTURA_NON_COLLEGATA => 'Fatturati senza collegare la scheda',
+                        SenzaFatturaCollegata::NON_NELLA_FATTURA => 'Da controllare nella fattura del periodo',
+                        SenzaFatturaCollegata::FATTURA_NON_COLLEGATA => 'Probabilmente fatturati a mano',
                         'da_fatturare' => 'Tutti senza fattura collegata',
                     ])
                     ->query(fn (Builder $query, array $data) => match ($data['value'] ?? null) {
@@ -1400,6 +1402,7 @@ class ServiceReportResource extends Resource
                             ->whereNotNull('eureka_fatture_controllate_il'),
                         SenzaFatturaCollegata::DA_VERIFICARE,
                         SenzaFatturaCollegata::DOPPIONE,
+                        SenzaFatturaCollegata::NON_NELLA_FATTURA,
                         SenzaFatturaCollegata::FATTURA_NON_COLLEGATA => $query->whereNull('eureka_fatturato_il')
                             ->where('eureka_fattura_motivo', $data['value']),
                         default => $query,

@@ -114,11 +114,29 @@ class SenzaFatturaCollegataTest extends TestCase
         $this->assertSame(S::DA_VERIFICARE, $this->classifica($this->rapportino('2025-11-10', 250))[0]);
     }
 
-    public function test_fatturato_senza_collegare_la_scheda(): void
+    /** Una fattura fatta a mano, senza schede collegate: plausibile che dentro ci sia anche questa. */
+    public function test_probabile_se_la_fattura_e_fatta_a_mano(): void
     {
         $this->fatturaA($this->cliente->id, null, '82', '2025-03-15');
 
         $this->assertSame([S::FATTURA_NON_COLLEGATA, 'FT 82 del 15/03/2025'], $this->classifica($this->rapportino('2025-03-10', 120)));
+    }
+
+    /**
+     * Una fattura fatta dalle schede, e questa non c'e': non e' "probabilmente
+     * dentro", e' da controllare. Villa Gentile SL-516/2026: la FT 267 di
+     * Martellozzo raccoglie gli interventi di giugno, ma non quello.
+     */
+    public function test_da_controllare_se_la_fattura_e_fatta_dalle_schede(): void
+    {
+        $this->fatturaA($this->cliente->id, null, '267', '2026-06-30');
+        $altra = $this->rapportino('2026-06-25', 50);
+        $altra->registraFattureEureka([['id_fattura' => 16953, 'tipo_doc' => 'FT', 'numero_fattura' => 267, 'data_fattura' => '2026-06-30T00:00:00.000+02:00']]);
+
+        $this->assertSame(
+            [S::NON_NELLA_FATTURA, 'FT 267 del 30/06/2026'],
+            S::classifica($this->rapportino('2026-06-26', 120), Carbon::parse('2026-09-21')),
+        );
     }
 
     /** Art & Food SL-54: la FT 31 e' intestata al pagante indicato sulla scheda. */
@@ -129,7 +147,7 @@ class SenzaFatturaCollegataTest extends TestCase
         $conPagante = $this->rapportino('2026-02-06', 250, ['eureka_destinazione_code' => '3046']);
         $senzaPagante = $this->rapportino('2026-02-06', 250);
 
-        $this->assertSame([S::FATTURA_NON_COLLEGATA, 'FT 31 del 16/02/2026'], $this->classifica($conPagante));
+        $this->assertSame([S::FATTURA_NON_COLLEGATA, 'FT 31 del 16/02/2026'], $this->classifica($conPagante), 'Nessuna scheda sulla FT 31: fatta a mano.');
         $this->assertSame(S::DA_VERIFICARE, $this->classifica($senzaPagante)[0], 'SL-53: senza pagante, la FT 31 non e\' sua.');
     }
 
@@ -161,7 +179,8 @@ class SenzaFatturaCollegataTest extends TestCase
     public function test_la_colonna_dice_il_motivo_con_la_prova(): void
     {
         $this->assertSame('doppione di RT-2025-0892', S::descrizione(S::DOPPIONE, 'RT-2025-0892'));
-        $this->assertSame('probabile FT 479 del 07/11/2025', S::descrizione(S::FATTURA_NON_COLLEGATA, 'FT 479 del 07/11/2025'));
+        $this->assertSame('probabile FT 479 del 07/11/2025 (fatta a mano)', S::descrizione(S::FATTURA_NON_COLLEGATA, 'FT 479 del 07/11/2025'));
+        $this->assertSame('da controllare nella FT 267 del 30/06/2026', S::descrizione(S::NON_NELLA_FATTURA, 'FT 267 del 30/06/2026'));
         $this->assertSame('da verificare', S::descrizione(S::DA_VERIFICARE, null));
     }
 }
