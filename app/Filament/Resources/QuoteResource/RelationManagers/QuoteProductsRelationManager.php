@@ -10,6 +10,7 @@ use App\Models\Category;
 use App\Models\Product;
 use App\Models\QuoteProduct;
 use App\Support\Assistenza\ContrattoAssistenza;
+use App\Support\Assistenza\ContrattoAssistenzaPdf;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\RelationManagers\RelationManager;
@@ -139,6 +140,11 @@ class QuoteProductsRelationManager extends RelationManager
         $livewire->dispatch('totaliPreventivoAggiornati');
     }
 
+    private static function modelloMancante(QuoteProduct $record): bool
+    {
+        return ContrattoAssistenzaPdf::modello((string) $record->contratto_assistenza, $record->quote?->tenant_id) === null;
+    }
+
     public function table(Table $table): Table
     {
         return $table
@@ -183,6 +189,12 @@ class QuoteProductsRelationManager extends RelationManager
                     ->icon('heroicon-o-document-text')
                     ->color('gray')
                     ->visible(fn (QuoteProduct $record) => $record->isBase() && ContrattoAssistenza::dellaRiga($record) !== null)
+                    // Il modello sta in Documenti: se l'ufficio non l'ha
+                    // caricato il pulsante resta, spento, e dice perche'.
+                    ->disabled(fn (QuoteProduct $record) => static::modelloMancante($record))
+                    ->tooltip(fn (QuoteProduct $record) => static::modelloMancante($record)
+                        ? 'Manca il modello del contratto '.ContrattoAssistenza::nome($record->contratto_assistenza).': caricalo in Magazzino → Documenti.'
+                        : null)
                     ->url(fn (QuoteProduct $record) => route('quotes.contratto', [$record->quote_id, $record]))
                     ->openUrlInNewTab(),
                 Tables\Actions\ActionGroup::make([

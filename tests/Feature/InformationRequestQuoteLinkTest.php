@@ -289,7 +289,25 @@ class InformationRequestQuoteLinkTest extends TestCase
         $this->assertNotNull($libero->id);
     }
 
-    public function test_a_quote_created_on_its_own_has_no_request_attached(): void
+    public function test_a_quote_started_from_quotes_proposes_the_customer_only_open_request(): void
+    {
+        // Partendo da Preventivi il collegamento prima non nasceva mai, e la
+        // richiesta restava "Nuova" anche a preventivo inviato.
+        Livewire::test(CreateQuote::class)
+            ->fillForm([
+                'customer_id' => $this->customer->id,
+                'date' => now()->toDateString(),
+                'status' => 'bozza',
+            ])
+            ->assertFormSet(['information_request_id' => $this->request->id])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame($this->request->id, Quote::where('customer_id', $this->customer->id)->firstOrFail()->information_request_id);
+        $this->assertSame('in_lavorazione', $this->request->fresh()->status);
+    }
+
+    public function test_the_proposed_request_can_be_left_out(): void
     {
         Livewire::test(CreateQuote::class)
             ->fillForm([
@@ -297,9 +315,29 @@ class InformationRequestQuoteLinkTest extends TestCase
                 'date' => now()->toDateString(),
                 'status' => 'bozza',
             ])
+            ->fillForm(['information_request_id' => null])
             ->call('create')
             ->assertHasNoFormErrors();
 
         $this->assertNull(Quote::where('customer_id', $this->customer->id)->firstOrFail()->information_request_id);
+        $this->assertSame('nuova', $this->request->fresh()->status);
+    }
+
+    public function test_with_two_open_requests_nothing_is_chosen_for_you(): void
+    {
+        InformationRequest::create(['tenant_id' => $this->tenant->id, 'customer_id' => $this->customer->id, 'status' => 'nuova']);
+
+        Livewire::test(CreateQuote::class)
+            ->fillForm(['customer_id' => $this->customer->id])
+            ->assertFormSet(['information_request_id' => null]);
+    }
+
+    public function test_a_customer_without_requests_has_no_request_field(): void
+    {
+        $other = Customer::create(['tenant_id' => $this->tenant->id, 'company_name' => 'Senza richieste']);
+
+        Livewire::test(CreateQuote::class)
+            ->fillForm(['customer_id' => $other->id])
+            ->assertFormFieldIsHidden('information_request_id');
     }
 }

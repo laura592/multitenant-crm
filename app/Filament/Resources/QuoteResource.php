@@ -11,6 +11,7 @@ use App\Filament\Resources\QuoteResource\Pages;
 use App\Filament\Resources\QuoteResource\RelationManagers\QuoteProductsRelationManager;
 use App\Mail\QuoteMail;
 use App\Models\Customer;
+use App\Models\InformationRequest;
 use App\Models\PaymentMethod;
 use App\Models\Quote;
 use App\Models\QuoteGroup;
@@ -21,6 +22,7 @@ use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
+use Filament\Forms\Set;
 use Filament\Infolists\Components\Actions as InfolistActions;
 use Filament\Infolists\Components\Actions\Action as InfolistAction;
 use Filament\Infolists\Components\Section as InfolistSection;
@@ -37,6 +39,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\HtmlString;
+use Illuminate\Support\Str;
 
 class QuoteResource extends Resource
 {
@@ -119,6 +122,35 @@ class QuoteResource extends Resource
                                     TextEntry::make('offer_alternatives_count')
                                         ->label('soluzioni alternative')
                                         ->state(fn (Quote $record) => max(0, ($record->quoteGroup?->quotes()->count() ?? 1) - 1)),
+                                ]),
+                            // Da quale richiesta nasce il preventivo: prima si vedeva
+                            // solo dal lato richiesta, e dal preventivo non c'era
+                            // modo di risalirci.
+                            InfolistSection::make('Richiesta informazioni')
+                                ->columnSpanFull()
+                                ->columns(3)
+                                ->visible(fn (Quote $record) => filled($record->information_request_id))
+                                ->extraAttributes([
+                                    'class' => 'rounded-2xl border border-sky-200 bg-sky-50 shadow-sm dark:border-sky-900/40 dark:bg-sky-950/20',
+                                ])
+                                ->schema([
+                                    TextEntry::make('informationRequest.number')
+                                        ->label('Richiesta')
+                                        ->color('primary')
+                                        ->url(fn (Quote $record) => $record->informationRequest
+                                            ? InformationRequestResource::getUrl('edit', ['record' => $record->informationRequest])
+                                            : null),
+                                    TextEntry::make('informationRequest.created_at')->label('Arrivata il')->date('d/m/Y'),
+                                    TextEntry::make('informationRequest.status')
+                                        ->label('Stato richiesta')
+                                        ->badge()
+                                        ->formatStateUsing(fn (?string $state) => InformationRequestResource::statusLabels()[$state] ?? $state)
+                                        ->color(fn (?string $state) => InformationRequestResource::statusColors()[$state] ?? 'gray'),
+                                    TextEntry::make('informationRequest.request_details')
+                                        ->label('Cosa chiedeva')
+                                        ->placeholder('—')
+                                        ->limit(300)
+                                        ->columnSpanFull(),
                                 ]),
                             \Filament\Infolists\Components\Grid::make(12)
                                 ->schema([
@@ -304,12 +336,6 @@ class QuoteResource extends Resource
                     // Quote nasce gia' agganciato al gruppo.
                     Forms\Components\Hidden::make('quote_group_id')
                         ->default(fn () => request()->query('group')),
-                    // Presente quando si arriva da "Crea preventivo" su una
-                    // richiesta informazioni: tiene il filo fra la richiesta e
-                    // i preventivi che ne nascono (vedi
-                    // InformationRequestResource::creaPreventivoAction()).
-                    Forms\Components\Hidden::make('information_request_id')
-                        ->default(fn () => request()->query('information_request_id')),
                     Forms\Components\TextInput::make('number')
                         ->label('Numero')
                         ->required()
@@ -332,6 +358,13 @@ class QuoteResource extends Resource
                             : request()->query('customer_id'))
                         ->disabled(fn () => $isCreating && filled(request()->query('group')))
                         ->dehydrated()
+                        // La richiesta informazioni sotto dipende dal cliente:
+                        // se ne ha una sola aperta si propone quella.
+                        ->live()
+                        ->afterStateUpdated(fn (Set $set, ?string $state) => $set(
+                            'information_request_id',
+                            static::richiestaUnica($state),
+                        ))
                         ->extraAttributes(['data-tour' => 'quotes-field-customer'])
                         ->createOptionForm([
                             Forms\Components\TextInput::make('company_name')->label('Ragione sociale'),
@@ -341,6 +374,7 @@ class QuoteResource extends Resource
                             ...CustomerFiscalFields::schema(),
                             ...ItalianAddressFields::schema(),
                         ]),
+                    static::informationRequestField(),
                     Forms\Components\DatePicker::make('date')
                         ->label('Data')
                         ->required()
@@ -412,6 +446,8 @@ class QuoteResource extends Resource
                                         ->default(fn () => request()->query('group') ? QuoteGroup::find(request()->query('group'))?->customer_id : null)
                                         ->disabled(fn () => $isCreating && filled(request()->query('group')))
                                         ->dehydrated()
+                                        ->live()
+                                        ->afterStateUpdated(fn (Set $set, ?string $state) => $set('information_request_id', static::richiestaUnica($state)))
                                         ->columnSpan(4)
                                         ->createOptionForm([
                                             Forms\Components\TextInput::make('company_name')->label('Ragione sociale'),
@@ -431,6 +467,7 @@ class QuoteResource extends Resource
                                         ->default('bozza')
                                         ->required()
                                         ->columnSpan(4),
+                                    static::informationRequestField()->columnSpan(4),
                                     Forms\Components\Select::make('payment_method')
                                         ->label('Metodo di pagamento')
                                         ->options(fn () => PaymentMethod::query()->where('is_active', true)->pluck('name', 'slug'))
@@ -597,6 +634,76 @@ class QuoteResource extends Resource
             ->emptyStateHeading('Nessun preventivo ancora')
             ->emptyStateDescription('Crea il primo preventivo per questo cliente con "Nuovo".')
             ->emptyStateIcon('heroicon-o-document-text');
+    }
+
+    /**
+     * Il filo fra la richiesta e i preventivi che ne nascono: la richiesta
+     * poi ne segue lo stato da sola (InformationRequest::syncStatusFromQuotes).
+     * Prima era un campo nascosto valorizzato solo arrivando da "Crea
+     * preventivo" sulla richiesta: partendo da Preventivi il collegamento non
+     * nasceva mai e la richiesta restava "Nuova" anche a preventivo inviato.
+     */
+    public static function informationRequestField(): Forms\Components\Select
+    {
+        return Forms\Components\Select::make('information_request_id')
+            ->label('Richiesta informazioni')
+            // La richiesta scelta resta sempre tra le opzioni, anche se chiusa:
+            // altrimenti la select mostrerebbe l'id nudo.
+            ->options(fn (Get $get) => static::richiesteCollegabili($get('customer_id'), $get('information_request_id')))
+            ->default(fn () => request()->query('information_request_id')
+                ?? static::richiestaUnica(request()->query('customer_id')))
+            ->placeholder('Nessuna')
+            ->visible(fn (Get $get) => static::richiesteCollegabili($get('customer_id'), $get('information_request_id')) !== [])
+            ->helperText('La richiesta passa da sola a "Preventivo inviato", "accettato" o "non accettato" seguendo questo preventivo.');
+    }
+
+    /**
+     * Le richieste del cliente a cui si puo' agganciare un nuovo preventivo:
+     * quelle ancora aperte o gia' con altri preventivi (un'alternativa in piu').
+     * Le "Gestita" / "Chiusa" restano fuori, sono chiuse a mano. $keep e' la
+     * richiesta gia' scelta, sempre presente anche se non rientra.
+     *
+     * @return array<string, string>
+     */
+    public static function richiesteCollegabili(?string $customerId, ?string $keep = null): array
+    {
+        if (! $customerId) {
+            return [];
+        }
+
+        return InformationRequest::query()
+            ->where('customer_id', $customerId)
+            ->where(fn (Builder $query) => $query
+                ->whereIn('status', InformationRequest::AUTO_STATUSES)
+                ->when($keep, fn (Builder $query) => $query->orWhere('id', $keep)))
+            ->orderByDesc('created_at')
+            ->get()
+            ->mapWithKeys(fn (InformationRequest $request) => [$request->id => implode(' · ', array_filter([
+                $request->number,
+                $request->created_at?->format('d/m/Y'),
+                InformationRequestResource::statusLabels()[$request->status] ?? $request->status,
+                $request->request_details ? Str::limit($request->request_details, 50) : null,
+            ]))])
+            ->all();
+    }
+
+    /**
+     * La richiesta da proporre in automatico: solo se il cliente ne ha
+     * esattamente una ancora da preventivare. Con due o piu' si sceglie a mano.
+     */
+    public static function richiestaUnica(?string $customerId): ?string
+    {
+        if (! $customerId) {
+            return null;
+        }
+
+        $open = InformationRequest::query()
+            ->where('customer_id', $customerId)
+            ->whereIn('status', ['nuova', 'in_lavorazione'])
+            ->limit(2)
+            ->pluck('id');
+
+        return $open->count() === 1 ? $open->first() : null;
     }
 
     public static function buildPdf(Quote $record)

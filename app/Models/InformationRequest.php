@@ -14,6 +14,13 @@ class InformationRequest extends Model
 {
     use BelongsToTenant, HasUuids, LogsAuditTrail;
 
+    /**
+     * Gli stati che segue da sola dai preventivi collegati. "Gestita" e
+     * "Chiusa" restano scelte a mano: una richiesta chiusa non si riapre
+     * perche' qualcuno manda un preventivo.
+     */
+    public const AUTO_STATUSES = ['nuova', 'in_lavorazione', 'preventivo_inviato', 'preventivo_accettato', 'preventivo_rifiutato'];
+
     protected $fillable = [
         'tenant_id',
         'customer_id',
@@ -88,6 +95,43 @@ class InformationRequest extends Model
     public function quotes(): HasMany
     {
         return $this->hasMany(Quote::class)->latest('created_at');
+    }
+
+    /**
+     * Lo stato che la richiesta dovrebbe avere guardando i suoi preventivi,
+     * o null se non c'e' niente da dire (stato scelto a mano). Un preventivo
+     * accettato vince su tutto; uno inviato vince sui rifiutati (il cliente
+     * ha ancora una proposta aperta); solo bozze = ci si sta lavorando.
+     * Senza piu' preventivi (scollegati o cancellati) torna "In lavorazione"
+     * se era avanzata per merito loro, altrimenti resta com'e'.
+     */
+    public function statusFromQuotes(): ?string
+    {
+        if (! in_array($this->status, self::AUTO_STATUSES, true)) {
+            return null;
+        }
+
+        $statuses = $this->quotes()->withoutGlobalScope('tenant')->pluck('status');
+
+        if ($statuses->isEmpty()) {
+            return str_starts_with($this->status, 'preventivo_') ? 'in_lavorazione' : null;
+        }
+
+        return match (true) {
+            $statuses->contains('accettato') => 'preventivo_accettato',
+            $statuses->contains('inviato') => 'preventivo_inviato',
+            $statuses->every(fn ($status) => $status === 'rifiutato') => 'preventivo_rifiutato',
+            default => 'in_lavorazione',
+        };
+    }
+
+    public function syncStatusFromQuotes(): void
+    {
+        $status = $this->statusFromQuotes();
+
+        if ($status !== null && $status !== $this->status) {
+            $this->update(['status' => $status]);
+        }
     }
 
     public function handledByUser(): BelongsTo

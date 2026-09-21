@@ -256,11 +256,10 @@ class InformationRequestResource extends Resource
                     ->badge()
                     ->formatStateUsing(fn (string $state) => static::statusLabels()[$state] ?? ucfirst($state))
                     ->color(fn (string $state) => static::statusColors()[$state] ?? 'gray'),
-                // Lo stato "preventivo inviato" non e' un altro stato della
-                // richiesta da tenere aggiornato a mano: e' quello del
-                // preventivo collegato, letto da qui. In elenco pero' basta
-                // il si'/no, come per le colonne Eureka: numeri, stati e
-                // offerta stanno nel tooltip e a un clic di distanza.
+                // Lo stato della richiesta segue gia' i preventivi collegati
+                // (InformationRequest::syncStatusFromQuotes); qui basta il
+                // si'/no, come per le colonne Eureka: numeri, stati e offerta
+                // stanno nel tooltip e a un clic di distanza.
                 Tables\Columns\IconColumn::make('has_quote')
                     ->label('Prev.')
                     ->alignCenter()
@@ -477,6 +476,11 @@ class InformationRequestResource extends Resource
         return [
             'nuova' => 'Nuova',
             'in_lavorazione' => 'In lavorazione',
+            // I tre "Preventivo ..." li mette da solo il preventivo collegato
+            // (InformationRequest::syncStatusFromQuotes).
+            'preventivo_inviato' => 'Preventivo inviato',
+            'preventivo_accettato' => 'Preventivo accettato',
+            'preventivo_rifiutato' => 'Preventivo non accettato',
             'gestita' => 'Gestita',
             'chiusa' => 'Chiusa',
         ];
@@ -487,6 +491,9 @@ class InformationRequestResource extends Resource
         return [
             'nuova' => 'gray',
             'in_lavorazione' => 'warning',
+            'preventivo_inviato' => 'info',
+            'preventivo_accettato' => 'success',
+            'preventivo_rifiutato' => 'danger',
             'gestita' => 'success',
             'chiusa' => 'success',
         ];

@@ -6,7 +6,9 @@ use App\Filament\Resources\ServiceReportResource;
 use App\Filament\Pages\ClientiVicini;
 use Filament\Actions;
 use Filament\Forms;
+use Filament\Resources\Components\Tab;
 use Filament\Resources\Pages\ListRecords;
+use Illuminate\Database\Eloquent\Builder;
 
 class ListServiceReports extends ListRecords
 {
@@ -67,5 +69,55 @@ class ListServiceReports extends ListRecords
             Actions\CreateAction::make()
                 ->extraAttributes(['data-tour' => 'service-reports-create']),
         ];
+    }
+
+    /**
+     * Una scheda per anno, dal piu' recente, piu' "Tutti" in fondo.
+     *
+     * Gli anni vengono dai rapportini che ci sono davvero (min/max della
+     * data intervento, filtrati per tenant da getEloquentQuery()), cosi'
+     * gennaio non apre con una scheda vuota e lo storico importato da
+     * Eureka compare da solo. Il filtro e' un intervallo di date e non
+     * whereYear(): cosi' usa l'indice (tenant_id, intervention_date).
+     */
+    public function getTabs(): array
+    {
+        $base = ServiceReportResource::getEloquentQuery()->withoutEagerLoads();
+        $primo = $base->clone()->min('intervention_date');
+        $ultimo = $base->clone()->max('intervention_date');
+
+        $tabs = [];
+
+        if ($primo && $ultimo) {
+            foreach (range((int) substr($ultimo, 0, 4), (int) substr($primo, 0, 4)) as $anno) {
+                // Semiaperto, non BETWEEN ... '12-31': se la data e' salvata
+                // con l'ora (SQLite lo fa), il 31 dicembre resterebbe fuori.
+                $filtro = fn (Builder $query) => $query
+                    ->where('intervention_date', '>=', "{$anno}-01-01")
+                    ->where('intervention_date', '<', ($anno + 1).'-01-01');
+
+                $tabs[(string) $anno] = Tab::make((string) $anno)
+                    ->modifyQueryUsing($filtro)
+                    ->badge(fn () => $filtro($base->clone())->count());
+            }
+        }
+
+        $tabs['tutti'] = Tab::make('Tutti');
+
+        return $tabs;
+    }
+
+    /**
+     * Si parte dall'anno in corso: e' quello che si guarda quasi sempre, e
+     * risparmia di sfogliare migliaia di righe degli anni passati. Se
+     * quest'anno non c'e' ancora niente, il primo anno disponibile.
+     */
+    public function getDefaultActiveTab(): string | int | null
+    {
+        // PHP trasforma le chiavi "2026" in interi: si confronta come stringhe.
+        $tabs = array_map('strval', array_keys($this->getCachedTabs()));
+        $anno = (string) now()->year;
+
+        return in_array($anno, $tabs, true) ? $anno : ($tabs[0] ?? null);
     }
 }

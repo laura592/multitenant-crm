@@ -6,6 +6,7 @@ use App\Models\Quote;
 use App\Models\QuoteProduct;
 use App\Support\Assistenza\ContrattoAssistenza;
 use App\Support\Assistenza\ContrattoAssistenzaPdf;
+use App\Support\Assistenza\ModelloContrattoMancante;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Spatie\Permission\PermissionRegistrar;
@@ -36,7 +37,16 @@ class ContrattoAssistenzaController extends Controller
             $quote->number ?: now()->format('Y-m-d'),
         );
 
-        return response(ContrattoAssistenzaPdf::crea($quoteProduct), 200, [
+        try {
+            $pdf = ContrattoAssistenzaPdf::crea($quoteProduct);
+        } catch (ModelloContrattoMancante $e) {
+            return response()->view('errors.404', [
+                'titolo' => 'Contratto non disponibile',
+                'messaggio' => $e->getMessage(),
+            ], 404);
+        }
+
+        return response($pdf, 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'inline; filename="'.$nome.'"',
         ]);

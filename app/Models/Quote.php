@@ -95,6 +95,18 @@ class Quote extends Model
             }
         });
 
+        // La richiesta informazioni da cui nasce il preventivo ne segue lo
+        // stato da sola (in lavorazione, preventivo inviato, accettato...):
+        // prima andava cambiata a mano e restava "Nuova", contata tra quelle
+        // da gestire, anche a preventivo gia' inviato.
+        static::saved(function (self $quote) {
+            if ($quote->wasRecentlyCreated || $quote->wasChanged(['status', 'information_request_id'])) {
+                $quote->syncInformationRequests();
+            }
+        });
+        static::deleted(fn (self $quote) => $quote->syncInformationRequests());
+        static::restored(fn (self $quote) => $quote->syncInformationRequests());
+
         // Le FK cascadeOnDelete() del DB non scattano piu' su un soft delete
         // (e' un UPDATE, non una DELETE): replichiamo la cascata a mano sui
         // figli diretti (righe preventivo ed email), cosi' spariscono e
@@ -103,6 +115,27 @@ class Quote extends Model
             $quote->quoteProducts->each->delete();
             $quote->emails->each->delete();
         });
+    }
+
+    /**
+     * Riallinea la richiesta collegata, e quella da cui il preventivo e'
+     * stato appena staccato se il collegamento e' cambiato.
+     */
+    protected function syncInformationRequests(): void
+    {
+        $requestIds = array_filter(array_unique([
+            $this->information_request_id,
+            $this->wasChanged('information_request_id') ? $this->getOriginal('information_request_id') : null,
+        ]));
+
+        if ($requestIds === []) {
+            return;
+        }
+
+        InformationRequest::withoutGlobalScope('tenant')
+            ->whereKey($requestIds)
+            ->get()
+            ->each->syncStatusFromQuotes();
     }
 
     /**

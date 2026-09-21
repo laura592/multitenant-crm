@@ -75,8 +75,15 @@
             </svg>
         </div>
         <p class="code">ERRORE 404</p>
-        <h1>Pagina non trovata</h1>
-        <p>La pagina che cerchi non esiste o &egrave; stata spostata. Controlla l&rsquo;indirizzo oppure torna alla dashboard.</p>
+        {{-- titolo/messaggio solo quando li passa un controller (es. il
+             contratto senza modello in Documenti): il messaggio
+             dell'eccezione no, per un 404 qualunque e' testo tecnico. --}}
+        <h1>{{ $titolo ?? 'Pagina non trovata' }}</h1>
+        @isset($messaggio)
+            <p>{{ $messaggio }}</p>
+        @else
+            <p>La pagina che cerchi non esiste o &egrave; stata spostata. Controlla l&rsquo;indirizzo oppure torna alla dashboard.</p>
+        @endisset
         <a href="{{ url('/') }}" class="btn">Torna alla dashboard</a>
     </div>
 </body>

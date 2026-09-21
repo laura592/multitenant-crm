@@ -585,35 +585,41 @@ class TourRegistry
 
             'price-lists' => [
                 [
-                    'title' => 'Listini',
-                    'text' => 'Listini prezzo usati per calcolare i prezzi correnti dei prodotti nei preventivi. Il prezzo "corrente" di un prodotto viene sempre dal listino attivo più recente.',
+                    'title' => 'Documenti',
+                    'text' => 'I PDF dell\'ufficio divisi per categoria: listini e cataloghi dei fornitori, modelli dei contratti di assistenza e altri documenti. Usa le schede in alto per vederne una categoria alla volta.',
                 ],
                 [
                     'element' => '[data-tour="price-lists-create"]',
-                    'title' => 'Passo 1 — Crea il listino',
-                    'text' => 'Clicca qui per aprire il form di un nuovo listino.',
+                    'title' => 'Passo 1 — Crea il documento',
+                    'text' => 'Clicca qui per aprire il form di un nuovo documento.',
+                ],
+                [
+                    'element' => '[data-tour="price-lists-field-category"]',
+                    'waitFor' => true,
+                    'title' => 'Passo 2 — Categoria',
+                    'text' => 'Listino (con i prezzi), Catalogo (schede prodotto senza prezzi), Contratto Full-Service, Contratto Easy-Service o Altro. Un contratto caricato qui è quello che esce, con la pagina dei dati del cliente davanti, quando si scarica il contratto da un preventivo.',
                 ],
                 [
                     'element' => '[data-tour="price-lists-field-name"]',
                     'waitFor' => true,
-                    'title' => 'Passo 2 — Nome (obbligatorio)',
-                    'text' => 'Un nome che ti aiuti a riconoscerlo (es. fornitore + anno).',
+                    'title' => 'Passo 3 — Nome (obbligatorio)',
+                    'text' => 'Un nome che ti aiuti a riconoscerlo (es. fornitore + anno, oppure "Full-Service rev. settembre 2026").',
                 ],
                 [
                     'element' => '[data-tour="price-lists-field-supplier"]',
                     'waitFor' => true,
-                    'title' => 'Passo 3 — Fornitore',
-                    'text' => 'Facoltativo, ma collegarlo aiuta a trovare rapidamente tutti i listini di un fornitore.',
+                    'title' => 'Passo 4 — Fornitore',
+                    'text' => 'Facoltativo, ma collegarlo aiuta a trovare rapidamente tutti i listini di un fornitore. Per i contratti non c\'è.',
                 ],
                 [
                     'element' => '[data-tour="price-lists-field-file"]',
                     'waitFor' => true,
-                    'title' => 'Passo 4 — File PDF',
-                    'text' => 'Carica qui il PDF del listino. Per sostituirlo in futuro carica un nuovo file: non è possibile rimuoverlo senza sostituirlo, e viene ottimizzato automaticamente se troppo pesante.',
+                    'title' => 'Passo 5 — File PDF',
+                    'text' => 'Carica qui il PDF. Per sostituirlo in futuro carica un nuovo file: non è possibile rimuoverlo senza sostituirlo. I listini vengono ottimizzati automaticamente se troppo pesanti, i contratti restano esattamente come li carichi.',
                 ],
                 [
                     'title' => 'Fatto',
-                    'text' => 'Imposta "Valido dal"/"Valido fino al" per tracciare il periodo di validità: lascia vuoto "fino al" se non ha una scadenza nota.',
+                    'text' => 'Imposta "Valido dal"/"Valido fino al" per tracciare il periodo di validità: lascia vuoto "fino al" se non ha una scadenza nota. Per i contratti, fra quelli validi oggi si usa quello con la decorrenza più recente: in tabella è segnato "In uso", gli altri "Sostituito".',
                 ],
             ],
 
@@ -635,7 +641,7 @@ class TourRegistry
                 ],
                 [
                     'title' => 'Fatto',
-                    'text' => 'Il fornitore è subito selezionabile nel form di Materiali, Listini e Ordini materiali.',
+                    'text' => 'Il fornitore è subito selezionabile nel form di Materiali, Documenti e Ordini materiali.',
                 ],
             ],
 

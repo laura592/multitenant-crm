@@ -16,9 +16,8 @@ use Illuminate\Database\Eloquent\Builder;
 
 /**
  * I preventivi nati da questa richiesta. Sola lettura: un preventivo si
- * modifica dalla sua pagina, qui serve solo vedere a che punto e' — che e'
- * poi il modo in cui la richiesta "sa" di essere stata preventivata, senza
- * uno stato parallelo da tenere aggiornato a mano.
+ * modifica dalla sua pagina, qui serve solo vedere a che punto e'. Lo stato
+ * della richiesta li segue da solo (InformationRequest::syncStatusFromQuotes).
  */
 class QuotesRelationManager extends RelationManager
 {
@@ -148,6 +147,10 @@ class QuotesRelationManager extends RelationManager
                             ->where('customer_id', $this->getOwnerRecord()->customer_id)
                             ->whereNull('information_request_id')
                             ->update(['information_request_id' => $this->getOwnerRecord()->id]);
+
+                        // update() di massa non passa dagli eventi del modello:
+                        // lo stato della richiesta va riallineato a mano qui.
+                        $this->getOwnerRecord()->syncStatusFromQuotes();
 
                         Notification::make()
                             ->success()

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Filament\Resources\QuoteResource\Pages\EditQuote;
 use App\Models\Brand;
 use App\Models\Customer;
+use App\Models\PriceList;
 use App\Models\Product;
 use App\Models\ProductFamily;
 use App\Models\ProductOptionSlot;
@@ -16,6 +17,7 @@ use App\Support\Assistenza\ContrattoAssistenza;
 use App\Support\Assistenza\ContrattoAssistenzaPdf;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Tests\Concerns\AssignsPermissionRoles;
 use Tests\TestCase;
@@ -50,6 +52,14 @@ class ContrattoAssistenzaTest extends TestCase
         parent::setUp();
 
         $this->tenant = Tenant::create(['name' => 'Alex', 'slug' => 'alex', 'is_master' => true]);
+
+        // I modelli dei contratti stanno in Documenti: qui quelli dell'ufficio.
+        Storage::fake('public');
+        foreach (PriceList::CONTRATTI as $tipo => $categoria) {
+            Storage::disk('public')->put("price-lists/{$tipo}.pdf", file_get_contents(base_path("tests/fixtures/contratti/{$tipo}-service.pdf")));
+            PriceList::create(['category' => $categoria, 'name' => "Contratto {$tipo}", 'file_path' => "price-lists/{$tipo}.pdf"]);
+        }
+
         $franke = Brand::create(['name' => 'Franke']);
         $famiglia = ProductFamily::create(['name' => 'A600']);
 
@@ -240,6 +250,21 @@ class ContrattoAssistenzaTest extends TestCase
         $this->get(route('quotes.contratto', [$this->quote, $riga]))
             ->assertOk()
             ->assertHeader('Content-Type', 'application/pdf');
+    }
+
+    /** Senza il modello in Documenti il contratto non si genera, e lo si dice. */
+    public function test_senza_modello_in_documenti_il_contratto_non_si_scarica(): void
+    {
+        $riga = $this->configura(ContrattoAssistenza::FULL);
+        PriceList::where('category', PriceList::CONTRATTO_FULL)->delete();
+
+        $this->get(route('quotes.contratto', [$this->quote, $riga]))
+            ->assertNotFound()
+            ->assertSee('Manca il modello del contratto Full-Service');
+
+        Livewire::test(\App\Filament\Resources\QuoteResource\RelationManagers\QuoteProductsRelationManager::class, [
+            'ownerRecord' => $this->quote, 'pageClass' => EditQuote::class,
+        ])->assertTableActionDisabled('contratto_pdf', $riga);
     }
 
     /** La riga deve essere del preventivo nell'indirizzo. */

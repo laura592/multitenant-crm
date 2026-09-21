@@ -21,8 +21,8 @@ use Illuminate\Support\Collection;
  * IndividualMilk, monitoraggio. Si riconosce dal nome dell'opzione, vedi
  * eSistemaLatte().
  *
- * I testi dei contratti non stanno qui ma nei PDF dell'ufficio, in
- * resources/contratti: vedi ContrattoAssistenzaPdf.
+ * I testi dei contratti non stanno qui ma nei PDF dell'ufficio, caricati
+ * in Documenti: vedi ContrattoAssistenzaPdf.
  */
 final class ContrattoAssistenza
 {
@@ -31,19 +31,17 @@ final class ContrattoAssistenza
     public const EASY = 'easy';
 
     /**
-     * @var array<string, array{nome: string, percentuale: float, file: string, conOptional: bool}>
+     * @var array<string, array{nome: string, percentuale: float, conOptional: bool}>
      */
     public const TIPI = [
         self::FULL => [
             'nome' => 'Full-Service',
             'percentuale' => 10.0,
-            'file' => 'full-service.pdf',
             'conOptional' => true,
         ],
         self::EASY => [
             'nome' => 'Easy-Service',
             'percentuale' => 5.0,
-            'file' => 'easy-service.pdf',
             'conOptional' => false,
         ],
     ];
