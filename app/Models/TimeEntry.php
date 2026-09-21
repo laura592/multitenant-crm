@@ -21,6 +21,8 @@ class TimeEntry extends Model
         'entered_by_user_id',
         'status',
         'notes',
+        'trasferta',
+        'destinazione_trasferta',
     ];
 
     protected $attributes = [
@@ -31,6 +33,7 @@ class TimeEntry extends Model
     protected $casts = [
         'clock_in' => 'datetime',
         'clock_out' => 'datetime',
+        'trasferta' => 'boolean',
     ];
 
     public function user(): BelongsTo

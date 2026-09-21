@@ -9,6 +9,7 @@ use App\Filament\Resources\TimeEntryResource;
 use App\Models\LeaveRequest;
 use App\Models\TimeEntry;
 use App\Models\User;
+use App\Support\Presenze\GiornataLavorativa;
 use Barryvdh\DomPDF\Facade\Pdf;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Carbon\Carbon;
@@ -88,6 +89,33 @@ class RiepilogoOre extends Page implements HasForms
     }
 
     /**
+     * I giorni di trasferta del periodo, per tutti gli utenti in una query.
+     *
+     * La trasferta si segna sul turno ma vale per la giornata: basta un turno
+     * in trasferta perche' lo sia il giorno. I turni ancora aperti contano:
+     * chi e' in trasferta oggi e non ha ancora timbrato l'uscita lo e' gia'.
+     * Se due turni dello stesso giorno portano due destinazioni diverse, si
+     * tengono entrambe.
+     *
+     * @return Collection<string, Collection<string, string>> user_id -> (Y-m-d -> destinazione)
+     */
+    protected function bulkTrasferte(Collection $users, Carbon $start, Carbon $end): Collection
+    {
+        return TimeEntry::whereIn('user_id', $users->pluck('id'))
+            ->where('trasferta', true)
+            ->whereBetween('clock_in', [$start, $end->copy()->endOfDay()])
+            ->get()
+            ->groupBy('user_id')
+            ->map(fn (Collection $entries) => $entries
+                ->groupBy(fn (TimeEntry $e) => $e->clock_in->format('Y-m-d'))
+                ->map(fn (Collection $dayEntries) => $dayEntries
+                    ->pluck('destinazione_trasferta')
+                    ->filter()
+                    ->unique()
+                    ->implode(', ')));
+    }
+
+    /**
      * Ferie/permessi/malattie approvati che si sovrappongono al periodo, per
      * TUTTI gli utenti passati, in una sola query.
      *
@@ -136,30 +164,34 @@ class RiepilogoOre extends Page implements HasForms
         $users = $this->visibleUsers();
         $workedByUser = $this->bulkDailyWorkedHours($users, $start, $end);
         $leaveByUser = $this->bulkApprovedLeaveRequests($users, $start, $end);
+        $trasferteByUser = $this->bulkTrasferte($users, $start, $end);
 
         return $users->map(fn (User $user) => $this->summaryRowFor(
             $user,
             $start,
             $end,
             $workedByUser->get($user->id, collect()),
-            $leaveByUser->get($user->id, collect())
+            $leaveByUser->get($user->id, collect()),
+            $trasferteByUser->get($user->id, collect()),
         ));
     }
 
-    protected function summaryRowFor(User $user, Carbon $start, Carbon $end, Collection $dailyHours, Collection $leaveRequests): array
+    protected function summaryRowFor(User $user, Carbon $start, Carbon $end, Collection $dailyHours, Collection $leaveRequests, ?Collection $trasferte = null): array
     {
         $dailyContract = (float) $user->daily_contract_hours;
+        $trasferte ??= collect();
 
         $ordinarie = 0.0;
         $straordinarioGiornaliero = 0.0;
         $ordinarieByWeek = [];
 
         foreach ($dailyHours as $day => $totalDay) {
-            $ordinarieDay = min($totalDay, $dailyContract);
-            $ordinarie += $ordinarieDay;
-            $straordinarioGiornaliero += max(0, $totalDay - $dailyContract);
+            $giornata = GiornataLavorativa::ripartisci((float) $totalDay, $dailyContract, $trasferte->has($day));
+
+            $ordinarie += $giornata->ordinarie;
+            $straordinarioGiornaliero += $giornata->straordinario;
             $week = Carbon::parse($day)->isoWeek;
-            $ordinarieByWeek[$week] = ($ordinarieByWeek[$week] ?? 0) + $ordinarieDay;
+            $ordinarieByWeek[$week] = ($ordinarieByWeek[$week] ?? 0) + $giornata->ordinarie;
         }
 
         // Straordinario settimanale (docs/architecture.md §12.1): un dipendente
@@ -199,6 +231,7 @@ class RiepilogoOre extends Page implements HasForms
             'ferie_giorni' => $ferieGiorni,
             'malattia_giorni' => $malattiaGiorni,
             'permessi_ore' => round($permessiOre, 2),
+            'trasferta_giorni' => $trasferte->count(),
         ];
     }
 
@@ -214,6 +247,7 @@ class RiepilogoOre extends Page implements HasForms
             'ferie_giorni' => round($rows->sum('ferie_giorni'), 2),
             'malattia_giorni' => round($rows->sum('malattia_giorni'), 2),
             'permessi_ore' => round($rows->sum('permessi_ore'), 2),
+            'trasferta_giorni' => $rows->sum('trasferta_giorni'),
         ];
     }
 
@@ -232,6 +266,7 @@ class RiepilogoOre extends Page implements HasForms
         $users = $this->visibleUsers();
         $workedByUser = $this->bulkDailyWorkedHours($users, $start, $end);
         $leaveByUser = $this->bulkApprovedLeaveRequests($users, $start, $end);
+        $trasferteByUser = $this->bulkTrasferte($users, $start, $end);
 
         $rows = collect();
 
@@ -239,6 +274,7 @@ class RiepilogoOre extends Page implements HasForms
             $dailyHours = $workedByUser->get($user->id, collect());
             $dailyContract = (float) $user->daily_contract_hours;
             $leaveRequests = $leaveByUser->get($user->id, collect());
+            $trasferte = $trasferteByUser->get($user->id, collect());
 
             for ($day = $start->copy(); $day->lte($end); $day->addDay()) {
                 $key = $day->format('Y-m-d');
@@ -248,16 +284,23 @@ class RiepilogoOre extends Page implements HasForms
                     fn (LeaveRequest $lr) => $day->between($lr->date_from, $lr->date_to)
                 );
 
-                if ($worked <= 0 && ! $leave) {
+                $inTrasferta = $trasferte->has($key);
+
+                if ($worked <= 0 && ! $leave && ! $inTrasferta) {
                     continue;
                 }
+
+                $giornata = GiornataLavorativa::ripartisci($worked, $dailyContract, $inTrasferta);
 
                 $rows->push([
                     'user' => $user->name,
                     'date' => $day->copy(),
                     'ore_lavorate' => round($worked, 2),
-                    'ordinarie' => round(min($worked, $dailyContract), 2),
-                    'straordinario' => round(max(0, $worked - $dailyContract), 2),
+                    'ordinarie' => round($giornata->ordinarie, 2),
+                    'straordinario' => round($giornata->straordinario, 2),
+                    // null = niente trasferta. "Sì" quando la trasferta c'e' ma
+                    // la destinazione no: il campo e' obbligatorio solo dal form.
+                    'trasferta' => $inTrasferta ? ($trasferte[$key] ?: 'Sì') : null,
                     'assenza' => match ($leave?->type) {
                         'ferie' => 'Ferie',
                         'permesso' => 'Permesso ('.number_format((float) $leave->hours, 2).' h)',

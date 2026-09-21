@@ -12,7 +12,7 @@ class DailyTimeDetailExport implements FromCollection, WithHeadings
 
     public function headings(): array
     {
-        return ['Dipendente', 'Data', 'Ore lavorate', 'Ordinarie', 'Straordinario', 'Assenza'];
+        return ['Dipendente', 'Data', 'Ore lavorate', 'Ordinarie', 'Straordinario', 'Trasferta', 'Assenza'];
     }
 
     public function collection(): Collection
@@ -23,6 +23,7 @@ class DailyTimeDetailExport implements FromCollection, WithHeadings
             $row['ore_lavorate'],
             $row['ordinarie'],
             $row['straordinario'],
+            $row['trasferta'] ?? '',
             $row['assenza'] ?? '',
         ]);
     }

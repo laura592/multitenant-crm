@@ -21,7 +21,7 @@
 
     <table class="items">
         <thead>
-            <tr><th>Dipendente</th><th>Data</th><th class="numeric">Ore lavorate</th><th class="numeric">Ordinarie</th><th class="numeric">Straordinario</th><th>Assenza</th></tr>
+            <tr><th>Dipendente</th><th>Data</th><th class="numeric">Ore lavorate</th><th class="numeric">Ordinarie</th><th class="numeric">Straordinario</th><th>Trasferta</th><th>Assenza</th></tr>
         </thead>
         <tbody>
         @foreach($rows as $row)
@@ -31,6 +31,7 @@
                 <td class="numeric">{{ $row['ore_lavorate'] }}</td>
                 <td class="numeric">{{ $row['ordinarie'] }}</td>
                 <td class="numeric">{{ $row['straordinario'] }}</td>
+                <td>{{ $row['trasferta'] ?? '' }}</td>
                 <td>{{ $row['assenza'] ?? '' }}</td>
             </tr>
         @endforeach

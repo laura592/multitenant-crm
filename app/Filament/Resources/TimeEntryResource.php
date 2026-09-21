@@ -33,6 +33,20 @@ class TimeEntryResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Presenze';
 
+    /** Il testo segue il valore in config, al singolare o al plurale. */
+    protected static function oreIncluseTesto(): string
+    {
+        $ore = (float) config('presenze.trasferta_ore_incluse', 1);
+
+        if ($ore == 1) {
+            return 'la prima ora oltre il contratto e\' compresa';
+        }
+
+        $numero = rtrim(rtrim(number_format($ore, 2, ',', ''), '0'), ',');
+
+        return "le prime {$numero} ore oltre il contratto sono comprese";
+    }
+
     public static function form(Form $form): Form
     {
         return $form->schema([
@@ -86,6 +100,29 @@ class TimeEntryResource extends Resource
                         ->default('manuale')
                         ->required(),
                 ]),
+            // Nel giorno di trasferta la prima ora oltre il contratto la paga
+            // gia' l'indennita', e lo straordinario parte dall'ora dopo
+            // (App\Support\Presenze\GiornataLavorativa). Basta segnarla su
+            // uno dei turni della giornata.
+            Forms\Components\Section::make('Trasferta')
+                ->columns(2)
+                ->schema([
+                    Forms\Components\Toggle::make('trasferta')
+                        ->label('Giornata in trasferta')
+                        ->helperText(fn () => ucfirst(static::oreIncluseTesto()).' nella trasferta: lo straordinario parte da li\'. Basta segnarla su un turno della giornata.')
+                        ->live()
+                        ->afterStateUpdated(function (Forms\Set $set, ?bool $state) {
+                            if (! $state) {
+                                $set('destinazione_trasferta', null);
+                            }
+                        }),
+                    Forms\Components\TextInput::make('destinazione_trasferta')
+                        ->label('Dove')
+                        ->placeholder('es. Cortina d\'Ampezzo, Hotel Cristallo')
+                        ->maxLength(255)
+                        ->visible(fn (Forms\Get $get) => (bool) $get('trasferta'))
+                        ->required(fn (Forms\Get $get) => (bool) $get('trasferta')),
+                ]),
             Forms\Components\Section::make('Stato')
                 ->columns(2)
                 ->schema([
@@ -131,6 +168,12 @@ class TimeEntryResource extends Resource
                 Tables\Columns\TextColumn::make('clock_in')->label('Entrata')->dateTime('H:i')->sortable(),
                 Tables\Columns\TextColumn::make('clock_out')->label('Uscita')->dateTime('H:i')->placeholder('In corso')->sortable(),
                 Tables\Columns\TextColumn::make('worked_hours')->label('Ore')->state(fn (TimeEntry $record) => $record->worked_hours)->placeholder('—'),
+                Tables\Columns\TextColumn::make('destinazione_trasferta')
+                    ->label('Trasferta')
+                    ->icon(fn (TimeEntry $record) => $record->trasferta ? 'heroicon-o-map-pin' : null)
+                    ->state(fn (TimeEntry $record) => $record->trasferta ? ($record->destinazione_trasferta ?: 'Sì') : null)
+                    ->placeholder('—')
+                    ->toggleable(),
                 Tables\Columns\TextColumn::make('source')
                     ->label('Origine')
                     ->badge()
@@ -153,6 +196,8 @@ class TimeEntryResource extends Resource
                 Tables\Filters\SelectFilter::make('status')
                     ->label('Stato')
                     ->options(static::statusLabels()),
+                Tables\Filters\TernaryFilter::make('trasferta')
+                    ->label('Trasferta'),
                 Tables\Filters\SelectFilter::make('source')
                     ->label('Origine')
                     ->options(['app' => 'App (tempo reale)', 'manuale' => 'Inserimento manuale']),
