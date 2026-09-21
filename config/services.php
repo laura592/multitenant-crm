@@ -53,6 +53,14 @@ return [
         'base_url' => env('EUREKA_BASE_URL', ''),
         'username' => env('EUREKA_USERNAME', ''),
         'password' => env('EUREKA_PASSWORD', ''),
+        // Con true il CRM verso Eureka puo' solo LEGGERE: qualunque richiesta
+        // che non sia GET/HEAD viene fermata prima di partire (vedi
+        // App\Support\Gestionale\EurekaSolaLettura). Da tenere accesa ovunque
+        // non si debba davvero scrivere sul gestionale — tipicamente in
+        // locale quando si punta alle API di produzione per leggere i dati
+        // aggiornati. In produzione resta spenta: "Invia a gestionale" deve
+        // poter creare la scheda.
+        'sola_lettura' => (bool) env('EUREKA_SOLA_LETTURA', false),
     ],
 
 ];

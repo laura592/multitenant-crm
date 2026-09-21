@@ -19,6 +19,7 @@ use App\Filament\Widgets\Gestionale\GestionaleFusioniMacchineWidget;
 use App\Filament\Widgets\Gestionale\GestionaleMacchineImportateWidget;
 use App\Models\User;
 use App\Support\EurekaClient;
+use App\Support\Gestionale\EurekaSolaLettura;
 use Filament\Forms\Components\DatePicker;
 use Filament\Infolists\Infolist;
 use Filament\Notifications\Notification;
@@ -27,6 +28,7 @@ use Filament\Support\Facades\FilamentView;
 use Filament\Tables\Table;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\ValidationException;
 use Jeffgreco13\FilamentBreezy\Livewire\PersonalInfo;
@@ -60,6 +62,12 @@ class AppServiceProvider extends ServiceProvider
         // questo e solo per lo staff master che deve avere accesso completo
         // ovunque, senza dover replicare un'assegnazione di ruolo per ogni tenant.
         Gate::before(fn (User $user) => $user->is_super_admin ? true : null);
+
+        // Eureka in sola lettura: nessuna richiesta che non sia una lettura
+        // esce verso il gestionale. Vedi EurekaSolaLettura.
+        if (config('services.eureka.sola_lettura') && ($host = parse_url((string) config('services.eureka.base_url'), PHP_URL_HOST))) {
+            Http::globalMiddleware(EurekaSolaLettura::middleware($host));
+        }
 
         // Bug segnalato: i campi data nei form mostravano il formato nativo
         // del browser (es. 07/20/2026, mese/giorno USA) invece che italiano,
