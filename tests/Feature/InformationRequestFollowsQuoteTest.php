@@ -170,17 +170,4 @@ class InformationRequestFollowsQuoteTest extends TestCase
             ->assertSee($request->number)
             ->assertSee('Vorrebbero una A600 a noleggio');
     }
-
-    public function test_backfill_command_previews_then_applies(): void
-    {
-        $request = $this->request();
-        Quote::withoutEvents(fn () => $this->quote($request, 'inviato', ['number' => 'PRV-OLD-0001']));
-        $this->assertSame('nuova', $request->fresh()->status);
-
-        $this->artisan('information-requests:sync-quote-status')->assertSuccessful();
-        $this->assertSame('nuova', $request->fresh()->status, 'Senza --apply non si tocca niente.');
-
-        $this->artisan('information-requests:sync-quote-status --apply')->assertSuccessful();
-        $this->assertSame('preventivo_inviato', $request->fresh()->status);
-    }
 }

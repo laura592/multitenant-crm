@@ -180,8 +180,8 @@ class PriceList extends Model
 
     /**
      * Sposta il file dove dice percorsoGiusto(). Cambia solo file_path: a
-     * salvare ci pensa chi chiama (il saving qui sopra, o il comando
-     * documenti:categorizza). True se ha spostato qualcosa.
+     * salvare ci pensa chi chiama (il saving qui sopra). True se ha
+     * spostato qualcosa.
      */
     public function sistemaFile(): bool
     {

@@ -158,59 +158,6 @@ class DocumentiContrattiTest extends TestCase
             ->assertHasActionErrors(['file_path' => 'required']);
     }
 
-    public function test_il_comando_mette_in_categoria_e_avvisa_dei_contratti_mancanti(): void
-    {
-        $manuale = PriceList::forceCreate(['id' => '01a032ee-e744-71af-a584-6a947c6d394c', 'name' => 'Manuale Alex CRM']);
-        $franke = PriceList::create(['name' => 'Franke 2026']);
-        $this->carica(PriceList::CONTRATTO_FULL);
-
-        $this->artisan('documenti:categorizza')
-            ->expectsConfirmation('Sposto 1 documenti di categoria e 0 file?', 'yes')
-            ->expectsOutputToContain('manca il contratto Easy-Service')
-            ->doesntExpectOutputToContain('manca il contratto Full-Service')
-            ->assertSuccessful();
-
-        $this->assertSame(PriceList::ALTRO, $manuale->fresh()->category);
-        $this->assertSame(PriceList::LISTINO, $franke->fresh()->category);
-
-        // Una seconda volta non c'e' piu' niente da fare.
-        $this->artisan('documenti:categorizza')->expectsOutputToContain('Niente da fare')->assertSuccessful();
-    }
-
-    /** Come erano prima del 21/09/2026: tutti in price-lists/, quelli dal pannello col codice a caso. */
-    private function documentoVecchio(string $nome, string $file, string $contenuto): PriceList
-    {
-        Storage::disk('public')->put($file, $contenuto);
-
-        return PriceList::withoutEvents(fn () => PriceList::create(['name' => $nome, 'file_path' => $file]));
-    }
-
-    public function test_il_comando_mette_i_file_nella_cartella_col_nome_del_documento(): void
-    {
-        $uno = $this->documentoVecchio('Liebherr', 'price-lists/01KYJ1NWCPG7YP26XKG0FY2DT3.pdf', 'a');
-        $due = $this->documentoVecchio('Liebherr', 'price-lists/01KZ8RDMSQ6NTYM6XTNW9SCRJ7.pdf', 'b');
-        $classic = $this->documentoVecchio('Franke Classic', 'price-lists/classic-a-line-2026-v1.pdf', 'c');
-        $manuale = PriceList::withoutEvents(fn () => PriceList::forceCreate([
-            'id' => '01a032ee-e744-71af-a584-6a947c6d394c', 'name' => 'Manuale Alex CRM', 'file_path' => 'price-lists/01M0SEXSRX7TAC84HMYDDK5ERQ.pdf',
-        ]));
-        Storage::disk('public')->put('price-lists/01M0SEXSRX7TAC84HMYDDK5ERQ.pdf', 'd');
-
-        $this->artisan('documenti:categorizza')
-            ->expectsConfirmation('Sposto 1 documenti di categoria e 4 file?', 'yes')
-            ->assertSuccessful();
-
-        // Stesso nome: il secondo prende -2, nessuno sovrascrive l'altro.
-        $this->assertSame('price-lists/listini/liebherr.pdf', $uno->fresh()->file_path);
-        $this->assertSame('price-lists/listini/liebherr-2.pdf', $due->fresh()->file_path);
-        $this->assertSame('a', Storage::disk('public')->get('price-lists/listini/liebherr.pdf'));
-        $this->assertSame('b', Storage::disk('public')->get('price-lists/listini/liebherr-2.pdf'));
-        Storage::disk('public')->assertMissing('price-lists/01KYJ1NWCPG7YP26XKG0FY2DT3.pdf');
-        // Un nome gia' leggibile resta, cambia solo la cartella.
-        $this->assertSame('price-lists/listini/classic-a-line-2026-v1.pdf', $classic->fresh()->file_path);
-        // La categoria nuova decide la cartella.
-        $this->assertSame('price-lists/altro/manuale-alex-crm.pdf', $manuale->fresh()->file_path);
-    }
-
     public function test_un_file_caricato_va_nella_sua_cartella_col_nome_del_documento(): void
     {
         $this->entraComeAdmin();

@@ -82,35 +82,6 @@ class SanificazioniImportateTest extends TestCase
         $this->assertSame('RT-2026-0001', $nostro->number);
     }
 
-    public function test_il_comando_corregge_solo_le_riparazioni_con_la_riga(): void
-    {
-        [$tenant, $cliente, $tecnico] = $this->base();
-        $sanif = Material::create(['tenant_id' => $tenant->id, 'code' => 'SANIFICAZIONE', 'category' => 'Eureka', 'type' => 'SANIFICAZIONE IMPIANTO ACQUA', 'source' => Material::SOURCE_EUREKA]);
-
-        $daCorreggere = $this->rapportinoCon($tenant, $cliente, $tecnico, ServiceReport::TYPE_RIPARAZIONE, $sanif);
-        $manutenzione = $this->rapportinoCon($tenant, $cliente, $tecnico, ServiceReport::TYPE_MANUTENZIONE_ORDINARIA, $sanif);
-        $senzaRiga = $this->rapportinoCon($tenant, $cliente, $tecnico, ServiceReport::TYPE_RIPARAZIONE, null);
-
-        $this->artisan('rapportini:correggi-sanificazioni', ['--tenant' => 'alex'])
-            ->expectsConfirmation('Correggo 1 rapportini?', 'yes')
-            ->assertSuccessful();
-
-        $this->assertSame(ServiceReport::TYPE_SANIFICAZIONE, $daCorreggere->fresh()->intervention_type);
-        $this->assertSame(ServiceReport::TYPE_MANUTENZIONE_ORDINARIA, $manutenzione->fresh()->intervention_type, 'Un tipo scelto non si tocca.');
-        $this->assertSame(ServiceReport::TYPE_RIPARAZIONE, $senzaRiga->fresh()->intervention_type);
-    }
-
-    public function test_in_prova_non_scrive(): void
-    {
-        [$tenant, $cliente, $tecnico] = $this->base();
-        $sanif = Material::create(['tenant_id' => $tenant->id, 'code' => 'SANIFICAZIONE', 'category' => 'Eureka', 'type' => 'SANIFICAZIONE IMPIANTO ACQUA', 'source' => Material::SOURCE_EUREKA]);
-        $r = $this->rapportinoCon($tenant, $cliente, $tecnico, ServiceReport::TYPE_RIPARAZIONE, $sanif);
-
-        $this->artisan('rapportini:correggi-sanificazioni', ['--tenant' => 'alex', '--dry-run' => true])->assertSuccessful();
-
-        $this->assertSame(ServiceReport::TYPE_RIPARAZIONE, $r->fresh()->intervention_type);
-    }
-
     /** @return array{0: Tenant, 1: Customer, 2: User} */
     private function base(): array
     {
