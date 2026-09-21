@@ -16,9 +16,24 @@ use Illuminate\Support\Str;
  */
 class PdfCompressor
 {
+    /**
+     * Sull'hosting cPanel di produzione proc_open e' disabilitato: senza
+     * questo controllo salvare un documento andava in errore (21/09/2026)
+     * invece di saltare la compressione, che e' solo un di piu'.
+     */
     public static function isAvailable(): bool
     {
-        return Process::run('which gs')->successful();
+        $disabilitate = array_map('trim', explode(',', (string) ini_get('disable_functions')));
+
+        if (! function_exists('proc_open') || in_array('proc_open', $disabilitate, true)) {
+            return false;
+        }
+
+        try {
+            return Process::run('which gs')->successful();
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**
