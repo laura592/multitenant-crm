@@ -2,7 +2,10 @@
 
 namespace App\Filament\Resources\MachineUnitResource\RelationManagers;
 
+use App\Models\MachineUnitPlacement;
 use App\Support\DisplayName;
+use App\Support\Macchine\EliminaPosizionamento;
+use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -11,14 +14,21 @@ use Filament\Tables\Table;
  * Storico sola lettura: gli spostamenti si creano solo tramite l'azione
  * "Sposta" sulla lista principale (MachineUnit::moveTo()), mai qui a mano,
  * per non rompere l'invariante "un solo posizionamento aperto alla volta".
- * Uno spostamento sbagliato si toglie con "Annulla ultimo spostamento"
- * (MachineUnit::undoLastMove()), in cima alla pagina della macchina.
+ * Uno spostamento sbagliato si toglie da qui con "Elimina", anche se non e'
+ * l'ultimo: lo storico si ricuce da solo (EliminaPosizionamento).
  */
 class PlacementsRelationManager extends RelationManager
 {
     protected static string $relationship = 'placements';
 
     protected static ?string $title = 'Storico posizionamenti';
+
+    // Sulla pagina "Visualizza" Filament rende le RelationManager di sola
+    // lettura: qui l'eliminazione serve proprio dal dettaglio della macchina.
+    public function isReadOnly(): bool
+    {
+        return false;
+    }
 
     public function table(Table $table): Table
     {
@@ -30,6 +40,22 @@ class PlacementsRelationManager extends RelationManager
                 Tables\Columns\TextColumn::make('placed_at')->label('Dal')->dateTime('d/m/Y H:i'),
                 Tables\Columns\TextColumn::make('removed_at')->label('Al')->dateTime('d/m/Y H:i')->placeholder('In corso'),
                 Tables\Columns\TextColumn::make('notes')->label('Note')->limit(50)->tooltip(fn ($state) => $state),
+            ])
+            ->actions([
+                Tables\Actions\Action::make('elimina')
+                    ->label('Elimina')
+                    ->icon('heroicon-o-trash')
+                    ->color('danger')
+                    ->authorize(fn () => auth()->user()?->can('update', $this->getOwnerRecord()) ?? false)
+                    ->requiresConfirmation()
+                    ->modalHeading('Eliminare questo spostamento?')
+                    ->modalDescription(fn (MachineUnitPlacement $record) => EliminaPosizionamento::descrizione($record))
+                    ->modalSubmitActionLabel('Elimina')
+                    ->action(function (MachineUnitPlacement $record) {
+                        EliminaPosizionamento::esegui($record);
+
+                        Notification::make()->title('Spostamento eliminato')->success()->send();
+                    }),
             ])
             ->defaultSort('placed_at', 'desc');
     }
