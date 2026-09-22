@@ -191,7 +191,11 @@ class MachineUnitResource extends Resource
                         ->state(fn (MachineUnit $record) => $record->placements()->whereNull('removed_at')->max('placed_at'))
                         ->date('d/m/Y')
                         ->placeholder('—'),
-                    TextEntry::make('billingCustomer.full_name')->label('Fatturare a')
+                    TextEntry::make('fatturare_a')->label('Fatturare a')
+                        // Il cliente stesso si dice "il cliente", come nello storico.
+                        ->state(fn (MachineUnit $record) => $record->billing_customer_id && $record->billing_customer_id !== $record->current_customer_id
+                            ? $record->billingCustomer?->full_name
+                            : null)
                         ->placeholder(fn (MachineUnit $record) => $record->current_customer_id ? 'il cliente' : '—')
                         ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                     TextEntry::make('status')
