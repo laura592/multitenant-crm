@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Models\ServiceReport;
 use App\Support\DisplayName;
 use App\Support\Gestionale\ControlloPaganteFattura;
+use App\Support\Gestionale\PaganteEureka;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Filament\Tables;
@@ -36,6 +37,24 @@ class GestionaleSchedeDaCorreggereWidget extends BaseWidget
     private static function baseQuery()
     {
         return ServiceReport::query()->whereNotNull('pagante_fattura_customer_id');
+    }
+
+    private static function scrittoSullaScheda(ServiceReport $record): ?string
+    {
+        $scritto = $record->eureka_destinazione_label;
+        $pagante = rescue(fn () => $record->invoiceRecipient()->company_name, null, false);
+
+        if (! $scritto || ! $pagante) {
+            return null;
+        }
+
+        $uguale = fn (string $a, string $b) => str_contains($a, substr($b, 0, 8)) || str_contains($b, substr($a, 0, 8));
+
+        if ($uguale(PaganteEureka::normalizza($scritto), PaganteEureka::normalizza($pagante))) {
+            return null;
+        }
+
+        return 'Su Eureka c\'è scritto: '.$scritto.($record->eureka_destinazione_code ? ' (codice '.$record->eureka_destinazione_code.')' : '');
     }
 
     public function table(Table $table): Table
@@ -80,6 +99,11 @@ class GestionaleSchedeDaCorreggereWidget extends BaseWidget
                 Tables\Columns\TextColumn::make('pagante_scheda')
                     ->label('Pagante sulla scheda')
                     ->state(fn (ServiceReport $record) => DisplayName::titleCase(rescue(fn () => $record->invoiceRecipient()->company_name, null, false)))
+                    // Sulla scheda la destinazione ha un codice anagrafica e un
+                    // nome scritto, e a volte non corrispondono (es. codice
+                    // 2911 = Acquasalsa, scritto "ILLY CAFFE' SPA"): il CRM
+                    // segue il codice, qui si mostra anche cosa c'e' scritto.
+                    ->description(fn (ServiceReport $record) => static::scrittoSullaScheda($record))
                     ->wrap(),
 
                 Tables\Columns\TextColumn::make('pagante_fattura')
