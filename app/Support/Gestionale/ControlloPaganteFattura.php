@@ -81,6 +81,52 @@ class ControlloPaganteFattura
         ]);
     }
 
+    /**
+     * Tutti i rapportini nel gestionale con pagante, scheda e fattura, per il
+     * controllo a mano in Excel (riquadro "Schede da correggere su Eureka").
+     *
+     * @return \Generator<int, array<string, string>>
+     */
+    public static function righeEsportazione(Tenant $tenant): \Generator
+    {
+        $fatture = static::mappaFatture($tenant->id);
+        $nomi = \App\Models\Customer::withoutGlobalScopes()->where('tenant_id', $tenant->id)->pluck('company_name', 'id');
+
+        $rapportini = static::rapportiniNelGestionale($tenant->id)
+            ->with(['customer.billingCustomer', 'billingCustomer', 'machineUnit.billingCustomer'])
+            // Niente orderBy qui: lazyById legge a blocchi per id, e un altro
+            // ordinamento gli fa saltare righe (1.578 su 3.772 in prova).
+            // In Excel si ordina per data con un clic.
+            ->lazyById(500);
+
+        foreach ($rapportini as $r) {
+            $numeri = collect($r->eureka_fatture ?? [])
+                ->filter(fn ($f) => is_array($f) && ! empty($f['numero_fattura']) && ! empty($f['data_fattura']));
+            $intestatari = $numeri
+                ->flatMap(fn (array $f) => $fatture[Carbon::parse($f['data_fattura'])->year.'|'.$f['numero_fattura']] ?? [])
+                ->unique()
+                ->map(fn ($id) => $nomi[$id] ?? '?')
+                ->implode(' / ');
+            $pagante = rescue(fn () => $r->invoiceRecipient()->company_name, null, false);
+
+            yield [
+                'Rapportino' => $r->number,
+                'N. gestionale' => (string) $r->gestionale_number,
+                'Data' => (string) $r->intervention_date?->format('d/m/Y'),
+                'Cliente' => (string) $r->customer?->company_name,
+                'Pagante nel CRM' => (string) $pagante,
+                'Destinazione sulla scheda' => trim(($r->eureka_destinazione_label ?? '').($r->eureka_destinazione_code ? ' (codice '.$r->eureka_destinazione_code.')' : '')),
+                'Fattura' => (string) $r->etichettaFatturaEureka(),
+                'Fattura intestata a' => $intestatari,
+                'Esito' => match (true) {
+                    $r->pagante_fattura_customer_id !== null => 'da correggere su Eureka',
+                    $numeri->isEmpty() => 'senza fattura',
+                    default => 'ok',
+                },
+            ];
+        }
+    }
+
     public static function rapportiniNelGestionale(string $tenantId)
     {
         return ServiceReport::withoutGlobalScopes()

@@ -200,4 +200,27 @@ class PaganteEurekaVincolanteTest extends TestCase
             ->assertTableActionExists('va_bene')
             ->assertTableActionDoesNotExist('applica');
     }
+
+    public function test_l_export_elenca_ogni_rapportino_con_pagante_fattura_ed_esito(): void
+    {
+        $daCorreggere = $this->nelGestionale(['billing_customer_id' => $this->chiosco->id]);
+        $daCorreggere->registraFattureEureka($this->fatturaA($this->martellozzo));
+        $this->nelGestionale(['number' => 'RT-2023-0400', 'gestionale_number' => 'SL-400/2023', 'eureka_service_report_id' => 3002]);
+        ControlloPaganteFattura::segnala($this->tenant);
+
+        $righe = collect(iterator_to_array(ControlloPaganteFattura::righeEsportazione($this->tenant), false))->keyBy('Rapportino');
+
+        $this->assertSame('da correggere su Eureka', $righe['RT-2023-0327']['Esito']);
+        $this->assertSame('Martellozzo Lorenzo & C. SAS', $righe['RT-2023-0327']['Fattura intestata a']);
+        $this->assertSame('SL-346/2023', $righe['RT-2023-0327']['N. gestionale']);
+        $this->assertSame('senza fattura', $righe['RT-2023-0400']['Esito']);
+
+        $this->giveRole($this->tecnico, $this->tenant, 'admin');
+        $this->actingAs($this->tecnico);
+        Filament::setTenant($this->tenant);
+
+        Livewire::test(GestionaleSchedeDaCorreggereWidget::class)
+            ->callTableAction('esporta_tutti')
+            ->assertFileDownloaded('pagante-rapportini-gestionale-'.now()->format('Y-m-d').'.csv');
+    }
 }

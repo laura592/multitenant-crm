@@ -14,6 +14,8 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
 use Illuminate\Database\Eloquent\Collection;
+use pxlrbt\FilamentExcel\Actions\Tables\ExportAction;
+use pxlrbt\FilamentExcel\Exports\ExcelExport;
 
 /**
  * Schede Eureka il cui pagante non torna con la fattura
@@ -29,9 +31,11 @@ class GestionaleSchedeDaCorreggereWidget extends BaseWidget
     // Vedi GestionaleDaRivedereWidget per il perche'.
     protected static bool $isLazy = false;
 
+    // Sempre visibile: anche senza schede da correggere serve l'export di
+    // tutti i rapportini nel gestionale per il controllo a mano.
     public static function canView(): bool
     {
-        return static::baseQuery()->exists();
+        return true;
     }
 
     private static function baseQuery()
@@ -64,7 +68,36 @@ class GestionaleSchedeDaCorreggereWidget extends BaseWidget
             ->query(static::baseQuery()->with(['customer.billingCustomer', 'billingCustomer', 'machineUnit.billingCustomer']))
             ->defaultSort('intervention_date', 'desc')
             ->description('Il pagante del CRM è quello della scheda Eureka. Qui ci sono le schede la cui fattura è intestata a un altro: correggi la scheda su Eureka, poi "Ricontrolla".')
+            ->emptyStateHeading('Nessuna scheda da correggere')
+            ->emptyStateDescription('Scheda e fattura tornano su tutti i rapportini gia\' fatturati.')
             ->headerActions([
+                ExportAction::make('esporta')
+                    ->label('Esporta in Excel')
+                    ->color('gray')
+                    ->exports([
+                        ExcelExport::make('schede-da-correggere')
+                            ->fromTable()
+                            ->withFilename('schede-da-correggere-'.now()->format('Y-m-d')),
+                    ]),
+                Tables\Actions\Action::make('esporta_tutti')
+                    ->label('Esporta tutti i rapportini nel gestionale')
+                    ->icon('heroicon-o-arrow-down-tray')
+                    ->color('gray')
+                    ->action(fn () => response()->streamDownload(function () {
+                        $out = fopen('php://output', 'w');
+                        // BOM e punto e virgola: Excel italiano lo apre gia'
+                        // diviso in colonne e con le lettere accentate giuste.
+                        fwrite($out, "\xEF\xBB\xBF");
+                        $prima = true;
+                        foreach (ControlloPaganteFattura::righeEsportazione(Filament::getTenant()) as $riga) {
+                            if ($prima) {
+                                fputcsv($out, array_keys($riga), ';');
+                                $prima = false;
+                            }
+                            fputcsv($out, $riga, ';');
+                        }
+                        fclose($out);
+                    }, 'pagante-rapportini-gestionale-'.now()->format('Y-m-d').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8'])),
                 Tables\Actions\Action::make('ricontrolla_tutte')
                     ->label('Ricontrolla tutte su Eureka')
                     ->icon('heroicon-o-arrow-path')
