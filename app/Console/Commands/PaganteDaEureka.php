@@ -63,6 +63,7 @@ class PaganteDaEureka extends Command
                 continue;
             }
 
+            $da = $fattura['customer_id'] ? 'fattura' : 'scheda (destinazione)';
             $pagante = $fattura['customer_id']
                 ?? ($r->eureka_destinazione_code ? $r->eurekaDestinazionePayer()?->id : null);
 
@@ -73,7 +74,7 @@ class PaganteDaEureka extends Command
             }
 
             if ($pagante !== $r->billing_customer_id) {
-                $correzioni->push([$r, $pagante]);
+                $correzioni->push([$r, $pagante, $da]);
             }
         }
 
@@ -82,9 +83,10 @@ class PaganteDaEureka extends Command
         if ($ambigue->isNotEmpty()) {
             $this->warn("Fattura ambigua (stesso numero in due serie, clienti diversi): {$ambigue->count()} - restano come sono, da controllare a mano.");
             $this->table(
-                ['Rapportino', 'Data', 'Cliente', 'Fattura'],
+                ['Rapportino', 'N. gestionale', 'Data', 'Cliente', 'Fattura'],
                 $ambigue->map(fn (ServiceReport $r) => [
                     $r->number,
+                    $r->gestionale_number ?? '—',
                     $r->intervention_date?->format('d/m/Y'),
                     $r->customer?->company_name ?? '—',
                     $r->etichettaFatturaEureka() ?? '—',
@@ -110,13 +112,16 @@ class PaganteDaEureka extends Command
 
         if ($cambiano->isNotEmpty()) {
             $this->table(
-                ['Rapportino', 'Data', 'Cliente', 'Pagante oggi nel CRM', 'Fattura intestata a'],
+                ['Rapportino', 'N. gestionale', 'Data', 'Cliente', 'Pagante oggi nel CRM', 'Pagante secondo Eureka', 'Da', 'Fattura'],
                 $cambiano->map(fn ($c) => [
                     $c[0]->number,
+                    $c[0]->gestionale_number ?? '—',
                     $c[0]->intervention_date?->format('d/m/Y'),
                     $c[0]->customer?->company_name ?? '—',
                     $oggi($c[0])?->company_name ?? '—',
                     $nomi[$c[1]] ?? '—',
+                    $c[2],
+                    $c[0]->etichettaFatturaEureka() ?? '—',
                 ])->all(),
             );
         }
