@@ -105,6 +105,22 @@ class PaganteEurekaVincolanteTest extends TestCase
         $this->artisan('rapportini:pagante-da-eureka')->expectsOutputToContain('Fattura ambigua');
     }
 
+    public function test_l_autofattura_di_un_fornitore_con_lo_stesso_numero_non_conta(): void
+    {
+        $fatture = $this->fattura($this->cliente);
+        // ZAF e' il fornitore delle pulizie: la sua autofattura (causale 112)
+        // ha una numerazione sua e lo stesso numero della fattura al cliente.
+        EurekaFattura::create([
+            'tenant_id' => $this->tenant->id, 'tipo' => EurekaFattura::TIPO_CLIENTE, 'id_eureka' => 99003, 'causale' => '112',
+            'customer_id' => $this->zaf->id, 'ragione_sociale' => 'ZAF SERVIZI', 'numero_doc' => '403', 'data_doc' => '2025-10-02',
+        ]);
+        $r = $this->importato();
+
+        $r->registraFattureEureka($fatture);
+
+        $this->assertSame($this->cliente->id, $r->fresh()->billing_customer_id);
+    }
+
     public function test_senza_il_cliente_nel_crm_non_si_congela_un_pagante_indovinato(): void
     {
         $r = $this->importato(['eureka_destinazione_code' => 999]);

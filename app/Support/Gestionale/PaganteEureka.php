@@ -40,11 +40,10 @@ class PaganteEureka
      * Come daFatture(), dicendo anche perche' non c'e' un pagante.
      *
      * La fattura della scheda si ritrova nell'elenco fatture per numero e
-     * anno: l'elenco non ha l'id della scheda. Ma lo stesso numero, nello
-     * stesso anno, puo' esistere in due serie diverse (causale 101 e 112:
-     * 20 casi nel dump del 21/09/2026, quasi sempre la seconda a ZAF
-     * Servizi). Se il numero porta a clienti diversi la fattura e' ambigua e
-     * non si decide.
+     * anno: l'elenco non ha l'id della scheda. Le autofatture su acquisti
+     * (EurekaFattura::CAUSALI_NON_CLIENTI) si escludono: hanno una
+     * numerazione loro e duplicavano i numeri. Se anche cosi' il numero porta
+     * a clienti diversi, la fattura e' ambigua e non si decide.
      *
      * @param  array<int, array<string, mixed>>|null  $fatture
      * @return array{esito: 'trovato'|'nessuna'|'ambigua', customer_id: ?string}
@@ -61,6 +60,10 @@ class PaganteEureka
             $candidati = EurekaFattura::query()
                 ->where('tenant_id', $tenantId)
                 ->where('tipo', EurekaFattura::TIPO_CLIENTE)
+                // Solo fatture vere ai clienti: le autofatture su acquisti
+                // (ZAF, Vodafone...) hanno una numerazione loro e lo stesso
+                // numero di una fattura cliente.
+                ->where(fn ($q) => $q->whereNull('causale')->orWhereNotIn('causale', EurekaFattura::CAUSALI_NON_CLIENTI))
                 ->where('numero_doc', (string) $f['numero_fattura'])
                 ->whereYear('data_doc', Carbon::parse($f['data_fattura'])->year)
                 ->pluck('customer_id')

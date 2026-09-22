@@ -21,6 +21,17 @@ class EurekaFattura extends Model
 
     public const TIPO_FORNITORE = 'fornitore';
 
+    /**
+     * Nell'elenco "fatture clienti" di Eureka finiscono anche documenti che
+     * non sono fatture a un cliente, con una numerazione loro: autofatture e
+     * integrazioni su acquisti (112: ZAF Servizi, Dell, Vodafone...; 108,
+     * 113, 114, 158: fornitori esteri come Franke, Meta, Google) e i
+     * corrispettivi (105). Visto il 22/09/2026: lo stesso numero di una
+     * fattura vera compariva cosi' due volte, e un rapportino di La Strana
+     * Coppia risultava "fatturato a ZAF", che e' il fornitore delle pulizie.
+     */
+    public const CAUSALI_NON_CLIENTI = ['105', '108', '112', '113', '114', '158'];
+
     protected $table = 'eureka_fatture';
 
     protected $fillable = [
