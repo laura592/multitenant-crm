@@ -201,19 +201,21 @@ class PaganteEurekaVincolanteTest extends TestCase
             ->assertTableActionDoesNotExist('applica');
     }
 
-    public function test_l_export_elenca_ogni_rapportino_con_pagante_fattura_ed_esito(): void
+    public function test_l_export_contiene_solo_differenze_ed_errori(): void
     {
         $daCorreggere = $this->nelGestionale(['billing_customer_id' => $this->chiosco->id]);
         $daCorreggere->registraFattureEureka($this->fatturaA($this->martellozzo));
-        $this->nelGestionale(['number' => 'RT-2023-0400', 'gestionale_number' => 'SL-400/2023', 'eureka_service_report_id' => 3002]);
+        $this->nelGestionale(['number' => 'RT-2023-0400', 'gestionale_number' => 'SL-400/2023', 'eureka_service_report_id' => 3002, 'eureka_fattura_motivo' => 'da_verificare']);
+        $this->nelGestionale(['number' => 'RT-2023-0401', 'gestionale_number' => 'SL-401/2023', 'eureka_service_report_id' => 3003, 'eureka_fattura_motivo' => 'recente']);
         ControlloPaganteFattura::segnala($this->tenant);
 
         $righe = collect(iterator_to_array(ControlloPaganteFattura::righeEsportazione($this->tenant), false))->keyBy('Rapportino');
 
-        $this->assertSame('da correggere su Eureka', $righe['RT-2023-0327']['Esito']);
+        $this->assertStringStartsWith('da correggere su Eureka', $righe['RT-2023-0327']['Problema']);
         $this->assertSame('Martellozzo Lorenzo & C. SAS', $righe['RT-2023-0327']['Fattura intestata a']);
         $this->assertSame('SL-346/2023', $righe['RT-2023-0327']['N. gestionale']);
-        $this->assertSame('senza fattura', $righe['RT-2023-0400']['Esito']);
+        $this->assertSame('senza fattura: da verificare', $righe['RT-2023-0400']['Problema']);
+        $this->assertFalse($righe->has('RT-2023-0401'), 'recente: la fattura deve ancora uscire, non e\' un errore');
 
         $this->giveRole($this->tecnico, $this->tenant, 'admin');
         $this->actingAs($this->tecnico);
@@ -221,6 +223,6 @@ class PaganteEurekaVincolanteTest extends TestCase
 
         Livewire::test(GestionaleSchedeDaCorreggereWidget::class)
             ->callTableAction('esporta_tutti')
-            ->assertFileDownloaded('pagante-rapportini-gestionale-'.now()->format('Y-m-d').'.csv');
+            ->assertFileDownloaded('rapportini-differenze-errori-'.now()->format('Y-m-d').'.csv');
     }
 }

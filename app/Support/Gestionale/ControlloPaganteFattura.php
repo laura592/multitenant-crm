@@ -82,8 +82,10 @@ class ControlloPaganteFattura
     }
 
     /**
-     * Tutti i rapportini nel gestionale con pagante, scheda e fattura, per il
+     * Solo i rapportini nel gestionale con una differenza o un errore, per il
      * controllo a mano in Excel (riquadro "Schede da correggere su Eureka").
+     * I casi normali restano fuori: tutto a posto, e senza fattura perche'
+     * recente (la fattura di fine mese deve ancora uscire) o senza importo.
      *
      * @return \Generator<int, array<string, string>>
      */
@@ -92,39 +94,66 @@ class ControlloPaganteFattura
         $fatture = static::mappaFatture($tenant->id);
         $nomi = \App\Models\Customer::withoutGlobalScopes()->where('tenant_id', $tenant->id)->pluck('company_name', 'id');
 
+        // Niente orderBy qui: lazyById legge a blocchi per id, e un altro
+        // ordinamento gli fa saltare righe. In Excel si ordina con un clic.
         $rapportini = static::rapportiniNelGestionale($tenant->id)
             ->with(['customer.billingCustomer', 'billingCustomer', 'machineUnit.billingCustomer'])
-            // Niente orderBy qui: lazyById legge a blocchi per id, e un altro
-            // ordinamento gli fa saltare righe (1.578 su 3.772 in prova).
-            // In Excel si ordina per data con un clic.
             ->lazyById(500);
 
         foreach ($rapportini as $r) {
             $numeri = collect($r->eureka_fatture ?? [])
                 ->filter(fn ($f) => is_array($f) && ! empty($f['numero_fattura']) && ! empty($f['data_fattura']));
-            $intestatari = $numeri
-                ->flatMap(fn (array $f) => $fatture[Carbon::parse($f['data_fattura'])->year.'|'.$f['numero_fattura']] ?? [])
-                ->unique()
-                ->map(fn ($id) => $nomi[$id] ?? '?')
-                ->implode(' / ');
             $pagante = rescue(fn () => $r->invoiceRecipient()->company_name, null, false);
+            $scritto = $r->eureka_destinazione_label;
+
+            $problemi = array_filter([
+                $r->pagante_fattura_customer_id !== null ? 'da correggere su Eureka: fattura intestata a un altro' : null,
+                $scritto && $pagante && ! static::simili($scritto, $pagante) ? 'scheda: codice e nome della destinazione diversi' : null,
+                $numeri->isEmpty() && ! in_array($r->eureka_fattura_motivo, [SenzaFatturaCollegata::RECENTE, SenzaFatturaCollegata::SENZA_IMPORTO], true)
+                    ? 'senza fattura: '.static::motivo($r->eureka_fattura_motivo)
+                    : null,
+            ]);
+
+            if ($problemi === []) {
+                continue;
+            }
 
             yield [
+                'Problema' => implode(' + ', $problemi),
                 'Rapportino' => $r->number,
                 'N. gestionale' => (string) $r->gestionale_number,
                 'Data' => (string) $r->intervention_date?->format('d/m/Y'),
                 'Cliente' => (string) $r->customer?->company_name,
                 'Pagante nel CRM' => (string) $pagante,
-                'Destinazione sulla scheda' => trim(($r->eureka_destinazione_label ?? '').($r->eureka_destinazione_code ? ' (codice '.$r->eureka_destinazione_code.')' : '')),
+                'Destinazione sulla scheda' => trim(($scritto ?? '').($r->eureka_destinazione_code ? ' (codice '.$r->eureka_destinazione_code.')' : '')),
                 'Fattura' => (string) $r->etichettaFatturaEureka(),
-                'Fattura intestata a' => $intestatari,
-                'Esito' => match (true) {
-                    $r->pagante_fattura_customer_id !== null => 'da correggere su Eureka',
-                    $numeri->isEmpty() => 'senza fattura',
-                    default => 'ok',
-                },
+                'Fattura intestata a' => $numeri
+                    ->flatMap(fn (array $f) => $fatture[Carbon::parse($f['data_fattura'])->year.'|'.$f['numero_fattura']] ?? [])
+                    ->unique()
+                    ->map(fn ($id) => $nomi[$id] ?? '?')
+                    ->implode(' / '),
+                'Indizio' => (string) $r->eureka_fattura_indizio,
             ];
         }
+    }
+
+    private static function simili(string $a, string $b): bool
+    {
+        $a = PaganteEureka::normalizza($a);
+        $b = PaganteEureka::normalizza($b);
+
+        return str_contains($a, substr($b, 0, 8)) || str_contains($b, substr($a, 0, 8));
+    }
+
+    private static function motivo(?string $motivo): string
+    {
+        return match ($motivo) {
+            SenzaFatturaCollegata::DOPPIONE => 'sembra il doppione di una scheda gia\' fatturata',
+            SenzaFatturaCollegata::FATTURA_NON_COLLEGATA => 'probabilmente in una fattura fatta a mano',
+            SenzaFatturaCollegata::NON_NELLA_FATTURA => 'lasciato fuori da una fattura fatta dalle schede',
+            SenzaFatturaCollegata::DA_VERIFICARE => 'da verificare',
+            default => 'non ancora classificato',
+        };
     }
 
     public static function rapportiniNelGestionale(string $tenantId)

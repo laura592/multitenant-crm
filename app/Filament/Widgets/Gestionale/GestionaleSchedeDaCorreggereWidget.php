@@ -31,8 +31,8 @@ class GestionaleSchedeDaCorreggereWidget extends BaseWidget
     // Vedi GestionaleDaRivedereWidget per il perche'.
     protected static bool $isLazy = false;
 
-    // Sempre visibile: anche senza schede da correggere serve l'export di
-    // tutti i rapportini nel gestionale per il controllo a mano.
+    // Sempre visibile: anche senza schede da correggere serve l'export
+    // delle differenze e degli errori per il controllo a mano.
     public static function canView(): bool
     {
         return true;
@@ -80,7 +80,8 @@ class GestionaleSchedeDaCorreggereWidget extends BaseWidget
                             ->withFilename('schede-da-correggere-'.now()->format('Y-m-d')),
                     ]),
                 Tables\Actions\Action::make('esporta_tutti')
-                    ->label('Esporta tutti i rapportini nel gestionale')
+                    ->label('Esporta differenze ed errori')
+                    ->tooltip('Tutti i rapportini nel gestionale con un problema: da correggere su Eureka, destinazione incoerente, senza fattura da controllare.')
                     ->icon('heroicon-o-arrow-down-tray')
                     ->color('gray')
                     ->action(fn () => response()->streamDownload(function () {
@@ -97,7 +98,7 @@ class GestionaleSchedeDaCorreggereWidget extends BaseWidget
                             fputcsv($out, $riga, ';');
                         }
                         fclose($out);
-                    }, 'pagante-rapportini-gestionale-'.now()->format('Y-m-d').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8'])),
+                    }, 'rapportini-differenze-errori-'.now()->format('Y-m-d').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8'])),
                 Tables\Actions\Action::make('ricontrolla_tutte')
                     ->label('Ricontrolla tutte su Eureka')
                     ->icon('heroicon-o-arrow-path')
