@@ -20,6 +20,7 @@ class ViewServiceReport extends ViewRecord
                 ->color('gray')
                 ->url(fn () => ServiceReportResource::getUrl('index')),
             ServiceReportResource::faiFirmareAction(Actions\Action::make('fai_firmare')),
+            ServiceReportResource::dividiPerMacchinaAction(Actions\Action::make('dividi_per_macchina')),
             // Stesse due action "pdf" della tabella (ServiceReportResource::table()),
             // qui per non dover tornare all'elenco solo per stampare.
             //
@@ -64,9 +65,10 @@ class ViewServiceReport extends ViewRecord
             // Gate::before() (is_super_admin bypassa Shield/spatie ovunque,
             // vedi AppServiceProvider) lo scavalcherebbe per lo staff con
             // quel flag — il pulsante non deve comparire per nessuno su un
-            // record bloccato, si veda anche EditServiceReport::authorizeAccess().
+            // record bloccato, si veda anche RapportiniAPassi::caricaRapportino().
             Actions\EditAction::make()
                 ->visible(fn () => ! $this->record->isLocked()),
+            ServiceReportResource::modificaVisitaAction(Actions\Action::make('modifica_visita')),
         ];
     }
 }

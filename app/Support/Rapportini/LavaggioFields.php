@@ -56,7 +56,7 @@ class LavaggioFields
      * direttamente dalle righe Lavaggio gia' generate per questo rapportino
      * (stesso criterio univoco service_report_id+maintenance_schedule_id di
      * Lavaggio::firstOrNew() dentro ServiceReport::syncGeneratedLavaggi()).
-     * Iniettato da EditServiceReport::mutateFormDataBeforeFill(), stesso
+     * Iniettato da statoModulo() qui sotto, stesso
      * motivo di resolveLavaggioShortcutDefaults() qui sotto.
      */
     public static function resolveLavaggioImpiantiDefaults(?ServiceReport $record): array
@@ -76,6 +76,44 @@ class LavaggioFields
     }
 
     /**
+     * I campi di comodo del modulo (interruttori, chiavi delle righe
+     * generate, impianti e vie) come li ha un rapportino gia' salvato: sul
+     * fill() di una modifica i loro ->default() non scattano, vanno messi
+     * accanto ai dati del rapportino. Lo usa la modifica a passi
+     * (ServiceReportResource\Pages\RapportiniAPassi).
+     *
+     * @return array<string, mixed>
+     */
+    public static function statoModulo(ServiceReport $record): array
+    {
+        $defaults = self::resolveLavaggioShortcutDefaults($record);
+
+        return [
+            'add_chiamata_material' => $defaults['chiamata_key'] !== null,
+            '_chiamata_material_key' => $defaults['chiamata_key'],
+            'add_manodopera_material' => $defaults['manodopera_key'] !== null,
+            '_manodopera_material_key' => $defaults['manodopera_key'],
+            // Solo le righe a vie: la sanificazione ha il suo interruttore
+            // dal 04/09/2026. Restato indietro alla separazione, accendeva
+            // "Lavaggio eseguito" su rapportini di sola sanificazione.
+            '_lavaggio_vie_eseguito' => $defaults['lavaggio_base_key'] !== null,
+            // Colonna vera, gia' presente in $data: la si sovrascrive lo
+            // stesso perche' resolveLavaggioShortcutDefaults() la ritorna
+            // tale e quale quando c'e', e col ripiego calcolato dalle righe
+            // quando e' vuota (rapportini vecchi o importati da Eureka).
+            'lavaggio_vie_count' => $defaults['vie_count'],
+            '_lavaggio_base_material_key' => $defaults['lavaggio_base_key'],
+            '_lavaggio_ult_material_key' => $defaults['lavaggio_ult_key'],
+            '_sanificazione_eseguita' => $defaults['sanificazione_key'] !== null,
+            '_sanificazione_material_key' => $defaults['sanificazione_key'],
+            'add_manutenzione_material' => $defaults['manutenzione_key'] !== null,
+            '_manutenzione_material_key' => $defaults['manutenzione_key'],
+            '_sanificazione_count' => $defaults['sanificazioni_count'],
+            'lavaggio_impianti' => self::resolveLavaggioImpiantiDefaults($record),
+        ];
+    }
+
+    /**
      * Applica le righe del Repeater "Impianti e vie lavate": prima la
      * selezione esplicita dei piani coinvolti (attach nudo, senza dati extra
      * sulla pivot — vince sulla regola implicita di
@@ -84,7 +122,7 @@ class LavaggioFields
      * le vie lavate scritte direttamente su quelle righe (niente colonna
      * pivot dedicata: piu' semplice riscrivere lines_washed a colpo sicuro
      * sulla riga Lavaggio che il sync ha appena creato/toccato). Chiamata da
-     * CreateServiceReport::afterCreate() ed EditServiceReport::afterSave().
+     * RapportiniAPassi::salva() e DividiPerMacchina.
      */
     public static function syncLavaggioImpianti(ServiceReport $record, array $rows): void
     {
@@ -118,13 +156,13 @@ class LavaggioFields
      * chiavi del repeater ->relationship() (che su un edit e' keyed per
      * "record-{id}", non per id nudo ne' per uuid generato al volo).
      *
-     * Pubblico perche' su EditServiceReport i ->default() qui sotto NON
+     * Pubblico perche' in modifica i ->default() qui sotto NON
      * bastano: Filament valuta getDefaultState() solo quando fill() e'
      * chiamato senza dati (create), non quando gli si passa l'array del
      * record da modificare (edit) — in quel caso i campi senza chiave in
      * quell'array vengono azzerati da fillStateWithNull(), ->default()
      * incluso. Serve quindi iniettare questi valori PRIMA, in
-     * EditServiceReport::mutateFormDataBeforeFill().
+     * statoModulo().
      */
     public static function resolveLavaggioShortcutDefaults(?ServiceReport $record): array
     {

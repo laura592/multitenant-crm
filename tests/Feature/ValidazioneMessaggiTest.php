@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Filament\Resources\ServiceReportResource\Pages\CreateServiceReport;
 use App\Models\Tenant;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -10,6 +9,7 @@ use Filament\Notifications\Notification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\Concerns\AssignsPermissionRoles;
+use Tests\Concerns\CompilaRapportini;
 use Tests\TestCase;
 
 /**
@@ -21,7 +21,7 @@ use Tests\TestCase;
  */
 class ValidazioneMessaggiTest extends TestCase
 {
-    use AssignsPermissionRoles, RefreshDatabase;
+    use AssignsPermissionRoles, CompilaRapportini, RefreshDatabase;
 
     public function test_i_messaggi_di_validazione_sono_in_italiano(): void
     {
@@ -48,9 +48,8 @@ class ValidazioneMessaggiTest extends TestCase
         Filament::setTenant($tenant);
 
         // Nessun cliente, nessun lavoro svolto: il form si ferma.
-        Livewire::test(CreateServiceReport::class)
-            ->fillForm(['intervention_date' => now()])
-            ->call('create')
+        $this->nuovoRapportino(['intervention_date' => now()])
+            ->call('salva')
             ->assertHasFormErrors();
 
         Notification::assertNotified('Non salvato: controlla i campi in rosso');

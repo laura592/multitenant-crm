@@ -90,6 +90,8 @@ class ServiceReport extends Model
         'customer_id',
         'billing_customer_id',
         'number',
+        // Rapportini della stessa visita, vedi la migration add_visita_id.
+        'visita_id',
         'gestionale_number',
         'gestionale_document_date',
         'machine_unit_id',

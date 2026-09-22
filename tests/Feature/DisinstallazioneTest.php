@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Console\Commands\ImportEurekaServiceReports;
 use App\Filament\Resources\ServiceReportResource;
-use App\Filament\Resources\ServiceReportResource\Pages\CreateServiceReport;
 use App\Models\Customer;
 use App\Models\ServiceReport;
 use App\Models\Tenant;
@@ -13,6 +12,7 @@ use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\Concerns\AssignsPermissionRoles;
+use Tests\Concerns\CompilaRapportini;
 use Tests\TestCase;
 
 /**
@@ -20,7 +20,7 @@ use Tests\TestCase;
  */
 class DisinstallazioneTest extends TestCase
 {
-    use AssignsPermissionRoles, RefreshDatabase;
+    use AssignsPermissionRoles, CompilaRapportini, RefreshDatabase;
 
     public function test_si_crea_un_rapportino_di_disinstallazione(): void
     {
@@ -32,15 +32,14 @@ class DisinstallazioneTest extends TestCase
         $this->actingAs($tecnico);
         Filament::setTenant($tenant);
 
-        Livewire::test(CreateServiceReport::class)
-            ->fillForm([
-                'customer_id' => $cliente->id,
-                'technician_id' => $tecnico->id,
-                'intervention_type' => ServiceReport::TYPE_DISINSTALLAZIONE,
-                'intervention_date' => today()->toDateString(),
-                'work_performed' => 'Ritirata la macchina',
-            ])
-            ->call('create')
+        $this->nuovoRapportino([
+            'customer_id' => $cliente->id,
+            'technician_id' => $tecnico->id,
+            'intervention_type' => ServiceReport::TYPE_DISINSTALLAZIONE,
+            'intervention_date' => today()->toDateString(),
+            'work_performed' => 'Ritirata la macchina',
+        ])
+            ->call('salva')
             ->assertHasNoFormErrors();
 
         $this->assertSame(ServiceReport::TYPE_DISINSTALLAZIONE, ServiceReport::sole()->intervention_type);

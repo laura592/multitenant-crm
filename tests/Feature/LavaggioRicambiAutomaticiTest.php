@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Filament\Resources\ServiceReportResource\Pages\CreateServiceReport;
 use App\Models\Customer;
 use App\Models\MachineUnit;
 use App\Models\MaintenanceSchedule;
@@ -14,6 +13,7 @@ use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\Concerns\AssignsPermissionRoles;
+use Tests\Concerns\CompilaRapportini;
 use Tests\TestCase;
 
 /**
@@ -28,7 +28,7 @@ use Tests\TestCase;
  */
 class LavaggioRicambiAutomaticiTest extends TestCase
 {
-    use AssignsPermissionRoles, RefreshDatabase;
+    use AssignsPermissionRoles, CompilaRapportini, RefreshDatabase;
 
     private function scenario(int $vie, ?string $bevanda = null): array
     {
@@ -76,15 +76,14 @@ class LavaggioRicambiAutomaticiTest extends TestCase
     {
         [$cliente, $piano, $utente] = $this->scenario(vie: 2);
 
-        $form = Livewire::test(CreateServiceReport::class)
-            ->fillForm([
+        $form = $this->nuovoRapportino([
                 'customer_id' => $cliente->id,
                 'technician_id' => $utente->id,
                 'intervention_type' => ServiceReport::TYPE_SANIFICAZIONE,
                 'lavaggio_impianti' => [['maintenance_schedule_id' => $piano->id]],
             ]);
 
-        $stato = $form->instance()->form->getRawState();
+        $stato = $this->statoPasso($form);
 
         $this->assertContains('LAV2', $this->codiciNelForm($stato), 'la voce di lavaggio deve comparire da sola');
         $this->assertSame(2, (int) ($stato['lavaggio_vie_count'] ?? 0));
@@ -96,15 +95,14 @@ class LavaggioRicambiAutomaticiTest extends TestCase
     {
         [$cliente, $piano, $utente] = $this->scenario(vie: 5);
 
-        $form = Livewire::test(CreateServiceReport::class)
-            ->fillForm([
+        $form = $this->nuovoRapportino([
                 'customer_id' => $cliente->id,
                 'technician_id' => $utente->id,
                 'intervention_type' => ServiceReport::TYPE_SANIFICAZIONE,
                 'lavaggio_impianti' => [['maintenance_schedule_id' => $piano->id]],
             ]);
 
-        $stato = $form->instance()->form->getRawState();
+        $stato = $this->statoPasso($form);
         $codici = $this->codiciNelForm($stato);
 
         $this->assertContains('LAV2', $codici);
@@ -125,15 +123,14 @@ class LavaggioRicambiAutomaticiTest extends TestCase
     {
         [$cliente, $piano, $utente] = $this->scenario(vie: 1, bevanda: MaintenanceSchedule::BEVERAGE_ACQUA);
 
-        $form = Livewire::test(CreateServiceReport::class)
-            ->fillForm([
+        $form = $this->nuovoRapportino([
                 'customer_id' => $cliente->id,
                 'technician_id' => $utente->id,
                 'intervention_type' => ServiceReport::TYPE_SANIFICAZIONE,
                 'lavaggio_impianti' => [['maintenance_schedule_id' => $piano->id]],
             ]);
 
-        $stato = $form->instance()->form->getRawState();
+        $stato = $this->statoPasso($form);
         $codici = $this->codiciNelForm($stato);
 
         $this->assertContains('SANIFICAZIONE', $codici, 'un impianto acqua deve portare la sanificazione');
@@ -154,21 +151,20 @@ class LavaggioRicambiAutomaticiTest extends TestCase
     {
         [$cliente, $piano, $utente] = $this->scenario(vie: 1, bevanda: MaintenanceSchedule::BEVERAGE_ACQUA);
 
-        $form = Livewire::test(CreateServiceReport::class)
-            ->fillForm([
+        $form = $this->nuovoRapportino([
                 'customer_id' => $cliente->id,
                 'technician_id' => $utente->id,
                 'intervention_type' => ServiceReport::TYPE_SANIFICAZIONE,
                 'lavaggio_impianti' => [['maintenance_schedule_id' => $piano->id]],
             ]);
 
-        $this->assertContains('SANIFICAZIONE', $this->codiciNelForm($form->instance()->form->getRawState()));
+        $this->assertContains('SANIFICAZIONE', $this->codiciNelForm($this->statoPasso($form)));
 
-        $form->set('data._sanificazione_eseguita', false);
+        $form->set($this->passo($form).'._sanificazione_eseguita', false);
 
         $this->assertNotContains(
             'SANIFICAZIONE',
-            $this->codiciNelForm($form->instance()->form->getRawState()),
+            $this->codiciNelForm($this->statoPasso($form)),
             'spenta la sanificazione, la voce non deve restare in elenco',
         );
     }
@@ -190,8 +186,7 @@ class LavaggioRicambiAutomaticiTest extends TestCase
             'beverage_type' => MaintenanceSchedule::BEVERAGE_ACQUA,
         ]);
 
-        $form = Livewire::test(CreateServiceReport::class)
-            ->fillForm([
+        $form = $this->nuovoRapportino([
                 'customer_id' => $cliente->id,
                 'technician_id' => $utente->id,
                 'intervention_type' => ServiceReport::TYPE_SANIFICAZIONE,
@@ -201,7 +196,7 @@ class LavaggioRicambiAutomaticiTest extends TestCase
                 ],
             ]);
 
-        $stato = $form->instance()->form->getRawState();
+        $stato = $this->statoPasso($form);
         $codici = $this->codiciNelForm($stato);
 
         $this->assertContains('LAV2', $codici);
@@ -221,7 +216,7 @@ class LavaggioRicambiAutomaticiTest extends TestCase
      * Riaprendo un rapportino di sola sanificazione, "Lavaggio eseguito"
      * deve essere spento: non ci sono vie lavate. Il default della Resource
      * non basta a garantirlo — sulla pagina di modifica vince quello che
-     * inietta EditServiceReport::mutateFormDataBeforeFill(), ed e' li' che la
+     * inietta LavaggioFields::statoModulo(), ed e' li' che la
      * separazione dei due interruttori era rimasta indietro.
      */
     public function test_riaprendo_una_sanificazione_il_lavaggio_resta_spento(): void
@@ -239,10 +234,7 @@ class LavaggioRicambiAutomaticiTest extends TestCase
             'quantity' => 1,
         ]);
 
-        $stato = Livewire::test(
-            \App\Filament\Resources\ServiceReportResource\Pages\EditServiceReport::class,
-            ['record' => $report->getRouteKey()],
-        )->instance()->form->getRawState();
+        $stato = $this->statoPasso($this->modificaRapportino($report));
 
         $this->assertTrue((bool) ($stato['_sanificazione_eseguita'] ?? false));
         $this->assertFalse((bool) ($stato['_lavaggio_vie_eseguito'] ?? false));

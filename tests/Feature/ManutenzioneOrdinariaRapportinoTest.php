@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Filament\Resources\ServiceReportResource\Pages\CreateServiceReport;
 use App\Models\Customer;
 use App\Models\MachineUnit;
 use App\Models\Material;
@@ -14,6 +13,7 @@ use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\Concerns\AssignsPermissionRoles;
+use Tests\Concerns\CompilaRapportini;
 use Tests\TestCase;
 
 /**
@@ -24,7 +24,7 @@ use Tests\TestCase;
  */
 class ManutenzioneOrdinariaRapportinoTest extends TestCase
 {
-    use AssignsPermissionRoles, RefreshDatabase;
+    use AssignsPermissionRoles, CompilaRapportini, RefreshDatabase;
 
     private function materiale(Tenant $tenant, string $code, string $type, array $extra = []): Material
     {
@@ -112,16 +112,15 @@ class ManutenzioneOrdinariaRapportinoTest extends TestCase
     {
         [, $cliente, $macchina, $utente] = $this->scenario();
 
-        $form = Livewire::test(CreateServiceReport::class)
-            ->fillForm([
-                'customer_id' => $cliente->id,
-                'technician_id' => $utente->id,
-                'intervention_type' => ServiceReport::TYPE_MANUTENZIONE_ORDINARIA,
-                'machine_unit_id' => $macchina->id,
-            ])
-            ->set('data.add_manutenzione_material', true);
+        $form = $this->nuovoRapportino([
+            'customer_id' => $cliente->id,
+            'technician_id' => $utente->id,
+            'intervention_type' => ServiceReport::TYPE_MANUTENZIONE_ORDINARIA,
+            'machine_unit_id' => $macchina->id,
+            'add_manutenzione_material' => true,
+        ]);
 
-        $stato = $form->instance()->form->getRawState();
+        $stato = $this->statoPasso($form);
         $codici = collect($stato['materialsUsed'] ?? [])
             ->map(fn (array $riga) => Material::find($riga['material_id'] ?? null)?->code)
             ->filter()->values()->all();
@@ -129,8 +128,8 @@ class ManutenzioneOrdinariaRapportinoTest extends TestCase
         $this->assertContains('F3', $codici);
 
         // Spegnendolo la riga se ne va.
-        $form->set('data.add_manutenzione_material', false);
-        $codici = collect($form->instance()->form->getRawState()['materialsUsed'] ?? [])
+        $form->set($this->passo($form).'.add_manutenzione_material', false);
+        $codici = collect($this->statoPasso($form)['materialsUsed'] ?? [])
             ->map(fn (array $riga) => Material::find($riga['material_id'] ?? null)?->code)
             ->filter()->values()->all();
 

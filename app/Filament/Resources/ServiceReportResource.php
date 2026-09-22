@@ -18,6 +18,7 @@ use App\Models\ServiceReport;
 use App\Policies\ServiceReportPolicy;
 use App\Support\DisplayName;
 use App\Support\OutsideLivewireRender;
+use App\Support\Rapportini\DividiPerMacchina;
 use App\Support\Rapportini\LavaggioFields;
 use App\Support\TariffeIntervento;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -334,614 +335,10 @@ class ServiceReportResource extends Resource
                                 .'</span>'
                         )),
                 ]),
-            Forms\Components\Section::make('Intervento')
-                ->columns(3)
-                ->schema([
-                    Forms\Components\TextInput::make('number')
-                        ->label('Numero')
-                        ->disabled()
-                        ->dehydrated(false)
-                        ->visibleOn('edit'),
-                    Forms\Components\Select::make('customer_id')
-                        ->label('Cliente')
-                        ->extraAttributes(['data-tour' => 'service-reports-field-customer'])
-                        ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
-                        ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::customerOption($record))
-                        ->searchable(['company_name', 'first_name', 'last_name', 'city'])
-                        ->preload()
-                        ->required()
-                        ->live()
-                        // Prefill arrivando dall'azione "Crea rapportino" su un
-                        // macchinario (MachineUnitResource): vedi anche
-                        // machine_unit_id sotto, stesso query param.
-                        ->default(fn () => request()->query('customer_id'))
-                        // La macchina tracciata sotto e' filtrata per cliente:
-                        // cambiando cliente la selezione fatta in precedenza non
-                        // ha piu' senso. Nemmeno il pagante: quello scritto sul
-                        // rapportino apparteneva al cliente di prima, e su un
-                        // rapportino gia' chiuso e' congelato, quindi da solo
-                        // non se ne andrebbe mai (vedi
-                        // ServiceReport::freezeInvoiceRecipient(), che riscrive
-                        // solo quando il campo e' vuoto). Svuotandolo qui il
-                        // campo torna a mostrare il pagante abituale del cliente
-                        // nuovo, e chi compila lo vede subito invece di
-                        // scoprirlo in fattura. La stessa pulizia e' ripetuta
-                        // sul modello, per le modifiche che non passano da
-                        // questo form.
-                        ->afterStateUpdated(function (Forms\Set $set) {
-                            $set('machine_unit_id', null);
-                            $set('billing_customer_id', null);
-                        })
-                        ->createOptionForm([
-                            Forms\Components\TextInput::make('company_name')->label('Ragione sociale'),
-                            Forms\Components\TextInput::make('first_name')->label('Nome'),
-                            Forms\Components\TextInput::make('last_name')->label('Cognome'),
-                            ...CustomerContactFields::schema(),
-                            ...CustomerFiscalFields::schema(),
-                        ])
-                        ->editOptionForm([
-                            Forms\Components\TextInput::make('company_name')->label('Ragione sociale'),
-                            Forms\Components\TextInput::make('first_name')->label('Nome'),
-                            Forms\Components\TextInput::make('last_name')->label('Cognome'),
-                            ...CustomerContactFields::schema(),
-                            ...CustomerFiscalFields::schema(),
-                        ])
-                        // L'editOptionForm sopra salva il Customer vero passando dal
-                        // meccanismo generico di Filament sul Select, non dalla pagina
-                        // CustomerResource\Pages\EditCustomer — senza questo hook la
-                        // segnalazione "da aggiornare su Eureka" (vedi
-                        // Customer::notifyGestionaleReviewIfLinked()) non scatterebbe mai
-                        // per le modifiche fatte da qui.
-                        ->editOptionAction(fn (Forms\Components\Actions\Action $action) => $action->after(
-                            fn (Forms\Components\Select $component) => $component->getSelectedRecord()
-                                ?->notifyGestionaleReviewIfLinked(array_keys($component->getSelectedRecord()->getChanges()))
-                        )),
-                    Forms\Components\Select::make('technician_id')
-                        ->label('Tecnico')
-                        ->relationship('technician', 'name')
-                        ->default(fn () => auth()->id())
-                        ->searchable()
-                        ->preload()
-                        ->required(),
-                    Forms\Components\Select::make('intervention_type')
-                        ->label('Tipo intervento')
-                        ->extraAttributes(['data-tour' => 'service-reports-field-type'])
-                        ->options(static::interventionTypeLabels())
-                        ->required()
-                        // La riga "manodopera" (ore lavorate) non si aggiunge piu'
-                        // da sola cambiando questo campo: vedi il toggle
-                        // "Manodopera" in "Ricambi/materiali utilizzati" piu' sotto,
-                        // scelta esplicita del tecnico invece che automatica.
-                        ->live(),
-                    Forms\Components\DatePicker::make('intervention_date')
-                        ->label('Data intervento')
-                        ->default(now())
-                        ->required(),
-                    Forms\Components\Select::make('status')
-                        ->label('Stato')
-                        // "In gestionale" e' scegliibile a mano dal 03/09/2026:
-                        // e' un'etichetta amministrativa, non una serratura.
-                        // A bloccare il rapportino e' il fatto che il documento
-                        // esista su Eureka (ServiceReport::isSuEureka()), non
-                        // questa tendina.
-                        ->options(fn () => self::statusLabels())
-                        ->default('bozza')
-                        ->required(),
-                ]),
-            Forms\Components\Section::make('Macchina')
-                ->columns(3)
-                ->schema([
-                    Forms\Components\Select::make('machine_unit_id')
-                        ->label('Macchina (matricola tracciata)')
-                        ->relationship(
-                            'machineUnit',
-                            'serial_number',
-                            // Se il cliente e' gia' selezionato filtriamo per lui, ma la
-                            // matricola si puo' anche scegliere per prima (vedi
-                            // afterStateUpdated sotto, che poi compila il cliente).
-                            modifyQueryUsing: fn (Builder $query, Get $get) => $get('customer_id')
-                                ? $query->where('current_customer_id', $get('customer_id'))
-                                : $query,
-                        )
-                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->display_name.' — '.$record->serial_number
-                            .(self::isMachineUnitLinkedToEureka($record) ? ' — ✓ Eureka' : ''))
-                        ->searchable()
-                        ->preload()
-                        ->live()
-                        // Prefill arrivando dall'azione "Crea rapportino" su un
-                        // macchinario (MachineUnitResource).
-                        ->default(fn () => request()->query('machine_unit_id'))
-                        // Scegliere qui la matricola tracciata compila da sola modello
-                        // e matricola sotto: prima erano tre campi indipendenti da
-                        // riempire a mano (facile sbagliare/dimenticarne uno). Compila
-                        // anche il cliente, cosi' si puo' partire dalla matricola senza
-                        // doverlo selezionare prima a mano.
-                        ->afterStateUpdated(function (Forms\Set $set, ?string $state) {
-                            if ($state === null) {
-                                return;
-                            }
-
-                            $machineUnit = MachineUnit::find($state);
-                            $set('machine_product_id', $machineUnit?->product_id);
-                            // L'articolo di gestionale della matricola: e' quello
-                            // che finisce in sl_articolo all'invio a Eureka
-                            // quando la macchina non e' a listino.
-                            $set('machine_material_id', $machineUnit?->material_id);
-                            $set('machine_serial_number', $machineUnit?->serial_number);
-
-                            if ($machineUnit?->current_customer_id) {
-                                $set('customer_id', $machineUnit->current_customer_id);
-                            }
-                        })
-                        ->helperText('Scegliendo la matricola si compilano da soli cliente, modello e matricola qui sotto.')
-                        // Se la matricola non e' ancora tracciata in CRM, prima
-                        // bisognava uscire da qui e crearla da Macchinari — stesso
-                        // "+" gia' presente sul cliente. moveTo() (non un
-                        // update diretto di current_customer_id) per rispettare lo
-                        // stesso invariante di MachineUnitResource: tiene lo storico
-                        // posizionamenti coerente anche per una macchina creata al volo.
-                        ->createOptionForm([
-                            Forms\Components\TextInput::make('serial_number')
-                                ->label('Matricola')
-                                ->helperText('Se non la conosci lascia vuoto o scrivi "'.self::MACHINE_UNIT_NO_SERIAL_PLACEHOLDER.'": ne viene generata una segnaposto univoca in automatico.')
-                                ->maxLength(255),
-                            Forms\Components\Select::make('product_id')
-                                ->label('Modello (da catalogo)')
-                                ->relationship('product', 'name', modifyQueryUsing: fn ($query) => $query->where('type', Product::TYPE_MACHINE))
-                                ->searchable()
-                                ->preload(),
-                            Forms\Components\Select::make('material_id')
-                                ->label('Articolo gestionale (Eureka)')
-                                ->relationship('material', 'code')
-                                ->getOptionLabelFromRecordUsing(fn (Material $record) => $record->display_label.' — '.$record->code)
-                                ->searchable(['code', 'type', 'variant'])
-                                ->helperText('Per le macchine non a listino: e\' il codice con cui Eureka la conosce.'),
-                            Forms\Components\TextInput::make('model_name')
-                                ->label('Modello (testo libero)')
-                                ->helperText('Solo se non e\' a catalogo ne\' a gestionale.')
-                                ->maxLength(255),
-                        ])
-                        ->createOptionUsing(function (array $data, Get $get) {
-                            $machineUnit = MachineUnit::create([
-                                'source' => MachineUnit::SOURCE_MANUALE,
-                                'serial_number' => self::resolveUniqueMachineSerialNumber($data['serial_number'] ?? null),
-                                'product_id' => $data['product_id'] ?? null,
-                                'material_id' => $data['material_id'] ?? null,
-                                'model_name' => $data['model_name'] ?? null,
-                            ]);
-
-                            $machineUnit->moveTo($get('customer_id') ? Customer::find($get('customer_id')) : null);
-
-                            return $machineUnit->id;
-                        }),
-                    // Una sanificazione spesso copre piu' impianti dello stesso
-                    // cliente in una sola visita, ognuno con le sue vie lavate
-                    // (es. Birra 2 vie, Vino 5 vie): machine_unit_id sopra resta
-                    // per singola macchina/matricola. Una riga qui = un piano
-                    // esplicitamente coperto da questa visita, con le vie
-                    // lavate quella volta — vince sulla regola implicita di
-                    // ServiceReport::syncMaintenanceSchedule() ("tutti i piani
-                    // attivi del cliente"/quello di machine_unit_id); nessuna
-                    // riga = comportamento di sempre. Non ->relationship():
-                    // Filament non porta dati extra (lines_washed) con un
-                    // binding automatico su una BelongsToMany, il collegamento
-                    // piani + scrittura vie va fatto a mano (vedi
-                    // CreateServiceReport/EditServiceReport, entrambi passano
-                    // da LavaggioFields::syncLavaggioImpianti()).
-                    Forms\Components\Repeater::make('lavaggio_impianti')
-                        ->label('Impianti e vie lavate')
-                        ->schema([
-                            Forms\Components\Select::make('maintenance_schedule_id')
-                                ->label('Impianto')
-                                ->options(function (Get $get) {
-                                    $customerId = $get('../../customer_id');
-
-                                    if (! $customerId) {
-                                        return [];
-                                    }
-
-                                    return MaintenanceSchedule::query()
-                                        ->where('customer_id', $customerId)
-                                        ->where('type', MaintenanceSchedule::TYPE_LAVAGGIO)
-                                        ->where('status', MaintenanceSchedule::STATUS_ATTIVO)
-                                        ->get()
-                                        ->mapWithKeys(fn (MaintenanceSchedule $record) => [$record->id => MaintenanceScheduleResource::impiantoHero($record)]);
-                                })
-                                ->required()
-                                ->searchable()
-                                ->live()
-                                ->afterStateUpdated(function (Forms\Set $set, Get $get, ?string $state) {
-                                    if (! $state) {
-                                        return;
-                                    }
-
-                                    $schedule = MaintenanceSchedule::find($state);
-                                    $set('lines_washed', $schedule?->lines_count);
-
-                                    // Scrivere le vie con $set NON risveglia
-                                    // l'afterStateUpdated del repeater: quello
-                                    // scatta solo se le vie le digiti tu e poi
-                                    // esci dal campo. Scegliendo l'impianto e
-                                    // fermandosi li', le righe LAV2/ULTVIA non
-                                    // arrivavano mai e il rapportino restava
-                                    // senza voci da fatturare (segnalato dal
-                                    // vivo il 03/09/2026). Si chiama quindi da
-                                    // qui, risalendo di due livelli fino al
-                                    // form: '../' e' la riga del repeater,
-                                    // '../../' il modulo.
-                                    LavaggioFields::syncVieDaImpianti($set, $get, '../../');
-                                }),
-                            Forms\Components\TextInput::make('lines_washed')
-                                ->label('Vie lavate')
-                                ->numeric()
-                                ->minValue(0)
-                                // live() perche' il totale vie di questo
-                                // repeater accende da solo il lavaggio e le
-                                // sue righe tariffa piu' in basso: senza,
-                                // l'afterStateUpdated del repeater (che
-                                // riceve il rimbalzo dai campi figli, vedi
-                                // HasState::callAfterStateUpdated) scatterebbe
-                                // solo aggiungendo o togliendo una riga, non
-                                // digitando le vie. onBlur: si aggiorna
-                                // quando si lascia il campo, non a ogni
-                                // cifra battuta ("15" passerebbe da "1").
-                                ->live(onBlur: true),
-                        ])
-                        ->columns(2)
-                        ->visible(fn (Get $get) => $get('intervention_type') === ServiceReport::TYPE_SANIFICAZIONE)
-                        // Le vie si scrivono qui, in cima al rapportino: da
-                        // qui discendono il toggle "Lavaggio eseguito" e le
-                        // righe LAV2/ULTERIORE VIA piu' in basso, invece di
-                        // farle ridigitare (e di lasciare senza voci da
-                        // fatturare chi si ferma a questo riquadro).
-                        ->afterStateUpdated(fn (Forms\Set $set, Get $get) => LavaggioFields::syncVieDaImpianti($set, $get))
-                        ->helperText('Lascia vuoto (nessuna riga) per applicarla a tutti i piani lavaggio attivi del cliente, senza vie specifiche per impianto (comportamento di sempre). Aggiungi una riga per ogni impianto coperto da questa visita: le vie totali accendono da sole il lavaggio e le sue voci tra i ricambi.')
-                        ->addActionLabel('Aggiungi impianto')
-                        ->defaultItems(0)
-                        ->columnSpanFull(),
-                    // Il collegamento Eureka manca spesso solo per il rapportino
-                    // (vedi ServiceReport::gestionaleValidationErrors()), ma finora
-                    // si scopriva solo al momento dell'invio, a rapportino gia'
-                    // compilato/firmato. Non blocca la compilazione (il tecnico deve
-                    // poter comunque lavorare sul posto): segnala solo, cosi' il
-                    // problema si vede subito invece che a fine giornata.
-                    Forms\Components\Placeholder::make('machine_unit_eureka_warning')
-                        ->label('')
-                        ->columnSpanFull()
-                        ->hidden(fn (Get $get) => blank($get('machine_unit_id'))
-                            || self::isMachineUnitLinkedToEureka(MachineUnit::find($get('machine_unit_id'))))
-                        ->content(new HtmlString(
-                            '<div class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">'
-                                .'⚠️ Questo modello non è ancora collegato a Eureka: il rapportino non potrà essere inviato al gestionale finché il back-office non lo collega da Macchinari.'
-                                .'</div>'
-                        )),
-                    // Il collegamento rapportino->piano di manutenzione e'
-                    // inferito da customer_id+machine_unit_id (nessuna FK
-                    // esplicita, vedi ServiceReport::syncMaintenanceSchedule()):
-                    // scegliendo la macchina sbagliata su un cliente con piu'
-                    // impianti, l'intervento riallinea in silenzio il piano
-                    // sbagliato (o nessuno). Avvisa solo per manutenzione
-                    // ordinaria: e' l'unico tipo che aggiorna un piano.
-                    Forms\Components\Placeholder::make('machine_unit_schedule_warning')
-                        ->label('')
-                        ->columnSpanFull()
-                        ->hidden(fn (Get $get) => blank($get('machine_unit_id'))
-                            || blank($get('customer_id'))
-                            || $get('intervention_type') !== ServiceReport::TYPE_MANUTENZIONE_ORDINARIA
-                            || self::activeMaintenanceScheduleCount($get) === 1)
-                        ->content(fn (Get $get) => new HtmlString(
-                            '<div class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">'
-                                .(self::activeMaintenanceScheduleCount($get) === 0
-                                    ? '⚠️ Nessun piano di manutenzione attivo per questa macchina: chiudendo questo rapportino nessuna scadenza verrà aggiornata automaticamente.'
-                                    : '⚠️ Questa macchina ha più piani di manutenzione attivi collegati: verranno aggiornati tutti. Controlla che non sia un doppione.')
-                                .'</div>'
-                        )),
-                    /*
-                     | Chi paga QUESTO intervento.
-                     |
-                     | Di default e' il pagante abituale — quello della
-                     | macchina, o quello del cliente — e nella stragrande
-                     | maggioranza dei casi non si tocca.
-                     |
-                     | Ma serve poterlo cambiare sul singolo rapportino: se il
-                     | guasto e' colpa del cliente, quell'intervento si fattura
-                     | a lui e non al torrefattore che paga il resto. Prima
-                     | questo campo era un Placeholder in sola lettura e
-                     | l'unica via era cambiare il pagante del cliente, cioe'
-                     | spostare anche tutto il resto.
-                     |
-                     | Quello che si sceglie qui resta scritto sul documento e
-                     | non cambia piu' (ServiceReport::freezeInvoiceRecipient()).
-                     */
-                    Forms\Components\Select::make('billing_customer_id')
-                        ->label('Fatturare a')
-                        ->helperText(fn (Get $get) => filled($get('billing_customer_id'))
-                            ? 'Scelta per questo rapportino. Svuota il campo per tornare al pagante abituale.'
-                            : 'Vuoto = pagante abituale: '.(DisplayName::titleCase(self::resolvePayer($get)?->full_name) ?? '—'))
-                        ->placeholder(fn (Get $get) => DisplayName::titleCase(self::resolvePayer($get)?->full_name) ?? '—')
-                        ->relationship('billingCustomer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
-                        ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::customerOption($record))
-                        ->searchable(['company_name', 'first_name', 'last_name', 'city'])
-                        ->preload()
-                        ->live()
-                        // Scorciatoia per il caso che ha fatto nascere il
-                        // campo: il guasto e' colpa del cliente, si fattura a
-                        // lui. Come hintAction accanto all'etichetta, non come
-                        // icona dentro il campo: si vede, e si capisce che fa.
-                        ->hintAction(
-                            Forms\Components\Actions\Action::make('fattura_al_cliente')
-                                ->label('Fattura al cliente')
-                                ->icon('heroicon-m-user')
-                                ->visible(fn (Get $get) => filled($get('customer_id'))
-                                    && $get('billing_customer_id') !== $get('customer_id'))
-                                ->action(fn (Forms\Set $set, Get $get) => $set('billing_customer_id', $get('customer_id')))
-                        ),
-                    // Non piu' una scelta manuale: il modello si ricava dalla
-                    // macchina/matricola selezionata sopra (afterStateUpdated
-                    // su machine_unit_id valorizza gia' l'Hidden sotto), cosi'
-                    // non puo' piu' disallinearsi da quella. Resta comunque
-                    // sempre visibile qui — non e' solo un dettaglio interno.
-                    Forms\Components\Placeholder::make('machine_product_display')
-                        ->label('Modello macchina')
-                        ->content(function (Get $get) {
-                            $machineUnit = $get('machine_unit_id') ? MachineUnit::find($get('machine_unit_id')) : null;
-
-                            if ($machineUnit) {
-                                return $machineUnit->display_name;
-                            }
-
-                            // Rapportino senza matricola tracciata collegata (es.
-                            // dato storico pre-esistente, o importato da Eureka
-                            // con il solo articolo): mostra comunque quanto gia'
-                            // salvato, invece di sparire.
-                            $article = $get('machine_product_id')
-                                ? Product::find($get('machine_product_id'))?->name
-                                : ($get('machine_material_id')
-                                    ? Material::find($get('machine_material_id'))?->display_label
-                                    : null);
-
-                            return $article ?: '— (seleziona la macchina/matricola)';
-                        }),
-                    Forms\Components\Hidden::make('machine_product_id'),
-                    Forms\Components\Hidden::make('machine_material_id'),
-                    // Stesso motivo del modello sopra: la matricola si ricava
-                    // dalla macchina tracciata, non si digita piu' a mano.
-                    Forms\Components\Placeholder::make('machine_serial_display')
-                        ->label('Matricola')
-                        ->content(fn (Get $get) => $get('machine_serial_number') ?: '— (seleziona la macchina/matricola)'),
-                    Forms\Components\Hidden::make('machine_serial_number'),
-                ]),
-            Forms\Components\Section::make('Descrizione')
-                ->schema([
-                    // autosize(): il campo cresce con il testo invece di
-                    // restare alto due o tre righe. Su un lavoro svolto lungo
-                    // il tecnico vedeva solo le prime righe e doveva scorrere
-                    // dentro il riquadro per rileggere quello che aveva
-                    // scritto — segnalato dall'ufficio il 02/09/2026.
-                    Forms\Components\Textarea::make('problem_description')->label('Problema riscontrato')
-                        ->rows(2)->autosize(),
-                    Forms\Components\Textarea::make('work_performed')->label('Lavoro svolto')
-                        ->rows(4)->autosize()->required()
-                        ->extraAttributes(['data-tour' => 'service-reports-field-work']),
-                    Forms\Components\Textarea::make('notes')->label('Note')->rows(2)->autosize(),
-                ]),
-            Forms\Components\Section::make('Ricambi/materiali utilizzati')
-                ->extraAttributes(['data-tour' => 'service-reports-field-materials'])
-                ->schema([
-                    // Le 3 Hidden e i 2 Toggle sotto sono tutti "di comodo"
-                    // (dehydrated(false), nessuna colonna reale): su un rapportino
-                    // gia' salvato devono pero' rispecchiare le righe materiale
-                    // gia' presenti (es. arrivando da Eureka, o da un salvataggio
-                    // precedente di questi stessi widget), altrimenti riaprendo un
-                    // rapportino con CHIORD/LAV2 gia' in elenco i toggle
-                    // risulterebbero spenti/vuoti pur essendo la riga li' —
-                    // vedi resolveLavaggioShortcutDefaults().
-                    Forms\Components\Hidden::make('_chiamata_material_key')
-                        ->dehydrated(false)
-                        ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['chiamata_key']),
-                    Forms\Components\Hidden::make('_manodopera_material_key')
-                        ->dehydrated(false)
-                        ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['manodopera_key']),
-                    Forms\Components\Hidden::make('_lavaggio_base_material_key')
-                        ->dehydrated(false)
-                        ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['lavaggio_base_key']),
-                    Forms\Components\Hidden::make('_lavaggio_ult_material_key')
-                        ->dehydrated(false)
-                        ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['lavaggio_ult_key']),
-                    // Impianti acqua: la riga generata e' SANIFICAZIONE, e il
-                    // conteggio e' quanti impianti acqua ci sono sul
-                    // rapportino — non le vie, che li' non si contano.
-                    Forms\Components\Hidden::make('_sanificazione_material_key')
-                        ->dehydrated(false)
-                        ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['sanificazione_key']),
-                    Forms\Components\Hidden::make('_manutenzione_material_key')
-                        ->dehydrated(false)
-                        ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['manutenzione_key']),
-                    Forms\Components\Hidden::make('_sanificazione_count')
-                        ->dehydrated(false)
-                        ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['sanificazioni_count']),
-                    // Scorciatoie che aggiungono/rimuovono righe materiale da sole
-                    // (stesso meccanismo per key, dehydrated(false), per entrambe):
-                    // "Chiamata" per il ricambio CHIVE/CHIORD (tariffa base
-                    // dell'intervento su Eureka: CHIVE per Venezia centro storico
-                    // — raggiungibile solo via acqua —, CHIORD altrove; Lido e
-                    // Burano hanno gia' un codice piu' specifico CHILI/CHIBU da
-                    // aggiungere a mano, quindi qui il match resta volutamente
-                    // stretto su "Venezia" esatto), "Lavaggio eseguito" per
-                    // LAVAGGIO 2 VIE (tariffa minima agevolata, dovuta anche
-                    // lavando una sola via) + ULTERIORE VIA LAVATA per le vie
-                    // oltre la seconda.
-                    // Quattro colonne: i quattro interruttori stanno su una riga
-                    // sola, il campo "Numero vie" compare sotto solo quando serve.
-                    Forms\Components\Grid::make(4)
-                        ->schema([
-                            // Il festivo lo dichiara chi compila: non si deduce dalla
-                            // data, perche' un intervento fatto di sabato puo' essere
-                            // fatturato feriale e viceversa.
-                            Forms\Components\Toggle::make('_intervento_festivo')
-                                ->label('Intervento festivo')
-                                ->live()
-                                ->dehydrated(false)
-                                ->helperText('Cambia chiamata e manodopera nelle voci festive, prima di aggiungerle.'),
-                            Forms\Components\Toggle::make('add_chiamata_material')
-                                ->label('Chiamata')
-                                ->live()
-                                ->dehydrated(false)
-                                ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['chiamata_key'] !== null)
-                                ->disabled(fn (Get $get) => blank($get('customer_id')))
-                                ->helperText(fn (Get $get) => self::descrizioneTariffa($get, 'chiamata'))
-                                ->afterStateUpdated(function (bool $state, Forms\Set $set, Get $get) {
-                                    $materialsUsed = $get('materialsUsed') ?? [];
-                                    $addedKey = $get('_chiamata_material_key');
-
-                                    if (! $state) {
-                                        // Rimuove solo la riga aggiunta da questo flag (per key),
-                                        // non un'eventuale riga uguale inserita a mano.
-                                        if ($addedKey && array_key_exists($addedKey, $materialsUsed)) {
-                                            unset($materialsUsed[$addedKey]);
-                                            $set('materialsUsed', $materialsUsed);
-                                        }
-
-                                        $set('_chiamata_material_key', null);
-
-                                        return;
-                                    }
-
-                                    $customer = Customer::find($get('customer_id'));
-                                    // Il codice dipende dal pagante (Martellozzo, Goppion,
-                                    // Spigola… hanno il loro listino, vedi config/tariffe.php)
-                                    // e solo in mancanza di listino dalla citta'.
-                                    $code = TariffeIntervento::per($customer, (bool) $get('_intervento_festivo'))['chiamata'];
-                                    $material = $code ? Material::where('code', $code)->first() : null;
-
-                                    if (! $material) {
-                                        return;
-                                    }
-
-                                    $alreadyAdded = collect($materialsUsed)->contains(
-                                        fn (array $item) => ($item['material_id'] ?? null) === $material->id
-                                    );
-
-                                    if ($alreadyAdded) {
-                                        return;
-                                    }
-
-                                    $newKey = (string) Str::uuid();
-                                    $materialsUsed[$newKey] = [
-                                        'material_id' => $material->id,
-                                        'quantity' => 1,
-                                    ];
-
-                                    $set('materialsUsed', $materialsUsed);
-                                    $set('_chiamata_material_key', $newKey);
-                                }),
-                            Forms\Components\Toggle::make('add_manodopera_material')
-                                ->label('Manodopera')
-                                ->live()
-                                ->dehydrated(false)
-                                ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['manodopera_key'] !== null)
-                                ->helperText(fn (Get $get) => self::descrizioneTariffa($get, 'manodopera'))
-                                ->afterStateUpdated(fn (bool $state, Forms\Set $set, Get $get) => self::syncManodoperaMaterial($state, $set, $get)),
-                            Forms\Components\Toggle::make('_lavaggio_vie_eseguito')
-                                ->label('Lavaggio eseguito')
-                                ->live()
-                                ->dehydrated(false)
-                                ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['lavaggio_base_key'] !== null)
-                                ->helperText('Aggiunge da sola LAVAGGIO 2 VIE (sempre) + ULTERIORE VIA LAVATA per le vie oltre la seconda.')
-                                ->afterStateUpdated(fn (Forms\Set $set, Get $get) => LavaggioFields::syncLavaggioViaMaterials($set, $get)),
-                            // Unico campo della sezione che e' una colonna
-                            // vera (service_reports.lavaggio_vie_count), non
-                            // di comodo come i toggle qui sopra: le righe
-                            // materiali da sole non bastano a ricordarlo,
-                            // perche' 1 via e 2 vie generano lo stesso identico
-                            // LAV2 e la lettura all'indietro tornava sempre 2
-                            // (vedi resolveLavaggioShortcutDefaults()).
-                            // ->dehydratedWhenHidden() perche' quando
-                            // "Lavaggio eseguito" e' spento il campo sparisce,
-                            // e un campo nascosto per default non viene
-                            // salvato: senza, in DB resterebbe il conteggio
-                            // del lavaggio appena tolto.
-                            Forms\Components\TextInput::make('lavaggio_vie_count')
-                                ->label('Numero vie lavate')
-                                ->numeric()
-                                ->minValue(1)
-                                ->live()
-                                ->dehydratedWhenHidden()
-                                ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['vie_count'])
-                                ->visible(fn (Get $get) => (bool) $get('_lavaggio_vie_eseguito'))
-                                ->afterStateUpdated(fn (Forms\Set $set, Get $get) => LavaggioFields::syncLavaggioViaMaterials($set, $get)),
-                            // Interruttore a se' dal 04/09/2026: lavare le vie
-                            // di un impianto bevande e sanificare un impianto
-                            // acqua sono due lavori diversi, con due voci
-                            // diverse, e capita di farne uno solo. Scegliendo
-                            // gli impianti in cima al rapportino si accende da
-                            // solo quello giusto.
-                            Forms\Components\Toggle::make('_sanificazione_eseguita')
-                                ->label('Sanificazione acqua')
-                                ->live()
-                                ->dehydrated(false)
-                                ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['sanificazione_key'] !== null)
-                                ->helperText('Aggiunge SANIFICAZIONE IMPIANTO ACQUA, una per impianto acqua. Gli impianti acqua non si contano a vie.')
-                                ->afterStateUpdated(fn (Forms\Set $set, Get $get) => LavaggioFields::syncLavaggioViaMaterials($set, $get)),
-                            // Manutenzione ordinaria: il codice non e' fisso,
-                            // dipende dal MODELLO della macchina scelta
-                            // (Faema 3 gruppi -> F3, Cimbali 2 -> C2), e dal
-                            // pagante (F3 -> F3GOPPION). Vedi
-                            // TariffeIntervento::manutenzione().
-                            Forms\Components\Toggle::make('add_manutenzione_material')
-                                ->label('Manutenzione ordinaria')
-                                ->live()
-                                ->dehydrated(false)
-                                ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['manutenzione_key'] !== null)
-                                ->helperText(fn (Get $get) => self::descrizioneManutenzione($get))
-                                ->afterStateUpdated(fn (bool $state, Forms\Set $set, Get $get) => self::syncManutenzioneMaterial($state, $set, $get)),
-                        ]),
-                    // Materiali (App\Models\Material), non Product: quest'ultimo e'
-                    // lo stesso elenco usato per i preventivi, senza filtro —
-                    // macchine/ricambi trovati su Eureka finirebbero anche li'.
-                    Forms\Components\Repeater::make('materialsUsed')
-                        ->relationship('materialsUsed')
-                        ->label('')
-                        ->columns(3)
-                        ->schema([
-                            Forms\Components\Select::make('material_id')
-                                ->label('Materiale')
-                                ->searchable()
-                                ->getSearchResultsUsing(fn (string $search): array => Material::query()
-                                    ->where(function (Builder $query) use ($search) {
-                                        foreach (explode(' ', trim($search)) as $word) {
-                                            if ($word === '') {
-                                                continue;
-                                            }
-
-                                            $query->where(function (Builder $query) use ($word) {
-                                                $query->where('code', 'like', "%{$word}%")
-                                                    ->orWhere('type', 'like', "%{$word}%")
-                                                    ->orWhere('variant', 'like', "%{$word}%")
-                                                    ->orWhere('category', 'like', "%{$word}%");
-                                            });
-                                        }
-                                    })
-                                    ->limit(50)
-                                    ->get()
-                                    ->mapWithKeys(fn (Material $material) => [$material->id => "{$material->display_label} ({$material->code})"])
-                                    ->toArray())
-                                ->getOptionLabelUsing(fn ($value): ?string => Material::find($value)?->display_label)
-                                ->required()
-                                ->columnSpan(2),
-                            Forms\Components\TextInput::make('quantity')->label('Quantità / ore')->numeric()->default(1)->required(),
-                        ])
-                        // La riga manodopera (materiale ORE) non e' un default
-                        // statico: dipende dal tipo intervento, scelto subito
-                        // sopra — vedi syncManodoperaMaterial(), agganciato
-                        // all'afterStateUpdated di intervention_type. Sostituisce
-                        // gli ex campi "Orario arrivo"/"Orario uscita" (rimossi
-                        // da questo form): invece di orari, si segnano le ore
-                        // lavorate come quantita' su quella riga.
-                        ->defaultItems(0)
-                        ->addActionLabel('Aggiungi ricambio')
-                        ->reorderable(false),
-                ]),
+            static::sezioneIntervento(),
+            static::sezioneMacchina(),
+            static::sezioneDescrizione(),
+            static::sezioneRicambi(),
             Forms\Components\Section::make('Firma cliente')
                 ->extraAttributes(['data-tour' => 'service-reports-field-signature'])
                 ->schema([
@@ -951,6 +348,669 @@ class ServiceReportResource extends Resource
                     SignaturePad::make('customer_signature_path')->label(''),
                 ]),
         ]);
+    }
+
+    /**
+     * Il tipo intervento: nella sezione Intervento del rapportino e, macchina
+     * per macchina, nella visita a passi (Pages\RapportiniAPassi).
+     */
+    public static function campoTipoIntervento(): Forms\Components\Select
+    {
+        return Forms\Components\Select::make('intervention_type')
+            ->label('Tipo intervento')
+            ->extraAttributes(['data-tour' => 'service-reports-field-type'])
+            ->options(static::interventionTypeLabels())
+            ->required()
+            // La riga "manodopera" (ore lavorate) non si aggiunge piu'
+            // da sola cambiando questo campo: vedi il toggle
+            // "Manodopera" in "Ricambi/materiali utilizzati" piu' sotto,
+            // scelta esplicita del tecnico invece che automatica.
+            ->live();
+    }
+
+    /**
+     * Cliente, tecnico, tipo, data e stato del rapportino.
+     */
+    public static function sezioneIntervento(): Forms\Components\Section
+    {
+        return Forms\Components\Section::make('Intervento')
+            ->columns(3)
+            ->schema([
+                Forms\Components\TextInput::make('number')
+                    ->label('Numero')
+                    ->disabled()
+                    ->dehydrated(false)
+                    ->visibleOn('edit'),
+                Forms\Components\Select::make('customer_id')
+                    ->label('Cliente')
+                    ->extraAttributes(['data-tour' => 'service-reports-field-customer'])
+                    ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
+                    ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::customerOption($record))
+                    ->searchable(['company_name', 'first_name', 'last_name', 'city'])
+                    ->preload()
+                    ->required()
+                    ->live()
+                    // Prefill arrivando dall'azione "Crea rapportino" su un
+                    // macchinario (MachineUnitResource): vedi anche
+                    // machine_unit_id sotto, stesso query param.
+                    ->default(fn () => request()->query('customer_id'))
+                    // La macchina tracciata sotto e' filtrata per cliente:
+                    // cambiando cliente la selezione fatta in precedenza non
+                    // ha piu' senso. Nemmeno il pagante: quello scritto sul
+                    // rapportino apparteneva al cliente di prima, e su un
+                    // rapportino gia' chiuso e' congelato, quindi da solo
+                    // non se ne andrebbe mai (vedi
+                    // ServiceReport::freezeInvoiceRecipient(), che riscrive
+                    // solo quando il campo e' vuoto). Svuotandolo qui il
+                    // campo torna a mostrare il pagante abituale del cliente
+                    // nuovo, e chi compila lo vede subito invece di
+                    // scoprirlo in fattura. La stessa pulizia e' ripetuta
+                    // sul modello, per le modifiche che non passano da
+                    // questo form.
+                    ->afterStateUpdated(function (Forms\Set $set) {
+                        $set('machine_unit_id', null);
+                        $set('billing_customer_id', null);
+                    })
+                    ->createOptionForm([
+                        Forms\Components\TextInput::make('company_name')->label('Ragione sociale'),
+                        Forms\Components\TextInput::make('first_name')->label('Nome'),
+                        Forms\Components\TextInput::make('last_name')->label('Cognome'),
+                        ...CustomerContactFields::schema(),
+                        ...CustomerFiscalFields::schema(),
+                    ])
+                    ->editOptionForm([
+                        Forms\Components\TextInput::make('company_name')->label('Ragione sociale'),
+                        Forms\Components\TextInput::make('first_name')->label('Nome'),
+                        Forms\Components\TextInput::make('last_name')->label('Cognome'),
+                        ...CustomerContactFields::schema(),
+                        ...CustomerFiscalFields::schema(),
+                    ])
+                    // L'editOptionForm sopra salva il Customer vero passando dal
+                    // meccanismo generico di Filament sul Select, non dalla pagina
+                    // CustomerResource\Pages\EditCustomer — senza questo hook la
+                    // segnalazione "da aggiornare su Eureka" (vedi
+                    // Customer::notifyGestionaleReviewIfLinked()) non scatterebbe mai
+                    // per le modifiche fatte da qui.
+                    ->editOptionAction(fn (Forms\Components\Actions\Action $action) => $action->after(
+                        fn (Forms\Components\Select $component) => $component->getSelectedRecord()
+                            ?->notifyGestionaleReviewIfLinked(array_keys($component->getSelectedRecord()->getChanges()))
+                    )),
+                Forms\Components\Select::make('technician_id')
+                    ->label('Tecnico')
+                    ->relationship('technician', 'name')
+                    ->default(fn () => auth()->id())
+                    ->searchable()
+                    ->preload()
+                    ->required(),
+                static::campoTipoIntervento(),
+                Forms\Components\DatePicker::make('intervention_date')
+                    ->label('Data intervento')
+                    ->default(now())
+                    ->required(),
+                Forms\Components\Select::make('status')
+                    ->label('Stato')
+                    // "In gestionale" e' scegliibile a mano dal 03/09/2026:
+                    // e' un'etichetta amministrativa, non una serratura.
+                    // A bloccare il rapportino e' il fatto che il documento
+                    // esista su Eureka (ServiceReport::isSuEureka()), non
+                    // questa tendina.
+                    ->options(fn () => self::statusLabels())
+                    ->default('bozza')
+                    ->required(),
+            ]);
+    }
+
+    /**
+     * Macchina, impianti e vie lavate, avvisi, chi paga.
+     *
+     * Anche ogni passo macchina della visita a passi (Pages\RapportiniAPassi) usa
+     * questa sezione, Descrizione e Ricambi: leggono solo campi propri piu'
+     * customer_id e intervention_type, che il passo ripete al suo interno.
+     */
+    public static function sezioneMacchina(bool $macchinaDellaVisita = false): Forms\Components\Section
+    {
+        return Forms\Components\Section::make('Macchina')
+            ->columns(3)
+            ->schema([
+                Forms\Components\Select::make('machine_unit_id')
+                    ->label('Macchina (matricola tracciata)')
+                    // Nella visita a passi la macchina e' quella del passo.
+                    ->disabled($macchinaDellaVisita)
+                    ->relationship(
+                        'machineUnit',
+                        'serial_number',
+                        // Se il cliente e' gia' selezionato filtriamo per lui, ma la
+                        // matricola si puo' anche scegliere per prima (vedi
+                        // afterStateUpdated sotto, che poi compila il cliente).
+                        modifyQueryUsing: fn (Builder $query, Get $get) => $get('customer_id')
+                            ? $query->where('current_customer_id', $get('customer_id'))
+                            : $query,
+                    )
+                    ->getOptionLabelFromRecordUsing(fn ($record) => $record->display_name.' — '.$record->serial_number
+                        .(self::isMachineUnitLinkedToEureka($record) ? ' — ✓ Eureka' : ''))
+                    ->searchable()
+                    ->preload()
+                    ->live()
+                    // Prefill arrivando dall'azione "Crea rapportino" su un
+                    // macchinario (MachineUnitResource).
+                    ->default(fn () => request()->query('machine_unit_id'))
+                    // Scegliere qui la matricola tracciata compila da sola modello
+                    // e matricola sotto: prima erano tre campi indipendenti da
+                    // riempire a mano (facile sbagliare/dimenticarne uno). Compila
+                    // anche il cliente, cosi' si puo' partire dalla matricola senza
+                    // doverlo selezionare prima a mano.
+                    ->afterStateUpdated(function (Forms\Set $set, ?string $state) {
+                        if ($state === null) {
+                            return;
+                        }
+
+                        $machineUnit = MachineUnit::find($state);
+                        $set('machine_product_id', $machineUnit?->product_id);
+                        // L'articolo di gestionale della matricola: e' quello
+                        // che finisce in sl_articolo all'invio a Eureka
+                        // quando la macchina non e' a listino.
+                        $set('machine_material_id', $machineUnit?->material_id);
+                        $set('machine_serial_number', $machineUnit?->serial_number);
+
+                        if ($machineUnit?->current_customer_id) {
+                            $set('customer_id', $machineUnit->current_customer_id);
+                        }
+                    })
+                    ->helperText('Scegliendo la matricola si compilano da soli cliente, modello e matricola qui sotto.')
+                    // Se la matricola non e' ancora tracciata in CRM, prima
+                    // bisognava uscire da qui e crearla da Macchinari — stesso
+                    // "+" gia' presente sul cliente. moveTo() (non un
+                    // update diretto di current_customer_id) per rispettare lo
+                    // stesso invariante di MachineUnitResource: tiene lo storico
+                    // posizionamenti coerente anche per una macchina creata al volo.
+                    ->createOptionForm([
+                        Forms\Components\TextInput::make('serial_number')
+                            ->label('Matricola')
+                            ->helperText('Se non la conosci lascia vuoto o scrivi "'.self::MACHINE_UNIT_NO_SERIAL_PLACEHOLDER.'": ne viene generata una segnaposto univoca in automatico.')
+                            ->maxLength(255),
+                        Forms\Components\Select::make('product_id')
+                            ->label('Modello (da catalogo)')
+                            ->relationship('product', 'name', modifyQueryUsing: fn ($query) => $query->where('type', Product::TYPE_MACHINE))
+                            ->searchable()
+                            ->preload(),
+                        Forms\Components\Select::make('material_id')
+                            ->label('Articolo gestionale (Eureka)')
+                            ->relationship('material', 'code')
+                            ->getOptionLabelFromRecordUsing(fn (Material $record) => $record->display_label.' — '.$record->code)
+                            ->searchable(['code', 'type', 'variant'])
+                            ->helperText('Per le macchine non a listino: e\' il codice con cui Eureka la conosce.'),
+                        Forms\Components\TextInput::make('model_name')
+                            ->label('Modello (testo libero)')
+                            ->helperText('Solo se non e\' a catalogo ne\' a gestionale.')
+                            ->maxLength(255),
+                    ])
+                    ->createOptionUsing(function (array $data, Get $get) {
+                        $machineUnit = MachineUnit::create([
+                            'source' => MachineUnit::SOURCE_MANUALE,
+                            'serial_number' => self::resolveUniqueMachineSerialNumber($data['serial_number'] ?? null),
+                            'product_id' => $data['product_id'] ?? null,
+                            'material_id' => $data['material_id'] ?? null,
+                            'model_name' => $data['model_name'] ?? null,
+                        ]);
+
+                        $machineUnit->moveTo($get('customer_id') ? Customer::find($get('customer_id')) : null);
+
+                        return $machineUnit->id;
+                    }),
+                // Una sanificazione spesso copre piu' impianti dello stesso
+                // cliente in una sola visita, ognuno con le sue vie lavate
+                // (es. Birra 2 vie, Vino 5 vie): machine_unit_id sopra resta
+                // per singola macchina/matricola. Una riga qui = un piano
+                // esplicitamente coperto da questa visita, con le vie
+                // lavate quella volta — vince sulla regola implicita di
+                // ServiceReport::syncMaintenanceSchedule() ("tutti i piani
+                // attivi del cliente"/quello di machine_unit_id); nessuna
+                // riga = comportamento di sempre. Non ->relationship():
+                // Filament non porta dati extra (lines_washed) con un
+                // binding automatico su una BelongsToMany, il collegamento
+                // piani + scrittura vie va fatto a mano (vedi
+                // Pages\RapportiniAPassi::salva(), che passa
+                // da LavaggioFields::syncLavaggioImpianti()).
+                Forms\Components\Repeater::make('lavaggio_impianti')
+                    ->label('Impianti e vie lavate')
+                    ->schema([
+                        Forms\Components\Select::make('maintenance_schedule_id')
+                            ->label('Impianto')
+                            ->options(function (Get $get) {
+                                $customerId = $get('../../customer_id');
+
+                                if (! $customerId) {
+                                    return [];
+                                }
+
+                                return MaintenanceSchedule::query()
+                                    ->where('customer_id', $customerId)
+                                    ->where('type', MaintenanceSchedule::TYPE_LAVAGGIO)
+                                    ->where('status', MaintenanceSchedule::STATUS_ATTIVO)
+                                    ->get()
+                                    ->mapWithKeys(fn (MaintenanceSchedule $record) => [$record->id => MaintenanceScheduleResource::impiantoHero($record)]);
+                            })
+                            ->required()
+                            ->searchable()
+                            ->live()
+                            ->afterStateUpdated(function (Forms\Set $set, Get $get, ?string $state) {
+                                if (! $state) {
+                                    return;
+                                }
+
+                                $schedule = MaintenanceSchedule::find($state);
+                                $set('lines_washed', $schedule?->lines_count);
+
+                                // Scrivere le vie con $set NON risveglia
+                                // l'afterStateUpdated del repeater: quello
+                                // scatta solo se le vie le digiti tu e poi
+                                // esci dal campo. Scegliendo l'impianto e
+                                // fermandosi li', le righe LAV2/ULTVIA non
+                                // arrivavano mai e il rapportino restava
+                                // senza voci da fatturare (segnalato dal
+                                // vivo il 03/09/2026). Si chiama quindi da
+                                // qui, risalendo di due livelli fino al
+                                // form: '../' e' la riga del repeater,
+                                // '../../' il modulo.
+                                LavaggioFields::syncVieDaImpianti($set, $get, '../../');
+                            }),
+                        Forms\Components\TextInput::make('lines_washed')
+                            ->label('Vie lavate')
+                            ->numeric()
+                            ->minValue(0)
+                            // live() perche' il totale vie di questo
+                            // repeater accende da solo il lavaggio e le
+                            // sue righe tariffa piu' in basso: senza,
+                            // l'afterStateUpdated del repeater (che
+                            // riceve il rimbalzo dai campi figli, vedi
+                            // HasState::callAfterStateUpdated) scatterebbe
+                            // solo aggiungendo o togliendo una riga, non
+                            // digitando le vie. onBlur: si aggiorna
+                            // quando si lascia il campo, non a ogni
+                            // cifra battuta ("15" passerebbe da "1").
+                            ->live(onBlur: true),
+                    ])
+                    ->columns(2)
+                    ->visible(fn (Get $get) => $get('intervention_type') === ServiceReport::TYPE_SANIFICAZIONE)
+                    // Le vie si scrivono qui, in cima al rapportino: da
+                    // qui discendono il toggle "Lavaggio eseguito" e le
+                    // righe LAV2/ULTERIORE VIA piu' in basso, invece di
+                    // farle ridigitare (e di lasciare senza voci da
+                    // fatturare chi si ferma a questo riquadro).
+                    ->afterStateUpdated(fn (Forms\Set $set, Get $get) => LavaggioFields::syncVieDaImpianti($set, $get))
+                    ->helperText('Lascia vuoto (nessuna riga) per applicarla a tutti i piani lavaggio attivi del cliente, senza vie specifiche per impianto (comportamento di sempre). Aggiungi una riga per ogni impianto coperto da questa visita: le vie totali accendono da sole il lavaggio e le sue voci tra i ricambi.')
+                    ->addActionLabel('Aggiungi impianto')
+                    ->defaultItems(0)
+                    ->columnSpanFull(),
+                // Il collegamento Eureka manca spesso solo per il rapportino
+                // (vedi ServiceReport::gestionaleValidationErrors()), ma finora
+                // si scopriva solo al momento dell'invio, a rapportino gia'
+                // compilato/firmato. Non blocca la compilazione (il tecnico deve
+                // poter comunque lavorare sul posto): segnala solo, cosi' il
+                // problema si vede subito invece che a fine giornata.
+                Forms\Components\Placeholder::make('machine_unit_eureka_warning')
+                    ->label('')
+                    ->columnSpanFull()
+                    ->hidden(fn (Get $get) => blank($get('machine_unit_id'))
+                        || self::isMachineUnitLinkedToEureka(MachineUnit::find($get('machine_unit_id'))))
+                    ->content(new HtmlString(
+                        '<div class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">'
+                            .'⚠️ Questo modello non è ancora collegato a Eureka: il rapportino non potrà essere inviato al gestionale finché il back-office non lo collega da Macchinari.'
+                            .'</div>'
+                    )),
+                // Il collegamento rapportino->piano di manutenzione e'
+                // inferito da customer_id+machine_unit_id (nessuna FK
+                // esplicita, vedi ServiceReport::syncMaintenanceSchedule()):
+                // scegliendo la macchina sbagliata su un cliente con piu'
+                // impianti, l'intervento riallinea in silenzio il piano
+                // sbagliato (o nessuno). Avvisa solo per manutenzione
+                // ordinaria: e' l'unico tipo che aggiorna un piano.
+                Forms\Components\Placeholder::make('machine_unit_schedule_warning')
+                    ->label('')
+                    ->columnSpanFull()
+                    ->hidden(fn (Get $get) => blank($get('machine_unit_id'))
+                        || blank($get('customer_id'))
+                        || $get('intervention_type') !== ServiceReport::TYPE_MANUTENZIONE_ORDINARIA
+                        || self::activeMaintenanceScheduleCount($get) === 1)
+                    ->content(fn (Get $get) => new HtmlString(
+                        '<div class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">'
+                            .(self::activeMaintenanceScheduleCount($get) === 0
+                                ? '⚠️ Nessun piano di manutenzione attivo per questa macchina: chiudendo questo rapportino nessuna scadenza verrà aggiornata automaticamente.'
+                                : '⚠️ Questa macchina ha più piani di manutenzione attivi collegati: verranno aggiornati tutti. Controlla che non sia un doppione.')
+                            .'</div>'
+                    )),
+                /*
+                 | Chi paga QUESTO intervento.
+                 |
+                 | Di default e' il pagante abituale — quello della
+                 | macchina, o quello del cliente — e nella stragrande
+                 | maggioranza dei casi non si tocca.
+                 |
+                 | Ma serve poterlo cambiare sul singolo rapportino: se il
+                 | guasto e' colpa del cliente, quell'intervento si fattura
+                 | a lui e non al torrefattore che paga il resto. Prima
+                 | questo campo era un Placeholder in sola lettura e
+                 | l'unica via era cambiare il pagante del cliente, cioe'
+                 | spostare anche tutto il resto.
+                 |
+                 | Quello che si sceglie qui resta scritto sul documento e
+                 | non cambia piu' (ServiceReport::freezeInvoiceRecipient()).
+                 */
+                Forms\Components\Select::make('billing_customer_id')
+                    ->label('Fatturare a')
+                    ->helperText(fn (Get $get) => filled($get('billing_customer_id'))
+                        ? 'Scelta per questo rapportino. Svuota il campo per tornare al pagante abituale.'
+                        : 'Vuoto = pagante abituale: '.(DisplayName::titleCase(self::resolvePayer($get)?->full_name) ?? '—'))
+                    ->placeholder(fn (Get $get) => DisplayName::titleCase(self::resolvePayer($get)?->full_name) ?? '—')
+                    ->relationship('billingCustomer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
+                    ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::customerOption($record))
+                    ->searchable(['company_name', 'first_name', 'last_name', 'city'])
+                    ->preload()
+                    ->live()
+                    // Scorciatoia per il caso che ha fatto nascere il
+                    // campo: il guasto e' colpa del cliente, si fattura a
+                    // lui. Come hintAction accanto all'etichetta, non come
+                    // icona dentro il campo: si vede, e si capisce che fa.
+                    ->hintAction(
+                        Forms\Components\Actions\Action::make('fattura_al_cliente')
+                            ->label('Fattura al cliente')
+                            ->icon('heroicon-m-user')
+                            ->visible(fn (Get $get) => filled($get('customer_id'))
+                                && $get('billing_customer_id') !== $get('customer_id'))
+                            ->action(fn (Forms\Set $set, Get $get) => $set('billing_customer_id', $get('customer_id')))
+                    ),
+                // Non piu' una scelta manuale: il modello si ricava dalla
+                // macchina/matricola selezionata sopra (afterStateUpdated
+                // su machine_unit_id valorizza gia' l'Hidden sotto), cosi'
+                // non puo' piu' disallinearsi da quella. Resta comunque
+                // sempre visibile qui — non e' solo un dettaglio interno.
+                Forms\Components\Placeholder::make('machine_product_display')
+                    ->label('Modello macchina')
+                    ->content(function (Get $get) {
+                        $machineUnit = $get('machine_unit_id') ? MachineUnit::find($get('machine_unit_id')) : null;
+
+                        if ($machineUnit) {
+                            return $machineUnit->display_name;
+                        }
+
+                        // Rapportino senza matricola tracciata collegata (es.
+                        // dato storico pre-esistente, o importato da Eureka
+                        // con il solo articolo): mostra comunque quanto gia'
+                        // salvato, invece di sparire.
+                        $article = $get('machine_product_id')
+                            ? Product::find($get('machine_product_id'))?->name
+                            : ($get('machine_material_id')
+                                ? Material::find($get('machine_material_id'))?->display_label
+                                : null);
+
+                        return $article ?: '— (seleziona la macchina/matricola)';
+                    }),
+                Forms\Components\Hidden::make('machine_product_id'),
+                Forms\Components\Hidden::make('machine_material_id'),
+                // Stesso motivo del modello sopra: la matricola si ricava
+                // dalla macchina tracciata, non si digita piu' a mano.
+                Forms\Components\Placeholder::make('machine_serial_display')
+                    ->label('Matricola')
+                    ->content(fn (Get $get) => $get('machine_serial_number') ?: '— (seleziona la macchina/matricola)'),
+                Forms\Components\Hidden::make('machine_serial_number'),
+            ]);
+    }
+
+    /**
+     * Problema, lavoro svolto, note.
+     */
+    public static function sezioneDescrizione(): Forms\Components\Section
+    {
+        return Forms\Components\Section::make('Descrizione')
+            ->schema([
+                // autosize(): il campo cresce con il testo invece di
+                // restare alto due o tre righe. Su un lavoro svolto lungo
+                // il tecnico vedeva solo le prime righe e doveva scorrere
+                // dentro il riquadro per rileggere quello che aveva
+                // scritto — segnalato dall'ufficio il 02/09/2026.
+                Forms\Components\Textarea::make('problem_description')->label('Problema riscontrato')
+                    ->rows(2)->autosize(),
+                Forms\Components\Textarea::make('work_performed')->label('Lavoro svolto')
+                    ->rows(4)->autosize()->required()
+                    ->extraAttributes(['data-tour' => 'service-reports-field-work']),
+                Forms\Components\Textarea::make('notes')->label('Note')->rows(2)->autosize(),
+            ]);
+    }
+
+    /**
+     * Scorciatoie tariffa (chiamata, manodopera, lavaggio, sanificazione,
+     * manutenzione) e righe materiali.
+     */
+    public static function sezioneRicambi(): Forms\Components\Section
+    {
+        return Forms\Components\Section::make('Ricambi/materiali utilizzati')
+            ->extraAttributes(['data-tour' => 'service-reports-field-materials'])
+            ->schema([
+                // Le 3 Hidden e i 2 Toggle sotto sono tutti "di comodo"
+                // (dehydrated(false), nessuna colonna reale): su un rapportino
+                // gia' salvato devono pero' rispecchiare le righe materiale
+                // gia' presenti (es. arrivando da Eureka, o da un salvataggio
+                // precedente di questi stessi widget), altrimenti riaprendo un
+                // rapportino con CHIORD/LAV2 gia' in elenco i toggle
+                // risulterebbero spenti/vuoti pur essendo la riga li' —
+                // vedi resolveLavaggioShortcutDefaults().
+                Forms\Components\Hidden::make('_chiamata_material_key')
+                    ->dehydrated(false)
+                    ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['chiamata_key']),
+                Forms\Components\Hidden::make('_manodopera_material_key')
+                    ->dehydrated(false)
+                    ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['manodopera_key']),
+                Forms\Components\Hidden::make('_lavaggio_base_material_key')
+                    ->dehydrated(false)
+                    ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['lavaggio_base_key']),
+                Forms\Components\Hidden::make('_lavaggio_ult_material_key')
+                    ->dehydrated(false)
+                    ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['lavaggio_ult_key']),
+                // Impianti acqua: la riga generata e' SANIFICAZIONE, e il
+                // conteggio e' quanti impianti acqua ci sono sul
+                // rapportino — non le vie, che li' non si contano.
+                Forms\Components\Hidden::make('_sanificazione_material_key')
+                    ->dehydrated(false)
+                    ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['sanificazione_key']),
+                Forms\Components\Hidden::make('_manutenzione_material_key')
+                    ->dehydrated(false)
+                    ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['manutenzione_key']),
+                Forms\Components\Hidden::make('_sanificazione_count')
+                    ->dehydrated(false)
+                    ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['sanificazioni_count']),
+                // Scorciatoie che aggiungono/rimuovono righe materiale da sole
+                // (stesso meccanismo per key, dehydrated(false), per entrambe):
+                // "Chiamata" per il ricambio CHIVE/CHIORD (tariffa base
+                // dell'intervento su Eureka: CHIVE per Venezia centro storico
+                // — raggiungibile solo via acqua —, CHIORD altrove; Lido e
+                // Burano hanno gia' un codice piu' specifico CHILI/CHIBU da
+                // aggiungere a mano, quindi qui il match resta volutamente
+                // stretto su "Venezia" esatto), "Lavaggio eseguito" per
+                // LAVAGGIO 2 VIE (tariffa minima agevolata, dovuta anche
+                // lavando una sola via) + ULTERIORE VIA LAVATA per le vie
+                // oltre la seconda.
+                // Quattro colonne: i quattro interruttori stanno su una riga
+                // sola, il campo "Numero vie" compare sotto solo quando serve.
+                Forms\Components\Grid::make(4)
+                    ->schema([
+                        // Il festivo lo dichiara chi compila: non si deduce dalla
+                        // data, perche' un intervento fatto di sabato puo' essere
+                        // fatturato feriale e viceversa.
+                        Forms\Components\Toggle::make('_intervento_festivo')
+                            ->label('Intervento festivo')
+                            ->live()
+                            ->dehydrated(false)
+                            ->helperText('Cambia chiamata e manodopera nelle voci festive, prima di aggiungerle.'),
+                        Forms\Components\Toggle::make('add_chiamata_material')
+                            ->label('Chiamata')
+                            ->live()
+                            ->dehydrated(false)
+                            ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['chiamata_key'] !== null)
+                            ->disabled(fn (Get $get) => blank($get('customer_id')))
+                            ->helperText(fn (Get $get) => self::descrizioneTariffa($get, 'chiamata'))
+                            ->afterStateUpdated(function (bool $state, Forms\Set $set, Get $get) {
+                                $materialsUsed = $get('materialsUsed') ?? [];
+                                $addedKey = $get('_chiamata_material_key');
+
+                                if (! $state) {
+                                    // Rimuove solo la riga aggiunta da questo flag (per key),
+                                    // non un'eventuale riga uguale inserita a mano.
+                                    if ($addedKey && array_key_exists($addedKey, $materialsUsed)) {
+                                        unset($materialsUsed[$addedKey]);
+                                        $set('materialsUsed', $materialsUsed);
+                                    }
+
+                                    $set('_chiamata_material_key', null);
+
+                                    return;
+                                }
+
+                                $customer = Customer::find($get('customer_id'));
+                                // Il codice dipende dal pagante (Martellozzo, Goppion,
+                                // Spigola… hanno il loro listino, vedi config/tariffe.php)
+                                // e solo in mancanza di listino dalla citta'.
+                                $code = TariffeIntervento::per($customer, (bool) $get('_intervento_festivo'))['chiamata'];
+                                $material = $code ? Material::where('code', $code)->first() : null;
+
+                                if (! $material) {
+                                    return;
+                                }
+
+                                $alreadyAdded = collect($materialsUsed)->contains(
+                                    fn (array $item) => ($item['material_id'] ?? null) === $material->id
+                                );
+
+                                if ($alreadyAdded) {
+                                    return;
+                                }
+
+                                $newKey = (string) Str::uuid();
+                                $materialsUsed[$newKey] = [
+                                    'material_id' => $material->id,
+                                    'quantity' => 1,
+                                ];
+
+                                $set('materialsUsed', $materialsUsed);
+                                $set('_chiamata_material_key', $newKey);
+                            }),
+                        Forms\Components\Toggle::make('add_manodopera_material')
+                            ->label('Manodopera')
+                            ->live()
+                            ->dehydrated(false)
+                            ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['manodopera_key'] !== null)
+                            ->helperText(fn (Get $get) => self::descrizioneTariffa($get, 'manodopera'))
+                            ->afterStateUpdated(fn (bool $state, Forms\Set $set, Get $get) => self::syncManodoperaMaterial($state, $set, $get)),
+                        Forms\Components\Toggle::make('_lavaggio_vie_eseguito')
+                            ->label('Lavaggio eseguito')
+                            ->live()
+                            ->dehydrated(false)
+                            ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['lavaggio_base_key'] !== null)
+                            ->helperText('Aggiunge da sola LAVAGGIO 2 VIE (sempre) + ULTERIORE VIA LAVATA per le vie oltre la seconda.')
+                            ->afterStateUpdated(fn (Forms\Set $set, Get $get) => LavaggioFields::syncLavaggioViaMaterials($set, $get)),
+                        // Unico campo della sezione che e' una colonna
+                        // vera (service_reports.lavaggio_vie_count), non
+                        // di comodo come i toggle qui sopra: le righe
+                        // materiali da sole non bastano a ricordarlo,
+                        // perche' 1 via e 2 vie generano lo stesso identico
+                        // LAV2 e la lettura all'indietro tornava sempre 2
+                        // (vedi resolveLavaggioShortcutDefaults()).
+                        // ->dehydratedWhenHidden() perche' quando
+                        // "Lavaggio eseguito" e' spento il campo sparisce,
+                        // e un campo nascosto per default non viene
+                        // salvato: senza, in DB resterebbe il conteggio
+                        // del lavaggio appena tolto.
+                        Forms\Components\TextInput::make('lavaggio_vie_count')
+                            ->label('Numero vie lavate')
+                            ->numeric()
+                            ->minValue(1)
+                            ->live()
+                            ->dehydratedWhenHidden()
+                            ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['vie_count'])
+                            ->visible(fn (Get $get) => (bool) $get('_lavaggio_vie_eseguito'))
+                            ->afterStateUpdated(fn (Forms\Set $set, Get $get) => LavaggioFields::syncLavaggioViaMaterials($set, $get)),
+                        // Interruttore a se' dal 04/09/2026: lavare le vie
+                        // di un impianto bevande e sanificare un impianto
+                        // acqua sono due lavori diversi, con due voci
+                        // diverse, e capita di farne uno solo. Scegliendo
+                        // gli impianti in cima al rapportino si accende da
+                        // solo quello giusto.
+                        Forms\Components\Toggle::make('_sanificazione_eseguita')
+                            ->label('Sanificazione acqua')
+                            ->live()
+                            ->dehydrated(false)
+                            ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['sanificazione_key'] !== null)
+                            ->helperText('Aggiunge SANIFICAZIONE IMPIANTO ACQUA, una per impianto acqua. Gli impianti acqua non si contano a vie.')
+                            ->afterStateUpdated(fn (Forms\Set $set, Get $get) => LavaggioFields::syncLavaggioViaMaterials($set, $get)),
+                        // Manutenzione ordinaria: il codice non e' fisso,
+                        // dipende dal MODELLO della macchina scelta
+                        // (Faema 3 gruppi -> F3, Cimbali 2 -> C2), e dal
+                        // pagante (F3 -> F3GOPPION). Vedi
+                        // TariffeIntervento::manutenzione().
+                        Forms\Components\Toggle::make('add_manutenzione_material')
+                            ->label('Manutenzione ordinaria')
+                            ->live()
+                            ->dehydrated(false)
+                            ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['manutenzione_key'] !== null)
+                            ->helperText(fn (Get $get) => self::descrizioneManutenzione($get))
+                            ->afterStateUpdated(fn (bool $state, Forms\Set $set, Get $get) => self::syncManutenzioneMaterial($state, $set, $get)),
+                    ]),
+                // Materiali (App\Models\Material), non Product: quest'ultimo e'
+                // lo stesso elenco usato per i preventivi, senza filtro —
+                // macchine/ricambi trovati su Eureka finirebbero anche li'.
+                Forms\Components\Repeater::make('materialsUsed')
+                    ->relationship('materialsUsed')
+                    ->label('')
+                    ->columns(3)
+                    ->schema([
+                        Forms\Components\Select::make('material_id')
+                            ->label('Materiale')
+                            ->searchable()
+                            ->getSearchResultsUsing(fn (string $search): array => self::cercaMateriali($search))
+                            ->getOptionLabelUsing(fn ($value): ?string => Material::find($value)?->display_label)
+                            ->required()
+                            ->columnSpan(2),
+                        Forms\Components\TextInput::make('quantity')->label('Quantità / ore')->numeric()->default(1)->required(),
+                    ])
+                    // La riga manodopera (materiale ORE) non e' un default
+                    // statico: dipende dal tipo intervento, scelto subito
+                    // sopra — vedi syncManodoperaMaterial(), agganciato
+                    // all'afterStateUpdated di intervention_type. Sostituisce
+                    // gli ex campi "Orario arrivo"/"Orario uscita" (rimossi
+                    // da questo form): invece di orari, si segnano le ore
+                    // lavorate come quantita' su quella riga.
+                    ->defaultItems(0)
+                    ->addActionLabel('Aggiungi ricambio')
+                    ->reorderable(false),
+            ]);
+    }
+
+    /**
+     * Ricerca materiali per parole (codice, tipo, variante, categoria): la
+     * stessa ovunque si scelgano materiali sul rapportino.
+     *
+     * @return array<string, string>
+     */
+    public static function cercaMateriali(string $search): array
+    {
+        return Material::query()
+            ->where(function (Builder $query) use ($search) {
+                foreach (explode(' ', trim($search)) as $word) {
+                    if ($word === '') {
+                        continue;
+                    }
+
+                    $query->where(function (Builder $query) use ($word) {
+                        $query->where('code', 'like', "%{$word}%")
+                            ->orWhere('type', 'like', "%{$word}%")
+                            ->orWhere('variant', 'like', "%{$word}%")
+                            ->orWhere('category', 'like', "%{$word}%");
+                    });
+                }
+            })
+            ->limit(50)
+            ->get()
+            ->mapWithKeys(fn (Material $material) => [$material->id => "{$material->display_label} ({$material->code})"])
+            ->toArray();
     }
 
     /**
@@ -1022,7 +1082,7 @@ class ServiceReportResource extends Resource
      * esplicito, perche' li' e' piu' probabile un doppione della stessa
      * macchina che una matricola davvero mancante.
      */
-    private static function resolveUniqueMachineSerialNumber(?string $serialNumber): string
+    public static function resolveUniqueMachineSerialNumber(?string $serialNumber): string
     {
         $trimmed = trim((string) $serialNumber);
         $tenantId = Filament::getTenant()?->id;
@@ -1550,6 +1610,7 @@ class ServiceReportResource extends Resource
                     // stesso commento su ViewServiceReport::getHeaderActions().
                     Tables\Actions\EditAction::make()
                         ->visible(fn (ServiceReport $record) => ! $record->isLocked()),
+                    static::modificaVisitaAction(Tables\Actions\Action::make('modifica_visita')),
                     Tables\Actions\DeleteAction::make(),
                     Tables\Actions\RestoreAction::make(),
                     Tables\Actions\ForceDeleteAction::make(),
@@ -2005,11 +2066,13 @@ class ServiceReportResource extends Resource
     {
         return [
             'index' => Pages\ListServiceReports::route('/'),
-            'create' => Pages\CreateServiceReport::route('/create'),
+            // Creare e modificare sono la stessa pagina a passi: un solo
+            // modo di fare un rapportino (22/09/2026).
+            'create' => Pages\RapportiniAPassi::route('/create'),
             // Prima di '/{record}': altrimenti "firma" verrebbe letto come id.
             'firma' => Pages\FirmaRapportini::route('/firma'),
             'view' => Pages\ViewServiceReport::route('/{record}'),
-            'edit' => Pages\EditServiceReport::route('/{record}/edit'),
+            'edit' => Pages\RapportiniAPassi::route('/{record}/edit'),
         ];
     }
 
@@ -2061,6 +2124,96 @@ class ServiceReportResource extends Resource
                     ->push($record)
                     ->unique('id')
             ));
+    }
+
+    /**
+     * "Dividi per macchina": un rapportino fatto per due macchine diventa
+     * due, con la stessa firma (vedi DividiPerMacchina). Si sceglie l'altra
+     * macchina e quanto di ogni riga passa al nuovo; di una riga da 2 o piu'
+     * la proposta e' la meta' (MANUTENZIONE X20 x2 -> x1 e x1).
+     */
+    public static function dividiPerMacchinaAction(MountableAction $action): MountableAction
+    {
+        return $action
+            ->label('Dividi per macchina')
+            ->icon('heroicon-o-scissors')
+            ->color('gray')
+            ->visible(fn (ServiceReport $record) => ! $record->isLocked()
+                && (auth()->user()?->can('update', $record) ?? false))
+            ->modalHeading(fn (ServiceReport $record) => "Dividi {$record->number} per macchina")
+            ->modalDescription('Nasce un secondo rapportino per l\'altra macchina, con la stessa firma. Qui scegli cosa passa al nuovo.')
+            ->modalSubmitActionLabel('Dividi')
+            ->form(fn (ServiceReport $record) => [
+                Forms\Components\Select::make('machine_unit_id')
+                    ->label('Altra macchina')
+                    ->options(fn () => MachineUnit::query()
+                        ->where('current_customer_id', $record->customer_id)
+                        ->when($record->machine_unit_id, fn (Builder $q) => $q->whereKeyNot($record->machine_unit_id))
+                        ->get()
+                        ->mapWithKeys(fn (MachineUnit $m) => [$m->id => Pages\RapportiniAPassi::nomeMacchina($m)]))
+                    ->required(),
+                Forms\Components\Textarea::make('lavoro_originale')
+                    ->label('Lavoro svolto su '.($record->machineUnit ? Pages\RapportiniAPassi::nomeMacchina($record->machineUnit) : 'questo rapportino'))
+                    ->default($record->work_performed)
+                    ->autosize()
+                    ->required(),
+                Forms\Components\Textarea::make('lavoro_nuovo')
+                    ->label('Lavoro svolto sull\'altra macchina')
+                    ->default($record->work_performed)
+                    ->autosize()
+                    ->required(),
+                Forms\Components\Fieldset::make('Cosa passa al nuovo rapportino')
+                    ->columns(1)
+                    ->visible($record->materialsUsed()->exists())
+                    ->schema($record->materialsUsed()->with('material')->get()
+                        ->map(fn ($riga) => Forms\Components\TextInput::make("righe.{$riga->id}")
+                            ->label(($riga->material?->display_label ?? 'Riga').' — su '.str_replace('.', ',', (string) (float) $riga->quantity))
+                            ->numeric()
+                            ->minValue(0)
+                            ->maxValue((float) $riga->quantity)
+                            ->default(DividiPerMacchina::proposta((float) $riga->quantity)))
+                        ->all()),
+            ])
+            ->action(function (ServiceReport $record, array $data, $livewire) {
+                $nuovo = DividiPerMacchina::esegui(
+                    $record,
+                    MachineUnit::findOrFail($data['machine_unit_id']),
+                    $data['righe'] ?? [],
+                    lavoroNuovo: $data['lavoro_nuovo'],
+                    lavoroOriginale: $data['lavoro_originale'],
+                );
+
+                Notification::make()
+                    ->success()
+                    ->title("Diviso: {$record->number} e {$nuovo->number}")
+                    ->body('Il nuovo rapportino ha la stessa firma. Per correggerli insieme: "Modifica visita".')
+                    ->actions([
+                        \Filament\Notifications\Actions\Action::make('apri')
+                            ->label("Apri {$nuovo->number}")
+                            ->url(static::getUrl('view', ['record' => $nuovo])),
+                    ])
+                    ->send();
+
+                $livewire->redirect(static::getUrl('view', ['record' => $record]));
+            });
+    }
+
+    /**
+     * "Modifica visita": tutti i rapportini della stessa visita insieme,
+     * un passo ciascuno. "Modifica" resta per il rapportino da solo.
+     * Compare solo se nella visita c'e' almeno un altro rapportino.
+     */
+    public static function modificaVisitaAction(MountableAction $action): MountableAction
+    {
+        return $action
+            ->label('Modifica visita')
+            ->icon('heroicon-o-squares-2x2')
+            ->color('gray')
+            ->visible(fn (ServiceReport $record) => filled($record->visita_id)
+                && ! $record->isLocked()
+                && ServiceReport::query()->where('visita_id', $record->visita_id)->whereKeyNot($record->getKey())->exists()
+                && (auth()->user()?->can('update', $record) ?? false))
+            ->url(fn (ServiceReport $record) => static::getUrl('edit', ['record' => $record, 'tutta_la_visita' => 1]));
     }
 
     /**

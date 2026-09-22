@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Filament\Resources\ServiceReportResource\Pages\CreateServiceReport;
 use App\Filament\Resources\ServiceReportResource\Pages\FirmaRapportini;
 use App\Models\Customer;
 use App\Models\ServiceReport;
@@ -13,6 +12,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Tests\Concerns\AssignsPermissionRoles;
+use Tests\Concerns\CompilaRapportini;
 use Tests\TestCase;
 
 /**
@@ -21,7 +21,7 @@ use Tests\TestCase;
  */
 class FirmaRapportiniInBloccoTest extends TestCase
 {
-    use AssignsPermissionRoles, RefreshDatabase;
+    use AssignsPermissionRoles, CompilaRapportini, RefreshDatabase;
 
     /** PNG 1x1 valido. */
     private const FIRMA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
@@ -109,34 +109,38 @@ class FirmaRapportiniInBloccoTest extends TestCase
             ->assertSee($nostro->number);
     }
 
-    public function test_salva_e_nuovo_tiene_il_cliente_e_salva_e_fai_firmare_porta_alla_firma_della_visita(): void
+    /**
+     * Il cliente non c'e' a fine lavoro: il rapportino a passi si salva
+     * senza firma, e "Fai firmare" poi propone tutti quelli della visita.
+     */
+    public function test_senza_firma_si_salva_e_fai_firmare_propone_tutta_la_visita(): void
     {
-        $pagina = Livewire::test(CreateServiceReport::class);
-        $pagina->fillForm([
+        $prima = \App\Models\MachineUnit::create(['tenant_id' => $this->tenant->id, 'current_customer_id' => $this->cliente->id, 'serial_number' => 'SN-1', 'model_name' => 'E71']);
+        $seconda = \App\Models\MachineUnit::create(['tenant_id' => $this->tenant->id, 'current_customer_id' => $this->cliente->id, 'serial_number' => 'SN-2', 'model_name' => 'E71']);
+
+        $pagina = $this->nuovoRapportino([
             'customer_id' => $this->cliente->id,
             'technician_id' => $this->tecnico->id,
-            'intervention_type' => ServiceReport::TYPE_RIPARAZIONE,
             'intervention_date' => today()->toDateString(),
+            'machine_unit_id' => $prima->id,
+            'intervention_type' => ServiceReport::TYPE_RIPARAZIONE,
             'work_performed' => 'Prima macchina',
         ]);
-        $pagina->call('createAnother');
-        $pagina->assertHasNoFormErrors();
-
-        // Il rapportino successivo si comincia dall'alto, non dai pulsanti in fondo.
-        $this->assertStringContainsString('window.scrollTo', implode(' ', array_column($pagina->effects['xjs'] ?? [], 'expression')));
-
-        // Il secondo rapportino riparte dallo stesso cliente.
-        $this->assertSame($this->cliente->id, $pagina->get('data.customer_id'));
-        $this->assertSame(ServiceReport::TYPE_RIPARAZIONE, $pagina->get('data.intervention_type'));
-
-        $pagina->fillForm(['work_performed' => 'Seconda macchina']);
-        $pagina->callAction('createAndSign');
-        $pagina->assertHasNoFormErrors();
+        $this->compilaRapportino($pagina, [
+            'machine_unit_id' => $seconda->id,
+            'intervention_type' => ServiceReport::TYPE_RIPARAZIONE,
+            'work_performed' => 'Seconda macchina',
+        ]);
+        $pagina->call('salva')->assertHasNoFormErrors();
 
         $rapportini = ServiceReport::orderBy('number')->get();
         $this->assertCount(2, $rapportini);
+        $this->assertTrue($rapportini->every(fn (ServiceReport $r) => $r->customer_signature_path === null));
+        $this->assertSame($rapportini[0]->visita_id, $rapportini[1]->visita_id);
 
-        $pagina->assertRedirect(FirmaRapportini::urlPer($rapportini));
+        Livewire::withQueryParams(['cliente' => $this->cliente->id])
+            ->test(FirmaRapportini::class)
+            ->assertSet('data.rapportini', fn ($scelti) => collect($scelti)->sort()->values()->all() === $rapportini->pluck('id')->sort()->values()->all());
     }
 
     public function test_la_firma_dal_modulo_segna_la_data_della_firma(): void

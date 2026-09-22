@@ -2,8 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Filament\Resources\ServiceReportResource\Pages\CreateServiceReport;
-use App\Filament\Resources\ServiceReportResource\Pages\EditServiceReport;
 use App\Filament\Resources\ServiceReportResource\Pages\ListServiceReports;
 use App\Mail\ServiceReportMail;
 use App\Models\Customer;
@@ -23,11 +21,12 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Tests\Concerns\AssignsPermissionRoles;
+use Tests\Concerns\CompilaRapportini;
 use Tests\TestCase;
 
 class ServiceReportTest extends TestCase
 {
-    use AssignsPermissionRoles, RefreshDatabase;
+    use AssignsPermissionRoles, CompilaRapportini, RefreshDatabase;
 
     /**
      * Il giro completo, con la divisione dei ruoli decisa il 04/09/2026: il
@@ -66,9 +65,8 @@ class ServiceReportTest extends TestCase
         $this->actingAs($tech);
         Filament::setTenant($tenant);
 
-        Livewire::test(EditServiceReport::class, ['record' => $report->getRouteKey()])
-            ->fillForm(['customer_signature_path' => $tinyPng, 'status' => 'firmato'])
-            ->call('save')
+        $this->modificaRapportino($report, ['customer_signature_name' => 'MARIO ROSSI', 'customer_signature_path' => $tinyPng, 'status' => 'firmato'])
+            ->call('salva')
             ->assertHasNoFormErrors();
 
         $report->refresh();
@@ -215,13 +213,12 @@ class ServiceReportTest extends TestCase
         $this->actingAs($tech);
         Filament::setTenant($tenant);
 
-        Livewire::test(EditServiceReport::class, ['record' => $report->getRouteKey()])
-            ->fillForm([
-                'materialsUsed' => [
-                    ['material_id' => $material->id, 'quantity' => 3],
-                ],
-            ])
-            ->call('save')
+        $this->modificaRapportino($report, [
+            'materialsUsed' => [
+                ['material_id' => $material->id, 'quantity' => 3],
+            ],
+        ])
+            ->call('salva')
             ->assertHasNoFormErrors();
 
         $report->refresh();
@@ -258,18 +255,17 @@ class ServiceReportTest extends TestCase
             'work_performed' => '5 vie + apertura',
             'notes' => 'Filtro sostituito',
         ])
-            ->test(CreateServiceReport::class)
-            ->assertFormSet(function (array $state) use ($customer, $machine): array {
-                return [
-                    'customer_id' => $customer->id,
-                    'machine_unit_id' => $machine->id,
-                    'intervention_date' => fn ($value) => str_starts_with((string) $value, '2026-08-05'),
-                    'intervention_type' => ServiceReport::TYPE_MANUTENZIONE_ORDINARIA,
-                    'problem_description' => 'Lavaggio impianto',
-                    'work_performed' => '5 vie + apertura',
-                    'notes' => 'Filtro sostituito',
-                ];
-            });
+            ->test(\App\Filament\Resources\ServiceReportResource\Pages\RapportiniAPassi::class)
+            ->assertSet('data.customer_id', $customer->id)
+            ->assertSet('data.macchine', [$machine->id])
+            ->assertSet('data.intervention_date', fn ($data) => str_starts_with((string) $data, '2026-08-05'))
+            // Con la macchina gia' nota si parte dal suo passo.
+            ->assertSet('passoIniziale', 2)
+            ->assertSet("data.lavori.{$machine->id}.machine_unit_id", $machine->id)
+            ->assertSet("data.lavori.{$machine->id}.intervention_type", ServiceReport::TYPE_MANUTENZIONE_ORDINARIA)
+            ->assertSet("data.lavori.{$machine->id}.problem_description", 'Lavaggio impianto')
+            ->assertSet("data.lavori.{$machine->id}.work_performed", '5 vie + apertura')
+            ->assertSet("data.lavori.{$machine->id}.notes", 'Filtro sostituito');
     }
 
     /**
@@ -307,20 +303,19 @@ class ServiceReportTest extends TestCase
         $this->actingAs($tech);
         Filament::setTenant($tenant);
 
-        Livewire::test(CreateServiceReport::class)
-            ->fillForm([
-                'customer_id' => $customer->id,
-                'technician_id' => $tech->id,
-                'intervention_type' => ServiceReport::TYPE_SANIFICAZIONE,
-                'intervention_date' => '2026-08-20',
-                'problem_description' => 'Lavaggio impianto',
-                'work_performed' => 'Lavaggio impianto',
-                'lavaggio_impianti' => [
-                    ['maintenance_schedule_id' => $birra->id, 'lines_washed' => 2],
-                    ['maintenance_schedule_id' => $vino->id, 'lines_washed' => 3],
-                ],
-            ])
-            ->call('create')
+        $this->nuovoRapportino([
+            'customer_id' => $customer->id,
+            'technician_id' => $tech->id,
+            'intervention_type' => ServiceReport::TYPE_SANIFICAZIONE,
+            'intervention_date' => '2026-08-20',
+            'problem_description' => 'Lavaggio impianto',
+            'work_performed' => 'Lavaggio impianto',
+            'lavaggio_impianti' => [
+                ['maintenance_schedule_id' => $birra->id, 'lines_washed' => 2],
+                ['maintenance_schedule_id' => $vino->id, 'lines_washed' => 3],
+            ],
+        ])
+            ->call('salva')
             ->assertHasNoFormErrors();
 
         $report = ServiceReport::where('customer_id', $customer->id)->latest()->first();
@@ -367,33 +362,32 @@ class ServiceReportTest extends TestCase
         $this->actingAs($tech);
         Filament::setTenant($tenant);
 
-        $livewire = Livewire::test(CreateServiceReport::class)
-            ->fillForm([
-                'customer_id' => $customer->id,
-                'technician_id' => $tech->id,
-                'intervention_type' => ServiceReport::TYPE_SANIFICAZIONE,
-                'intervention_date' => now(),
-                'work_performed' => 'Lavaggio impianti birra e vino',
-            ])
+        $livewire = $this->nuovoRapportino([
+            'customer_id' => $customer->id,
+            'technician_id' => $tech->id,
+            'intervention_type' => ServiceReport::TYPE_SANIFICAZIONE,
+            'intervention_date' => now(),
+            'work_performed' => 'Lavaggio impianti birra e vino',
+        ]);
+        $passo = $this->passo($livewire);
+        $livewire
             // Le righe si idratano con fillForm() (equivale ad averle gia'
             // aggiunte), poi le vie si scrivono una alla volta sul path
             // annidato del singolo campo: e' esattamente quello che manda il
             // browser quando il tecnico digita dentro una riga, e cosi' si
             // verifica che il rimbalzo dal campo figlio al repeater ci sia
             // davvero (con ->set() sull'intero array non si vedrebbe).
-            ->fillForm([
-                'lavaggio_impianti' => [
-                    'riga-birra' => ['maintenance_schedule_id' => $birra->id, 'lines_washed' => null],
-                    'riga-vino' => ['maintenance_schedule_id' => $vino->id, 'lines_washed' => null],
-                ],
+            ->set("{$passo}.lavaggio_impianti", [
+                'riga-birra' => ['maintenance_schedule_id' => $birra->id, 'lines_washed' => null],
+                'riga-vino' => ['maintenance_schedule_id' => $vino->id, 'lines_washed' => null],
             ])
-            ->set('data.lavaggio_impianti.riga-birra.lines_washed', 2)
-            ->set('data.lavaggio_impianti.riga-vino.lines_washed', 3);
+            ->set("{$passo}.lavaggio_impianti.riga-birra.lines_washed", 2)
+            ->set("{$passo}.lavaggio_impianti.riga-vino.lines_washed", 3);
 
-        $this->assertTrue((bool) $livewire->get('data._lavaggio_vie_eseguito'));
-        $this->assertSame(5, (int) $livewire->get('data.lavaggio_vie_count'));
+        $this->assertTrue((bool) $livewire->get("{$passo}._lavaggio_vie_eseguito"));
+        $this->assertSame(5, (int) $livewire->get("{$passo}.lavaggio_vie_count"));
 
-        $materialsUsed = collect($livewire->get('data.materialsUsed'));
+        $materialsUsed = collect($livewire->get("{$passo}.materialsUsed"));
         $this->assertCount(2, $materialsUsed);
         $this->assertSame(1, (int) $materialsUsed->firstWhere('material_id', $lav2->id)['quantity']);
         $this->assertSame(3, (int) $materialsUsed->firstWhere('material_id', $ultVia->id)['quantity']);
@@ -420,26 +414,26 @@ class ServiceReportTest extends TestCase
         $this->actingAs($tech);
         Filament::setTenant($tenant);
 
-        $livewire = Livewire::test(CreateServiceReport::class)
-            ->fillForm([
-                'customer_id' => $customer->id,
-                'technician_id' => $tech->id,
-                'intervention_type' => ServiceReport::TYPE_MANUTENZIONE_ORDINARIA,
-                'intervention_date' => now(),
-                'work_performed' => 'Lavaggio impianto 4 vie',
-            ])
-            ->set('data._lavaggio_vie_eseguito', true)
-            ->set('data.lavaggio_vie_count', 4);
+        $livewire = $this->nuovoRapportino([
+            'customer_id' => $customer->id,
+            'technician_id' => $tech->id,
+            'intervention_type' => ServiceReport::TYPE_MANUTENZIONE_ORDINARIA,
+            'intervention_date' => now(),
+            'work_performed' => 'Lavaggio impianto 4 vie',
+            '_lavaggio_vie_eseguito' => true,
+            'lavaggio_vie_count' => 4,
+        ]);
+        $passo = $this->passo($livewire);
 
-        $materialsUsed = collect($livewire->get('data.materialsUsed'));
+        $materialsUsed = collect($livewire->get("{$passo}.materialsUsed"));
 
         $this->assertCount(2, $materialsUsed);
         $this->assertSame(1, (int) $materialsUsed->firstWhere('material_id', $lav2->id)['quantity']);
         $this->assertSame(2, (int) $materialsUsed->firstWhere('material_id', $ultVia->id)['quantity']);
 
         // Riducendo a 2 vie, la riga "ulteriore via" deve sparire da sola.
-        $livewire->set('data.lavaggio_vie_count', 2);
-        $materialsUsed = collect($livewire->get('data.materialsUsed'));
+        $livewire->set("{$passo}.lavaggio_vie_count", 2);
+        $materialsUsed = collect($livewire->get("{$passo}.materialsUsed"));
         $this->assertCount(1, $materialsUsed);
         $this->assertSame(1, (int) $materialsUsed->firstWhere('material_id', $lav2->id)['quantity']);
     }
@@ -467,17 +461,16 @@ class ServiceReportTest extends TestCase
         $this->actingAs($tech);
         Filament::setTenant($tenant);
 
-        Livewire::test(CreateServiceReport::class)
-            ->fillForm([
-                'customer_id' => $customer->id,
-                'technician_id' => $tech->id,
-                'intervention_type' => ServiceReport::TYPE_MANUTENZIONE_ORDINARIA,
-                'intervention_date' => now(),
-                'work_performed' => 'Lavaggio impianto 1 via',
-            ])
-            ->set('data._lavaggio_vie_eseguito', true)
-            ->set('data.lavaggio_vie_count', 1)
-            ->call('create')
+        $this->nuovoRapportino([
+            'customer_id' => $customer->id,
+            'technician_id' => $tech->id,
+            'intervention_type' => ServiceReport::TYPE_MANUTENZIONE_ORDINARIA,
+            'intervention_date' => now(),
+            'work_performed' => 'Lavaggio impianto 1 via',
+            '_lavaggio_vie_eseguito' => true,
+            'lavaggio_vie_count' => 1,
+        ])
+            ->call('salva')
             ->assertHasNoFormErrors();
 
         $report = ServiceReport::where('customer_id', $customer->id)->latest()->first();
@@ -490,11 +483,9 @@ class ServiceReportTest extends TestCase
         $this->assertCount(1, $righe);
         $this->assertSame($lav2->id, $righe->first()->material_id);
 
-        Livewire::test(EditServiceReport::class, ['record' => $report->getRouteKey()])
-            ->assertFormSet([
-                '_lavaggio_vie_eseguito' => true,
-                'lavaggio_vie_count' => 1,
-            ]);
+        $pagina = $this->modificaRapportino($report);
+        $this->assertSame(true, $pagina->get("data.lavori.{$report->id}._lavaggio_vie_eseguito"));
+        $this->assertSame(1, $pagina->get("data.lavori.{$report->id}.lavaggio_vie_count"));
     }
 
     /**
@@ -537,12 +528,10 @@ class ServiceReportTest extends TestCase
         $this->actingAs($tech);
         Filament::setTenant($tenant);
 
-        Livewire::test(EditServiceReport::class, ['record' => $report->getRouteKey()])
-            ->assertFormSet([
-                'add_chiamata_material' => true,
-                '_lavaggio_vie_eseguito' => true,
-                'lavaggio_vie_count' => 2,
-            ]);
+        $pagina = $this->modificaRapportino($report);
+        $this->assertSame(true, $pagina->get("data.lavori.{$report->id}.add_chiamata_material"));
+        $this->assertSame(true, $pagina->get("data.lavori.{$report->id}._lavaggio_vie_eseguito"));
+        $this->assertSame(2, $pagina->get("data.lavori.{$report->id}.lavaggio_vie_count"));
     }
 
     /**
@@ -576,11 +565,9 @@ class ServiceReportTest extends TestCase
         $this->actingAs($tech);
         Filament::setTenant($tenant);
 
-        Livewire::test(EditServiceReport::class, ['record' => $report->getRouteKey()])
-            ->assertFormSet([
-                '_lavaggio_vie_eseguito' => true,
-                'lavaggio_vie_count' => 4,
-            ]);
+        $pagina = $this->modificaRapportino($report);
+        $this->assertSame(true, $pagina->get("data.lavori.{$report->id}._lavaggio_vie_eseguito"));
+        $this->assertSame(4, $pagina->get("data.lavori.{$report->id}.lavaggio_vie_count"));
     }
 
     /**

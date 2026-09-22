@@ -5,7 +5,7 @@ namespace Tests\Feature;
 use App\Filament\Resources\MaintenanceScheduleResource\Pages\CreateMaintenanceSchedule;
 use App\Filament\Resources\MaintenanceScheduleResource\Pages\EditMaintenanceSchedule;
 use App\Filament\Resources\MaintenanceScheduleResource\RelationManagers\LavaggiRelationManager;
-use App\Filament\Resources\ServiceReportResource\Pages\CreateServiceReport;
+use App\Filament\Resources\ServiceReportResource\Pages\RapportiniAPassi;
 use App\Models\Customer;
 use App\Models\Lavaggio;
 use App\Models\MachineUnit;
@@ -337,7 +337,7 @@ class MaintenanceScheduleLavaggioTest extends TestCase
      * ServiceReport::syncGeneratedLavaggi() cercava per service_report_id
      * (ancora nullo sulla riga originale) e ne creava sempre una seconda,
      * lasciando due righe per la stessa visita. Vedi
-     * CreateServiceReport::linkSourceLavaggio().
+     * RapportiniAPassi::collegaLavaggioDiPartenza().
      */
     public function test_creating_a_rapportino_from_a_lavaggio_row_links_it_instead_of_duplicating(): void
     {
@@ -373,9 +373,9 @@ class MaintenanceScheduleLavaggioTest extends TestCase
         $this->assertSame((string) $lavaggio->id, $query['lavaggio_id']);
 
         Livewire::withQueryParams($query)
-            ->test(CreateServiceReport::class)
-            ->fillForm(['technician_id' => $tech->id])
-            ->call('create')
+            ->test(RapportiniAPassi::class)
+            ->set('data.technician_id', $tech->id)
+            ->call('salva')
             ->assertHasNoFormErrors();
 
         // Una sola riga lavaggio per questo piano, non due: quella originale
