@@ -944,6 +944,12 @@ class ServiceReport extends Model
             return $this->billingCustomer;
         }
 
+        // Scheda nel gestionale con un pagante indicato da Eureka: vale
+        // quello, non il pagante di oggi della macchina (PaganteEureka).
+        if ($this->isSuEureka() && ($daEureka = $this->eurekaDestinazionePayer())) {
+            return $daEureka;
+        }
+
         if (! $this->customer) {
             throw new \RuntimeException('Cliente collegato a questo rapportino non trovato (probabilmente eliminato).');
         }
@@ -970,6 +976,17 @@ class ServiceReport extends Model
     public function freezeInvoiceRecipient(): void
     {
         if ($this->billing_customer_id || ! $this->customer) {
+            return;
+        }
+
+        // Pagante indicato da Eureka ma non (ancora) cliente del CRM: non si
+        // congela un pagante indovinato dalla macchina, che sarebbe
+        // sbagliato. Resta vuoto finche' il cliente non esiste.
+        if ($this->isSuEureka() && $this->eureka_destinazione_code) {
+            if ($daEureka = $this->eurekaDestinazionePayer()) {
+                $this->forceFill(['billing_customer_id' => $daEureka->id])->saveQuietly();
+            }
+
             return;
         }
 

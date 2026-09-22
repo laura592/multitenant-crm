@@ -14,6 +14,7 @@ use App\Support\Gestionale\RegistroSync;
 use App\Support\Gestionale\RiabbinaImportati;
 use App\Models\User;
 use App\Support\EurekaClient;
+use App\Support\Gestionale\PaganteEureka;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -304,6 +305,11 @@ class ImportEurekaServiceReports extends Command
             $intestatarioCode = (int) ($detail['id_intestatario'] ?? $summary['id_codice_f15'] ?? 0);
             $hasDestinazione = $destinazioneCode > 0 && $destinazioneCode !== $intestatarioCode;
 
+            // Il pagante della scheda e' vincolante: e' nel gestionale. Solo
+            // col dettaglio si sa chi e'; senza, il pagante gia' scritto sul
+            // rapportino resta com'e'.
+            $pagante = $detail ? PaganteEureka::daDettaglio($detail, $summary, $tenant->id, $localCustomerId) : null;
+
             $payload = [
                 'tenant_id' => $tenant->id,
                 'source' => ServiceReport::SOURCE_EUREKA,
@@ -313,6 +319,7 @@ class ImportEurekaServiceReports extends Command
                     ? $this->normalizeText($detail['destinazione']['rag_sociale'] ?? null)
                     : null,
                 'customer_id' => $localCustomerId,
+                ...($pagante ? ['billing_customer_id' => $pagante['customer_id']] : []),
                 'machine_product_id' => $machineProduct?->id,
                 'machine_material_id' => $machineMaterial?->id,
                 'machine_unit_id' => $machineUnit?->id,
