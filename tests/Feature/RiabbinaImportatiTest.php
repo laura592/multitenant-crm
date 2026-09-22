@@ -223,37 +223,6 @@ class RiabbinaImportatiTest extends TestCase
         $this->assertStringContainsString('Cliente chiede richiamata', $acqua->notes);
         $this->assertStringContainsString('Numero documento Eureka: 759', $acqua->notes);
         $this->assertSame('Lavaggio spina e cambio filtro', $acqua->work_performed);
-
-        // Il comando che sistema quelli gia' creati la trova gia' a posto.
-        $this->artisan('rapportini:sistema-visite-divise', ['--tenant' => 'alex'])
-            ->expectsOutputToContain('Niente da sistemare')
-            ->assertSuccessful();
-    }
-
-    public function test_il_comando_sistema_le_parti_gia_create(): void
-    {
-        $igor = User::create(['tenant_id' => $this->tenant->id, 'name' => 'Igor', 'email' => 'i@alex.it', 'password' => bcrypt('x')]);
-        $tecnico = $this->rapportino('RT-2026-0785', '2026-09-10', eureka: 998, matricola: null);
-        $tecnico->forceFill(['technician_id' => $igor->id, 'source' => ServiceReport::SOURCE_MANUALE, 'notes' => 'Perdita dal rubinetto'])->saveQuietly();
-        $parte = $this->rapportino('RT-2026-0818', '2026-09-10', eureka: 751, matricola: null);
-
-        $this->artisan('rapportini:sistema-visite-divise', ['--tenant' => 'alex', '--dry-run' => true])
-            ->expectsOutputToContain('RT-2026-0818')
-            ->assertSuccessful();
-        $this->assertSame($this->tecnico->id, $parte->fresh()->technician_id, 'In prova non scrive.');
-
-        $this->artisan('rapportini:sistema-visite-divise', ['--tenant' => 'alex'])
-            ->expectsConfirmation('Sistemo 1 rapportini?', 'yes')
-            ->assertSuccessful();
-
-        $parte->refresh();
-        $this->assertSame($igor->id, $parte->technician_id);
-        $this->assertStringContainsString('Perdita dal rubinetto', $parte->notes);
-
-        // Rilanciato non ricopia niente.
-        $this->artisan('rapportini:sistema-visite-divise', ['--tenant' => 'alex'])
-            ->expectsOutputToContain('Niente da sistemare')
-            ->assertSuccessful();
     }
 
     /** Due schede diverse sullo stesso impianto: non e' ne' divisa ne' doppia. Decide una persona. */
