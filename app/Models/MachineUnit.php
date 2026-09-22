@@ -57,6 +57,7 @@ class MachineUnit extends Model
         'eureka_billing_customer_code',
         'fusione_suggerita_id',
         'fusione_suggerita_motivo',
+        'fusa_in_id',
         'spostamento_suggerito_customer_id',
         'spostamento_suggerito_il',
         'spostamento_suggerito_motivo',
@@ -294,6 +295,57 @@ class MachineUnit extends Model
         return mb_strtolower(trim((string) $matricola));
     }
 
+    /**
+     * La macchina viva in cui questa e' confluita, seguendo le fusioni a
+     * catena. Null se questa non e' stata fusa.
+     */
+    public function superstiteFusione(): ?self
+    {
+        $corrente = $this;
+        $visti = [];
+
+        while ($corrente->fusa_in_id && ! isset($visti[$corrente->id])) {
+            $visti[$corrente->id] = true;
+            $corrente = self::withTrashed()->find($corrente->fusa_in_id);
+
+            if (! $corrente) {
+                return null;
+            }
+        }
+
+        return $corrente->is($this) || $corrente->trashed() ? null : $corrente;
+    }
+
+    /**
+     * Dopo una fusione che ha tenuto la matricola che Eureka non usa: questa
+     * macchina (la tenuta) prende la matricola della fusa, e la fusa, che
+     * resta archiviata, prende la sua. Id, storico e rapportini non si
+     * muovono; cambia solo quale scrittura porta la macchina viva.
+     *
+     * Lo scambio passa da un valore provvisorio: tenant+matricola e' unico
+     * anche fra le archiviate.
+     */
+    public function scambiaMatricolaCon(self $fusa): void
+    {
+        if ($fusa->fusa_in_id !== $this->id || ! $fusa->trashed()) {
+            throw new \LogicException('Si scambia la matricola solo con una macchina fusa in questa.');
+        }
+
+        DB::transaction(function () use ($fusa) {
+            $mia = $this->serial_number;
+            $sua = $fusa->serial_number;
+
+            self::withoutEvents(fn () => $fusa->forceFill(['serial_number' => '~scambio~'.$fusa->id])->save());
+            $this->update(['serial_number' => $sua]);
+            self::withoutEvents(fn () => $fusa->forceFill(['serial_number' => $mia])->save());
+        });
+
+        RegistroSync::movimento('macchine', 'matricola presa da Eureka', [
+            'prima' => $fusa->serial_number,
+            'ora' => $this->serial_number,
+        ]);
+    }
+
     /** La macchina che il sync propone di assorbire in questa. */
     public function fusioneSuggerita(): BelongsTo
     {
@@ -316,9 +368,31 @@ class MachineUnit extends Model
         }
 
         DB::transaction(function () use ($altra) {
+            // Una consegna che questa macchina ha gia' (stesso cliente, stessa
+            // data) non si copia: l'import degli installati crea le due
+            // macchine dalla stessa bolla, e spostarle tutte raddoppiava lo
+            // storico. Si tiene quella di qui, completata con il pagante
+            // dell'altra se qui mancava; il doppione se ne va con l'altra.
+            foreach ($altra->placements()->get() as $sua) {
+                $mia = $this->placements()
+                    ->where('customer_id', $sua->customer_id)
+                    ->where('placed_at', $sua->placed_at)
+                    ->first();
+
+                if (! $mia) {
+                    $sua->update(['machine_unit_id' => $this->id]);
+
+                    continue;
+                }
+
+                $mia->update(array_filter([
+                    'billing_customer_id' => $mia->billing_customer_id ?? $sua->billing_customer_id,
+                    'eureka_billing_customer_code' => $mia->eureka_billing_customer_code ?? $sua->eureka_billing_customer_code,
+                ], fn ($v) => $v !== null));
+            }
+
             foreach ([
                 ['service_reports', 'machine_unit_id'],
-                ['machine_unit_placements', 'machine_unit_id'],
                 ['maintenance_schedules', 'machine_unit_id'],
             ] as [$tabella, $colonna]) {
                 if (Schema::hasColumn($tabella, $colonna)) {
@@ -341,7 +415,10 @@ class MachineUnit extends Model
             $this->fusione_suggerita_motivo = null;
             $this->save();
 
-            $altra->update(['fusione_suggerita_id' => null, 'fusione_suggerita_motivo' => null]);
+            // fusa_in_id resta anche da archiviata: e' quello che dice al sync
+            // degli installati di non ripristinarla (vedi
+            // GestionaleSyncRunner::importInstalledMachines()).
+            $altra->update(['fusione_suggerita_id' => null, 'fusione_suggerita_motivo' => null, 'fusa_in_id' => $this->id]);
             $altra->delete();
         });
 

@@ -10,6 +10,9 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Support\Gestionale\ConfrontoMacchine;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 /**
@@ -151,6 +154,92 @@ class FusioneMacchineTest extends TestCase
         $this->assertSame('FRANKE A300', $buona->fresh()->model_name);
         // Il codice Eureka c'era gia': non si tocca.
         $this->assertSame(9001, (int) $buona->fresh()->gestionale_code);
+        $this->assertSoftDeleted('machine_units', ['id' => $copia->id]);
+    }
+
+    /**
+     * Le due macchine nascono dalla stessa bolla: fonderle non deve lasciare
+     * due volte la stessa consegna nello storico.
+     */
+    public function test_assorbire_non_raddoppia_la_consegna(): void
+    {
+        $buona = $this->macchina('1919045', 'SUPER JOLLY');
+        $copia = $this->macchina('1919045-21679');
+        $buona->moveTo($this->cliente, 'bolla n. 97', Carbon::parse('2024-01-01'));
+        $copia->moveTo($this->cliente, 'bolla n. 97', Carbon::parse('2024-01-01'), codicePaganteEureka: 580);
+
+        $buona->assorbe($copia);
+
+        $posizione = $buona->placements()->sole();
+        // Il pagante mancava qui e c'era sulla copia: si raccoglie.
+        $this->assertSame(580, (int) $posizione->eureka_billing_customer_code);
+        $this->assertSame($buona->id, $copia->fresh()->fusa_in_id);
+    }
+
+    /**
+     * Eureka continua a chiamarla con la matricola della copia: il sync non
+     * deve ripristinarla, se no la fusione si ripropone e ogni conferma
+     * aggiunge un'altra copia della consegna (22/09/2026, 1919045).
+     */
+    public function test_il_sync_non_ripristina_la_macchina_fusa(): void
+    {
+        Http::preventStrayRequests();
+        $this->cliente->update(['gestionale_code' => 1460]);
+
+        $buona = $this->macchina('1919045', 'SUPER JOLLY');
+        $copia = $this->macchina('1919045-21679');
+        $buona->moveTo($this->cliente, 'bolla n. 97', Carbon::parse('2024-01-01'));
+        $copia->moveTo($this->cliente, 'bolla n. 97', Carbon::parse('2024-01-01'));
+        $buona->assorbe($copia);
+
+        Http::fake(fn (Request $request) => Http::response(str_contains($request->url(), 'art_installati')
+            ? [['id' => 1, 'matricola' => '1919045-21679', 'numero_doc_t23' => 97, 'data_documento' => '2024-01-01T00:00:00.000+01:00', 'id_intestatario_fattura_f15' => 580]]
+            : [], 200));
+
+        $this->artisan('gestionale:sync')->assertExitCode(0);
+
+        $this->assertSoftDeleted('machine_units', ['id' => $copia->id]);
+        $this->assertSame(1, $buona->placements()->count());
+        // Il pagante che Eureka da' per la copia arriva sulla macchina tenuta.
+        $this->assertSame(580, (int) $buona->placements()->sole()->eureka_billing_customer_code);
+    }
+
+    /** Se Eureka la scrive lunga, si tiene quella lunga. */
+    public function test_si_tiene_la_matricola_che_usa_eureka(): void
+    {
+        $this->macchina('1919045', 'SUPER JOLLY');
+        $this->macchina('1919045-21679');
+
+        $proposte = ConfrontoMacchine::proposte(MachineUnit::all(), ['191904521679' => true]);
+
+        $this->assertCount(1, $proposte);
+        $this->assertSame('1919045-21679', $proposte[0]['tenere']->serial_number);
+        $this->assertSame('1919045', $proposte[0]['assorbire']->serial_number);
+    }
+
+    /** Eureka le elenca tutte e due: per Eureka sono due apparecchi. */
+    public function test_due_matricole_su_eureka_non_si_fondono(): void
+    {
+        $this->macchina('1502475', 'TEOREMA A2');
+        $this->macchina('1502475-CM103290', 'TEOREMA A2');
+        $this->macchina('031814', 'CEADO');
+        $this->macchina('31814', 'CEADO');
+
+        $eureka = ['1502475' => true, '1502475cm103290' => true, '031814' => true, '31814' => true];
+
+        $this->assertSame([], ConfrontoMacchine::proposte(MachineUnit::all(), $eureka));
+    }
+
+    public function test_la_tenuta_prende_la_matricola_della_fusa(): void
+    {
+        $buona = $this->macchina('1919045', 'SUPER JOLLY');
+        $copia = $this->macchina('1919045-21679');
+        $buona->assorbe($copia);
+
+        $buona->scambiaMatricolaCon($copia->fresh());
+
+        $this->assertSame('1919045-21679', $buona->fresh()->serial_number);
+        $this->assertSame('1919045', MachineUnit::withTrashed()->find($copia->id)->serial_number);
         $this->assertSoftDeleted('machine_units', ['id' => $copia->id]);
     }
 

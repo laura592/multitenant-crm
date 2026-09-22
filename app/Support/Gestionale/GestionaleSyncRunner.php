@@ -426,6 +426,29 @@ class GestionaleSyncRunner
      *
      * @return array<int, array{tenere: MachineUnit, assorbire: MachineUnit, motivo: string}>
      */
+    /**
+     * Le matricole che Eureka elenca oggi fra gli installati, per chiave.
+     * Dicono quale delle due macchine doppie tenere (ConfrontoMacchine).
+     *
+     * @return array<string, true>
+     */
+    private function matricoleSuEureka(): array
+    {
+        $chiavi = [];
+
+        foreach ($this->installedMachinesByCustomer() as $righe) {
+            foreach ((array) $righe as $riga) {
+                $chiave = MachineUnit::chiaveMatricola((string) ($riga['matricola'] ?? ''));
+
+                if ($chiave !== '') {
+                    $chiavi[$chiave] = true;
+                }
+            }
+        }
+
+        return $chiavi;
+    }
+
     private function proponiFusioniMacchine(): array
     {
         // Le proposte gia' in piedi non si rifanno: una che una persona ha
@@ -434,7 +457,7 @@ class GestionaleSyncRunner
             ->whereNull('fusione_suggerita_id')
             ->get(['id', 'serial_number', 'model_name', 'gestionale_code', 'current_customer_id', 'created_at']);
 
-        $proposte = ConfrontoMacchine::proposte($macchine);
+        $proposte = ConfrontoMacchine::proposte($macchine, $this->matricoleSuEureka());
 
         foreach ($proposte as $proposta) {
             $proposta['assorbire']->update([

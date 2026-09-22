@@ -57,15 +57,28 @@ class ConfrontoMacchine
      * da assorbire.
      *
      * Si tiene la macchina piu' "vera": quella collegata a Eureka
-     * (gestionale_code) prima di tutto, poi quella con un modello, poi la
-     * piu' vecchia. La matricola scritta a mano e' quasi sempre la copia.
+     * (gestionale_code) prima di tutto, poi quella la cui matricola Eureka
+     * elenca oggi fra gli installati, poi quella con un modello, poi la piu'
+     * vecchia. La matricola scritta a mano e' quasi sempre la copia.
+     *
+     * $matricoleEureka sono le chiavi (chiave()) delle matricole che Eureka
+     * elenca fra gli installati. Tenere quella li' conta: e' per matricola
+     * che il sync ritrova la macchina, e con la matricola "sbagliata" gli
+     * spostamenti proposti da Eureka non la trovavano piu' (22/09/2026,
+     * tenuta "1919045", Eureka "1919045-21679").
+     *
+     * Se Eureka le elenca TUTTE E DUE, per Eureka sono due apparecchi: non si
+     * propone niente ("1502475" e "1502475-CM103290", due TEOREMA A2 presso
+     * lo stesso hotel con due bolle diverse).
      *
      * @param  Collection<int, MachineUnit>  $macchine
+     * @param  array<string, true>  $matricoleEureka
      * @return array<int, array{tenere: MachineUnit, assorbire: MachineUnit, motivo: string}>
      */
-    public static function proposte(Collection $macchine): array
+    public static function proposte(Collection $macchine, array $matricoleEureka = []): array
     {
         $macchine = $macchine->reject(fn (MachineUnit $m) => self::segnaposto(self::chiave($m->serial_number)));
+        $suEureka = fn (MachineUnit $m) => isset($matricoleEureka[self::chiave($m->serial_number)]);
 
         $proposte = [];
         $gia = [];
@@ -83,9 +96,14 @@ class ConfrontoMacchine
                     continue;
                 }
 
-                $ordinate = self::perAffidabilita($gruppo->reject(fn (MachineUnit $m) => isset($gia[$m->id])));
+                $ordinate = self::perAffidabilita($gruppo->reject(fn (MachineUnit $m) => isset($gia[$m->id])), $matricoleEureka);
 
                 if ($ordinate->count() < 2) {
+                    continue;
+                }
+
+                // "031814" e "31814" entrambe su Eureka: per Eureka sono due.
+                if ($ordinate->filter($suEureka)->map(fn (MachineUnit $m) => self::chiave($m->serial_number))->uniqueStrict()->count() > 1) {
                     continue;
                 }
 
@@ -117,10 +135,21 @@ class ConfrontoMacchine
                         continue;
                     }
 
-                    if (self::contieneComeToken($lunga->serial_number, $corta->serial_number)) {
-                        $proposte[] = ['tenere' => $corta, 'assorbire' => $lunga, 'motivo' => self::MATRICOLA_CONTENUTA];
-                        $gia[$lunga->id] = true;
+                    if (! self::contieneComeToken($lunga->serial_number, $corta->serial_number)) {
+                        continue;
                     }
+
+                    if ($suEureka($lunga) && $suEureka($corta)) {
+                        continue;
+                    }
+
+                    // Di solito la corta e' il seriale e la lunga ha il
+                    // modello davanti; ma se Eureka la scrive lunga, si
+                    // tiene come la scrive Eureka.
+                    [$tenere, $assorbire] = $suEureka($lunga) ? [$lunga, $corta] : [$corta, $lunga];
+
+                    $proposte[] = ['tenere' => $tenere, 'assorbire' => $assorbire, 'motivo' => self::MATRICOLA_CONTENUTA];
+                    $gia[$assorbire->id] = true;
                 }
             }
         }
@@ -200,19 +229,22 @@ class ConfrontoMacchine
 
     /**
      * Dalla piu' attendibile alla meno: chi ha un codice Eureka, poi chi ha
-     * un modello, poi la piu' vecchia.
+     * la matricola che Eureka elenca, poi chi ha un modello, poi la piu'
+     * vecchia.
      *
      * @param  Collection<int, MachineUnit>  $gruppo
+     * @param  array<string, true>  $matricoleEureka
      * @return Collection<int, MachineUnit>
      */
-    private static function perAffidabilita(Collection $gruppo): Collection
+    private static function perAffidabilita(Collection $gruppo, array $matricoleEureka = []): Collection
     {
         // Una chiave composita, non un array di closure: sortBy() in quella
         // forma vuole coppie [campo, verso] e con le sole closure non ordina
         // come ci si aspetta (teneva la matricola scritta a mano).
         return $gruppo->sortBy(fn (MachineUnit $m) => sprintf(
-            '%d%d%020d',
+            '%d%d%d%020d',
             $m->gestionale_code === null ? 1 : 0,
+            isset($matricoleEureka[self::chiave($m->serial_number)]) ? 0 : 1,
             trim((string) $m->model_name) === '' ? 1 : 0,
             $m->created_at?->timestamp ?? 0,
         ))->values();
