@@ -309,13 +309,8 @@ class TourRegistry
                     'text' => 'Se il modello è a catalogo Prodotti, collegalo qui. Se non lo è (macchina non a listino Alex), usa invece il campo "Modello (testo libero)" subito sotto.',
                 ],
                 [
-                    'element' => '[data-tour="machine-units-field-billing"]',
-                    'title' => 'Passo 4 — Fatturare a',
-                    'text' => 'Lascia vuoto se paga il cliente presso cui è installata: impostalo solo se a pagare è un altro cliente (es. comodato).',
-                ],
-                [
                     'title' => 'Fatto',
-                    'text' => 'Il macchinario nasce "In magazzino": usa l\'azione "Sposta" sulla sua scheda per installarlo presso un cliente, mantenendo lo storico degli spostamenti.',
+                    'text' => 'Il macchinario nasce "In magazzino": usa l\'azione "Sposta" sulla sua scheda per installarlo presso un cliente, mantenendo lo storico degli spostamenti. In "Sposta" scegli anche chi paga ("Fatturare a"): lascialo vuoto se paga il cliente stesso.',
                 ],
             ],
 

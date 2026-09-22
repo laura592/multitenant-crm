@@ -137,18 +137,10 @@ class MachineUnitResource extends Resource
                         // l'import per registrare una macchina.
                         ->datalist(static::codiciManutenzione())
                         ->maxLength(255),
-                    Forms\Components\Select::make('billing_customer_id')
-                        ->label('Fatturare a')
-                        ->relationship('billingCustomer', 'company_name')
-                        ->getOptionLabelFromRecordUsing(fn (Customer $record) => DisplayName::customerOption($record))
-                        ->searchable(['company_name', 'first_name', 'last_name', 'city'])
-                        ->preload()
-                        ->helperText('Chi paga dove si trova ora. Lascia vuoto se paga il cliente presso cui è installata. Quando la macchina si sposta si sceglie di nuovo con "Sposta"; lo storico è in "Storico posizionamenti".')
-                        ->live()
-                        ->hint(fn (?MachineUnit $record, ?string $state) => $record?->placements()->whereNull('removed_at')->first()?->avvisoPaganteEureka($state))
-                        ->hintColor('warning')
-                        ->hintIcon(fn (?MachineUnit $record, ?string $state) => $record?->placements()->whereNull('removed_at')->first()?->avvisoPaganteEureka($state) ? 'heroicon-o-exclamation-triangle' : null)
-                        ->extraAttributes(['data-tour' => 'machine-units-field-billing']),
+                    // "Fatturare a" non sta piu' qui (22/09/2026): e' della
+                    // posizione, non della macchina. Si sceglie con "Sposta" e
+                    // si corregge con "Cambia pagante" nello storico
+                    // posizionamenti; in lettura e' in "Dove si trova ora".
                     Forms\Components\Select::make('status')
                         ->label('Stato')
                         ->options([
