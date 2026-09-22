@@ -57,6 +57,7 @@ class GestionaleSyncRunner
             'machineUnitLinks' => $this->proposeMachineUnitLinks(),
             'newMachines' => $this->importInstalledMachines(),
             'fusioniMacchine' => $this->proponiFusioniMacchine(),
+            'spostamentiMacchine' => $this->proponiSpostamentiMacchine(),
             'eurekaNotes' => $this->syncEurekaNotes(),
             'doppioniRapportini' => $this->proponiDoppioniRapportini(),
             // Un'interruzione di Eureka per tutta la durata della sync
@@ -439,6 +440,92 @@ class GestionaleSyncRunner
                 'assorbire' => $proposta['assorbire']->serial_number,
                 'motivo' => $proposta['motivo'],
             ]);
+        }
+
+        return $proposte;
+    }
+
+    /**
+     * Le macchine che su Eureka hanno una bolla piu' recente presso un altro
+     * cliente: si propone lo spostamento, con la data della bolla. Vedi
+     * SpostamentiMacchine.
+     *
+     * Usa l'art_installati gia' scaricato per importInstalledMachines(): non
+     * costa chiamate in piu'.
+     *
+     * @return array<int, array{macchina: MachineUnit, cliente: Customer, data: Carbon, motivo: string}>
+     */
+    private function proponiSpostamentiMacchine(): array
+    {
+        $installed = $this->installedMachinesByCustomer();
+        $clienti = $this->linkedCustomers->keyBy('id');
+        $perMatricola = [];
+
+        foreach ($installed as $customerId => $rows) {
+            $cliente = $clienti->get($customerId);
+
+            foreach ((array) $rows as $row) {
+                $serial = trim((string) ($row['matricola'] ?? ''));
+
+                if (! $cliente || $serial === '' || preg_match('/^0+$/', $serial)) {
+                    continue;
+                }
+
+                $perMatricola[MachineUnit::chiaveMatricola($serial)][$cliente->id] = [
+                    'cliente' => $cliente,
+                    'data' => $this->parseEurekaDate($row['data_documento'] ?? null),
+                    'bolla' => (int) ($row['numero_doc_t23'] ?? 0),
+                ];
+            }
+        }
+
+        $proposte = [];
+
+        $macchine = MachineUnit::query()
+            ->where('tenant_id', $this->tenant->id)
+            ->whereNotNull('serial_number')
+            ->with(['placements' => fn ($q) => $q->whereNull('removed_at')])
+            ->get();
+
+        foreach ($macchine as $macchina) {
+            $consegne = array_values($perMatricola[MachineUnit::chiaveMatricola($macchina->serial_number)] ?? []);
+
+            if ($consegne === []) {
+                continue;
+            }
+
+            $dal = $macchina->placements->max('placed_at');
+            $proposta = SpostamentiMacchine::proposta($macchina, $consegne, $dal ? Carbon::parse($dal) : null);
+
+            if (! $proposta) {
+                // Nel frattempo la macchina e' stata spostata dove diceva
+                // Eureka (o Eureka ha cambiato idea): la proposta non serve.
+                if ($macchina->spostamento_suggerito_customer_id !== null) {
+                    $macchina->update(['spostamento_suggerito_customer_id' => null, 'spostamento_suggerito_il' => null, 'spostamento_suggerito_motivo' => null]);
+                }
+
+                continue;
+            }
+
+            $nuova = $macchina->spostamento_suggerito_customer_id !== $proposta['cliente']->id
+                || ! $macchina->spostamento_suggerito_il?->isSameDay($proposta['data']);
+
+            $macchina->update([
+                'spostamento_suggerito_customer_id' => $proposta['cliente']->id,
+                'spostamento_suggerito_il' => $proposta['data'],
+                'spostamento_suggerito_motivo' => $proposta['motivo'],
+            ]);
+
+            if ($nuova) {
+                RegistroSync::movimento('sync-anagrafiche', 'spostamento macchina proposto', [
+                    'matricola' => $macchina->serial_number,
+                    'da' => $macchina->currentCustomer?->company_name,
+                    'a' => $proposta['cliente']->company_name,
+                    'motivo' => $proposta['motivo'],
+                ]);
+            }
+
+            $proposte[] = ['macchina' => $macchina] + $proposta;
         }
 
         return $proposte;

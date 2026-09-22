@@ -57,6 +57,14 @@ class MachineUnit extends Model
         'eureka_billing_customer_code',
         'fusione_suggerita_id',
         'fusione_suggerita_motivo',
+        'spostamento_suggerito_customer_id',
+        'spostamento_suggerito_il',
+        'spostamento_suggerito_motivo',
+        'spostamento_scartato',
+    ];
+
+    protected $casts = [
+        'spostamento_suggerito_il' => 'date',
     ];
 
     protected $attributes = [
@@ -319,5 +327,48 @@ class MachineUnit extends Model
     public function scartaFusione(): void
     {
         $this->update(['fusione_suggerita_id' => null, 'fusione_suggerita_motivo' => null]);
+    }
+
+    /** Dove Eureka dice che la macchina e' ora (GestionaleSyncRunner::proponiSpostamentiMacchine()). */
+    public function spostamentoSuggerito(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class, 'spostamento_suggerito_customer_id');
+    }
+
+    public static function chiaveSpostamento(?string $customerId, ?\DateTimeInterface $il): string
+    {
+        return $customerId.'|'.($il?->format('Y-m-d') ?? '');
+    }
+
+    /** Conferma: la macchina va dove dice Eureka, con la data della bolla. */
+    public function accettaSpostamento(): bool
+    {
+        $cliente = $this->spostamentoSuggerito;
+
+        if (! $cliente || ! $this->spostamento_suggerito_il) {
+            $this->scartaSpostamento();
+
+            return false;
+        }
+
+        $this->moveTo($cliente, 'Da Eureka: '.$this->spostamento_suggerito_motivo, $this->spostamento_suggerito_il->copy()->startOfDay());
+        $this->update([
+            'spostamento_suggerito_customer_id' => null,
+            'spostamento_suggerito_il' => null,
+            'spostamento_suggerito_motivo' => null,
+        ]);
+
+        return true;
+    }
+
+    /** Non e' vero: non si ripropone finche' Eureka non dice qualcosa di diverso. */
+    public function scartaSpostamento(): void
+    {
+        $this->update([
+            'spostamento_scartato' => self::chiaveSpostamento($this->spostamento_suggerito_customer_id, $this->spostamento_suggerito_il),
+            'spostamento_suggerito_customer_id' => null,
+            'spostamento_suggerito_il' => null,
+            'spostamento_suggerito_motivo' => null,
+        ]);
     }
 }
