@@ -63,6 +63,9 @@ class EliminaPosizionamento
 
             $macchina?->update([
                 'current_customer_id' => $aperta?->customer_id,
+                // Chi paga torna quello della posizione riaperta.
+                'billing_customer_id' => $aperta?->billing_customer_id,
+                'eureka_billing_customer_code' => $aperta?->eureka_billing_customer_code,
                 'status' => $aperta?->customer_id ? MachineUnit::STATUS_INSTALLATA : MachineUnit::STATUS_IN_MAGAZZINO,
             ]);
         });

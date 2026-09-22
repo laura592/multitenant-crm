@@ -60,6 +60,7 @@ class MachineUnit extends Model
         'spostamento_suggerito_customer_id',
         'spostamento_suggerito_il',
         'spostamento_suggerito_motivo',
+        'spostamento_suggerito_pagante_code',
         'spostamento_scartato',
     ];
 
@@ -78,6 +79,20 @@ class MachineUnit extends Model
         // storico posizionamenti.
         static::deleting(function (self $unit) {
             $unit->placements->each->delete();
+        });
+
+        // Chi paga e' della posizione attuale: se cambia sulla macchina (dal
+        // form, o da eureka:apply-machine-billing-payer) cambia anche li',
+        // e lo storico resta giusto.
+        static::updated(function (self $unit) {
+            // Solo i campi cambiati davvero: il sync carica la macchina con
+            // poche colonne, e copiare anche quelle non lette azzerava il
+            // pagante della posizione.
+            $cambiati = array_intersect_key($unit->getChanges(), array_flip(['billing_customer_id', 'eureka_billing_customer_code']));
+
+            if ($cambiati !== []) {
+                $unit->placements()->whereNull('removed_at')->update($cambiati);
+            }
         });
     }
 
@@ -128,8 +143,16 @@ class MachineUnit extends Model
      * quella del DDT di consegna/installazione) puo' passare la data reale
      * invece di intestare tutto a "oggi".
      */
-    public function moveTo(?Customer $customer, ?string $notes = null, ?\DateTimeInterface $placedAt = null): void
+    /**
+     * Chi paga va con la posizione: senza $pagante la macchina nella nuova
+     * posizione la paga il cliente stesso (o chi paga per lui, vedi
+     * Customer::invoiceRecipient()). Prima restava il pagante della
+     * posizione di prima.
+     */
+    public function moveTo(?Customer $customer, ?string $notes = null, ?\DateTimeInterface $placedAt = null, ?Customer $pagante = null, ?int $codicePaganteEureka = null): void
     {
+        $paganteId = $customer && $pagante && $pagante->id !== $customer->id ? $pagante->id : null;
+
         $quando = $placedAt ? Carbon::instance($placedAt) : now();
 
         // La posizione vecchia si chiude nello stesso istante in cui si apre
@@ -144,6 +167,8 @@ class MachineUnit extends Model
             $this->placements()->create([
                 'tenant_id' => $this->tenant_id,
                 'customer_id' => $customer->id,
+                'billing_customer_id' => $paganteId,
+                'eureka_billing_customer_code' => $customer ? $codicePaganteEureka : null,
                 'placed_at' => $quando,
                 'notes' => $notes,
             ]);
@@ -151,6 +176,8 @@ class MachineUnit extends Model
 
         $this->update([
             'current_customer_id' => $customer?->id,
+            'billing_customer_id' => $paganteId,
+            'eureka_billing_customer_code' => $customer ? $codicePaganteEureka : null,
             'status' => $customer ? self::STATUS_INSTALLATA : self::STATUS_IN_MAGAZZINO,
         ]);
     }
@@ -191,6 +218,8 @@ class MachineUnit extends Model
 
             $this->update([
                 'current_customer_id' => $closed?->customer_id,
+                'billing_customer_id' => $closed?->billing_customer_id,
+                'eureka_billing_customer_code' => $closed?->eureka_billing_customer_code,
                 'status' => $closed?->customer_id ? self::STATUS_INSTALLATA : self::STATUS_IN_MAGAZZINO,
             ]);
         });
@@ -351,11 +380,16 @@ class MachineUnit extends Model
             return false;
         }
 
-        $this->moveTo($cliente, 'Da Eureka: '.$this->spostamento_suggerito_motivo, $this->spostamento_suggerito_il->copy()->startOfDay());
+        // Il pagante che Eureka indica per quella consegna, se lo sappiamo.
+        $codice = $this->spostamento_suggerito_pagante_code;
+        $pagante = $codice ? Customer::withoutGlobalScopes()->where('tenant_id', $this->tenant_id)->where('gestionale_code', $codice)->first() : null;
+
+        $this->moveTo($cliente, 'Da Eureka: '.$this->spostamento_suggerito_motivo, $this->spostamento_suggerito_il->copy()->startOfDay(), $pagante, $codice);
         $this->update([
             'spostamento_suggerito_customer_id' => null,
             'spostamento_suggerito_il' => null,
             'spostamento_suggerito_motivo' => null,
+            'spostamento_suggerito_pagante_code' => null,
         ]);
 
         return true;
@@ -369,6 +403,7 @@ class MachineUnit extends Model
             'spostamento_suggerito_customer_id' => null,
             'spostamento_suggerito_il' => null,
             'spostamento_suggerito_motivo' => null,
+            'spostamento_suggerito_pagante_code' => null,
         ]);
     }
 }

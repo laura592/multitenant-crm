@@ -356,7 +356,8 @@ class MachineUnitResource extends Resource
                     ->options(fn () => Customer::query()->orderBy('company_name')->get()->mapWithKeys(
                         fn (Customer $customer) => [$customer->id => DisplayName::customerOption($customer) ?: 'Cliente senza nome']
                     ))
-                    ->searchable(),
+                    ->searchable()
+                    ->live(),
                 // Gli spostamenti si registrano spesso dopo (22/09/2026: una
                 // macchina ritirata nel 2024 e reinstallata nel 2026): la data
                 // e' quella vera, non quella in cui lo si scrive.
@@ -373,13 +374,24 @@ class MachineUnitResource extends Resource
                     ->helperText(fn (MachineUnit $record) => ($dal = $record->placements()->whereNull('removed_at')->max('placed_at'))
                         ? 'Dove si trova ora è dal '.Carbon::parse($dal)->format('d/m/Y').': non si può spostare prima.'
                         : null),
+                // Chi paga dipende da dove va la macchina, non dalla macchina
+                // (22/09/2026): vuoto = il nuovo cliente, o chi paga per lui.
+                Forms\Components\Select::make('billing_customer_id')
+                    ->label('Fatturare a')
+                    ->helperText('Lascia vuoto se paga il cliente presso cui va (o chi paga già per lui).')
+                    ->options(fn () => Customer::query()->orderBy('company_name')->get()->mapWithKeys(
+                        fn (Customer $customer) => [$customer->id => DisplayName::customerOption($customer) ?: 'Cliente senza nome']
+                    ))
+                    ->searchable()
+                    ->visible(fn (Forms\Get $get) => filled($get('customer_id'))),
                 Forms\Components\Textarea::make('notes')->label('Note sullo spostamento'),
             ])
             ->action(function (MachineUnit $record, array $data) {
                 $customer = $data['customer_id'] ? Customer::find($data['customer_id']) : null;
+                $pagante = ($data['billing_customer_id'] ?? null) ? Customer::find($data['billing_customer_id']) : null;
                 $giorno = Carbon::parse($data['data']);
                 // Oggi con l'ora di adesso, un altro giorno a inizio giornata.
-                $record->moveTo($customer, $data['notes'] ?? null, $giorno->isToday() ? now() : $giorno->startOfDay());
+                $record->moveTo($customer, $data['notes'] ?? null, $giorno->isToday() ? now() : $giorno->startOfDay(), $pagante, $pagante?->gestionale_code ? (int) $pagante->gestionale_code : null);
 
                 Notification::make()
                     ->title($customer ? 'Macchina spostata presso '.DisplayName::titleCase($customer->company_name) : 'Macchina rientrata in magazzino')

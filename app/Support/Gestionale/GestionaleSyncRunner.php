@@ -4,6 +4,7 @@ namespace App\Support\Gestionale;
 
 use App\Models\Customer;
 use App\Models\MachineUnit;
+use App\Models\MachineUnitPlacement;
 use App\Models\Product;
 use App\Models\ServiceReport;
 use App\Models\Tenant;
@@ -475,6 +476,7 @@ class GestionaleSyncRunner
                     'cliente' => $cliente,
                     'data' => $this->parseEurekaDate($row['data_documento'] ?? null),
                     'bolla' => (int) ($row['numero_doc_t23'] ?? 0),
+                    'pagante' => ((int) ($row['id_intestatario_fattura_f15'] ?? 0)) ?: null,
                 ];
             }
         }
@@ -501,7 +503,7 @@ class GestionaleSyncRunner
                 // Nel frattempo la macchina e' stata spostata dove diceva
                 // Eureka (o Eureka ha cambiato idea): la proposta non serve.
                 if ($macchina->spostamento_suggerito_customer_id !== null) {
-                    $macchina->update(['spostamento_suggerito_customer_id' => null, 'spostamento_suggerito_il' => null, 'spostamento_suggerito_motivo' => null]);
+                    $macchina->update(['spostamento_suggerito_customer_id' => null, 'spostamento_suggerito_il' => null, 'spostamento_suggerito_motivo' => null, 'spostamento_suggerito_pagante_code' => null]);
                 }
 
                 continue;
@@ -514,6 +516,7 @@ class GestionaleSyncRunner
                 'spostamento_suggerito_customer_id' => $proposta['cliente']->id,
                 'spostamento_suggerito_il' => $proposta['data'],
                 'spostamento_suggerito_motivo' => $proposta['motivo'],
+                'spostamento_suggerito_pagante_code' => $proposta['pagante'],
             ]);
 
             if ($nuova) {
@@ -740,7 +743,7 @@ class GestionaleSyncRunner
         // presenza: serve per aggiornare eureka_billing_customer_code anche
         // sulle macchine gia' note, che altrimenti il ciclo sotto salterebbe
         // del tutto (era pensato solo per creare macchine nuove).
-        $knownMachineUnits = MachineUnit::query()->get(['id', 'serial_number', 'eureka_billing_customer_code'])
+        $knownMachineUnits = MachineUnit::query()->get(['id', 'serial_number', 'current_customer_id', 'eureka_billing_customer_code'])
             ->keyBy(fn (MachineUnit $m) => MachineUnit::chiaveMatricola($m->serial_number));
         $knownSerials = $knownMachineUnits->map(fn () => true)->all();
 
@@ -784,9 +787,22 @@ class GestionaleSyncRunner
                     // lui e silenziosamente sbagliato per tutti gli altri.
                     $isPlaceholderSerial = (bool) preg_match('/^0+$/', $serial);
 
-                    if ($known && ! $isPlaceholderSerial && $known->eureka_billing_customer_code !== $billingCode) {
-                        $known->eureka_billing_customer_code = $billingCode;
-                        $known->save();
+                    // Il pagante e' della consegna, cioe' della posizione presso
+                    // questo cliente (22/09/2026): la stessa matricola compare
+                    // presso piu' clienti, e scriverlo sulla macchina dava il
+                    // pagante dell'ultimo cliente letto, uno qualsiasi. Sulla
+                    // macchina va solo se e' la posizione attuale.
+                    if ($known && ! $isPlaceholderSerial) {
+                        MachineUnitPlacement::query()
+                            ->where('machine_unit_id', $known->id)
+                            ->where('customer_id', $customer->id)
+                            ->where(fn ($q) => $q->whereNull('eureka_billing_customer_code')->orWhere('eureka_billing_customer_code', '!=', $billingCode ?? 0))
+                            ->update(['eureka_billing_customer_code' => $billingCode]);
+
+                        if ($known->current_customer_id === $customer->id && $known->eureka_billing_customer_code !== $billingCode) {
+                            $known->eureka_billing_customer_code = $billingCode;
+                            $known->save();
+                        }
                     }
 
                     continue;
@@ -852,7 +868,7 @@ class GestionaleSyncRunner
                     $machineUnit->restore();
                 }
 
-                $machineUnit->moveTo($customer, notes: $installNote, placedAt: $installedAt);
+                $machineUnit->moveTo($customer, notes: $installNote, placedAt: $installedAt, codicePaganteEureka: $billingCode);
 
                 $imported[] = ['machineUnit' => $machineUnit, 'customer' => $customer];
 

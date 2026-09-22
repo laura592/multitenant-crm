@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\MachineUnitResource\RelationManagers;
 
+use App\Models\Customer;
 use App\Models\MachineUnitPlacement;
 use App\Support\DisplayName;
 use App\Support\Macchine\EliminaPosizionamento;
@@ -37,6 +38,18 @@ class PlacementsRelationManager extends RelationManager
             ->columns([
                 Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->placeholder('Magazzino')
                     ->formatStateUsing(fn ($state, $record) => DisplayName::customerOption($record->customer)),
+                // Chi pagava in quel periodo (22/09/2026). Per le posizioni
+                // vecchie si sa solo il codice Eureka: si risolve al volo.
+                Tables\Columns\TextColumn::make('pagato_da')->label('Pagato da')
+                    ->state(function (MachineUnitPlacement $record): ?string {
+                        $pagante = $record->billingCustomer
+                            ?? ($record->eureka_billing_customer_code
+                                ? Customer::query()->where('gestionale_code', $record->eureka_billing_customer_code)->first()
+                                : null);
+
+                        return $pagante && $pagante->id !== $record->customer_id ? DisplayName::customerOption($pagante) : null;
+                    })
+                    ->placeholder(fn (MachineUnitPlacement $record) => $record->customer_id ? 'il cliente' : '—'),
                 Tables\Columns\TextColumn::make('placed_at')->label('Dal')->dateTime('d/m/Y H:i'),
                 Tables\Columns\TextColumn::make('removed_at')->label('Al')->dateTime('d/m/Y H:i')->placeholder('In corso'),
                 Tables\Columns\TextColumn::make('notes')->label('Note')->limit(50)->tooltip(fn ($state) => $state),

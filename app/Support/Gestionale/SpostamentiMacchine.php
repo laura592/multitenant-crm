@@ -23,9 +23,9 @@ use Illuminate\Support\Carbon;
 final class SpostamentiMacchine
 {
     /**
-     * @param  array<int, array{cliente: Customer, data: ?Carbon, bolla: int}>  $consegne  la matricola su Eureka, una riga per cliente
+     * @param  array<int, array{cliente: Customer, data: ?Carbon, bolla: int, pagante?: ?int}>  $consegne  la matricola su Eureka, una riga per cliente
      * @param  ?Carbon  $dal  da quando la macchina e' dove dice il CRM
-     * @return ?array{cliente: Customer, data: Carbon, motivo: string}
+     * @return ?array{cliente: Customer, data: Carbon, motivo: string, pagante: ?int}
      */
     public static function proposta(MachineUnit $macchina, array $consegne, ?Carbon $dal): ?array
     {
@@ -63,6 +63,7 @@ final class SpostamentiMacchine
 
         return [
             'cliente' => $ultima['cliente'],
+            'pagante' => $ultima['pagante'] ?? null,
             'data' => $ultima['data']->copy()->startOfDay(),
             'motivo' => trim(($ultima['bolla'] > 0 ? "bolla n. {$ultima['bolla']} " : 'bolla ').'del '.$ultima['data']->format('d/m/Y')
                 .($altrove !== '' ? " (su Eureka risulta anche presso: {$altrove})" : '')),
