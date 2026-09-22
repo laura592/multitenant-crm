@@ -305,10 +305,10 @@ class ImportEurekaServiceReports extends Command
             $intestatarioCode = (int) ($detail['id_intestatario'] ?? $summary['id_codice_f15'] ?? 0);
             $hasDestinazione = $destinazioneCode > 0 && $destinazioneCode !== $intestatarioCode;
 
-            // Il pagante della scheda e' vincolante: e' nel gestionale. Solo
-            // col dettaglio si sa chi e'; senza, il pagante gia' scritto sul
-            // rapportino resta com'e'.
-            $pagante = $detail ? PaganteEureka::daDettaglio($detail, $summary, $tenant->id, $localCustomerId) : null;
+            // Pagante vincolante (PaganteEureka): all'import vale solo una
+            // destinazione esplicita della scheda. Senza, chi paga lo dice la
+            // fattura, e lo scrive registraFattureEureka() quando arriva.
+            $destinazioneEsplicita = $detail ? PaganteEureka::destinazione($detail, $summary, $tenant->id) : null;
 
             $payload = [
                 'tenant_id' => $tenant->id,
@@ -319,7 +319,7 @@ class ImportEurekaServiceReports extends Command
                     ? $this->normalizeText($detail['destinazione']['rag_sociale'] ?? null)
                     : null,
                 'customer_id' => $localCustomerId,
-                ...($pagante ? ['billing_customer_id' => $pagante['customer_id']] : []),
+                ...($destinazioneEsplicita['customer_id'] ?? null ? ['billing_customer_id' => $destinazioneEsplicita['customer_id']] : []),
                 'machine_product_id' => $machineProduct?->id,
                 'machine_material_id' => $machineMaterial?->id,
                 'machine_unit_id' => $machineUnit?->id,
