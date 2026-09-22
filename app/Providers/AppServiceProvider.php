@@ -10,6 +10,7 @@ use App\Filament\Widgets\Contabilita\FatturatoOverviewWidget;
 use App\Filament\Widgets\Contabilita\RibaWidget;
 use App\Filament\Widgets\Contabilita\SaldiDivergentiWidget;
 use App\Filament\Widgets\Contabilita\ScadutoOverviewWidget;
+use App\Filament\Widgets\Gestionale\EurekaUltimiAggiornamentiWidget;
 use App\Filament\Widgets\Gestionale\GestionaleCollegamentiClientiWidget;
 use App\Filament\Widgets\Gestionale\GestionaleCollegamentiMacchinariWidget;
 use App\Filament\Widgets\Gestionale\GestionaleCollegamentiProdottiWidget;
@@ -20,6 +21,7 @@ use App\Filament\Widgets\Gestionale\GestionaleMacchineImportateWidget;
 use App\Filament\Widgets\Gestionale\GestionaleSpostamentiMacchineWidget;
 use App\Models\User;
 use App\Support\EurekaClient;
+use App\Support\Gestionale\DiarioEsecuzioni;
 use App\Support\Gestionale\EurekaSolaLettura;
 use Filament\Forms\Components\DatePicker;
 use Filament\Infolists\Infolist;
@@ -57,6 +59,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Quando gira ogni lavoro con Eureka e com'e' finito: in cima alla
+        // revisione del sync (22/09/2026).
+        if ($this->app->runningInConsole()) {
+            DiarioEsecuzioni::registra();
+        }
+
         // Staff Alex (is_super_admin): bypassa i permessi Shield/spatie in ogni
         // tenant in cui opera. E' un flag distinto dai ruoli per-tenant di
         // §5.3 (docs/architecture.md) - i ruoli restano scoped per team/tenant,
@@ -144,6 +152,7 @@ class AppServiceProvider extends ServiceProvider
         // la /livewire/update tornava 419 e app.js rimbalzava su
         // /sessione-scaduta. Riprodotto con Playwright il 2026-09-02.
         collect([
+            EurekaUltimiAggiornamentiWidget::class,
             GestionaleDaRivedereWidget::class,
             GestionaleCollegamentiClientiWidget::class,
             GestionaleCollegamentiProdottiWidget::class,

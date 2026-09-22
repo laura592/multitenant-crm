@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Filament\Widgets\Gestionale\EurekaUltimiAggiornamentiWidget;
 use App\Filament\Widgets\Gestionale\GestionaleCollegamentiClientiWidget;
 use App\Filament\Widgets\Gestionale\GestionaleCollegamentiMacchinariWidget;
 use App\Filament\Widgets\Gestionale\GestionaleCollegamentiProdottiWidget;
@@ -12,7 +13,9 @@ use App\Filament\Widgets\Gestionale\GestionaleMacchineImportateWidget;
 use App\Filament\Widgets\Gestionale\GestionaleSpostamentiMacchineWidget;
 use App\Jobs\ImportEurekaServiceReportsJob;
 use App\Jobs\RefreshMaterialPricesFromEurekaJob;
+use App\Jobs\SincronizzaGestionaleJob;
 use App\Jobs\SweepEurekaMaterialsCatalogJob;
+use App\Models\EsecuzioneEureka;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -86,6 +89,30 @@ class GestionaleSyncReview extends Page
     protected function getHeaderActions(): array
     {
         return [
+            // Lo stesso sync delle 03:00, subito (22/09/2026).
+            Action::make('sincronizzaOra')
+                ->label('Sincronizza ora')
+                ->icon('heroicon-o-arrow-path')
+                ->color('primary')
+                ->requiresConfirmation()
+                ->modalHeading('Sincronizzare adesso con Eureka?')
+                ->modalDescription('Clienti, macchine, spostamenti e proposte, come ogni notte alle 03:00. Ci vogliono alcuni minuti: ti avviso qui quando ha finito. A fine giro parte anche la mail di riepilogo, come ogni notte.')
+                ->disabled(fn () => EsecuzioneEureka::where('comando', 'gestionale:sync')
+                    ->where('esito', EsecuzioneEureka::IN_CORSO)
+                    ->where('avviata_il', '>=', now()->subHours(3))
+                    ->exists())
+                ->tooltip(fn () => EsecuzioneEureka::where('comando', 'gestionale:sync')->where('esito', EsecuzioneEureka::IN_CORSO)->where('avviata_il', '>=', now()->subHours(3))->exists()
+                    ? 'Una sincronizzazione è già in corso.'
+                    : null)
+                ->action(function () {
+                    SincronizzaGestionaleJob::dispatch(Auth::user());
+
+                    Notification::make()
+                        ->title('Sincronizzazione avviata')
+                        ->body('Verrai avvisato qui quando termina.')
+                        ->success()
+                        ->send();
+                }),
             Action::make('importaRapportiniEureka')
                 ->label('Importa rapportini da Eureka')
                 ->icon('heroicon-o-arrow-down-tray')
@@ -165,6 +192,7 @@ class GestionaleSyncReview extends Page
     protected function getHeaderWidgets(): array
     {
         return [
+            EurekaUltimiAggiornamentiWidget::class,
             GestionaleDaRivedereWidget::class,
             GestionaleCollegamentiClientiWidget::class,
             GestionaleCollegamentiProdottiWidget::class,

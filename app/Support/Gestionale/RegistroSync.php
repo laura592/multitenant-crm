@@ -46,6 +46,7 @@ class RegistroSync
     public static function esito(string $operazione, array $numeri = []): void
     {
         Log::channel(self::CANALE)->info("{$operazione}: concluso", $numeri);
+        DiarioEsecuzioni::annotaEsito($operazione, $numeri);
     }
 
     /**
