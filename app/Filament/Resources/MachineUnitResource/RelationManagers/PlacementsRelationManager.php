@@ -6,11 +6,15 @@ use App\Models\Customer;
 use App\Models\MachineUnitPlacement;
 use App\Support\DisplayName;
 use App\Support\Macchine\EliminaPosizionamento;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Toggle;
+use Filament\Forms\Get;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Support\Carbon;
 
 /**
  * Storico sola lettura: gli spostamenti si creano solo tramite l'azione
@@ -77,10 +81,27 @@ class PlacementsRelationManager extends RelationManager
                             ->hint(fn (?string $state) => $record->avvisoPaganteEureka($state))
                             ->hintColor('warning')
                             ->hintIcon(fn (?string $state) => $record->avvisoPaganteEureka($state) ? 'heroicon-o-exclamation-triangle' : null),
+                        // Sulla posizione in corso il cambio ha una data, e il
+                        // pagante di prima resta nello storico fino a quel giorno.
+                        Toggle::make('correzione')
+                            ->label('Era sbagliato dall\'inizio (correggi, senza nuovo periodo)')
+                            ->live()
+                            ->visible($record->removed_at === null),
+                        DatePicker::make('dal')
+                            ->label('Paga il nuovo pagante dal')
+                            ->default(now()->toDateString())
+                            ->native(false)
+                            ->displayFormat('d/m/Y')
+                            ->minDate($record->placed_at->copy()->addDay()->toDateString())
+                            ->maxDate(now())
+                            ->required(fn (Get $get) => ! $get('correzione'))
+                            ->visible(fn (Get $get) => $record->removed_at === null && ! $get('correzione'))
+                            ->helperText('Fino al giorno prima resta il pagante di adesso: lo vedi nello storico.'),
                     ])
                     ->modalHeading(fn (MachineUnitPlacement $record) => 'Chi pagava presso '.DisplayName::customerOption($record->customer))
                     ->action(function (MachineUnitPlacement $record, array $data) {
-                        $record->cambiaPagante(($data['billing_customer_id'] ?? null) ? Customer::find($data['billing_customer_id']) : null);
+                        $dal = ($data['correzione'] ?? false) || empty($data['dal']) ? null : Carbon::parse($data['dal']);
+                        $record->cambiaPagante(($data['billing_customer_id'] ?? null) ? Customer::find($data['billing_customer_id']) : null, $dal?->isToday() ? now() : $dal?->startOfDay());
 
                         Notification::make()->title('Pagante aggiornato')->success()->send();
                     }),

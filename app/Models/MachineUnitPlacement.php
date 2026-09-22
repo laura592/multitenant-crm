@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 
 /**
  * Storico degli spostamenti di un MachineUnit: una riga per ogni periodo in
@@ -90,12 +91,26 @@ class MachineUnitPlacement extends Model
             .($this->removed_at === null ? ' Stanotte il CRM rimetterà quello: per cambiarlo davvero, correggilo su Eureka.' : '');
     }
 
-    /** Cambia chi pagava: sulla posizione attuale passa dalla macchina, che ne tiene la copia. */
-    public function cambiaPagante(?Customer $pagante): void
+    /**
+     * Cambia chi paga.
+     *
+     * Sulla posizione attuale, con una data: la macchina resta dov'e', ma da
+     * quel giorno paga un altro. La riga si chiude e se ne apre una nuova
+     * presso lo stesso cliente, cosi' lo storico dice chi pagava fino a
+     * quando (22/09/2026). Senza data (o su una riga vecchia) e' una
+     * correzione: era sbagliato dall'inizio, e si sovrascrive.
+     */
+    public function cambiaPagante(?Customer $pagante, ?\DateTimeInterface $dal = null): void
     {
         $id = $pagante && $pagante->id !== $this->customer_id ? $pagante->id : null;
 
         if ($this->removed_at === null && $this->machineUnit) {
+            if ($dal && Carbon::instance($dal)->startOfDay()->gt($this->placed_at->copy()->startOfDay())) {
+                $this->machineUnit->moveTo($this->customer, 'Cambio pagante', $dal, $pagante, $this->eureka_billing_customer_code);
+
+                return;
+            }
+
             $this->machineUnit->update(['billing_customer_id' => $id]);
             $this->refresh();
 

@@ -138,9 +138,22 @@ class PaganteMacchinaPosizionamentoTest extends TestCase
         $this->assertSame($this->rtg->id, $vecchia->fresh()->billing_customer_id);
         $this->assertNull($m->fresh()->billing_customer_id, 'Una riga vecchia non tocca il pagante di adesso.');
 
-        $tabella->callTableAction('cambia_pagante', $attuale, ['billing_customer_id' => $this->dersut->id])->assertHasNoTableActionErrors();
-        $this->assertSame($this->dersut->id, $m->fresh()->billing_customer_id, 'Sulla riga attuale cambia anche la macchina.');
-        $this->assertSame($this->dersut->id, $attuale->fresh()->billing_customer_id);
+        // Sulla riga in corso, con una data: nuovo periodo, e il pagante di
+        // prima resta nello storico fino a quel giorno.
+        $tabella->callTableAction('cambia_pagante', $attuale, ['billing_customer_id' => $this->dersut->id, 'dal' => '2026-06-01'])->assertHasNoTableActionErrors();
+        $m->refresh();
+        $this->assertSame($this->dersut->id, $m->billing_customer_id, 'Sulla riga attuale cambia anche la macchina.');
+        $this->assertSame($this->grigliata->id, $m->current_customer_id, 'La macchina resta dov\'e\'.');
+        $this->assertNull($attuale->fresh()->billing_customer_id, 'Fino al 31/05 pagava il cliente: resta scritto.');
+        $this->assertSame('2026-06-01', $attuale->fresh()->removed_at->toDateString());
+        $nuova = $m->placements()->whereNull('removed_at')->sole();
+        $this->assertSame([$this->grigliata->id, $this->dersut->id, '2026-06-01'], [$nuova->customer_id, $nuova->billing_customer_id, $nuova->placed_at->toDateString()]);
+
+        // Correzione: era sbagliato dall'inizio, niente periodo nuovo.
+        $tabella->callTableAction('cambia_pagante', $nuova, ['billing_customer_id' => $this->rtg->id, 'correzione' => true])->assertHasNoTableActionErrors();
+        $this->assertSame(3, $m->placements()->count());
+        $this->assertSame($this->rtg->id, $nuova->fresh()->billing_customer_id);
+        $this->assertSame($this->rtg->id, $m->fresh()->billing_customer_id);
     }
 
     public function test_avvisa_se_eureka_dice_un_altro_pagante(): void
