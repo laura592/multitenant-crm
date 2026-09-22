@@ -1102,6 +1102,8 @@ class ImportEurekaServiceReports extends Command
         ])));
 
         return match (true) {
+            // Prima di 'install': "disinstallazione" lo contiene.
+            str_contains($haystack, 'disinstall') => ServiceReport::TYPE_DISINSTALLAZIONE,
             str_contains($haystack, 'install') => ServiceReport::TYPE_INSTALLAZIONE,
             str_contains($haystack, 'garanzia') => ServiceReport::TYPE_GARANZIA,
             str_contains($haystack, 'manutenz') => ServiceReport::TYPE_MANUTENZIONE_ORDINARIA,

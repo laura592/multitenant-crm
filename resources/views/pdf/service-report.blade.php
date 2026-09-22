@@ -95,14 +95,7 @@
 
     @php
         $recipient = $report->invoiceRecipient();
-        $interventionTypeLabels = [
-            \App\Models\ServiceReport::TYPE_INSTALLAZIONE => 'Installazione',
-            \App\Models\ServiceReport::TYPE_MANUTENZIONE_ORDINARIA => 'Manutenzione ordinaria',
-            \App\Models\ServiceReport::TYPE_MANUTENZIONE_STRAORDINARIA => 'Manutenzione straordinaria',
-            \App\Models\ServiceReport::TYPE_RIPARAZIONE => 'Riparazione',
-            \App\Models\ServiceReport::TYPE_GARANZIA => 'Garanzia',
-            \App\Models\ServiceReport::TYPE_SANIFICAZIONE => 'Sanificazione',
-        ];
+        $interventionTypeLabels = \App\Filament\Resources\ServiceReportResource::interventionTypeLabels();
         $hasMachineInfo = $report->machineProduct || $report->machine_serial_number || $report->machineUnit || $report->quote;
         // Stesso controllo gia' fatto dall'ImageEntry dell'infolist Filament
         // (ServiceReportResource): il path puo' restare in DB anche se il

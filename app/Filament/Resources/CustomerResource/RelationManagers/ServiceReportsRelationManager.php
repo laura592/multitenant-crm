@@ -50,15 +50,7 @@ class ServiceReportsRelationManager extends RelationManager
                 Tables\Columns\TextColumn::make('intervention_type')
                     ->label('Tipo')
                     ->badge()
-                    ->formatStateUsing(fn (string $state) => match ($state) {
-                        ServiceReport::TYPE_INSTALLAZIONE => 'Installazione',
-                        ServiceReport::TYPE_MANUTENZIONE_ORDINARIA => 'Manutenzione ord.',
-                        ServiceReport::TYPE_MANUTENZIONE_STRAORDINARIA => 'Manutenzione straord.',
-                        ServiceReport::TYPE_RIPARAZIONE => 'Riparazione',
-                        ServiceReport::TYPE_GARANZIA => 'Garanzia',
-                        ServiceReport::TYPE_SANIFICAZIONE => 'Sanificazione',
-                        default => $state,
-                    })
+                    ->formatStateUsing(fn (string $state) => (\App\Filament\Resources\ServiceReportResource::interventionTypeLabels(short: true)[$state] ?? $state))
                     ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('status')
                     ->label('Stato')

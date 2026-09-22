@@ -20,6 +20,8 @@ class ServiceReport extends Model
 
     public const TYPE_INSTALLAZIONE = 'installazione';
 
+    public const TYPE_DISINSTALLAZIONE = 'disinstallazione';
+
     public const TYPE_MANUTENZIONE_ORDINARIA = 'manutenzione_ordinaria';
 
     public const TYPE_MANUTENZIONE_STRAORDINARIA = 'manutenzione_straordinaria';

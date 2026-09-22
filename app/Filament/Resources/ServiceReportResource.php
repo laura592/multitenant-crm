@@ -132,15 +132,7 @@ class ServiceReportResource extends Resource
                     TextEntry::make('intervention_type')
                         ->label('Tipo intervento')
                         ->badge()
-                        ->formatStateUsing(fn (string $state) => match ($state) {
-                            ServiceReport::TYPE_INSTALLAZIONE => 'Installazione',
-                            ServiceReport::TYPE_MANUTENZIONE_ORDINARIA => 'Manutenzione ordinaria',
-                            ServiceReport::TYPE_MANUTENZIONE_STRAORDINARIA => 'Manutenzione straordinaria',
-                            ServiceReport::TYPE_RIPARAZIONE => 'Riparazione',
-                            ServiceReport::TYPE_GARANZIA => 'Garanzia',
-                            ServiceReport::TYPE_SANIFICAZIONE => 'Sanificazione',
-                            default => $state,
-                        })
+                        ->formatStateUsing(fn (string $state) => (static::interventionTypeLabels()[$state] ?? $state))
                         ->columnSpan(2),
                     TextEntry::make('intervention_date')->label('Data')->date()->columnSpan(1),
                     TextEntry::make('status')
@@ -328,15 +320,7 @@ class ServiceReportResource extends Resource
                         ->content(fn (?ServiceReport $record) => $record?->technician?->name ?? '—'),
                     Forms\Components\Placeholder::make('summary_type')
                         ->label('Tipo intervento')
-                        ->content(fn (?ServiceReport $record) => match ($record?->intervention_type) {
-                            ServiceReport::TYPE_INSTALLAZIONE => 'Installazione',
-                            ServiceReport::TYPE_MANUTENZIONE_ORDINARIA => 'Manutenzione ordinaria',
-                            ServiceReport::TYPE_MANUTENZIONE_STRAORDINARIA => 'Manutenzione straordinaria',
-                            ServiceReport::TYPE_RIPARAZIONE => 'Riparazione',
-                            ServiceReport::TYPE_GARANZIA => 'Garanzia',
-                            ServiceReport::TYPE_SANIFICAZIONE => 'Sanificazione',
-                            default => '—',
-                        }),
+                        ->content(fn (?ServiceReport $record) => (static::interventionTypeLabels()[$record?->intervention_type] ?? '—')),
                     Forms\Components\Placeholder::make('summary_date')
                         ->label('Data')
                         ->content(fn (?ServiceReport $record) => $record
@@ -1265,14 +1249,7 @@ class ServiceReportResource extends Resource
                 Tables\Columns\TextColumn::make('intervention_type')
                     ->label('Tipo')
                     ->badge()
-                    ->formatStateUsing(fn (string $state) => match ($state) {
-                        ServiceReport::TYPE_INSTALLAZIONE => 'Installazione',
-                        ServiceReport::TYPE_MANUTENZIONE_ORDINARIA => 'Manutenzione ord.',
-                        ServiceReport::TYPE_MANUTENZIONE_STRAORDINARIA => 'Manutenzione straord.',
-                        ServiceReport::TYPE_RIPARAZIONE => 'Riparazione',
-                        ServiceReport::TYPE_GARANZIA => 'Garanzia',
-                        default => $state,
-                    }),
+                    ->formatStateUsing(fn (string $state) => (static::interventionTypeLabels(short: true)[$state] ?? $state)),
                 Tables\Columns\TextColumn::make('intervention_date')->label('Data')->date()->sortable(),
                 Tables\Columns\TextColumn::make('status')
                     ->label('Stato')
@@ -1340,14 +1317,7 @@ class ServiceReportResource extends Resource
             ->filters([
                 Tables\Filters\SelectFilter::make('intervention_type')
                     ->label('Tipo')
-                    ->options([
-                        ServiceReport::TYPE_INSTALLAZIONE => 'Installazione',
-                        ServiceReport::TYPE_MANUTENZIONE_ORDINARIA => 'Manutenzione ordinaria',
-                        ServiceReport::TYPE_MANUTENZIONE_STRAORDINARIA => 'Manutenzione straordinaria',
-                        ServiceReport::TYPE_RIPARAZIONE => 'Riparazione',
-                        ServiceReport::TYPE_GARANZIA => 'Garanzia',
-                        ServiceReport::TYPE_SANIFICAZIONE => 'Sanificazione',
-                    ]),
+                    ->options(static::interventionTypeLabels()),
                 Tables\Filters\SelectFilter::make('status')
                     ->label('Stato')
                     ->options(fn () => self::statusLabels()),
@@ -2093,12 +2063,18 @@ class ServiceReportResource extends Resource
             ));
     }
 
-    public static function interventionTypeLabels(): array
+    /**
+     * Unico elenco dei tipi intervento (form, filtri, tabelle, PDF): prima
+     * era ripetuto in otto punti, e un tipo nuovo andava aggiunto in tutti.
+     * $short per le colonne strette delle tabelle.
+     */
+    public static function interventionTypeLabels(bool $short = false): array
     {
         return [
             ServiceReport::TYPE_INSTALLAZIONE => 'Installazione',
-            ServiceReport::TYPE_MANUTENZIONE_ORDINARIA => 'Manutenzione ordinaria',
-            ServiceReport::TYPE_MANUTENZIONE_STRAORDINARIA => 'Manutenzione straordinaria',
+            ServiceReport::TYPE_DISINSTALLAZIONE => 'Disinstallazione',
+            ServiceReport::TYPE_MANUTENZIONE_ORDINARIA => $short ? 'Manutenzione ord.' : 'Manutenzione ordinaria',
+            ServiceReport::TYPE_MANUTENZIONE_STRAORDINARIA => $short ? 'Manutenzione straord.' : 'Manutenzione straordinaria',
             ServiceReport::TYPE_RIPARAZIONE => 'Riparazione',
             ServiceReport::TYPE_GARANZIA => 'Garanzia',
             ServiceReport::TYPE_SANIFICAZIONE => 'Sanificazione',
