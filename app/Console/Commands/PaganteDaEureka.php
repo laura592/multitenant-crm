@@ -110,16 +110,28 @@ class PaganteDaEureka extends Command
             ->whereIn('id', $correzioni->pluck('1.billing_customer_id')->filter()->unique())
             ->pluck('company_name', 'id');
 
-        $this->table(
-            ['Rapportino', 'Data', 'Cliente', 'Pagante oggi nel CRM', 'Pagante su Eureka'],
-            $correzioni->map(fn ($c) => [
-                $c[0]->number,
-                $c[0]->intervention_date?->format('d/m/Y'),
-                $c[0]->customer?->company_name ?? '—',
-                $c[0]->billingCustomer?->company_name ?? '(calcolato dalla macchina/cliente)',
-                $nomi[$c[1]['billing_customer_id']] ?? ($c[1]['eureka_destinazione_label'] ? $c[1]['eureka_destinazione_label'].' (non nel CRM)' : '—'),
-            ])->all(),
+        // Il pagante che il CRM mostra OGGI (calcolato da macchina/cliente se
+        // non fissato): e' il confronto che serve per capire cosa cambia.
+        $oggi = fn (ServiceReport $r) => rescue(fn () => $r->invoiceRecipient(), null, false);
+        [$cambiano, $soloFissati] = $correzioni->partition(
+            fn ($c) => $oggi($c[0])?->id !== $c[1]['billing_customer_id']
         );
+
+        $this->info("Il pagante resta lo stesso e viene solo fissato: {$soloFissati->count()} rapportini.");
+        $this->info("Il pagante CAMBIA: {$cambiano->count()} rapportini.");
+
+        if ($cambiano->isNotEmpty()) {
+            $this->table(
+                ['Rapportino', 'Data', 'Cliente', 'Pagante oggi nel CRM', 'Pagante su Eureka'],
+                $cambiano->map(fn ($c) => [
+                    $c[0]->number,
+                    $c[0]->intervention_date?->format('d/m/Y'),
+                    $c[0]->customer?->company_name ?? '—',
+                    $oggi($c[0])?->company_name ?? '—',
+                    $nomi[$c[1]['billing_customer_id']] ?? ($c[1]['eureka_destinazione_label'] ? $c[1]['eureka_destinazione_label'].' (non nel CRM)' : '—'),
+                ])->all(),
+            );
+        }
 
         if (! $this->option('esegui')) {
             $this->warn('Solo anteprima: niente e\' stato scritto. Rilancia con --esegui per applicare.');

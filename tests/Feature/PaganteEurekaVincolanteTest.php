@@ -85,7 +85,9 @@ class PaganteEurekaVincolanteTest extends TestCase
         $r = $this->importato();
         $this->eurekaDice(200);
 
-        $this->artisan('rapportini:pagante-da-eureka')->assertSuccessful();
+        $this->artisan('rapportini:pagante-da-eureka')
+            ->expectsOutputToContain('Il pagante CAMBIA: 1 rapportini.')
+            ->assertSuccessful();
         $this->assertNull($r->fresh()->billing_customer_id, 'senza --esegui non scrive');
 
         $this->artisan('rapportini:pagante-da-eureka --esegui')
@@ -101,6 +103,10 @@ class PaganteEurekaVincolanteTest extends TestCase
     {
         $r = $this->importato();
         $this->eurekaDice(null);
+
+        $this->artisan('rapportini:pagante-da-eureka')
+            ->expectsOutputToContain('Il pagante resta lo stesso e viene solo fissato: 1 rapportini.')
+            ->expectsOutputToContain('Il pagante CAMBIA: 0 rapportini.');
 
         $this->artisan('rapportini:pagante-da-eureka --esegui')
             ->expectsConfirmation('Scrivere il pagante di Eureka su 1 rapportini?', 'yes')
