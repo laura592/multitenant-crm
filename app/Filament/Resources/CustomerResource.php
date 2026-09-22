@@ -175,17 +175,49 @@ class CustomerResource extends Resource
         ]);
     }
 
+    /**
+     * Ricerca per nome come la scrive una persona: "alex s.r.l." deve
+     * trovare "Alex SRL", "bar roma treviso" il Bar Roma di Treviso. Ogni
+     * parola cercata deve comparire nella ragione sociale, nel nome, nel
+     * cognome o nel paese, ignorando punti, apostrofi, trattini e spazi.
+     */
+    public static function cercaPerNome(Builder $query, string $search): Builder
+    {
+        $pulisci = fn (string $colonna) => "LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE({$colonna}, ''), '.', ''), '''', ''), '-', ''), ',', ''), ' ', ''))";
+        $parole = collect(preg_split('/\s+/', mb_strtolower(trim($search))))
+            ->map(fn (string $parola) => str_replace(['.', "'", '-', ','], '', $parola))
+            ->filter(fn (string $parola) => $parola !== '');
+
+        if ($parole->isEmpty()) {
+            return $query;
+        }
+
+        foreach ($parole as $parola) {
+            $query->where(function (Builder $q) use ($parola, $pulisci) {
+                foreach (['company_name', 'first_name', 'last_name', 'city'] as $colonna) {
+                    $q->orWhereRaw($pulisci($colonna).' LIKE ?', ['%'.$parola.'%']);
+                }
+            });
+        }
+
+        return $query;
+    }
+
     public static function table(Table $table): Table
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('company_name')->label('Ragione sociale')->searchable()->sortable()
+                Tables\Columns\TextColumn::make('company_name')->label('Ragione sociale')->sortable()
+                    ->searchable(query: fn (Builder $query, string $search) => static::cercaPerNome($query, $search))
                     ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                 Tables\Columns\TextColumn::make('emails')
                     ->label('Email')
                     ->listWithLineBreaks()
+                    // LIKE sul testo del JSON invece di JSON_SEARCH: stesso
+                    // risultato, senza maiuscole/minuscole, e gira anche su
+                    // sqlite (i test).
                     ->searchable(query: fn ($query, string $search) => $query
-                        ->whereRaw('JSON_SEARCH(emails, "one", ?) IS NOT NULL', ["%{$search}%"])),
+                        ->whereRaw('LOWER(CAST(emails AS CHAR)) LIKE ?', ['%'.mb_strtolower($search).'%'])),
                 // Visibile di default (21/09/2026): il telefono e' il dato che
                 // si cerca di piu' nell'elenco, non va aperto il cliente per
                 // leggerlo. Per chiamare c'e' "Contatta" in fondo alla riga.
@@ -197,8 +229,12 @@ class CustomerResource extends Resource
                     ->copyable()
                     ->copyableState(fn (?string $state) => PhoneNumber::display($state))
                     ->copyMessage('Telefono copiato')
-                    ->searchable(query: fn ($query, string $search) => $query
-                        ->whereRaw('JSON_SEARCH(phones, "one", ?) IS NOT NULL', ['%'.preg_replace('/\D/', '', $search).'%']))
+                    // Solo se nella ricerca ci sono almeno 3 cifre: senza, il
+                    // filtro diventava "%%" e trovava TUTTI i clienti con un
+                    // telefono (cercando "alex s.r.l." usciva mezzo elenco).
+                    ->searchable(query: fn ($query, string $search) => strlen($cifre = preg_replace('/\D/', '', $search)) >= 3
+                        ? $query->whereRaw('CAST(phones AS CHAR) LIKE ?', ["%{$cifre}%"])
+                        : $query->whereRaw('1 = 0'))
                     ->toggleable(),
                 Tables\Columns\TextColumn::make('website')
                     ->label('Sito web')
