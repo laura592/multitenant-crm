@@ -47,7 +47,24 @@ class PaganteDaEureka extends Command
 
         $this->info("Schede da rileggere su Eureka: {$rapportini->count()}");
 
-        $esito = PaganteEureka::rileggiSchede($rapportini, scrivi: false);
+        // A blocchi, con la barra: sono migliaia di schede, una chiamata
+        // ciascuna, e in silenzio sembrava fermo (~40 minuti per tutte).
+        $esito = ['letti' => 0, 'cambiati' => [], 'non_trovati' => [], 'non_letti' => 0, 'da_scrivere' => []];
+        $barra = $this->output->createProgressBar($rapportini->count());
+        $barra->start();
+
+        foreach ($rapportini->chunk(100) as $blocco) {
+            $parziale = PaganteEureka::rileggiSchede($blocco->values(), scrivi: false);
+            $esito['letti'] += $parziale['letti'];
+            $esito['non_letti'] += $parziale['non_letti'];
+            foreach (['cambiati', 'non_trovati', 'da_scrivere'] as $k) {
+                $esito[$k] = [...$esito[$k], ...$parziale[$k]];
+            }
+            $barra->advance($blocco->count());
+        }
+
+        $barra->finish();
+        $this->output->writeln(["", ""]);
 
         if ($esito['non_letti'] > 0) {
             $this->warn("Non lette (Eureka non ha risposto): {$esito['non_letti']} - restano come sono, rilancia piu' tardi.");
