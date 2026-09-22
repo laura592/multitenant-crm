@@ -61,6 +61,12 @@ class GestionaleSyncRunner
             'spostamentiMacchine' => $this->proponiSpostamentiMacchine(),
             'eurekaNotes' => $this->syncEurekaNotes(),
             'doppioniRapportini' => $this->proponiDoppioniRapportini(),
+            // Schede Eureka la cui fattura e' intestata a un altro: si
+            // rileggono quelle gia' segnalate (magari corrette su Eureka) e si
+            // rifa' il controllo sulle fatture gia' nel CRM. Il pagante nel
+            // CRM resta sempre quello della scheda (ControlloPaganteFattura).
+            'schedeDaCorreggere' => ControlloPaganteFattura::ricontrolla($this->tenant)
+                + ['totale' => ControlloPaganteFattura::segnala($this->tenant)],
             // Un'interruzione di Eureka per tutta la durata della sync
             // produce comunque array vuoti da ogni metodo sopra (best-effort
             // by design) — indistinguibile da "niente da segnalare" senza
@@ -745,6 +751,22 @@ class GestionaleSyncRunner
         // del tutto (era pensato solo per creare macchine nuove).
         $knownMachineUnits = MachineUnit::query()->get(['id', 'serial_number', 'current_customer_id', 'eureka_billing_customer_code'])
             ->keyBy(fn (MachineUnit $m) => MachineUnit::chiaveMatricola($m->serial_number));
+
+        // Una macchina archiviata da una fusione non e' "sconosciuta": Eureka
+        // continua a chiamarla con la sua matricola, e ripristinarla rifaceva
+        // il doppione (con un'altra copia della consegna) che una persona
+        // aveva appena fuso. La sua matricola vale come quella della
+        // macchina in cui e' confluita.
+        MachineUnit::onlyTrashed()->whereNotNull('fusa_in_id')->get()
+            ->each(function (MachineUnit $fusa) use ($knownMachineUnits) {
+                $chiave = MachineUnit::chiaveMatricola($fusa->serial_number);
+                $superstite = $fusa->superstiteFusione();
+
+                if ($superstite && ! $knownMachineUnits->has($chiave)) {
+                    $knownMachineUnits->put($chiave, $superstite);
+                }
+            });
+
         $knownSerials = $knownMachineUnits->map(fn () => true)->all();
 
         $installedByCustomer = $this->installedMachinesByCustomer();

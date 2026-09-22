@@ -10,6 +10,7 @@ use App\Filament\Widgets\Gestionale\GestionaleDaRivedereWidget;
 use App\Filament\Widgets\Gestionale\GestionaleDoppioniRapportiniWidget;
 use App\Filament\Widgets\Gestionale\GestionaleFusioniMacchineWidget;
 use App\Filament\Widgets\Gestionale\GestionaleMacchineImportateWidget;
+use App\Filament\Widgets\Gestionale\GestionaleSchedeDaCorreggereWidget;
 use App\Filament\Widgets\Gestionale\GestionaleSpostamentiMacchineWidget;
 use App\Jobs\ImportEurekaServiceReportsJob;
 use App\Jobs\RefreshMaterialPricesFromEurekaJob;
@@ -201,6 +202,7 @@ class GestionaleSyncReview extends Page
             GestionaleDoppioniRapportiniWidget::class,
             GestionaleFusioniMacchineWidget::class,
             GestionaleSpostamentiMacchineWidget::class,
+            GestionaleSchedeDaCorreggereWidget::class,
         ];
     }
 }

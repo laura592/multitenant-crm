@@ -295,31 +295,23 @@ class ImportEurekaServiceReports extends Command
 
             $interventionDate = $appointmentDate ?? $documentDate;
 
-            // "destinazione" (doc API §6.1): chi paga davvero, se diverso
-            // dall'intestatario - mai letta prima da questo import (vedi
-            // audit fatturazione comodato, 2026-08-13). Solo nel detail
-            // (--with-detail), non nel summary. A volte ripete la stessa
-            // anagrafica dell'intestatario (stesso id_eureka): equivale a
-            // "nessun pagante diverso", va trattata come assenza.
-            $destinazioneCode = (int) ($detail['destinazione']['id_eureka'] ?? 0);
-            $intestatarioCode = (int) ($detail['id_intestatario'] ?? $summary['id_codice_f15'] ?? 0);
-            $hasDestinazione = $destinazioneCode > 0 && $destinazioneCode !== $intestatarioCode;
-
-            // Pagante vincolante (PaganteEureka): all'import vale solo una
-            // destinazione esplicita della scheda. Senza, chi paga lo dice la
-            // fattura, e lo scrive registraFattureEureka() quando arriva.
-            $destinazioneEsplicita = $detail ? PaganteEureka::destinazione($detail, $summary, $tenant->id) : null;
+            // Il pagante lo dice la scheda e il CRM lo copia (PaganteEureka):
+            // la "destinazione" (doc API §6.1) se c'e', anche scritta solo col
+            // nome, altrimenti l'intestatario. Solo nel detail (--with-detail):
+            // senza, pagante e destinazione gia' scritti restano come sono.
+            // Una destinazione che nel CRM non si ritrova non si indovina.
+            $scheda = $detail ? PaganteEureka::daScheda($detail, $summary, $tenant->id, $localCustomerId) : null;
 
             $payload = [
                 'tenant_id' => $tenant->id,
                 'source' => ServiceReport::SOURCE_EUREKA,
                 'eureka_service_report_id' => $eurekaId,
-                'eureka_destinazione_code' => $hasDestinazione ? $destinazioneCode : null,
-                'eureka_destinazione_label' => $hasDestinazione
-                    ? $this->normalizeText($detail['destinazione']['rag_sociale'] ?? null)
-                    : null,
+                ...($scheda ? [
+                    'eureka_destinazione_code' => $scheda['code'],
+                    'eureka_destinazione_label' => $this->normalizeText($scheda['label']),
+                ] : []),
                 'customer_id' => $localCustomerId,
-                ...($destinazioneEsplicita['customer_id'] ?? null ? ['billing_customer_id' => $destinazioneEsplicita['customer_id']] : []),
+                ...($scheda['trovato'] ?? false ? ['billing_customer_id' => $scheda['customer_id']] : []),
                 'machine_product_id' => $machineProduct?->id,
                 'machine_material_id' => $machineMaterial?->id,
                 'machine_unit_id' => $machineUnit?->id,

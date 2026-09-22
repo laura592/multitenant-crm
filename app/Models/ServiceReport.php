@@ -438,13 +438,6 @@ class ServiceReport extends Model
             $valori += ['eureka_fattura_motivo' => null, 'eureka_fattura_indizio' => null];
         }
 
-        // Il pagante e' chi ha ricevuto la fattura: nel gestionale e'
-        // vincolante (PaganteEureka), vince sul pagante della macchina.
-        $pagante = \App\Support\Gestionale\PaganteEureka::daFatture($fatture, $this->tenant_id);
-        if ($pagante && $pagante !== $this->billing_customer_id) {
-            $valori['billing_customer_id'] = $pagante;
-        }
-
         static::withTrashed()->whereKey($this->getKey())->toBase()->update($valori);
 
         $this->forceFill([
@@ -453,10 +446,6 @@ class ServiceReport extends Model
             'eureka_fatture_controllate_il' => $valori['eureka_fatture_controllate_il'],
         ])->syncOriginalAttributes(['eureka_fatture', 'eureka_fatturato_il', 'eureka_fatture_controllate_il']);
 
-        if (isset($valori['billing_customer_id'])) {
-            $this->forceFill(['billing_customer_id' => $valori['billing_customer_id']])->syncOriginalAttributes(['billing_customer_id']);
-            $this->unsetRelation('billingCustomer');
-        }
     }
 
     /** "FT 267 del 30/06/2026", la piu' recente; null se non fatturato. */
@@ -995,8 +984,9 @@ class ServiceReport extends Model
 
         // Pagante indicato da Eureka ma non (ancora) cliente del CRM: non si
         // congela un pagante indovinato dalla macchina, che sarebbe
-        // sbagliato. Resta vuoto finche' il cliente non esiste.
-        if ($this->isSuEureka() && $this->eureka_destinazione_code) {
+        // sbagliato. Resta vuoto finche' il cliente non esiste. Vale anche per
+        // una destinazione scritta solo col nome (PaganteEureka).
+        if ($this->isSuEureka() && ($this->eureka_destinazione_code || $this->eureka_destinazione_label)) {
             if ($daEureka = $this->eurekaDestinazionePayer()) {
                 $this->forceFill(['billing_customer_id' => $daEureka->id])->saveQuietly();
             }

@@ -3,118 +3,167 @@
 namespace App\Support\Gestionale;
 
 use App\Models\Customer;
-use App\Models\EurekaFattura;
 use App\Models\ServiceReport;
-use Illuminate\Support\Carbon;
+use App\Support\EurekaClient;
+use Illuminate\Support\Collection;
 
 /**
- * Chi paga una scheda lavoro secondo Eureka (22/09/2026: "se sono nel
- * gestionale deve essere vincolante").
+ * Chi paga un rapportino gia' nel gestionale (22/09/2026, deciso con Laura):
+ * lo dice la SCHEDA Eureka, e il CRM lo copia senza mai deciderlo da se'.
  *
- * La prova e' la FATTURA: a chi e' stata intestata la fattura su cui e'
- * finita la scheda. Verificato sul dump del 21/09/2026: delle 658 schede
- * senza pagante fissato ma gia' fatturate, 628 erano fatturate al cliente
- * stesso e 30 a un altro (ZAF Servizi, Villa Gestioni, Goppion...), e la
- * "destinazione" della scheda era vuota in tutte: non basta a dire chi paga.
+ * - Pagante = la destinazione della scheda; se e' vuota, l'intestatario (il
+ *   cliente del rapportino).
+ * - La fattura serve solo da CONTROLLO: se e' intestata a un altro, e' la
+ *   scheda che va corretta su Eureka (ControlloPaganteFattura). Il CRM poi
+ *   la rilegge e si allinea da solo.
  *
- * Prima della fattura vale solo una destinazione esplicita della scheda;
- * senza nessuna delle due Eureka non dice niente, e non si indovina.
+ * Attenzione alla destinazione: a volte ha il nome ma non il codice
+ * anagrafica (id_eureka 0), es. SL-346/2023 "MARTELLOZZO LORENZO & C. SAS".
+ * Non e' vuota: si cerca il cliente per nome.
  */
 class PaganteEureka
 {
-    /**
-     * Il cliente intestatario delle fatture della scheda. Null se non
-     * fatturata, se la fattura non e' (ancora) nell'elenco fatture del CRM,
-     * o se le fatture della stessa scheda sono intestate a clienti diversi.
-     *
-     * @param  array<int, array<string, mixed>>|null  $fatture  come ServiceReport::$eureka_fatture
-     */
-    public static function daFatture(?array $fatture, string $tenantId): ?string
-    {
-        $esito = static::esitoFatture($fatture, $tenantId);
+    /** @var array<string, array<string, array<int, string>>> tenant => nome normalizzato => id clienti */
+    private static array $perNome = [];
 
-        return $esito['esito'] === 'trovato' ? $esito['customer_id'] : null;
+    /**
+     * Il pagante secondo la scheda (dettaglio GET /schedelavoro/{id}).
+     *
+     * @param  array<string, mixed>  $detail
+     * @param  array<string, mixed>  $summary
+     * @return array{customer_id: ?string, code: ?int, label: ?string, trovato: bool}
+     *   trovato=false: la scheda indica un pagante che nel CRM non si ritrova
+     *   (codice o nome sconosciuti, o nome che corrisponde a piu' clienti).
+     */
+    public static function daScheda(array $detail, array $summary, string $tenantId, ?string $clienteId): array
+    {
+        $destinazione = is_array($detail['destinazione'] ?? null) ? $detail['destinazione'] : [];
+        $codice = (int) ($destinazione['id_eureka'] ?? 0);
+        $nome = trim((string) ($destinazione['rag_sociale'] ?? ''));
+        $intestatario = (int) ($detail['id_intestatario'] ?? $summary['id_codice_f15'] ?? 0);
+
+        $intestatarioPaga = ['customer_id' => $clienteId, 'code' => null, 'label' => null, 'trovato' => $clienteId !== null];
+
+        if ($codice > 0) {
+            if ($codice === $intestatario) {
+                return $intestatarioPaga;
+            }
+
+            $id = Customer::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('gestionale_code', $codice)->value('id');
+
+            return ['customer_id' => $id, 'code' => $codice, 'label' => $nome ?: null, 'trovato' => $id !== null];
+        }
+
+        if ($nome === '') {
+            return $intestatarioPaga;
+        }
+
+        // Destinazione scritta senza codice: si cerca per nome.
+        $cliente = $clienteId ? Customer::withoutGlobalScopes()->whereKey($clienteId)->value('company_name') : null;
+        if ($cliente !== null && static::normalizza($cliente) === static::normalizza($nome)) {
+            return $intestatarioPaga;
+        }
+
+        $trovati = static::clientiPerNome($tenantId)[static::normalizza($nome)] ?? [];
+        $id = count($trovati) === 1 ? $trovati[0] : null;
+
+        return ['customer_id' => $id, 'code' => null, 'label' => $nome, 'trovato' => $id !== null];
     }
 
     /**
-     * Come daFatture(), dicendo anche perche' non c'e' un pagante.
+     * Rilegge da Eureka (sola lettura) le schede dei rapportini e copia nel CRM
+     * pagante e destinazione. Tocca solo quelli, senza eventi.
      *
-     * La fattura della scheda si ritrova nell'elenco fatture per numero e
-     * anno: l'elenco non ha l'id della scheda. Le autofatture su acquisti
-     * (EurekaFattura::CAUSALI_NON_CLIENTI) si escludono: hanno una
-     * numerazione loro e duplicavano i numeri. Se anche cosi' il numero porta
-     * a clienti diversi, la fattura e' ambigua e non si decide.
-     *
-     * @param  array<int, array<string, mixed>>|null  $fatture
-     * @return array{esito: 'trovato'|'nessuna'|'ambigua', customer_id: ?string}
+     * @param  Collection<int, ServiceReport>  $rapportini
+     * @return array{letti: int, cambiati: array<int, array{0: ServiceReport, 1: ?string, 2: ?string}>, non_trovati: array<int, array{0: ServiceReport, 1: ?string}>, non_letti: int, da_scrivere: array<int, array{0: ServiceReport, 1: array<string, mixed>}>}
+     *   cambiati: [rapportino, pagante prima, pagante dopo]. Con $scrivi=false
+     *   non scrive niente: da_scrivere si passa poi a scrivi().
      */
-    public static function esitoFatture(?array $fatture, string $tenantId): array
+    public static function rileggiSchede(Collection $rapportini, bool $scrivi = true): array
     {
-        $clienti = collect();
+        $esito = ['letti' => 0, 'cambiati' => [], 'non_trovati' => [], 'non_letti' => 0, 'da_scrivere' => []];
 
-        foreach ($fatture ?? [] as $f) {
-            if (! is_array($f) || empty($f['numero_fattura']) || empty($f['data_fattura'])) {
+        $dettagli = app(EurekaClient::class)->pooledGetServiceReports(
+            $rapportini->map(fn (ServiceReport $r) => $r->idSchedaEureka())->filter()->values()->all()
+        );
+
+        foreach ($rapportini as $r) {
+            $detail = $dettagli[$r->idSchedaEureka()] ?? null;
+
+            if (! $detail) {
+                $esito['non_letti']++;
+
                 continue;
             }
 
-            $candidati = EurekaFattura::query()
-                ->where('tenant_id', $tenantId)
-                ->where('tipo', EurekaFattura::TIPO_CLIENTE)
-                // Solo fatture vere ai clienti: le autofatture su acquisti
-                // (ZAF, Vodafone...) hanno una numerazione loro e lo stesso
-                // numero di una fattura cliente.
-                ->where(fn ($q) => $q->whereNull('causale')->orWhereNotIn('causale', EurekaFattura::CAUSALI_NON_CLIENTI))
-                ->where('numero_doc', (string) $f['numero_fattura'])
-                ->whereYear('data_doc', Carbon::parse($f['data_fattura'])->year)
-                ->pluck('customer_id')
-                ->unique();
+            $esito['letti']++;
+            $scheda = static::daScheda($detail, [], $r->tenant_id, $r->customer_id);
 
-            if ($candidati->count() > 1) {
-                return ['esito' => 'ambigua', 'customer_id' => null];
+            if (! $scheda['trovato']) {
+                $esito['non_trovati'][] = [$r, $scheda['label']];
             }
 
-            $clienti = $clienti->merge($candidati->filter());
+            // Pagante che la scheda indica ma che nel CRM non si ritrova: non
+            // si inventa, si lascia quello che c'e'.
+            $pagante = $scheda['trovato'] ? $scheda['customer_id'] : $r->billing_customer_id;
+
+            $valori = [
+                'billing_customer_id' => $pagante,
+                'eureka_destinazione_code' => $scheda['code'],
+                'eureka_destinazione_label' => $scheda['label'],
+            ];
+
+            $prima = rescue(fn () => $r->invoiceRecipient()->id, null, false);
+
+            if ($pagante !== null && $pagante !== $prima) {
+                $esito['cambiati'][] = [$r, $prima, $pagante];
+            }
+
+            $diverso = collect($valori)->contains(fn ($v, $k) => (string) $r->{$k} !== (string) $v);
+
+            if ($diverso) {
+                $esito['da_scrivere'][] = [$r, $valori];
+            }
         }
 
-        $clienti = $clienti->unique();
+        if ($scrivi) {
+            static::scrivi($esito['da_scrivere']);
+        }
 
-        return match ($clienti->count()) {
-            0 => ['esito' => 'nessuna', 'customer_id' => null],
-            1 => ['esito' => 'trovato', 'customer_id' => $clienti->first()],
-            default => ['esito' => 'ambigua', 'customer_id' => null],
-        };
+        return $esito;
     }
 
     /**
-     * La destinazione ESPLICITA della scheda (dettaglio /schedelavoro), se
-     * diversa dall'intestatario. Vuota = Eureka non la indica: null.
+     * Copia nel CRM quello che rileggiSchede() ha letto. Solo pagante e
+     * destinazione, senza eventi: una lettura dal gestionale, non una
+     * modifica del rapportino.
      *
-     * @param  array<string, mixed>  $detail
-     * @return array{code: int, label: ?string, customer_id: ?string}|null
+     * @param  array<int, array{0: ServiceReport, 1: array<string, mixed>}>  $daScrivere
      */
-    public static function destinazione(array $detail, array $summary, string $tenantId): ?array
+    public static function scrivi(array $daScrivere): void
     {
-        $destinazione = (int) ($detail['destinazione']['id_eureka'] ?? 0);
-        $intestatario = (int) ($detail['id_intestatario'] ?? $summary['id_codice_f15'] ?? 0);
-
-        if ($destinazione <= 0 || $destinazione === $intestatario) {
-            return null;
+        foreach ($daScrivere as [$r, $valori]) {
+            ServiceReport::withoutGlobalScopes()->whereKey($r->getKey())->toBase()->update($valori);
+            $r->forceFill($valori)->syncOriginalAttributes(array_keys($valori));
+            $r->unsetRelation('billingCustomer');
         }
-
-        return [
-            'code' => $destinazione,
-            'label' => trim((string) ($detail['destinazione']['rag_sociale'] ?? '')) ?: null,
-            'customer_id' => Customer::query()->where('tenant_id', $tenantId)->where('gestionale_code', $destinazione)->value('id'),
-        ];
     }
 
-    /**
-     * Il pagante vincolante di un rapportino nel gestionale: fattura, poi
-     * destinazione esplicita gia' salvata. Null = Eureka non lo dice.
-     */
-    public static function per(ServiceReport $rapportino): ?string
+    public static function normalizza(string $nome): string
     {
-        return static::daFatture($rapportino->eureka_fatture, $rapportino->tenant_id)
-            ?? ($rapportino->eureka_destinazione_code ? $rapportino->eurekaDestinazionePayer()?->id : null);
+        return preg_replace('/[^A-Z0-9]/', '', mb_strtoupper($nome));
+    }
+
+    /** @return array<string, array<int, string>> */
+    private static function clientiPerNome(string $tenantId): array
+    {
+        return static::$perNome[$tenantId] ??= Customer::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->whereNull('deleted_at')
+            ->whereNotNull('company_name')
+            ->get(['id', 'company_name'])
+            ->groupBy(fn (Customer $c) => static::normalizza($c->company_name))
+            ->map(fn ($g) => $g->pluck('id')->all())
+            ->all();
     }
 }
