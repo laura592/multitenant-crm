@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\LogsAuditTrail;
+use App\Support\DisplayName;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -52,5 +53,55 @@ class MachineUnitPlacement extends Model
     public function billingCustomer(): BelongsTo
     {
         return $this->belongsTo(Customer::class, 'billing_customer_id');
+    }
+
+    /**
+     * Il pagante che Eureka indica per questa consegna, se diverso dal
+     * cliente stesso. Null anche quando Eureka non lo dice.
+     */
+    public function paganteEureka(): ?Customer
+    {
+        if (! $this->eureka_billing_customer_code) {
+            return null;
+        }
+
+        $pagante = Customer::withoutGlobalScopes()
+            ->where('tenant_id', $this->tenant_id)
+            ->where('gestionale_code', $this->eureka_billing_customer_code)
+            ->first();
+
+        return $pagante && $pagante->id !== $this->customer_id ? $pagante : null;
+    }
+
+    /**
+     * L'avviso da mostrare quando si sceglie un pagante diverso da quello
+     * di Eureka: sulla posizione attuale eureka:apply-machine-billing-payer
+     * (ogni notte alle 03:15) lo rimetterebbe com'e' su Eureka.
+     */
+    public function avvisoPaganteEureka(?string $sceltoId): ?string
+    {
+        $eureka = $this->paganteEureka();
+
+        if (! $eureka || $eureka->id === $sceltoId) {
+            return null;
+        }
+
+        return 'Su Eureka questa consegna è intestata a '.DisplayName::customerOption($eureka).'.'
+            .($this->removed_at === null ? ' Stanotte il CRM rimetterà quello: per cambiarlo davvero, correggilo su Eureka.' : '');
+    }
+
+    /** Cambia chi pagava: sulla posizione attuale passa dalla macchina, che ne tiene la copia. */
+    public function cambiaPagante(?Customer $pagante): void
+    {
+        $id = $pagante && $pagante->id !== $this->customer_id ? $pagante->id : null;
+
+        if ($this->removed_at === null && $this->machineUnit) {
+            $this->machineUnit->update(['billing_customer_id' => $id]);
+            $this->refresh();
+
+            return;
+        }
+
+        $this->update(['billing_customer_id' => $id]);
     }
 }

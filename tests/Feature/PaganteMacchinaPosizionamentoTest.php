@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\MachineUnitResource\Pages\ViewMachineUnit;
+use App\Filament\Resources\MachineUnitResource\RelationManagers\PlacementsRelationManager;
 use App\Models\Customer;
 use App\Models\MachineUnit;
 use App\Models\Tenant;
@@ -118,6 +119,38 @@ class PaganteMacchinaPosizionamentoTest extends TestCase
         $this->assertSame($this->grigliata->id, $m->current_customer_id);
         $this->assertSame($this->rtg->id, $m->billing_customer_id);
         $this->assertSame($this->rtg->id, $m->placements()->whereNull('removed_at')->sole()->billing_customer_id);
+    }
+
+    public function test_cambia_pagante_su_una_riga_dello_storico(): void
+    {
+        $user = User::create(['tenant_id' => $this->tenant->id, 'name' => 'Admin', 'email' => 'a@alex.it', 'password' => bcrypt('x')]);
+        $this->giveRole($user, $this->tenant, 'admin');
+        $this->actingAs($user);
+        Filament::setTenant($this->tenant);
+
+        $m = $this->macchina();
+        $m->moveTo($this->grigliata, placedAt: Carbon::parse('2026-01-14'));
+        $vecchia = $m->placements()->where('customer_id', $this->majer->id)->sole();
+        $attuale = $m->placements()->whereNull('removed_at')->sole();
+
+        $tabella = Livewire::test(PlacementsRelationManager::class, ['ownerRecord' => $m->fresh(), 'pageClass' => ViewMachineUnit::class]);
+        $tabella->callTableAction('cambia_pagante', $vecchia, ['billing_customer_id' => $this->rtg->id])->assertHasNoTableActionErrors();
+        $this->assertSame($this->rtg->id, $vecchia->fresh()->billing_customer_id);
+        $this->assertNull($m->fresh()->billing_customer_id, 'Una riga vecchia non tocca il pagante di adesso.');
+
+        $tabella->callTableAction('cambia_pagante', $attuale, ['billing_customer_id' => $this->dersut->id])->assertHasNoTableActionErrors();
+        $this->assertSame($this->dersut->id, $m->fresh()->billing_customer_id, 'Sulla riga attuale cambia anche la macchina.');
+        $this->assertSame($this->dersut->id, $attuale->fresh()->billing_customer_id);
+    }
+
+    public function test_avvisa_se_eureka_dice_un_altro_pagante(): void
+    {
+        $m = $this->macchina();
+        $attuale = $m->placements()->whereNull('removed_at')->sole();
+
+        $this->assertNull($attuale->avvisoPaganteEureka($this->dersut->id), 'Coincide con Eureka: nessun avviso.');
+        $this->assertStringContainsString('Stanotte', (string) $attuale->avvisoPaganteEureka($this->rtg->id));
+        $this->assertStringContainsString('Dersut', (string) $attuale->avvisoPaganteEureka(null));
     }
 
     public function test_sposta_dal_pannello_chiede_chi_paga(): void

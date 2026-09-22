@@ -6,6 +6,7 @@ use App\Models\Customer;
 use App\Models\MachineUnitPlacement;
 use App\Support\DisplayName;
 use App\Support\Macchine\EliminaPosizionamento;
+use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
@@ -55,6 +56,34 @@ class PlacementsRelationManager extends RelationManager
                 Tables\Columns\TextColumn::make('notes')->label('Note')->limit(50)->tooltip(fn ($state) => $state),
             ])
             ->actions([
+                // Chi pagava in quel periodo (22/09/2026). Sulla posizione
+                // attuale e' lo stesso "Fatturare a" della macchina.
+                Tables\Actions\Action::make('cambia_pagante')
+                    ->label('Cambia pagante')
+                    ->icon('heroicon-o-banknotes')
+                    ->color('gray')
+                    ->visible(fn (MachineUnitPlacement $record) => $record->customer_id !== null)
+                    ->authorize(fn () => auth()->user()?->can('update', $this->getOwnerRecord()) ?? false)
+                    ->fillForm(fn (MachineUnitPlacement $record) => ['billing_customer_id' => $record->billing_customer_id])
+                    ->form(fn (MachineUnitPlacement $record) => [
+                        Select::make('billing_customer_id')
+                            ->label('Fatturare a')
+                            ->helperText('Lascia vuoto se pagava il cliente stesso.')
+                            ->options(fn () => Customer::query()->orderBy('company_name')->get()->mapWithKeys(
+                                fn (Customer $c) => [$c->id => DisplayName::customerOption($c) ?: 'Cliente senza nome']
+                            ))
+                            ->searchable()
+                            ->live()
+                            ->hint(fn (?string $state) => $record->avvisoPaganteEureka($state))
+                            ->hintColor('warning')
+                            ->hintIcon(fn (?string $state) => $record->avvisoPaganteEureka($state) ? 'heroicon-o-exclamation-triangle' : null),
+                    ])
+                    ->modalHeading(fn (MachineUnitPlacement $record) => 'Chi pagava presso '.DisplayName::customerOption($record->customer))
+                    ->action(function (MachineUnitPlacement $record, array $data) {
+                        $record->cambiaPagante(($data['billing_customer_id'] ?? null) ? Customer::find($data['billing_customer_id']) : null);
+
+                        Notification::make()->title('Pagante aggiornato')->success()->send();
+                    }),
                 Tables\Actions\Action::make('elimina')
                     ->label('Elimina')
                     ->icon('heroicon-o-trash')

@@ -144,6 +144,10 @@ class MachineUnitResource extends Resource
                         ->searchable(['company_name', 'first_name', 'last_name', 'city'])
                         ->preload()
                         ->helperText('Chi paga dove si trova ora. Lascia vuoto se paga il cliente presso cui è installata. Quando la macchina si sposta si sceglie di nuovo con "Sposta"; lo storico è in "Storico posizionamenti".')
+                        ->live()
+                        ->hint(fn (?MachineUnit $record, ?string $state) => $record?->placements()->whereNull('removed_at')->first()?->avvisoPaganteEureka($state))
+                        ->hintColor('warning')
+                        ->hintIcon(fn (?MachineUnit $record, ?string $state) => $record?->placements()->whereNull('removed_at')->first()?->avvisoPaganteEureka($state) ? 'heroicon-o-exclamation-triangle' : null)
                         ->extraAttributes(['data-tour' => 'machine-units-field-billing']),
                     Forms\Components\Select::make('status')
                         ->label('Stato')
