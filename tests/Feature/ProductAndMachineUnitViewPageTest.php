@@ -30,7 +30,7 @@ use Tests\TestCase;
  */
 class ProductAndMachineUnitViewPageTest extends TestCase
 {
-    use RefreshDatabase, AssignsPermissionRoles;
+    use AssignsPermissionRoles, RefreshDatabase;
 
     private function loginAdmin(): Tenant
     {
@@ -176,6 +176,43 @@ class ProductAndMachineUnitViewPageTest extends TestCase
             ->assertHasNoActionErrors();
 
         $this->assertSame($newCustomer->id, $machine->fresh()->current_customer_id);
+    }
+
+    /**
+     * Matricola 18520 (22/09/2026): ritirata dalla Bertola il 29/10/2024,
+     * installata al Bellevue a maggio 2026, registrato solo adesso. Lo
+     * storico deve avere le date vere, non quella in cui lo si scrive.
+     */
+    public function test_sposta_con_la_data_vera_dello_spostamento(): void
+    {
+        $tenant = $this->loginAdmin();
+        $bertola = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Locanda Bertola']);
+        $bellevue = Customer::create(['tenant_id' => $tenant->id, 'company_name' => 'Hotel Bellevue']);
+        $machine = MachineUnit::create(['tenant_id' => $tenant->id, 'serial_number' => '18520', 'model_name' => 'Super Jolly']);
+        $machine->moveTo($bertola, placedAt: now()->setDate(2024, 1, 16)->startOfDay());
+
+        $pagina = Livewire::test(ViewMachineUnit::class, ['record' => $machine->getRouteKey()]);
+
+        // Prima di quando e' arrivata dove sta ora, no.
+        $pagina->mountAction('sposta')
+            ->setActionData(['customer_id' => null, 'data' => '2023-12-01'])
+            ->callMountedAction()
+            ->assertHasActionErrors(['data']);
+
+        $pagina->mountAction('sposta')
+            ->setActionData(['customer_id' => null, 'data' => '2024-10-29'])
+            ->callMountedAction()
+            ->assertHasNoActionErrors();
+        $pagina->mountAction('sposta')
+            ->setActionData(['customer_id' => $bellevue->id, 'data' => '2026-05-14'])
+            ->callMountedAction()
+            ->assertHasNoActionErrors();
+
+        $storico = $machine->placements()->reorder('placed_at')->get();
+        $this->assertSame(['2024-01-16', '2026-05-14'], $storico->map(fn ($p) => $p->placed_at->toDateString())->all());
+        $this->assertSame('2024-10-29', $storico[0]->removed_at->toDateString(), 'Ritirata quel giorno, non oggi.');
+        $this->assertNull($storico[1]->removed_at);
+        $this->assertSame($bellevue->id, $machine->fresh()->current_customer_id);
     }
 
     /**

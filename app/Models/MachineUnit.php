@@ -4,11 +4,15 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\LogsAuditTrail;
+use App\Support\Gestionale\RegistroSync;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Un macchinario fisico con matricola, tracciato indipendentemente da dove si
@@ -118,13 +122,21 @@ class MachineUnit extends Model
      */
     public function moveTo(?Customer $customer, ?string $notes = null, ?\DateTimeInterface $placedAt = null): void
     {
-        $this->placements()->whereNull('removed_at')->update(['removed_at' => now()]);
+        $quando = $placedAt ? Carbon::instance($placedAt) : now();
+
+        // La posizione vecchia si chiude nello stesso istante in cui si apre
+        // la nuova: uno spostamento registrato a posteriori ("ritirata il
+        // 29/10/2024") non deve risultare chiuso oggi (22/09/2026). Mai
+        // prima di quando era cominciata.
+        $this->placements()->whereNull('removed_at')->get()->each(
+            fn (MachineUnitPlacement $aperta) => $aperta->update(['removed_at' => $quando->max($aperta->placed_at)])
+        );
 
         if ($customer) {
             $this->placements()->create([
                 'tenant_id' => $this->tenant_id,
                 'customer_id' => $customer->id,
-                'placed_at' => $placedAt ?? now(),
+                'placed_at' => $quando,
                 'notes' => $notes,
             ]);
         }
@@ -165,7 +177,7 @@ class MachineUnit extends Model
             return false;
         }
 
-        \Illuminate\Support\Facades\DB::transaction(function () use ($open, $closed) {
+        DB::transaction(function () use ($open, $closed) {
             $open?->delete();
             $closed?->update(['removed_at' => null]);
 
@@ -190,7 +202,7 @@ class MachineUnit extends Model
             $this->placements()->max('removed_at'),
         ])->filter()->max();
 
-        return $lastMove !== null && \Illuminate\Support\Carbon::parse($lastMove)->gt(now()->subDays(30));
+        return $lastMove !== null && Carbon::parse($lastMove)->gt(now()->subDays(30));
     }
 
     /**
@@ -228,6 +240,7 @@ class MachineUnit extends Model
             'gestionale_suggested_label' => null,
         ]);
     }
+
     /**
      * Chiave di confronto fra matricole.
      *
@@ -245,7 +258,7 @@ class MachineUnit extends Model
     }
 
     /** La macchina che il sync propone di assorbire in questa. */
-    public function fusioneSuggerita(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    public function fusioneSuggerita(): BelongsTo
     {
         return $this->belongsTo(self::class, 'fusione_suggerita_id')->withTrashed();
     }
@@ -265,14 +278,14 @@ class MachineUnit extends Model
             return;
         }
 
-        \Illuminate\Support\Facades\DB::transaction(function () use ($altra) {
+        DB::transaction(function () use ($altra) {
             foreach ([
                 ['service_reports', 'machine_unit_id'],
                 ['machine_unit_placements', 'machine_unit_id'],
                 ['maintenance_schedules', 'machine_unit_id'],
             ] as [$tabella, $colonna]) {
-                if (\Illuminate\Support\Facades\Schema::hasColumn($tabella, $colonna)) {
-                    \Illuminate\Support\Facades\DB::table($tabella)
+                if (Schema::hasColumn($tabella, $colonna)) {
+                    DB::table($tabella)
                         ->where($colonna, $altra->id)
                         ->update([$colonna => $this->id]);
                 }
@@ -295,7 +308,7 @@ class MachineUnit extends Model
             $altra->delete();
         });
 
-        \App\Support\Gestionale\RegistroSync::movimento('macchine', 'macchine fuse', [
+        RegistroSync::movimento('macchine', 'macchine fuse', [
             'tenuta' => $this->serial_number,
             'assorbita' => $altra->serial_number,
             'deciso_da' => auth()->user()?->email,
@@ -307,5 +320,4 @@ class MachineUnit extends Model
     {
         $this->update(['fusione_suggerita_id' => null, 'fusione_suggerita_motivo' => null]);
     }
-
 }

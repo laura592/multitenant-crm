@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources;
 
-use Illuminate\Database\Eloquent\Builder;
 use App\Filament\Resources\MachineUnitResource\Pages;
 use App\Filament\Resources\MachineUnitResource\RelationManagers\PlacementsRelationManager;
 use App\Models\Customer;
@@ -10,8 +9,8 @@ use App\Models\MachineUnit;
 use App\Models\Material;
 use App\Models\Product;
 use App\Support\DisplayName;
-use App\Support\TariffeIntervento;
 use App\Support\Gestionale\EurekaClient;
+use App\Support\TariffeIntervento;
 use Filament\Actions\MountableAction;
 use Filament\Facades\Filament;
 use Filament\Forms;
@@ -23,6 +22,8 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 
 /**
  * Registro dei macchinari fisici: matricola, proprieta' (puo' non coincidere
@@ -40,7 +41,6 @@ class MachineUnitResource extends Resource
 
     protected static ?string $navigationGroup = 'Interventi tecnici';
 
-
     protected static ?int $navigationSort = 3;
 
     protected static ?string $navigationLabel = 'Macchinari';
@@ -48,7 +48,6 @@ class MachineUnitResource extends Resource
     protected static ?string $modelLabel = 'Macchinario';
 
     protected static ?string $pluralModelLabel = 'Macchinari';
-
 
     /**
      * Precarica le relazioni che l'elenco legge per ogni riga.
@@ -358,11 +357,29 @@ class MachineUnitResource extends Resource
                         fn (Customer $customer) => [$customer->id => DisplayName::customerOption($customer) ?: 'Cliente senza nome']
                     ))
                     ->searchable(),
+                // Gli spostamenti si registrano spesso dopo (22/09/2026: una
+                // macchina ritirata nel 2024 e reinstallata nel 2026): la data
+                // e' quella vera, non quella in cui lo si scrive.
+                Forms\Components\DatePicker::make('data')
+                    ->label('Data dello spostamento')
+                    ->default(now()->toDateString())
+                    ->required()
+                    ->native(false)
+                    ->displayFormat('d/m/Y')
+                    ->maxDate(now())
+                    ->minDate(fn (MachineUnit $record) => ($dal = $record->placements()->whereNull('removed_at')->max('placed_at'))
+                        ? Carbon::parse($dal)->toDateString()
+                        : null)
+                    ->helperText(fn (MachineUnit $record) => ($dal = $record->placements()->whereNull('removed_at')->max('placed_at'))
+                        ? 'Dove si trova ora è dal '.Carbon::parse($dal)->format('d/m/Y').': non si può spostare prima.'
+                        : null),
                 Forms\Components\Textarea::make('notes')->label('Note sullo spostamento'),
             ])
             ->action(function (MachineUnit $record, array $data) {
                 $customer = $data['customer_id'] ? Customer::find($data['customer_id']) : null;
-                $record->moveTo($customer, $data['notes'] ?? null);
+                $giorno = Carbon::parse($data['data']);
+                // Oggi con l'ora di adesso, un altro giorno a inizio giornata.
+                $record->moveTo($customer, $data['notes'] ?? null, $giorno->isToday() ? now() : $giorno->startOfDay());
 
                 Notification::make()
                     ->title($customer ? 'Macchina spostata presso '.DisplayName::titleCase($customer->company_name) : 'Macchina rientrata in magazzino')
