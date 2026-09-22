@@ -154,15 +154,18 @@ class Lavaggio extends Model
      */
     public function visitLinesLabel(): string
     {
+        // Una voce per bevanda: due rapportini dello stesso giorno sullo
+        // stesso impianto non devono ripeterla. Le vie sono le piu' alte.
         return $this->visitSiblings()
-            ->map(function (self $l) {
-                $label = MaintenanceScheduleResource::beverageLabels()[$l->maintenanceSchedule?->beverage_type] ?? null;
-                $vie = $l->lines_washed ? $l->lines_washed.($l->lines_washed === 1 ? ' via' : ' vie') : null;
+            ->groupBy(fn (self $l) => MaintenanceScheduleResource::beverageLabels()[$l->maintenanceSchedule?->beverage_type] ?? '')
+            ->map(function (Collection $righe, string $bevanda) {
+                $vie = (int) $righe->max('lines_washed');
+                $vie = $vie ? $vie.($vie === 1 ? ' via' : ' vie') : null;
 
-                return trim(($label ?? ($vie ? 'Lavaggio' : '')).' '.($vie ?? ''));
+                return trim(($bevanda !== '' ? $bevanda : ($vie ? 'Lavaggio' : '')).' '.($vie ?? ''));
             })
             ->filter()
-            ->unique()
+            ->values()
             ->implode(' · ') ?: '—';
     }
 
