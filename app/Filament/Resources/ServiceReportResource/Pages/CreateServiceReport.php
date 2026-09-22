@@ -98,6 +98,20 @@ class CreateServiceReport extends CreateRecord
         ];
     }
 
+    /**
+     * "Salva e nuovo" non ricarica la pagina: il form si svuota e si
+     * riempie di nuovo, ma si restava in fondo, sui pulsanti. Il rapportino
+     * successivo si comincia dall'alto (richiesta dell'ufficio, 22/09/2026).
+     */
+    public function create(bool $another = false): void
+    {
+        parent::create($another);
+
+        if ($another) {
+            $this->js('window.scrollTo({ top: 0, behavior: "smooth" })');
+        }
+    }
+
     protected function getRedirectUrl(): string
     {
         if ($this->firmaDopo && $this->getRecord()) {

@@ -122,6 +122,9 @@ class FirmaRapportiniInBloccoTest extends TestCase
         $pagina->call('createAnother');
         $pagina->assertHasNoFormErrors();
 
+        // Il rapportino successivo si comincia dall'alto, non dai pulsanti in fondo.
+        $this->assertStringContainsString('window.scrollTo', implode(' ', array_column($pagina->effects['xjs'] ?? [], 'expression')));
+
         // Il secondo rapportino riparte dallo stesso cliente.
         $this->assertSame($this->cliente->id, $pagina->get('data.customer_id'));
         $this->assertSame(ServiceReport::TYPE_RIPARAZIONE, $pagina->get('data.intervention_type'));
