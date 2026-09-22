@@ -143,7 +143,7 @@ class MachineUnitResource extends Resource
                         ->getOptionLabelFromRecordUsing(fn (Customer $record) => DisplayName::customerOption($record))
                         ->searchable(['company_name', 'first_name', 'last_name', 'city'])
                         ->preload()
-                        ->helperText('Lascia vuoto se paga il cliente presso cui è installata questa macchina.')
+                        ->helperText('Chi paga dove si trova ora. Lascia vuoto se paga il cliente presso cui è installata. Quando la macchina si sposta si sceglie di nuovo con "Sposta"; lo storico è in "Storico posizionamenti".')
                         ->extraAttributes(['data-tour' => 'machine-units-field-billing']),
                     Forms\Components\Select::make('status')
                         ->label('Stato')
@@ -182,16 +182,27 @@ class MachineUnitResource extends Resource
                     TextEntry::make('type')
                         ->label('Categoria impianto')
                         ->formatStateUsing(fn (?string $state) => static::typeLabels()[$state] ?? '—'),
-                    TextEntry::make('billingCustomer.full_name')->label('Fatturare a')->placeholder('—')
-                        ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
+                    TextEntry::make('notes')->label('Note')->placeholder('—')->columnSpanFull(),
+                ]),
+            // Dove si trova e chi paga non sono della macchina ma della sua
+            // posizione (22/09/2026): qui quella attuale, sotto lo storico.
+            InfolistSection::make('Dove si trova ora')
+                ->columns(4)
+                ->schema([
                     TextEntry::make('currentCustomer.full_name')->label('Presso')->placeholder('In magazzino')
+                        ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
+                    TextEntry::make('dal')->label('Dal')
+                        ->state(fn (MachineUnit $record) => $record->placements()->whereNull('removed_at')->max('placed_at'))
+                        ->date('d/m/Y')
+                        ->placeholder('—'),
+                    TextEntry::make('billingCustomer.full_name')->label('Fatturare a')
+                        ->placeholder(fn (MachineUnit $record) => $record->current_customer_id ? 'il cliente' : '—')
                         ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                     TextEntry::make('status')
                         ->label('Stato')
                         ->badge()
                         ->formatStateUsing(fn (string $state) => static::statusLabels()[$state] ?? 'In magazzino')
                         ->color(fn (string $state) => static::statusColors()[$state] ?? 'gray'),
-                    TextEntry::make('notes')->label('Note')->placeholder('—')->columnSpanFull(),
                 ]),
         ]);
     }
