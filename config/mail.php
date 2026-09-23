@@ -18,6 +18,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Dirottamento fuori produzione
+    |--------------------------------------------------------------------------
+    |
+    | Il .env di sviluppo punta all'SMTP vero di Alex, e il database locale e'
+    | un dump di produzione con clienti veri dentro: provare "Invia preventivo"
+    | in locale scriveva a un cliente vero. Fuori dalla produzione ogni
+    | messaggio va invece a questo indirizzo, qualunque destinatario abbia:
+    | la mail si vede lo stesso, ma non esce verso nessun cliente.
+    |
+    | Si legge con MAIL_REDIRECT_TO; lasciarlo vuoto spegne il dirottamento
+    | (e allora la posta parte davvero, anche in locale).
+    |
+    */
+
+    'redirect_non_production' => env('MAIL_REDIRECT_TO', env('MAIL_FROM_ADDRESS')),
+
+    /*
+    |--------------------------------------------------------------------------
     | Mailer Configurations
     |--------------------------------------------------------------------------
     |

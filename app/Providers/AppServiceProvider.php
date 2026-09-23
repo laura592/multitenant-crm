@@ -33,6 +33,7 @@ use Filament\Tables\Table;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\ValidationException;
 use Jeffgreco13\FilamentBreezy\Livewire\PersonalInfo;
@@ -64,6 +65,21 @@ class AppServiceProvider extends ServiceProvider
         // revisione del sync (22/09/2026).
         if ($this->app->runningInConsole()) {
             DiarioEsecuzioni::registra();
+        }
+
+        // Fuori produzione la posta non deve raggiungere nessun cliente vero.
+        //
+        // Il .env locale punta all'SMTP di Alex e il database locale e' un
+        // dump di produzione: una prova di "Invia preventivo" partiva davvero,
+        // verso l'indirizzo vero del cliente vero. Qui ogni messaggio viene
+        // dirottato su un indirizzo solo (config/mail.php), cosi' lo si legge
+        // senza che esca. I test restano fuori: usano il mailer "array" e
+        // controllano i destinatari veri.
+        if (! $this->app->isProduction()
+            && ! $this->app->runningUnitTests()
+            && filled($dirottaA = config('mail.redirect_non_production'))
+        ) {
+            Mail::alwaysTo($dirottaA);
         }
 
         // Staff Alex (is_super_admin): bypassa i permessi Shield/spatie in ogni
