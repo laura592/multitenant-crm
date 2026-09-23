@@ -77,21 +77,23 @@ class ApplyEurekaMachineBillingPayer extends Command
                 continue;
             }
 
-            if ($payerId === $machine->current_customer_id) {
-                // Il pagante Eureka coincide col cliente presso cui e'
-                // installata: equivale a "nessun pagante diverso", non va
-                // forzato un billing_customer_id esplicito per questo.
-                $selfPaying++;
-
-                continue;
-            }
-
+            // Il pagante Eureka coincide col cliente presso cui la macchina
+            // e' installata: va scritto lo stesso, per esteso (23/09/2026).
+            // Lasciarlo vuoto non vuol dire "paga il cliente": vuol dire
+            // "non l'ha detto nessuno", e allora vale il pagante
+            // dell'anagrafica — Bar Miki ha Dersut in anagrafica, e
+            // l'impianto alla spina suo (SPINAMIKI, codice pagante 233 =
+            // lui stesso) finiva a Dersut.
             $currentPayerId = $machine->billing_customer_id;
 
             if ($currentPayerId === $payerId) {
                 $alreadyCorrect++;
 
                 continue;
+            }
+
+            if ($payerId === $machine->current_customer_id) {
+                $selfPaying++;
             }
 
             if ($currentPayerId !== null) {
@@ -119,12 +121,12 @@ class ApplyEurekaMachineBillingPayer extends Command
 
         $this->newLine();
         $this->info(sprintf(
-            '%sApplicati: %d (di cui %d sovrascritti su un valore CRM diverso). Gia\' corretti: %d. Pagante = cliente stesso (nessuna modifica necessaria): %d. Codice pagante non risolvibile in CRM: %d.',
+            '%sApplicati: %d (di cui %d sovrascritti su un valore CRM diverso, e %d "paga il cliente stesso"). Gia\' corretti: %d. Codice pagante non risolvibile in CRM: %d.',
             $dryRun ? '[DRY RUN] ' : '',
             $applied,
             count($overwritten),
-            $alreadyCorrect,
             $selfPaying,
+            $alreadyCorrect,
             $unresolved,
         ));
 

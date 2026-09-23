@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\LogsAuditTrail;
 use App\Support\Gestionale\ConfrontoRapportini;
+use App\Support\Gestionale\FattureRapportino;
 use App\Support\Gestionale\RegistroSync;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
@@ -12,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 class ServiceReport extends Model
@@ -428,7 +430,7 @@ class ServiceReport extends Model
 
         $valori = [
             'eureka_fatture' => $fatture === [] ? null : json_encode($fatture),
-            'eureka_fatturato_il' => $data ? \Illuminate\Support\Carbon::parse($data)->toDateString() : null,
+            'eureka_fatturato_il' => $data ? Carbon::parse($data)->toDateString() : null,
             'eureka_fatture_controllate_il' => now(),
         ];
 
@@ -453,7 +455,7 @@ class ServiceReport extends Model
     {
         $f = $this->eureka_fatture[0] ?? null;
 
-        return $f ? \App\Support\Gestionale\FattureRapportino::etichetta($f) : null;
+        return $f ? FattureRapportino::etichetta($f) : null;
     }
 
     /**
@@ -957,7 +959,9 @@ class ServiceReport extends Model
             throw new \RuntimeException('Cliente collegato a questo rapportino non trovato (probabilmente eliminato).');
         }
 
-        return $this->machineUnit?->billingCustomer ?? $this->customer->invoiceRecipient();
+        // Sul rapportino di una macchina decide la macchina: il pagante
+        // dell'anagrafica vale solo dove nessuno ha detto niente.
+        return $this->machineUnit?->paganteEffettivo() ?? $this->customer->invoiceRecipient();
     }
 
     /**

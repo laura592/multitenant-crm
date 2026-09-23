@@ -110,6 +110,12 @@ class MachineUnitPlacement extends Model
             return DisplayName::customerOption($this->billingCustomer);
         }
 
+        // Eureka indica come pagante il cliente stesso: l'ha detto il
+        // gestionale, non si eredita quello dell'anagrafica (23/09/2026).
+        if ($this->eureka_billing_customer_code && (int) $this->customer?->gestionale_code === (int) $this->eureka_billing_customer_code) {
+            return 'il cliente stesso';
+        }
+
         $delCliente = $this->customer?->billingCustomer;
 
         return $delCliente
