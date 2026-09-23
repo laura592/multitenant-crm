@@ -17,11 +17,15 @@ use App\Models\Product;
 use App\Models\ServiceReport;
 use App\Policies\ServiceReportPolicy;
 use App\Support\DisplayName;
+use App\Support\Gestionale\FattureRapportino;
+use App\Support\Gestionale\SenzaFatturaCollegata;
 use App\Support\OutsideLivewireRender;
 use App\Support\Rapportini\DividiPerMacchina;
 use App\Support\Rapportini\LavaggioFields;
 use App\Support\TariffeIntervento;
 use Barryvdh\DomPDF\Facade\Pdf;
+use BezhanSalleh\FilamentShield\Contracts\HasShieldPermissions;
+use Filament\Actions\MountableAction;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -33,13 +37,13 @@ use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
-use Filament\Actions\MountableAction;
+use Filament\Notifications\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Support\Enums\FontWeight;
 use Filament\Support\Exceptions\Halt;
 use Filament\Tables;
 use Filament\Tables\Table;
-use App\Support\Gestionale\SenzaFatturaCollegata;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
@@ -49,14 +53,32 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 
-class ServiceReportResource extends Resource
+class ServiceReportResource extends Resource implements HasShieldPermissions
 {
     protected static ?string $model = ServiceReport::class;
+
+    /**
+     * I permessi nostri, oltre a quelli standard: senza dichiararli qui non
+     * comparivano nella schermata dei ruoli, e chi modificava un ruolo dal
+     * pannello li perdeva senza accorgersene — e' cosi' che
+     * view_prices_service::report e' sparito dal ruolo admin (04/09/2026) e
+     * poi da amministrazione (22/09/2026, Cristina non vedeva piu' le
+     * fatture collegate ai rapportini).
+     */
+    public static function getPermissionPrefixes(): array
+    {
+        return [
+            ...(array) config('filament-shield.permission_prefixes.resource', []),
+            'view_prices',
+            'send_to_gestionale',
+            'send_email',
+            'send_email_completo',
+        ];
+    }
 
     protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-check';
 
     protected static ?string $navigationGroup = 'Interventi tecnici';
-
 
     protected static ?int $navigationSort = 1;
 
@@ -1346,7 +1368,7 @@ class ServiceReportResource extends Resource
                         default => 'gray',
                     })
                     ->weight(fn (ServiceReport $record) => $record->eureka_fattura_motivo === SenzaFatturaCollegata::DA_VERIFICARE && $record->eureka_fatturato_il === null
-                        ? \Filament\Support\Enums\FontWeight::Bold
+                        ? FontWeight::Bold
                         : null)
                     // "probabile FT 479 del 07/11/2025" e' lungo: a capo, non
                     // tagliato sul bordo della tabella.
@@ -1470,7 +1492,7 @@ class ServiceReportResource extends Resource
                         ->visible(fn (ServiceReport $record): bool => $record->idSchedaEureka() !== null
                             && (auth()->user()?->can('viewPrices', $record) ?? false))
                         ->modalHeading('Fattura su Eureka')
-                        ->modalContent(fn (ServiceReport $record) => view('filament.modals.fatture-eureka', \App\Support\Gestionale\FattureRapportino::per($record)))
+                        ->modalContent(fn (ServiceReport $record) => view('filament.modals.fatture-eureka', FattureRapportino::per($record)))
                         ->modalSubmitAction(false)
                         ->modalCancelActionLabel('Chiudi'),
                     Tables\Actions\Action::make('send')
@@ -2188,7 +2210,7 @@ class ServiceReportResource extends Resource
                     ->title("Diviso: {$record->number} e {$nuovo->number}")
                     ->body('Il nuovo rapportino ha la stessa firma. Per correggerli insieme: "Modifica visita".')
                     ->actions([
-                        \Filament\Notifications\Actions\Action::make('apri')
+                        Action::make('apri')
                             ->label("Apri {$nuovo->number}")
                             ->url(static::getUrl('view', ['record' => $nuovo])),
                     ])

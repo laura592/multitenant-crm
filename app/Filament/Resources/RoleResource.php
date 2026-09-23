@@ -2,10 +2,10 @@
 
 namespace App\Filament\Resources;
 
-use BezhanSalleh\FilamentShield\Contracts\HasShieldPermissions;
-use BezhanSalleh\FilamentShield\Forms\ShieldSelectAllToggle;
 use App\Filament\Resources\RoleResource\Pages;
+use BezhanSalleh\FilamentShield\Contracts\HasShieldPermissions;
 use BezhanSalleh\FilamentShield\Facades\FilamentShield;
+use BezhanSalleh\FilamentShield\Forms\ShieldSelectAllToggle;
 use BezhanSalleh\FilamentShield\Support\Utils;
 use BezhanSalleh\FilamentShield\Traits\HasShieldFormComponents;
 use Filament\Facades\Filament;
@@ -227,6 +227,12 @@ class RoleResource extends Resource implements HasShieldPermissions
         'restore_any' => 'Ripristinare in blocco',
         'force_delete' => 'Eliminare per sempre',
         'force_delete_any' => 'Eliminare per sempre in blocco',
+        // I permessi nostri dei rapportini (ServiceReportResource): senza
+        // un'etichetta qui comparirebbero come "View Prices".
+        'view_prices' => 'Vedere i prezzi',
+        'send_to_gestionale' => 'Inviare a Eureka',
+        'send_email' => 'Inviare al cliente',
+        'send_email_completo' => 'Scegliere la copia da inviare',
     ];
 
     /**
@@ -263,13 +269,15 @@ class RoleResource extends Resource implements HasShieldPermissions
             $opzioni["{$prefisso}_{$risorsa}"] = self::ETICHETTE[$prefisso];
         }
 
-        // Un prefisso che la risorsa dichiara ma che qui non abbiamo tradotto
-        // non deve sparire dalla schermata: finirebbe fuori da ogni controllo.
+        // Un prefisso che la risorsa dichiara e che non e' fra quelli
+        // standard (es. view_prices_service::report) non deve sparire dalla
+        // schermata: finirebbe fuori da ogni controllo, e chi salva il ruolo
+        // lo perderebbe senza accorgersene. Col suo nome se ce l'ha.
         foreach ($attivi as $prefisso) {
             $nome = "{$prefisso}_{$risorsa}";
 
-            if (! array_key_exists($nome, $opzioni) && ! array_key_exists($prefisso, self::ETICHETTE)) {
-                $opzioni[$nome] = Str::headline($prefisso);
+            if (! array_key_exists($nome, $opzioni)) {
+                $opzioni[$nome] = self::ETICHETTE[$prefisso] ?? Str::headline($prefisso);
             }
         }
 
@@ -302,8 +310,7 @@ class RoleResource extends Resource implements HasShieldPermissions
                 fn (string $value, ?array $state) => $value !== $viewAnyKey
                     && $value !== $viewKey
                     && ! (collect($state ?? [])->contains($viewAnyKey) && collect($state ?? [])->contains($viewKey))
-            )
-;
+            );
     }
 
     /**
