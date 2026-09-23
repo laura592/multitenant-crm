@@ -188,6 +188,65 @@ class ScadutoWidgetTest extends TestCase
     }
 
     /**
+     * Il saldo di un cliente che non e' da chiamare.
+     *
+     * L'elenco e' la lista delle telefonate, quindi taglia fuori chi non e'
+     * ancora scaduto e chi e' a credito: giusto per telefonare, inutile
+     * quando si sta verificando un'anagrafica contro il gestionale. Il
+     * Ristorante alla Grigliata (273,52 in scadenza il 30/11) e Moka Efti
+     * (244,00 a credito) erano scritti giusti nei nostri dati e non si
+     * vedevano da nessuna parte nel CRM.
+     */
+    public function test_tutti_i_saldi_mostra_anche_chi_non_e_da_chiamare(): void
+    {
+        $tenant = Tenant::create(['name' => 'Alex', 'slug' => 'alex', 'is_master' => true]);
+        $user = User::create([
+            'tenant_id' => $tenant->id, 'name' => 'Amm', 'email' => 'amm@alex.it', 'password' => bcrypt('password'),
+        ]);
+        $this->giveRole($user, $tenant, 'admin');
+        $user->update(['is_super_admin' => true]);
+
+        $partita = function (array $dati) use ($tenant) {
+            EurekaPartitaAperta::create($dati + [
+                'tenant_id' => $tenant->id,
+                'tipo' => EurekaPartitaAperta::TIPO_CLIENTE,
+                'anno' => 2026,
+            ]);
+        };
+
+        $partita(['gestionale_code' => 18, 'ragione_sociale' => 'Da Chiamare', 'numero_fattura' => '43',
+            'data_fattura' => '2026-02-28', 'data_scadenza' => '2026-02-28', 'saldo' => 100.00]);
+        $partita(['gestionale_code' => 1493, 'ragione_sociale' => 'Alla Grigliata', 'numero_fattura' => '429',
+            'data_fattura' => '2026-09-21', 'data_scadenza' => '2099-11-30', 'saldo' => 273.52]);
+        $partita(['gestionale_code' => 1221, 'ragione_sociale' => 'Moka Efti', 'numero_fattura' => '516',
+            'data_fattura' => '2023-12-15', 'data_scadenza' => null, 'saldo' => -244.00]);
+
+        $this->actingAs($user);
+        Filament::setTenant($tenant);
+
+        // Di partenza comanda la telefonata: gli altri due non si chiamano.
+        $this->assertSame(
+            [18],
+            Livewire::test(ScadutoClienti::class)->instance()->getTableRecords()
+                ->pluck('gestionale_code')->all(),
+        );
+
+        $saldi = Livewire::test(ScadutoClienti::class)->callAction('modo');
+
+        $this->assertEqualsCanonicalizing(
+            [18, 1493, 1221],
+            $saldi->instance()->getTableRecords()->pluck('gestionale_code')->all(),
+            'coi saldi in vista ci sono anche le scadenze future e i clienti a credito',
+        );
+
+        $saldi->assertSee('273,52')
+            // Una partita che deve ancora scadere non e' "ferma da -68
+            // giorni": dice quando scade.
+            ->assertSee('scade il 30/11/2099')
+            ->assertDontSee('-244,00 giorni');
+    }
+
+    /**
      * Gli incassi che Eureka non abbina a nessuna fattura sono soldi gia'
      * arrivati. Finche' l'elenco li scartava (stesso filtro dei riporti:
      * niente numero di fattura) capitava di chiamare un cliente per

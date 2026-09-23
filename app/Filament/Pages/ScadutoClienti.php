@@ -97,9 +97,28 @@ class ScadutoClienti extends Page implements HasTable
 
     protected static ?string $slug = 'scaduto';
 
+    /**
+     * Due letture dello stesso archivio.
+     *
+     * Spenta (il default) la pagina e' l'elenco delle telefonate: solo chi ha
+     * qualcosa di gia' scaduto e resta a debito. Accesa mostra il SALDO di
+     * ogni anagrafica con una partita aperta, scadenze future comprese e
+     * crediti compresi.
+     *
+     * Serve perche' finora quei saldi non si vedevano da nessuna parte:
+     * chi voleva sapere a quanto sta un cliente doveva aprire Eureka.
+     * Ristorante alla Grigliata (273,52, ma in scadenza il 30/11) e Moka
+     * Efti (244,00 a credito) non comparivano da nessuna parte nel CRM, pur
+     * essendo scritti giusti nei nostri dati — bastava non poterli
+     * guardare. Indicazione dell'utente, 23/09/2026.
+     */
+    public bool $tuttiISaldi = false;
+
     public function getSubheading(): ?string
     {
-        return 'Chi chiamare, in ordine di urgenza. Importi al netto di note di credito e incassi non ancora imputati, riporti di apertura compresi: quello che il cliente deve davvero.';
+        return $this->tuttiISaldi
+            ? 'Il saldo di ogni cliente con una partita aperta, scadenze future e crediti compresi. È il numero del gestionale, non l\'elenco delle telefonate.'
+            : 'Chi chiamare, in ordine di urgenza. Importi al netto di note di credito e incassi non ancora imputati, riporti di apertura compresi: quello che il cliente deve davvero.';
     }
 
     /**
@@ -158,6 +177,23 @@ class ScadutoClienti extends Page implements HasTable
     private static function giorni(mixed $data): int
     {
         return (int) Carbon::parse($data)->diffInDays(now());
+    }
+
+    /**
+     * Da quanto aspetta quella riga, o quando scadra'. Una sola definizione
+     * per la colonna e per la stampa: erano gia' due copie della stessa
+     * frase, e con le scadenze future sarebbero diventate due copie dello
+     * stesso "-68 giorni".
+     */
+    private static function attesa(mixed $piuVecchia): string
+    {
+        if (! $piuVecchia) {
+            return '—';
+        }
+
+        return Carbon::parse($piuVecchia)->isFuture()
+            ? 'scade il '.Carbon::parse($piuVecchia)->format('d/m/Y')
+            : self::giorni($piuVecchia).' giorni';
     }
 
     /**
@@ -220,6 +256,19 @@ class ScadutoClienti extends Page implements HasTable
     protected function getHeaderActions(): array
     {
         return [
+            // Il cambio di modo sta in testata e non fra i filtri: un filtro
+            // Filament aggiunge condizioni, mentre qui bisogna TOGLIERE
+            // quelle che fanno dell'elenco una lista di telefonate (solo
+            // scaduto, solo chi resta a debito).
+            Actions\Action::make('modo')
+                ->label(fn () => $this->tuttiISaldi ? 'Solo chi è scaduto' : 'Tutti i saldi')
+                ->icon(fn () => $this->tuttiISaldi ? 'heroicon-o-phone-arrow-up-right' : 'heroicon-o-list-bullet')
+                ->color('gray')
+                ->action(function () {
+                    $this->tuttiISaldi = ! $this->tuttiISaldi;
+                    $this->resetTable();
+                }),
+
             Actions\Action::make('stampa')
                 ->label('Stampa')
                 ->icon('heroicon-o-printer')
@@ -230,7 +279,10 @@ class ScadutoClienti extends Page implements HasTable
                         'composizione' => self::composizione($record),
                         'detrazioni' => self::detrazioni($record),
                         'scaduto' => (float) $record->scaduto,
-                        'giorni' => $record->piu_vecchia ? self::giorni($record->piu_vecchia) : null,
+                        'attesa' => self::attesa($record->piu_vecchia),
+                        'giorni' => $record->piu_vecchia && ! Carbon::parse($record->piu_vecchia)->isFuture()
+                            ? self::giorni($record->piu_vecchia)
+                            : null,
                         'piu_vecchia' => $record->piu_vecchia ? Carbon::parse($record->piu_vecchia)->format('d/m/Y') : null,
                     ])->all();
 
@@ -240,6 +292,7 @@ class ScadutoClienti extends Page implements HasTable
                     // ogni @if.
                     $pdf = OutsideLivewireRender::run(fn () => Pdf::loadView('pdf.scaduto-clienti', [
                         'righe' => $righe,
+                        'saldi' => $this->tuttiISaldi,
                         'tenant' => Filament::getTenant(),
                         'ricerca' => $this->getTableSearch(),
                         'data' => now()->format('d/m/Y'),
@@ -251,7 +304,10 @@ class ScadutoClienti extends Page implements HasTable
                     // dov'era con la sua ricerca, che e' anche quella che
                     // questa stampa segue.
                     static::apriUrlInNuovaScheda(
-                        StampaTemporanea::parcheggia($pdf->output(), 'scaduto-clienti-'.now()->format('Y-m-d').'.pdf'),
+                        StampaTemporanea::parcheggia(
+                            $pdf->output(),
+                            ($this->tuttiISaldi ? 'saldi-clienti-' : 'scaduto-clienti-').now()->format('Y-m-d').'.pdf',
+                        ),
                         $this,
                     );
                 }),
@@ -286,19 +342,22 @@ class ScadutoClienti extends Page implements HasTable
                 ->where('tipo', EurekaPartitaAperta::TIPO_CLIENTE)
                 // Del dare entra solo cio' che e' gia' scaduto, dell'avere
                 // tutto: una nota di credito abbassa quello che il cliente
-                // deve a prescindere dalla sua data.
-                ->where(fn (Builder $q) => $q
+                // deve a prescindere dalla sua data. Nel modo "tutti i
+                // saldi" non si taglia niente: il saldo e' il saldo.
+                ->when(! $this->tuttiISaldi, fn (Builder $q) => $q
                     ->where(fn (Builder $q) => $q
-                        ->where('saldo', '>', 0)
-                        ->whereRaw(self::SCADENZA_EFFETTIVA.' < ?', [now()->toDateString()]))
-                    ->orWhere('saldo', '<', 0))
+                        ->where(fn (Builder $q) => $q
+                            ->where('saldo', '>', 0)
+                            ->whereRaw(self::SCADENZA_EFFETTIVA.' < ?', [now()->toDateString()]))
+                        ->orWhere('saldo', '<', 0)))
                 ->groupBy('gestionale_code')
                 // Il netto positivo e' la condizione per comparire, e visto
                 // che le partite positive qui dentro sono solo quelle
                 // scadute garantisce anche che ce ne sia almeno una: chi ha
                 // solo note di credito, o piu' credito che debito, non e'
-                // qualcuno da chiamare.
-                ->havingRaw('SUM(saldo) > 0'))
+                // qualcuno da chiamare. Di nuovo, non vale per i saldi: un
+                // cliente a credito ha un saldo, e va visto.
+                ->when(! $this->tuttiISaldi, fn (Builder $q) => $q->havingRaw('SUM(saldo) > 0')))
             ->columns([
                 Tables\Columns\TextColumn::make('ragione_sociale')
                     ->label('Cliente')
@@ -313,7 +372,11 @@ class ScadutoClienti extends Page implements HasTable
                     ->description(fn ($record) => self::composizione($record)),
 
                 Tables\Columns\TextColumn::make('scaduto')
-                    ->label('Scaduto')
+                    // La colonna e' la stessa somma, ma nei due modi dice
+                    // due cose diverse: chiamarla "Scaduto" accanto a una
+                    // fattura che scade fra due mesi sarebbe falso.
+                    ->label(fn () => $this->tuttiISaldi ? 'Saldo' : 'Scaduto')
+                    ->color(fn ($record) => (float) $record->scaduto < 0 ? 'success' : null)
                     ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderByRaw("SUM(saldo) {$direction}"))
                     ->money('EUR')
                     ->alignEnd()
@@ -331,9 +394,14 @@ class ScadutoClienti extends Page implements HasTable
                     // (int) non e' pignoleria: diffInDays() restituisce un
                     // float, quindi senza cast in colonna finisce
                     // "397.73471022177 giorni".
-                    ->formatStateUsing(fn ($state) => $state ? self::giorni($state).' giorni' : '—')
+                    // Con i saldi in vista entrano anche le scadenze future,
+                    // e li' diffInDays() torna un numero negativo: "-68
+                    // giorni" non lo legge nessuno. Una partita che deve
+                    // ancora scadere dice quando scade.
+                    ->formatStateUsing(fn ($state) => self::attesa($state))
                     ->color(fn ($state) => match (true) {
                         ! $state => 'gray',
+                        Carbon::parse($state)->isFuture() => 'success',
                         self::giorni($state) > 180 => 'danger',
                         self::giorni($state) > 60 => 'warning',
                         default => 'info',
@@ -352,8 +420,10 @@ class ScadutoClienti extends Page implements HasTable
             // diventerebbe un criterio secondario e quindi inefficace.
             ->defaultSort(fn (Builder $query): Builder => $query->orderByRaw(self::ordinamentoPerPeso(), [now()->toDateString()]))
             ->recordUrl(fn ($record) => DettaglioScaduto::getUrl(['codice' => $record->gestionale_code]))
-            ->emptyStateHeading('Nessuno scaduto')
-            ->emptyStateDescription('Nessun cliente ha fatture scadute. I dati si aggiornano con eureka:import-partite-aperte.')
+            ->emptyStateHeading(fn () => $this->tuttiISaldi ? 'Nessuna partita aperta' : 'Nessuno scaduto')
+            ->emptyStateDescription(fn () => $this->tuttiISaldi
+                ? 'Nessun cliente ha partite aperte su Eureka. I dati si aggiornano con eureka:import-partite-aperte.'
+                : 'Nessun cliente ha fatture scadute. I dati si aggiornano con eureka:import-partite-aperte.')
             ->paginated([25, 50, 100]);
     }
 }

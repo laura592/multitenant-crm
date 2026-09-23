@@ -33,25 +33,26 @@
 </head>
 <body>
 
-<h1>Scaduto clienti</h1>
+<h1>{{ $saldi ? 'Saldi clienti' : 'Scaduto clienti' }}</h1>
 <div class="sottotitolo">
     {{ $tenant?->name }} — situazione al {{ $data }}
     @if($ricerca) · filtrato per “{{ $ricerca }}” @endif
     · importi al netto di note di credito e incassi non imputati, riporti di apertura compresi
+    @if($saldi) · scadenze future e clienti a credito compresi @endif
 </div>
 
 <table class="riepilogo">
     <tr>
         <td width="33%">
-            <div class="etichetta">Clienti da chiamare</div>
+            <div class="etichetta">{{ $saldi ? 'Clienti con partite aperte' : 'Clienti da chiamare' }}</div>
             <div class="valore">{{ count($righe) }}</div>
         </td>
         <td width="33%">
-            <div class="etichetta">Totale scaduto</div>
+            <div class="etichetta">{{ $saldi ? 'Totale saldi' : 'Totale scaduto' }}</div>
             <div class="valore">€ {{ number_format($totale, 2, ',', '.') }}</div>
         </td>
         <td>
-            <div class="etichetta">Attesa più lunga</div>
+            <div class="etichetta">{{ $saldi ? 'Ritardo più lungo' : 'Attesa più lunga' }}</div>
             <div class="valore">{{ $attesaMassima !== null ? $attesaMassima.' giorni' : '—' }}</div>
         </td>
     </tr>
@@ -63,7 +64,7 @@
             <th width="4%">#</th>
             <th>Cliente</th>
             <th width="12%" class="centro">Ferma da</th>
-            <th width="16%" class="destra">Scaduto</th>
+            <th width="16%" class="destra">{{ $saldi ? 'Saldo' : 'Scaduto' }}</th>
             <th class="esito">Esito telefonata</th>
         </tr>
     </thead>
@@ -83,8 +84,11 @@
                     </div>
                 </td>
                 <td class="centro @if($riga['giorni'] !== null && $riga['giorni'] > 180) rosso @elseif($riga['giorni'] !== null && $riga['giorni'] > 60) ambra @endif">
-                    {{ $riga['giorni'] !== null ? $riga['giorni'].' gg' : '—' }}
-                    @if($riga['piu_vecchia'])
+                    {{-- Stessa dicitura dello schermo: coi saldi in vista una
+                         partita puo' dover ancora scadere, e "gg" non direbbe
+                         niente. --}}
+                    {{ $riga['giorni'] !== null ? $riga['giorni'].' gg' : $riga['attesa'] }}
+                    @if($riga['piu_vecchia'] && $riga['giorni'] !== null)
                         <div class="nota">dal {{ $riga['piu_vecchia'] }}</div>
                     @endif
                 </td>
