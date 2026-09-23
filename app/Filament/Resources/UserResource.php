@@ -14,6 +14,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Validation\Rules\Password;
 
 /**
  * Creazione/gestione utenti, riservata al ruolo "admin" e allo staff master
@@ -78,6 +79,14 @@ class UserResource extends Resource
                         ->required(fn (string $context) => $context === 'create')
                         ->dehydrated(fn (?string $state) => filled($state))
                         ->dehydrateStateUsing(fn (string $state) => bcrypt($state))
+                        // Qui non c'era nessuna lunghezza minima: da questa
+                        // schermata si poteva assegnare "1234" a un utente che
+                        // vede clienti e prezzi. E' la stessa regola che il
+                        // pannello applica gia' a chi si cambia la password da
+                        // solo (BreezyCore::passwordUpdateRules in
+                        // AdminPanelProvider): non ha senso che sia piu'
+                        // permissiva quando la password la sceglie un altro.
+                        ->rule(Password::default()->min(8))
                         ->maxLength(255)
                         ->helperText('Lascia vuoto per non modificarla.')
                         ->extraAttributes(['data-tour' => 'users-field-password']),
@@ -181,6 +190,12 @@ class UserResource extends Resource
                     ->color(fn (User $record) => $record->is_active ? 'danger' : 'success')
                     ->requiresConfirmation(fn (User $record) => $record->is_active)
                     ->hidden(fn (User $record) => $record->id === auth()->id())
+                    // Disattivare un utente vale quanto modificarlo: questa e'
+                    // un'azione nostra e, a differenza di Edit/Elimina, Filament
+                    // non la manda da sola alla policy. Senza, l'admin di un
+                    // partner poteva chiudere fuori dal pannello lo staff master
+                    // Alex, che compare in ogni elenco Utenti (getEloquentQuery).
+                    ->visible(fn (User $record) => (bool) auth()->user()?->can('update', $record))
                     ->action(fn (User $record) => $record->update(['is_active' => ! $record->is_active])),
                 Tables\Actions\ActionGroup::make([
                     Tables\Actions\EditAction::make(),
@@ -197,7 +212,8 @@ class UserResource extends Resource
                         ->requiresConfirmation()
                         ->action(function (Collection $records) {
                             $ownAccount = $records->contains('id', auth()->id());
-                            $records->reject(fn (User $record) => $record->id === auth()->id())
+                            static::selezioneConsentita($records, 'update')
+                                ->reject(fn (User $record) => $record->id === auth()->id())
                                 ->each(fn (User $record) => $record->update(['is_active' => false]));
 
                             if ($ownAccount) {
@@ -212,11 +228,13 @@ class UserResource extends Resource
                         ->label('Attiva selezionati')
                         ->icon('heroicon-o-lock-open')
                         ->color('success')
-                        ->action(fn (Collection $records) => $records->each(fn (User $record) => $record->update(['is_active' => true]))),
+                        ->action(fn (Collection $records) => static::selezioneConsentita($records, 'update')
+                            ->each(fn (User $record) => $record->update(['is_active' => true]))),
                     Tables\Actions\DeleteBulkAction::make()
                         ->action(function (Collection $records) {
                             $ownAccount = $records->contains('id', auth()->id());
-                            $records->reject(fn (User $record) => $record->id === auth()->id())
+                            static::selezioneConsentita($records, 'delete')
+                                ->reject(fn (User $record) => $record->id === auth()->id())
                                 ->each->delete();
 
                             if ($ownAccount) {
@@ -229,6 +247,43 @@ class UserResource extends Resource
                         }),
                 ]),
             ]);
+    }
+
+    /**
+     * Fra gli utenti selezionati, quelli su cui chi agisce ha davvero potere.
+     *
+     * Le azioni in blocco ricevono una Collection gia' pronta e non passano
+     * da nessuna policy, a differenza di EditAction/DeleteAction: senza
+     * questo filtro l'admin di un tenant partner poteva spuntare la riga
+     * dello staff master Alex - che compare nell'elenco Utenti di OGNI
+     * tenant, vedi getEloquentQuery() - ed eliminarlo o disattivarlo in
+     * blocco, aggirando il controllo appena messo in UserPolicy.
+     *
+     * Chi resta fuori viene detto, invece di sparire in silenzio: chi ha
+     * selezionato dieci righe deve sapere che due non sono state toccate.
+     *
+     * @param  Collection<int, User>  $records
+     * @return Collection<int, User>
+     */
+    protected static function selezioneConsentita(Collection $records, string $azione): Collection
+    {
+        $utente = auth()->user();
+
+        $consentiti = $records->filter(fn (User $record) => (bool) $utente?->can($azione, $record));
+
+        $scartati = $records->count() - $consentiti->count();
+
+        if ($scartati > 0) {
+            Notification::make()
+                ->title($scartati === 1
+                    ? 'Un utente non e\' stato toccato'
+                    : "{$scartati} utenti non sono stati toccati")
+                ->body('Sono di un altro tenant: puoi gestire solo gli utenti del tuo.')
+                ->warning()
+                ->send();
+        }
+
+        return $consentiti;
     }
 
     public static function getPages(): array

@@ -274,6 +274,15 @@ class RoleResource extends Resource implements HasShieldPermissions
         // schermata: finirebbe fuori da ogni controllo, e chi salva il ruolo
         // lo perderebbe senza accorgersene. Col suo nome se ce l'ha.
         foreach ($attivi as $prefisso) {
+            // Stessa eccezione del ciclo sopra, da ripetere qui: questo giro
+            // guarda i prefissi dichiarati dalla risorsa, non l'ORDINE, e
+            // senza il controllo rimetteva dentro "ripristina"/"elimina per
+            // sempre" anche dove il cestino non c'e' - proprio le caselle
+            // che il ciclo precedente aveva appena tolto.
+            if (! $conCestino && in_array($prefisso, self::SOLO_COL_CESTINO, true)) {
+                continue;
+            }
+
             $nome = "{$prefisso}_{$risorsa}";
 
             if (! array_key_exists($nome, $opzioni)) {
