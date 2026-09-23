@@ -145,6 +145,47 @@ class PaganteMacchinaPosizionamentoTest extends TestCase
         $this->assertSame('il cliente stesso', $impianto->placements()->whereNull('removed_at')->sole()->paganteInParole());
     }
 
+    /**
+     * Il macinadosatore 0819352 e' stato alla Pizzeria la Nuvola fino al DDT
+     * 186 del 18/11/2024, e su Eureka quella consegna non risulta piu': il
+     * periodo si aggiunge a mano (23/09/2026).
+     */
+    public function test_un_periodo_passato_si_aggiunge_a_mano(): void
+    {
+        $user = User::create(['tenant_id' => $this->tenant->id, 'name' => 'Admin', 'email' => 'periodo@alex.it', 'password' => bcrypt('x')]);
+        $this->giveRole($user, $this->tenant, 'admin');
+        $this->actingAs($user);
+        Filament::setTenant($this->tenant);
+
+        $nuvola = Customer::create(['tenant_id' => $this->tenant->id, 'company_name' => 'Pizzeria la Nuvola']);
+        $m = $this->macchina();
+        $m->moveTo($this->grigliata, placedAt: Carbon::parse('2026-01-14'));
+
+        $tabella = Livewire::test(PlacementsRelationManager::class, ['ownerRecord' => $m->fresh(), 'pageClass' => ViewMachineUnit::class]);
+
+        $tabella->callTableAction('aggiungi_periodo', data: [
+            'customer_id' => $nuvola->id,
+            'dal' => '2023-06-01',
+            'al' => '2023-11-18',
+            'notes' => 'Ritirata con DDT 186',
+        ])->assertHasNoTableActionErrors();
+
+        $periodo = $m->placements()->where('customer_id', $nuvola->id)->sole();
+        $this->assertSame('2023-06-01', $periodo->placed_at->toDateString());
+        $this->assertSame('2023-11-18', $periodo->removed_at->toDateString());
+        $this->assertSame($this->grigliata->id, $m->fresh()->current_customer_id, 'Dov\'e\' adesso non cambia.');
+
+        // Un periodo che si accavalla a uno che c'e' gia' non si scrive.
+        $tabella->callTableAction('aggiungi_periodo', data: [
+            'customer_id' => $nuvola->id,
+            'dal' => '2026-02-01',
+            'al' => '2026-03-01',
+            'notes' => null,
+        ]);
+
+        $this->assertSame(1, $m->placements()->where('customer_id', $nuvola->id)->count());
+    }
+
     public function test_cambia_pagante_su_una_riga_dello_storico(): void
     {
         $user = User::create(['tenant_id' => $this->tenant->id, 'name' => 'Admin', 'email' => 'a@alex.it', 'password' => bcrypt('x')]);

@@ -8,6 +8,7 @@ use App\Support\DisplayName;
 use App\Support\Macchine\EliminaPosizionamento;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Forms\Get;
 use Filament\Notifications\Notification;
@@ -17,11 +18,16 @@ use Filament\Tables\Table;
 use Illuminate\Support\Carbon;
 
 /**
- * Storico sola lettura: gli spostamenti si creano solo tramite l'azione
- * "Sposta" sulla lista principale (MachineUnit::moveTo()), mai qui a mano,
- * per non rompere l'invariante "un solo posizionamento aperto alla volta".
- * Uno spostamento sbagliato si toglie da qui con "Elimina", anche se non e'
- * l'ultimo: lo storico si ricuce da solo (EliminaPosizionamento).
+ * Lo spostamento di oggi si fa con "Sposta" sulla macchina
+ * (MachineUnit::moveTo()), mai qui: qui si romperebbe l'invariante "un solo
+ * posizionamento aperto alla volta". Uno spostamento sbagliato si toglie
+ * con "Elimina", anche se non e' l'ultimo: lo storico si ricuce da solo
+ * (EliminaPosizionamento).
+ *
+ * Qui si aggiunge invece un periodo CHIUSO del passato, che il gestionale
+ * non sa piu' raccontare (23/09/2026, macinadosatore 0819352: alla Pizzeria
+ * la Nuvola fino al DDT 186 del 18/11/2024 — su Eureka quella consegna non
+ * risulta piu' fra le installate, quindi dalle bolle non si ricostruisce).
  */
 class PlacementsRelationManager extends RelationManager
 {
@@ -53,6 +59,61 @@ class PlacementsRelationManager extends RelationManager
                 Tables\Columns\TextColumn::make('placed_at')->label('Dal')->dateTime('d/m/Y H:i'),
                 Tables\Columns\TextColumn::make('removed_at')->label('Al')->dateTime('d/m/Y H:i')->placeholder('In corso'),
                 Tables\Columns\TextColumn::make('notes')->label('Note')->limit(50)->tooltip(fn ($state) => $state),
+            ])
+            ->headerActions([
+                // Un periodo del passato che il gestionale non racconta piu'.
+                // Chiuso per forza: dov'e' la macchina adesso lo dice
+                // "Sposta", e due posizionamenti aperti sarebbero un guaio.
+                Tables\Actions\Action::make('aggiungi_periodo')
+                    ->label('Aggiungi periodo passato')
+                    ->icon('heroicon-o-plus')
+                    ->color('gray')
+                    ->authorize(fn () => auth()->user()?->can('update', $this->getOwnerRecord()) ?? false)
+                    ->modalHeading('Dov\'era la macchina in quel periodo')
+                    ->modalDescription('Per i passaggi che su Eureka non risultano più, tipo un ritiro con un DDT. Per dire dov\'è adesso si usa "Sposta".')
+                    ->form([
+                        Select::make('customer_id')
+                            ->label('Cliente')
+                            ->helperText('Vuoto = in magazzino.')
+                            ->options(fn () => Customer::query()->orderBy('company_name')->get()->mapWithKeys(
+                                fn (Customer $customer) => [$customer->id => DisplayName::customerOption($customer) ?: 'Cliente senza nome']
+                            ))
+                            ->searchable(),
+                        DatePicker::make('dal')->label('Dal')->required()->native(false)->displayFormat('d/m/Y')->maxDate(now()),
+                        DatePicker::make('al')->label('Al')->required()->native(false)->displayFormat('d/m/Y')->maxDate(now())
+                            ->helperText('Il giorno in cui la macchina è andata via da lì.')
+                            ->after('dal'),
+                        TextInput::make('notes')->label('Note')->placeholder('Es. ritirata con DDT 186'),
+                    ])
+                    ->action(function (array $data) {
+                        $dal = Carbon::parse($data['dal'])->startOfDay();
+                        $al = Carbon::parse($data['al'])->startOfDay();
+
+                        $accavalla = $this->getOwnerRecord()->placements()
+                            ->where('placed_at', '<', $al)
+                            ->where(fn ($q) => $q->whereNull('removed_at')->orWhere('removed_at', '>', $dal))
+                            ->exists();
+
+                        if ($accavalla) {
+                            Notification::make()
+                                ->title('Quel periodo si sovrappone a uno che c\'è già')
+                                ->body('Sistema prima le date dei periodi vicini, poi riprova.')
+                                ->danger()
+                                ->send();
+
+                            return;
+                        }
+
+                        $this->getOwnerRecord()->placements()->create([
+                            'tenant_id' => $this->getOwnerRecord()->tenant_id,
+                            'customer_id' => $data['customer_id'] ?: null,
+                            'placed_at' => $dal,
+                            'removed_at' => $al,
+                            'notes' => $data['notes'] ?: null,
+                        ]);
+
+                        Notification::make()->title('Periodo aggiunto allo storico')->success()->send();
+                    }),
             ])
             ->actions([
                 // Chi pagava in quel periodo (22/09/2026). Sulla posizione
