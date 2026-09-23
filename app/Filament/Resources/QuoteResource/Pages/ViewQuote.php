@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\QuoteResource\Pages;
 
-use App\Filament\Actions\ContattaCliente;
 use App\Filament\Resources\QuoteResource;
 use App\Models\QuoteGroup;
 use Filament\Actions;
@@ -16,7 +15,6 @@ class ViewQuote extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            ContattaCliente::perPagina($this->record->customer),
             // Solo "Invia" resta a colore pieno (success): e' l'azione che fa
             // avanzare davvero il preventivo verso il cliente. Le altre sono
             // di supporto/secondarie, quindi gray - stesso criterio gia'

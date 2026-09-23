@@ -6,10 +6,8 @@ use App\Filament\Resources\CustomerResource\Pages\ListCustomers;
 use App\Filament\Resources\CustomerResource\Pages\ViewCustomer;
 use App\Filament\Resources\InformationRequestResource\Pages\EditInformationRequest;
 use App\Filament\Resources\InformationRequestResource\Pages\ListInformationRequests;
-use App\Filament\Resources\QuoteResource\Pages\ViewQuote;
 use App\Models\Customer;
 use App\Models\InformationRequest;
-use App\Models\Quote;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Support\PhoneNumber;
@@ -20,7 +18,8 @@ use Tests\TestCase;
 
 /**
  * Il pulsante "Contatta" (21/09/2026): telefono, WhatsApp ed email del
- * cliente a un clic dall'elenco clienti, dalle richieste e dai preventivi.
+ * cliente a un clic dall'elenco clienti e dalle richieste informazioni.
+ * Nei preventivi no: li' non serve (23/09/2026).
  */
 class ContattaClienteTest extends TestCase
 {
@@ -79,15 +78,11 @@ class ContattaClienteTest extends TestCase
             ->assertTableActionHidden('email_0', $muto);
     }
 
-    public function test_dalla_richiesta_e_dal_preventivo_si_contatta_il_cliente(): void
+    public function test_dalla_richiesta_e_dal_cliente_si_contatta(): void
     {
         $richiesta = InformationRequest::create([
             'tenant_id' => $this->tenant->id, 'customer_id' => $this->cliente->id,
             'request_details' => 'Macchina a noleggio', 'status' => 'nuova',
-        ]);
-        $preventivo = Quote::create([
-            'tenant_id' => $this->tenant->id, 'customer_id' => $this->cliente->id,
-            'date' => now(), 'status' => 'bozza', 'discount' => 0,
         ]);
 
         Livewire::test(ListInformationRequests::class)
@@ -97,9 +92,6 @@ class ContattaClienteTest extends TestCase
             ->assertActionVisible('chiama_0')
             ->assertActionHasUrl('email_0', 'mailto:bar@example.it')
             ->assertSeeHtml('href="tel:+393471234567"');
-
-        Livewire::test(ViewQuote::class, ['record' => $preventivo->id])
-            ->assertActionHasUrl('whatsapp', 'https://wa.me/393471234567');
 
         Livewire::test(ViewCustomer::class, ['record' => $this->cliente->id])
             ->assertActionHasUrl('chiama_0', 'tel:+390421123456');

@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\QuoteResource\Pages;
 
 use App\Filament\Actions\ConfigureMachineAction;
-use App\Filament\Actions\ContattaCliente;
 use App\Filament\Concerns\RedirectsCancelToView;
 use App\Filament\Resources\QuoteResource;
 use Filament\Actions;
@@ -35,7 +34,6 @@ class EditQuote extends EditRecord
             // principale di questa pagina. Le altre sono di supporto, quindi
             // gray - stesso criterio applicato in QuoteResource::table()/ViewQuote.
             ConfigureMachineAction::make(),
-            ContattaCliente::perPagina($this->record->customer),
             Actions\Action::make('recalculate')
                 ->label('Ricalcola totali')
                 ->icon('heroicon-o-arrow-path')
