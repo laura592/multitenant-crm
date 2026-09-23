@@ -998,7 +998,9 @@ class ServiceReport extends Model
             return;
         }
 
-        $pagante = $this->machineUnit?->billingCustomer ?? $this->customer->invoiceRecipient();
+        // Come invoiceRecipient(): sul rapportino di una macchina decide la
+        // macchina, compreso il "paga il cliente stesso" che dice Eureka.
+        $pagante = $this->machineUnit?->paganteEffettivo() ?? $this->customer->invoiceRecipient();
 
         $this->forceFill(['billing_customer_id' => $pagante->id])->saveQuietly();
     }

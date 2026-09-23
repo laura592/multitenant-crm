@@ -81,6 +81,16 @@ class PaganteMacchinaEurekaTest extends TestCase
         $this->assertSame('il cliente stesso', $spinamiki->placements()->whereNull('removed_at')->sole()->paganteInParole());
     }
 
+    public function test_alla_chiusura_si_congela_il_pagante_giusto(): void
+    {
+        $spinamiki = $this->macchina('SPINAMIKI', 233);
+        $rapportino = $this->rapportino($spinamiki);
+
+        $rapportino->freezeInvoiceRecipient();
+
+        $this->assertSame($this->bar->id, $rapportino->fresh()->billing_customer_id, 'Chiuso oggi, resta suo anche domani.');
+    }
+
     public function test_se_eureka_indica_un_altro_paga_quello(): void
     {
         $macchina = $this->macchina('V24003882', 580);

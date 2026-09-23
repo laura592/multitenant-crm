@@ -2,11 +2,11 @@
 
 namespace App\Models;
 
+use App\Filament\Resources\MaintenanceScheduleResource;
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\LogsAuditTrail;
 use App\Support\DisplayName;
 use App\Support\LavaggioDescrizione;
-use App\Filament\Resources\MaintenanceScheduleResource;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
@@ -204,7 +204,7 @@ class Lavaggio extends Model
             throw new \RuntimeException('Cliente collegato a questo lavaggio non trovato (probabilmente eliminato).');
         }
 
-        return $this->machineUnit?->billingCustomer ?? $this->customer->invoiceRecipient();
+        return $this->machineUnit?->paganteEffettivo() ?? $this->customer->invoiceRecipient();
     }
 
     /**
