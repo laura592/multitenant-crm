@@ -10,11 +10,11 @@ use App\Models\Product;
 use App\Models\ServiceReport;
 use App\Models\ServiceReportMaterial;
 use App\Models\Tenant;
-use App\Support\Gestionale\RegistroSync;
-use App\Support\Gestionale\RiabbinaImportati;
 use App\Models\User;
 use App\Support\EurekaClient;
 use App\Support\Gestionale\PaganteEureka;
+use App\Support\Gestionale\RegistroSync;
+use App\Support\Gestionale\RiabbinaImportati;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -589,12 +589,20 @@ class ImportEurekaServiceReports extends Command
             ->where('gestionale_code', $code)
             ->first();
 
-        if ($existing) {
-            return $existing;
-        }
-
         $companyName = $this->extractCustomerCompanyName($row, $detail)
             ?: 'Cliente Eureka '.$code;
+
+        if ($existing) {
+            // Cliente nato senza nome da una scheda che non ce l'aveva
+            // (2026-08-06, "Cliente Eureka 2933"): appena una scheda lo
+            // porta, si scrive. Vedi clienti:nomi-da-eureka per quelli
+            // gia' in anagrafica.
+            if (! $dryRun && str_starts_with((string) $existing->company_name, 'Cliente Eureka ') && ! str_starts_with($companyName, 'Cliente Eureka ')) {
+                $existing->update(['company_name' => $companyName]);
+            }
+
+            return $existing;
+        }
 
         if ($dryRun) {
             $this->line("  <comment>[DRY RUN] Cliente NON creato: {$companyName} (codice gestionale {$code})</comment>");
