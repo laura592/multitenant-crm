@@ -2,6 +2,7 @@
 
 namespace App\Support\Gestionale;
 
+use App\Models\Customer;
 use App\Models\EurekaFattura;
 use App\Models\ServiceReport;
 use App\Models\Tenant;
@@ -22,6 +23,19 @@ use Illuminate\Support\Collection;
  */
 class ControlloPaganteFattura
 {
+    /**
+     * I tre problemi, ognuno con il suo foglio nell'Excel e le sue colonne:
+     * le schede da correggere non vanno confuse con le decine di rapportini
+     * senza fattura, che sono un'altra cosa.
+     *
+     * @var array<string, array{0: string, 1: array<int, string>}>
+     */
+    public const CATEGORIE = [
+        'da_correggere' => ['Da correggere su Eureka', ['Rapportino', 'N. gestionale', 'Data', 'Cliente', 'Pagante nel CRM', 'Destinazione sulla scheda', 'Fattura', 'Fattura intestata a']],
+        'destinazione' => ['Destinazione incoerente', ['Rapportino', 'N. gestionale', 'Data', 'Cliente', 'Pagante nel CRM', 'Destinazione sulla scheda']],
+        'senza_fattura' => ['Senza fattura', ['Problema', 'Rapportino', 'N. gestionale', 'Data', 'Cliente', 'Pagante nel CRM', 'Fattura', 'Indizio']],
+    ];
+
     /**
      * Ricalcola le segnalazioni di tutti i rapportini nel gestionale.
      *
@@ -92,7 +106,7 @@ class ControlloPaganteFattura
     public static function righeEsportazione(Tenant $tenant): \Generator
     {
         $fatture = static::mappaFatture($tenant->id);
-        $nomi = \App\Models\Customer::withoutGlobalScopes()->where('tenant_id', $tenant->id)->pluck('company_name', 'id');
+        $nomi = Customer::withoutGlobalScopes()->where('tenant_id', $tenant->id)->pluck('company_name', 'id');
 
         // Niente orderBy qui: lazyById legge a blocchi per id, e un altro
         // ordinamento gli fa saltare righe. In Excel si ordina con un clic.
@@ -106,12 +120,14 @@ class ControlloPaganteFattura
             $pagante = rescue(fn () => $r->invoiceRecipient()->company_name, null, false);
             $scritto = $r->eureka_destinazione_label;
 
+            $daCorreggere = $r->pagante_fattura_customer_id !== null;
+            $destinazione = $scritto && $pagante && ! static::simili($scritto, $pagante);
+            $senzaFattura = $numeri->isEmpty() && ! in_array($r->eureka_fattura_motivo, [SenzaFatturaCollegata::RECENTE, SenzaFatturaCollegata::SENZA_IMPORTO], true);
+
             $problemi = array_filter([
-                $r->pagante_fattura_customer_id !== null ? 'da correggere su Eureka: fattura intestata a un altro' : null,
-                $scritto && $pagante && ! static::simili($scritto, $pagante) ? 'scheda: codice e nome della destinazione diversi' : null,
-                $numeri->isEmpty() && ! in_array($r->eureka_fattura_motivo, [SenzaFatturaCollegata::RECENTE, SenzaFatturaCollegata::SENZA_IMPORTO], true)
-                    ? 'senza fattura: '.static::motivo($r->eureka_fattura_motivo)
-                    : null,
+                $daCorreggere ? 'da correggere su Eureka: fattura intestata a un altro' : null,
+                $destinazione ? 'scheda: codice e nome della destinazione diversi' : null,
+                $senzaFattura ? 'senza fattura: '.static::motivo($r->eureka_fattura_motivo) : null,
             ]);
 
             if ($problemi === []) {
@@ -119,6 +135,13 @@ class ControlloPaganteFattura
             }
 
             yield [
+                // Un rapportino con piu' problemi finisce nel foglio del piu'
+                // importante, ma la colonna Problema li elenca tutti.
+                'Categoria' => match (true) {
+                    $daCorreggere => 'da_correggere',
+                    $destinazione => 'destinazione',
+                    default => 'senza_fattura',
+                },
                 'Problema' => implode(' + ', $problemi),
                 'Rapportino' => $r->number,
                 'N. gestionale' => (string) $r->gestionale_number,

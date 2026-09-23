@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets\Gestionale;
 
+use App\Exports\ProblemiGestionaleExport;
 use App\Filament\Resources\ServiceReportResource;
 use App\Models\Customer;
 use App\Models\ServiceReport;
@@ -14,6 +15,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
 use Illuminate\Database\Eloquent\Collection;
+use Maatwebsite\Excel\Facades\Excel;
 use pxlrbt\FilamentExcel\Actions\Tables\ExportAction;
 use pxlrbt\FilamentExcel\Columns\Column;
 use pxlrbt\FilamentExcel\Exports\ExcelExport;
@@ -72,8 +74,17 @@ class GestionaleSchedeDaCorreggereWidget extends BaseWidget
             ->emptyStateHeading('Nessuna scheda da correggere')
             ->emptyStateDescription('Scheda e fattura tornano su tutti i rapportini gia\' fatturati.')
             ->headerActions([
-                ExportAction::make('esporta')
+                Tables\Actions\Action::make('esporta')
                     ->label('Esporta in Excel')
+                    ->tooltip('Un foglio per problema: le schede da correggere, le destinazioni incoerenti e i rapportini senza fattura, con quante sono nel nome del foglio.')
+                    ->icon('heroicon-o-arrow-down-tray')
+                    ->color('gray')
+                    ->action(fn () => Excel::download(
+                        new ProblemiGestionaleExport(Filament::getTenant()),
+                        'rapportini-gestionale-da-controllare-'.now()->format('Y-m-d').'.xlsx',
+                    )),
+                ExportAction::make('esporta_tabella')
+                    ->label('Esporta solo questa tabella')
                     ->color('gray')
                     ->exports([
                         // Colonne scritte a mano e non ->fromTable(): li' il
@@ -101,26 +112,6 @@ class GestionaleSchedeDaCorreggereWidget extends BaseWidget
                                     ->getStateUsing(fn (ServiceReport $record) => $record->etichettaFatturaEureka()),
                             ]),
                     ]),
-                Tables\Actions\Action::make('esporta_tutti')
-                    ->label('Esporta differenze ed errori')
-                    ->tooltip('Tutti i rapportini nel gestionale con un problema: da correggere su Eureka, destinazione incoerente, senza fattura da controllare.')
-                    ->icon('heroicon-o-arrow-down-tray')
-                    ->color('gray')
-                    ->action(fn () => response()->streamDownload(function () {
-                        $out = fopen('php://output', 'w');
-                        // BOM e punto e virgola: Excel italiano lo apre gia'
-                        // diviso in colonne e con le lettere accentate giuste.
-                        fwrite($out, "\xEF\xBB\xBF");
-                        $prima = true;
-                        foreach (ControlloPaganteFattura::righeEsportazione(Filament::getTenant()) as $riga) {
-                            if ($prima) {
-                                fputcsv($out, array_keys($riga), ';');
-                                $prima = false;
-                            }
-                            fputcsv($out, $riga, ';');
-                        }
-                        fclose($out);
-                    }, 'rapportini-differenze-errori-'.now()->format('Y-m-d').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8'])),
                 Tables\Actions\Action::make('ricontrolla_tutte')
                     ->label('Ricontrolla tutte su Eureka')
                     ->icon('heroicon-o-arrow-path')

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Exports\ProblemiGestionaleExport;
 use App\Filament\Widgets\Gestionale\GestionaleSchedeDaCorreggereWidget;
 use App\Models\Customer;
 use App\Models\EurekaFattura;
@@ -222,36 +223,44 @@ class PaganteEurekaVincolanteTest extends TestCase
         $this->actingAs($this->tecnico);
         Filament::setTenant($this->tenant);
 
-        Livewire::test(GestionaleSchedeDaCorreggereWidget::class)
-            ->callTableAction('esporta_tutti')
-            ->assertFileDownloaded('rapportini-differenze-errori-'.now()->format('Y-m-d').'.csv');
-    }
-
-    /** Prima il numero della scheda stava solo nella descrizione, e nell'Excel non usciva. */
-    public function test_l_excel_delle_schede_da_correggere_ha_il_numero_della_scheda(): void
-    {
-        $r = $this->nelGestionale(['billing_customer_id' => $this->chiosco->id]);
-        $r->registraFattureEureka($this->fatturaA($this->martellozzo));
-        ControlloPaganteFattura::segnala($this->tenant);
-
-        $this->giveRole($this->tecnico, $this->tenant, 'admin');
-        $this->actingAs($this->tecnico);
-        Filament::setTenant($this->tenant);
-
         Excel::fake();
 
         Livewire::test(GestionaleSchedeDaCorreggereWidget::class)
             ->callTableAction('esporta');
 
-        Excel::assertDownloaded('schede-da-correggere-'.now()->format('Y-m-d').'.xlsx', function ($export) use ($r) {
-            $this->assertContains('N. gestionale', $export->getHeadings());
+        Excel::assertDownloaded('rapportini-gestionale-da-controllare-'.now()->format('Y-m-d').'.xlsx');
+    }
 
-            $riga = array_map(fn ($v) => is_array($v) ? ($v[0] ?? null) : $v, $export->map($r->fresh()));
-            $this->assertSame('SL-346/2023', $riga['gestionale_number']);
-            $this->assertSame(3001, (int) $riga['eureka_service_report_id']);
-            $this->assertSame('Martellozzo Lorenzo & C. Sas', $riga['pagante_fattura']);
+    /**
+     * Un foglio per problema: le schede da correggere sono una ventina e in
+     * un foglio unico sparivano fra i rapportini senza fattura.
+     */
+    public function test_l_excel_ha_un_foglio_per_problema_con_quante_righe_sono(): void
+    {
+        $daCorreggere = $this->nelGestionale(['billing_customer_id' => $this->chiosco->id]);
+        $daCorreggere->registraFattureEureka($this->fatturaA($this->martellozzo));
+        $this->nelGestionale(['number' => 'RT-2023-0400', 'gestionale_number' => 'SL-400/2023', 'eureka_service_report_id' => 3002, 'eureka_fattura_motivo' => 'da_verificare']);
+        $this->nelGestionale(['number' => 'RT-2023-0402', 'gestionale_number' => 'SL-402/2023', 'eureka_service_report_id' => 3004, 'eureka_fattura_motivo' => 'non_nella_fattura']);
+        ControlloPaganteFattura::segnala($this->tenant);
 
-            return true;
-        });
+        $fogli = (new ProblemiGestionaleExport($this->tenant))->sheets();
+
+        $this->assertSame([
+            'Da correggere su Eureka (1)',
+            'Destinazione incoerente (0)',
+            'Senza fattura (2)',
+        ], array_map(fn ($foglio) => $foglio->title(), $fogli));
+
+        // Sul primo foglio il numero della scheda c'e': prima, esportando la
+        // tabella, restava nella descrizione e non usciva.
+        $this->assertContains('N. gestionale', $fogli[0]->headings());
+        $riga = array_combine($fogli[0]->headings(), $fogli[0]->collection()->first());
+        $this->assertSame('RT-2023-0327', $riga['Rapportino']);
+        $this->assertSame('SL-346/2023', $riga['N. gestionale']);
+        $this->assertSame('Martellozzo Lorenzo & C. SAS', $riga['Fattura intestata a']);
+
+        // Niente Categoria e niente colonne vuote sui fogli che non le usano.
+        $this->assertNotContains('Categoria', $fogli[0]->headings());
+        $this->assertNotContains('Fattura intestata a', $fogli[2]->headings());
     }
 }
