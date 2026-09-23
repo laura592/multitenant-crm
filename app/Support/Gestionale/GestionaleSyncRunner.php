@@ -11,6 +11,7 @@ use App\Models\Tenant;
 use App\Support\PhoneNumber;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Confronta clienti/prodotti gia' collegati a Eureka con l'anagrafica reale
@@ -59,6 +60,7 @@ class GestionaleSyncRunner
             'newMachines' => $this->importInstalledMachines(),
             'fusioniMacchine' => $this->proponiFusioniMacchine(),
             'spostamentiMacchine' => $this->proponiSpostamentiMacchine(),
+            'rientriMagazzino' => $this->proponiRientriMagazzino(),
             'eurekaNotes' => $this->syncEurekaNotes(),
             'doppioniRapportini' => $this->proponiDoppioniRapportini(),
             // Schede Eureka la cui fattura e' intestata a un altro: si
@@ -455,7 +457,8 @@ class GestionaleSyncRunner
         // gia' scartato non deve ricomparire ad ogni sync.
         $macchine = MachineUnit::query()
             ->whereNull('fusione_suggerita_id')
-            ->get(['id', 'serial_number', 'model_name', 'gestionale_code', 'current_customer_id', 'created_at']);
+            // type serve a ConfrontoMacchine per riconoscere gli impianti.
+            ->get(['id', 'serial_number', 'model_name', 'type', 'gestionale_code', 'current_customer_id', 'created_at']);
 
         $proposte = ConfrontoMacchine::proposte($macchine, $this->matricoleSuEureka());
 
@@ -553,6 +556,100 @@ class GestionaleSyncRunner
                     'matricola' => $macchina->serial_number,
                     'da' => $macchina->currentCustomer?->company_name,
                     'a' => $proposta['cliente']->company_name,
+                    'motivo' => $proposta['motivo'],
+                ]);
+            }
+
+            $proposte[] = ['macchina' => $macchina] + $proposta;
+        }
+
+        return $proposte;
+    }
+
+    /**
+     * Le macchine che i rapportini dicono ritirate e che qui risultano
+     * ancora dal cliente: si propone il rientro in magazzino. Vedi
+     * RientriMagazzino — i DDT di ritiro dall'API non si leggono.
+     *
+     * @return array<int, array{macchina: MachineUnit, data: Carbon, motivo: string}>
+     */
+    private function proponiRientriMagazzino(): array
+    {
+        $ritiriPerMacchina = DB::table('service_report_materials as l')
+            ->join('service_reports as r', 'r.id', '=', 'l.service_report_id')
+            ->join('materials as m', 'm.id', '=', 'l.material_id')
+            ->whereNull('l.deleted_at')
+            ->whereNull('r.deleted_at')
+            ->where('r.tenant_id', $this->tenant->id)
+            ->whereNotNull('r.machine_unit_id')
+            ->where(fn ($q) => $q->where('m.code', 'like', 'DISIN%')->orWhere('m.code', 'like', '%RITIR%'))
+            ->get(['r.machine_unit_id', 'r.customer_id', 'r.number', 'r.intervention_date'])
+            ->map(fn ($r) => (object) [
+                'machine_unit_id' => $r->machine_unit_id,
+                'customer_id' => $r->customer_id,
+                'numero' => $r->number,
+                'data' => Carbon::parse($r->intervention_date),
+            ])
+            ->groupBy('machine_unit_id');
+
+        if ($ritiriPerMacchina->isEmpty()) {
+            return [];
+        }
+
+        // L'ultimo intervento su ogni macchina: se e' successivo al ritiro,
+        // la macchina e' ancora li' (vedi RientriMagazzino::proposta).
+        $interventi = ServiceReport::query()
+            ->where('tenant_id', $this->tenant->id)
+            ->whereIn('machine_unit_id', $ritiriPerMacchina->keys())
+            ->whereNotNull('intervention_date')
+            ->get(['machine_unit_id', 'customer_id', 'intervention_date'])
+            ->groupBy('machine_unit_id');
+
+        $proposte = [];
+
+        $macchine = MachineUnit::query()
+            ->where('tenant_id', $this->tenant->id)
+            ->whereIn('id', $ritiriPerMacchina->keys())
+            ->whereNotNull('current_customer_id')
+            // Uno spostamento gia' proposto (una consegna a un altro cliente)
+            // dice qualcosa di piu' recente: non si propone anche il rientro.
+            ->whereNull('spostamento_suggerito_customer_id')
+            ->with(['placements' => fn ($q) => $q->whereNull('removed_at')])
+            ->get();
+
+        foreach ($macchine as $macchina) {
+            $dal = $macchina->placements->max('placed_at');
+            $proposta = RientriMagazzino::proposta(
+                $macchina,
+                collect($ritiriPerMacchina[$macchina->id] ?? []),
+                $dal ? Carbon::parse($dal) : null,
+                null,
+                $interventi->get($macchina->id, collect())
+                    ->where('customer_id', $macchina->current_customer_id)
+                    ->max('intervention_date'),
+            );
+
+            if (! $proposta) {
+                if ($macchina->spostamento_suggerito_motivo !== null && $macchina->spostamento_suggerito_customer_id === null) {
+                    $macchina->update(['spostamento_suggerito_il' => null, 'spostamento_suggerito_motivo' => null]);
+                }
+
+                continue;
+            }
+
+            $nuova = $macchina->spostamento_suggerito_motivo !== $proposta['motivo'];
+
+            $macchina->update([
+                'spostamento_suggerito_customer_id' => null,
+                'spostamento_suggerito_il' => $proposta['data'],
+                'spostamento_suggerito_motivo' => $proposta['motivo'],
+                'spostamento_suggerito_pagante_code' => null,
+            ]);
+
+            if ($nuova) {
+                RegistroSync::movimento('sync-anagrafiche', 'rientro in magazzino proposto', [
+                    'matricola' => $macchina->serial_number,
+                    'da' => $macchina->currentCustomer?->company_name,
                     'motivo' => $proposta['motivo'],
                 ]);
             }

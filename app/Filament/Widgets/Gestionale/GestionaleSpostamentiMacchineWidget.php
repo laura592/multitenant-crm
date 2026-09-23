@@ -20,7 +20,7 @@ use Illuminate\Database\Eloquent\Collection;
  */
 class GestionaleSpostamentiMacchineWidget extends BaseWidget
 {
-    protected static ?string $heading = 'Macchine spostate su Eureka — da aggiornare qui';
+    protected static ?string $heading = 'Macchine spostate o ritirate — da aggiornare qui';
 
     protected int|string|array $columnSpan = 'full';
 
@@ -34,7 +34,8 @@ class GestionaleSpostamentiMacchineWidget extends BaseWidget
 
     private static function baseQuery()
     {
-        return MachineUnit::query()->whereNotNull('spostamento_suggerito_customer_id');
+        // Senza cliente proposto e' un rientro in magazzino (RientriMagazzino).
+        return MachineUnit::query()->whereNotNull('spostamento_suggerito_motivo');
     }
 
     public function table(Table $table): Table
@@ -58,9 +59,10 @@ class GestionaleSpostamentiMacchineWidget extends BaseWidget
                     ->placeholder('magazzino'),
 
                 Tables\Columns\TextColumn::make('spostamentoSuggerito.company_name')
-                    ->label('Su Eureka presso')
+                    ->label('Dovrebbe essere')
                     ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state))
                     ->weight('medium')
+                    ->placeholder('in magazzino')
                     ->description(fn (MachineUnit $record) => $record->spostamentoSuggerito?->city),
 
                 Tables\Columns\TextColumn::make('spostamento_suggerito_il')
@@ -98,9 +100,11 @@ class GestionaleSpostamentiMacchineWidget extends BaseWidget
                     ->requiresConfirmation()
                     ->modalHeading('Spostare la macchina?')
                     ->modalDescription(fn (MachineUnit $record) => sprintf(
-                        'La matricola %s passa presso %s dal %s. Nello storico resta dov\'era prima.',
+                        'La matricola %s %s dal %s. Nello storico resta dov\'era prima.',
                         $record->serial_number,
-                        DisplayName::titleCase($record->spostamentoSuggerito?->company_name),
+                        $record->spostamentoSuggerito
+                            ? 'passa presso '.DisplayName::titleCase($record->spostamentoSuggerito->company_name)
+                            : 'rientra in magazzino',
                         $record->spostamento_suggerito_il?->format('d/m/Y'),
                     ))
                     ->action(function (MachineUnit $record) {

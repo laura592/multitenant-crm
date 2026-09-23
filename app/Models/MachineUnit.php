@@ -122,6 +122,32 @@ class MachineUnit extends Model
         return $this->belongsTo(Customer::class, 'billing_customer_id');
     }
 
+    /**
+     * Chi paga per questa macchina, o null se non l'ha detto nessuno.
+     *
+     * Oltre al pagante scritto qui vale il codice che Eureka indica per la
+     * consegna, anche quando e' il cliente stesso: li' il pagante l'ha
+     * detto il gestionale, e non si deve ricadere su quello dell'anagrafica
+     * (23/09/2026, SPINAMIKI: impianto alla spina di Bar Miki, che in
+     * anagrafica ha Dersut, finiva a Dersut). Il valore poi lo scrive per
+     * esteso eureka:apply-machine-billing-payer, ogni notte alle 03:15.
+     */
+    public function paganteEffettivo(): ?Customer
+    {
+        if ($this->billingCustomer) {
+            return $this->billingCustomer;
+        }
+
+        if (! $this->eureka_billing_customer_code) {
+            return null;
+        }
+
+        return Customer::withoutGlobalScopes()
+            ->where('tenant_id', $this->tenant_id)
+            ->where('gestionale_code', $this->eureka_billing_customer_code)
+            ->first();
+    }
+
     public function placements(): HasMany
     {
         return $this->hasMany(MachineUnitPlacement::class)->latest('placed_at');
@@ -455,7 +481,8 @@ class MachineUnit extends Model
     {
         $cliente = $this->spostamentoSuggerito;
 
-        if (! $cliente || ! $this->spostamento_suggerito_il) {
+        // Senza cliente proposto e' un rientro in magazzino (RientriMagazzino).
+        if (! $this->spostamento_suggerito_motivo || ! $this->spostamento_suggerito_il) {
             $this->scartaSpostamento();
 
             return false;
@@ -465,7 +492,7 @@ class MachineUnit extends Model
         $codice = $this->spostamento_suggerito_pagante_code;
         $pagante = $codice ? Customer::withoutGlobalScopes()->where('tenant_id', $this->tenant_id)->where('gestionale_code', $codice)->first() : null;
 
-        $this->moveTo($cliente, 'Da Eureka: '.$this->spostamento_suggerito_motivo, $this->spostamento_suggerito_il->copy()->startOfDay(), $pagante, $codice);
+        $this->moveTo($cliente, ($cliente ? 'Da Eureka: ' : 'Rientro in magazzino: ').$this->spostamento_suggerito_motivo, $this->spostamento_suggerito_il->copy()->startOfDay(), $pagante, $codice);
         $this->update([
             'spostamento_suggerito_customer_id' => null,
             'spostamento_suggerito_il' => null,
