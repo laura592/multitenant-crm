@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Filament\Concerns\ApreStampeInNuovaScheda;
+use App\Jobs\AggiornaSaldiEurekaJob;
 use App\Models\EurekaPartitaAperta;
 use App\Support\DisplayName;
 use App\Support\OutsideLivewireRender;
@@ -11,6 +12,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Actions;
 use Filament\Facades\Filament;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Tables;
 use Filament\Tables\Concerns\InteractsWithTable;
@@ -18,6 +20,7 @@ use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
 
 /**
  * Lo scaduto clienti, per chi deve telefonare e farsi pagare.
@@ -267,6 +270,26 @@ class ScadutoClienti extends Page implements HasTable
                 ->action(function () {
                     $this->tuttiISaldi = ! $this->tuttiISaldi;
                     $this->resetTable();
+                }),
+
+            // Le partite girano due volte al giorno (vedi routes/console.php):
+            // quando si sta telefonando ai clienti serve la fotografia di
+            // adesso, non quella di stamattina (23/09/2026).
+            Actions\Action::make('aggiornaSaldi')
+                ->label('Aggiorna saldi da Eureka')
+                ->icon('heroicon-o-arrow-path')
+                ->color('gray')
+                ->requiresConfirmation()
+                ->modalHeading('Rileggere saldi e partite da Eureka?')
+                ->modalDescription('Partite aperte, fatture e indicatori, come ogni notte. Ci vuole qualche minuto: ti avviso qui quando ha finito.')
+                ->action(function () {
+                    AggiornaSaldiEurekaJob::dispatch(Filament::getTenant(), Auth::user());
+
+                    Notification::make()
+                        ->title('Aggiornamento saldi avviato')
+                        ->body('Verrai avvisato qui quando termina.')
+                        ->success()
+                        ->send();
                 }),
 
             Actions\Action::make('stampa')
