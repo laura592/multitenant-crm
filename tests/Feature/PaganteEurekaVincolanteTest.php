@@ -15,6 +15,7 @@ use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
+use Maatwebsite\Excel\Facades\Excel;
 use Tests\Concerns\AssignsPermissionRoles;
 use Tests\TestCase;
 
@@ -82,7 +83,7 @@ class PaganteEurekaVincolanteTest extends TestCase
     {
         // SL-346/2023: destinazione con il nome ma id_eureka 0.
         $scheda = PaganteEureka::daScheda(
-            ['id_intestatario' => 2905, 'destinazione' => ['id_eureka' => 0, 'rag_sociale' => "MARTELLOZZO LORENZO & C. SAS"]],
+            ['id_intestatario' => 2905, 'destinazione' => ['id_eureka' => 0, 'rag_sociale' => 'MARTELLOZZO LORENZO & C. SAS']],
             [], $this->tenant->id, $this->chiosco->id,
         );
 
@@ -224,5 +225,33 @@ class PaganteEurekaVincolanteTest extends TestCase
         Livewire::test(GestionaleSchedeDaCorreggereWidget::class)
             ->callTableAction('esporta_tutti')
             ->assertFileDownloaded('rapportini-differenze-errori-'.now()->format('Y-m-d').'.csv');
+    }
+
+    /** Prima il numero della scheda stava solo nella descrizione, e nell'Excel non usciva. */
+    public function test_l_excel_delle_schede_da_correggere_ha_il_numero_della_scheda(): void
+    {
+        $r = $this->nelGestionale(['billing_customer_id' => $this->chiosco->id]);
+        $r->registraFattureEureka($this->fatturaA($this->martellozzo));
+        ControlloPaganteFattura::segnala($this->tenant);
+
+        $this->giveRole($this->tecnico, $this->tenant, 'admin');
+        $this->actingAs($this->tecnico);
+        Filament::setTenant($this->tenant);
+
+        Excel::fake();
+
+        Livewire::test(GestionaleSchedeDaCorreggereWidget::class)
+            ->callTableAction('esporta');
+
+        Excel::assertDownloaded('schede-da-correggere-'.now()->format('Y-m-d').'.xlsx', function ($export) use ($r) {
+            $this->assertContains('N. gestionale', $export->getHeadings());
+
+            $riga = array_map(fn ($v) => is_array($v) ? ($v[0] ?? null) : $v, $export->map($r->fresh()));
+            $this->assertSame('SL-346/2023', $riga['gestionale_number']);
+            $this->assertSame(3001, (int) $riga['eureka_service_report_id']);
+            $this->assertSame('Martellozzo Lorenzo & C. Sas', $riga['pagante_fattura']);
+
+            return true;
+        });
     }
 }

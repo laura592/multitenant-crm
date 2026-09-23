@@ -15,6 +15,7 @@ use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
 use Illuminate\Database\Eloquent\Collection;
 use pxlrbt\FilamentExcel\Actions\Tables\ExportAction;
+use pxlrbt\FilamentExcel\Columns\Column;
 use pxlrbt\FilamentExcel\Exports\ExcelExport;
 
 /**
@@ -75,9 +76,30 @@ class GestionaleSchedeDaCorreggereWidget extends BaseWidget
                     ->label('Esporta in Excel')
                     ->color('gray')
                     ->exports([
+                        // Colonne scritte a mano e non ->fromTable(): li' il
+                        // numero della scheda sta nella descrizione sotto il
+                        // rapportino, e le descrizioni non si esportano.
                         ExcelExport::make('schede-da-correggere')
-                            ->fromTable()
-                            ->withFilename('schede-da-correggere-'.now()->format('Y-m-d')),
+                            ->withFilename('schede-da-correggere-'.now()->format('Y-m-d'))
+                            ->withColumns([
+                                Column::make('number')->heading('Rapportino'),
+                                Column::make('gestionale_number')->heading('N. gestionale'),
+                                Column::make('eureka_service_report_id')->heading('Id scheda Eureka'),
+                                Column::make('intervention_date')->heading('Data')
+                                    ->formatStateUsing(fn ($state) => $state?->format('d/m/Y')),
+                                Column::make('customer.company_name')->heading('Cliente')
+                                    ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
+                                Column::make('pagante_scheda')->heading('Pagante sulla scheda')
+                                    ->getStateUsing(fn (ServiceReport $record) => DisplayName::titleCase(rescue(fn () => $record->invoiceRecipient()->company_name, null, false))),
+                                Column::make('scritto_sulla_scheda')->heading('Scritto sulla scheda Eureka')
+                                    ->getStateUsing(fn (ServiceReport $record) => $record->eureka_destinazione_label
+                                        ? $record->eureka_destinazione_label.($record->eureka_destinazione_code ? ' (codice '.$record->eureka_destinazione_code.')' : '')
+                                        : null),
+                                Column::make('pagante_fattura')->heading('Fattura intestata a')
+                                    ->getStateUsing(fn (ServiceReport $record) => DisplayName::titleCase(Customer::withoutGlobalScopes()->whereKey($record->pagante_fattura_customer_id)->value('company_name'))),
+                                Column::make('fattura')->heading('Fattura')
+                                    ->getStateUsing(fn (ServiceReport $record) => $record->etichettaFatturaEureka()),
+                            ]),
                     ]),
                 Tables\Actions\Action::make('esporta_tutti')
                     ->label('Esporta differenze ed errori')
@@ -116,8 +138,12 @@ class GestionaleSchedeDaCorreggereWidget extends BaseWidget
                     ->label('Rapportino')
                     ->weight('medium')
                     ->searchable()
-                    ->url(fn (ServiceReport $record) => ServiceReportResource::getUrl('view', ['record' => $record]))
-                    ->description(fn (ServiceReport $record) => $record->gestionale_number),
+                    ->url(fn (ServiceReport $record) => ServiceReportResource::getUrl('view', ['record' => $record])),
+
+                Tables\Columns\TextColumn::make('gestionale_number')
+                    ->label('N. gestionale')
+                    ->searchable()
+                    ->placeholder('—'),
 
                 Tables\Columns\TextColumn::make('intervention_date')
                     ->label('Data')
