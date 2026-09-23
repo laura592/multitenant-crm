@@ -302,7 +302,7 @@
             </table>
 
             @if($quote->notes)
-                <div class="notes"><h2>Descrizione attrezzatura</h2>{!! $quote->notes !!}</div>
+                <div class="notes"><h2>Descrizione attrezzatura</h2>{!! \App\Support\HtmlSicuro::filtra($quote->notes) !!}</div>
             @endif
 
             <a class="pdf-link" href="{{ route('client.quote.pdf', ['token' => $token, 'quoteId' => $quote->id]) }}" target="_blank" rel="noopener">Scarica il PDF{{ $isChosen ? ' firmato' : '' }}</a>

@@ -11,7 +11,7 @@
 />
 
 <x-mail.box>
-{!! $customMessage ?? '' !!}
+{!! \App\Support\HtmlSicuro::filtra($customMessage ?? '') !!}
 </x-mail.box>
 
 @if(! empty($clientUrl))

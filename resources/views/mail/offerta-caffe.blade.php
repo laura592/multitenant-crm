@@ -10,7 +10,7 @@
 />
 
 <x-mail.box>
-{!! $customMessage ?? '' !!}
+{!! \App\Support\HtmlSicuro::filtra($customMessage ?? '') !!}
 </x-mail.box>
 
 <x-slot:footer>

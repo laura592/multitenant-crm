@@ -12,7 +12,7 @@
 
 <x-mail.box>
 @if ($customMessage)
-{!! $customMessage !!}
+{!! \App\Support\HtmlSicuro::filtra($customMessage) !!}
 @else
 <p style="margin:0 0 12px;">Gentile {{ $customerName }},</p>
 <p style="margin:0 0 12px;">in allegato il rapportino relativo all'intervento del {{ $report->intervention_date->format('d/m/Y') }}.</p>

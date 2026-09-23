@@ -21,7 +21,7 @@
 />
 
 <x-mail.box>
-{!! $bodyHtml !!}
+{!! \App\Support\HtmlSicuro::filtra($bodyHtml) !!}
 </x-mail.box>
 
 @if($quotes->isNotEmpty())

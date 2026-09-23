@@ -231,7 +231,7 @@
     @if($quote->notes)
         <div class="notes-box">
             <h2>Descrizione attrezzatura</h2>
-            {!! $quote->notes !!}
+            {!! \App\Support\HtmlSicuro::filtra($quote->notes) !!}
         </div>
     @endif
 
