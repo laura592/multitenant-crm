@@ -35,6 +35,8 @@ class ConfrontoMacchine
 
     public const IMPIANTO_ORA_SU_EUREKA = 'impianto segnato a mano, ora arriva dal gestionale';
 
+    public const ENTRAMBE_SU_EUREKA = 'due scritture della stessa matricola, consegnate allo stesso cliente: se è la stessa macchina, unisci';
+
     /**
      * Gli impianti nati nel CRM: non hanno una matricola, hanno un codice
      * nostro (IMP-SPINA-022, CASETTA-ACQUA-1). Quando poi il gestionale
@@ -77,18 +79,32 @@ class ConfrontoMacchine
      * spostamenti proposti da Eureka non la trovavano piu' (22/09/2026,
      * tenuta "1919045", Eureka "1919045-21679").
      *
-     * Se Eureka le elenca TUTTE E DUE, per Eureka sono due apparecchi: non si
-     * propone niente ("1502475" e "1502475-CM103290", due TEOREMA A2 presso
-     * lo stesso hotel con due bolle diverse).
+     * Se Eureka le elenca TUTTE E DUE con la stessa matricola scritta uguale,
+     * per Eureka sono due apparecchi. Quando invece la scrittura e' diversa e
+     * la consegna piu' recente le porta dallo STESSO cliente, si propone
+     * comunque, dicendo perche': e' quasi sempre la stessa macchina con la
+     * bolla vecchia mai chiusa (23/09/2026, macinadosatore 0819352, al
+     * Principe come "-0819352" e come "0819352-013489"). Resta una proposta:
+     * a volte sono davvero due ("1502475" e "1502475-CM103290", due TEOREMA
+     * A2 nello stesso hotel), e li' si scarta.
      *
      * @param  Collection<int, MachineUnit>  $macchine
      * @param  array<string, true>  $matricoleEureka
+     * @param  array<string, array{cliente: string, data: string}>  $consegneEureka  chiave matricola => cliente e data dell'ultima consegna
      * @return array<int, array{tenere: MachineUnit, assorbire: MachineUnit, motivo: string}>
      */
-    public static function proposte(Collection $macchine, array $matricoleEureka = []): array
+    public static function proposte(Collection $macchine, array $matricoleEureka = [], array $consegneEureka = []): array
     {
         $macchine = $macchine->reject(fn (MachineUnit $m) => self::segnaposto(self::chiave($m->serial_number)));
         $suEureka = fn (MachineUnit $m) => isset($matricoleEureka[self::chiave($m->serial_number)]);
+
+        // Il cliente che conta e' quello dell'ultima consegna: nel CRM una
+        // delle due puo' essere rimasta a un cliente di due anni prima.
+        $presso = fn (MachineUnit $m) => $consegneEureka[self::chiave($m->serial_number)]['cliente'] ?? $m->current_customer_id;
+
+        // La scrittura della bolla piu' recente e' quella con cui Eureka
+        // ritrovera' la macchina domani: e' quella da tenere.
+        $consegnataIl = fn (MachineUnit $m) => $consegneEureka[self::chiave($m->serial_number)]['data'] ?? '';
 
         $proposte = [];
         $gia = [];
@@ -134,7 +150,7 @@ class ConfrontoMacchine
         //    "1955952741" verrebbe proposto come doppione: sono due seriali
         //    diversi che per caso condividono un prefisso, e fonderli
         //    perderebbe una macchina vera.
-        foreach ($macchine->groupBy('current_customer_id') as $cliente => $gruppo) {
+        foreach ($macchine->groupBy($presso) as $cliente => $gruppo) {
             if ((string) $cliente === '' || $gruppo->count() < 2) {
                 continue;
             }
@@ -149,16 +165,24 @@ class ConfrontoMacchine
                         continue;
                     }
 
-                    if ($suEureka($lunga) && $suEureka($corta)) {
-                        continue;
-                    }
+                    $entrambe = $suEureka($lunga) && $suEureka($corta);
 
                     // Di solito la corta e' il seriale e la lunga ha il
                     // modello davanti; ma se Eureka la scrive lunga, si
                     // tiene come la scrive Eureka.
                     [$tenere, $assorbire] = $suEureka($lunga) ? [$lunga, $corta] : [$corta, $lunga];
 
-                    $proposte[] = ['tenere' => $tenere, 'assorbire' => $assorbire, 'motivo' => self::MATRICOLA_CONTENUTA];
+                    // Con tutte e due su Eureka la piu' attendibile e' quella
+                    // dell'ultima consegna, non la piu' corta.
+                    if ($entrambe) {
+                        [$tenere, $assorbire] = $consegnataIl($lunga) >= $consegnataIl($corta) ? [$lunga, $corta] : [$corta, $lunga];
+                    }
+
+                    $proposte[] = [
+                        'tenere' => $tenere,
+                        'assorbire' => $assorbire,
+                        'motivo' => $entrambe ? self::ENTRAMBE_SU_EUREKA : self::MATRICOLA_CONTENUTA,
+                    ];
                     $gia[$assorbire->id] = true;
                 }
             }
@@ -171,7 +195,7 @@ class ConfrontoMacchine
         //    appiglio e' che presso quel cliente c'e' un impianto solo di
         //    quel genere per parte. Se ce n'e' piu' d'uno non si propone
         //    niente: quale sia quale non lo si puo' dire.
-        foreach ($macchine->groupBy('current_customer_id') as $cliente => $gruppo) {
+        foreach ($macchine->groupBy($presso) as $cliente => $gruppo) {
             if ((string) $cliente === '' || $gruppo->count() < 2) {
                 continue;
             }

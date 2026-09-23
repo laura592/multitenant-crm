@@ -58,6 +58,49 @@ class FusioneMacchineTest extends TestCase
         return ConfrontoMacchine::proposte(MachineUnit::all());
     }
 
+    public function test_due_scritture_della_stessa_matricola_consegnate_allo_stesso_cliente(): void
+    {
+        // Macinadosatore 0819352 (23/09/2026): il Principe ce l'ha come
+        // "-0819352" dalla bolla 94 del 2024 e come "0819352-013489" dalla
+        // 267 del 20/04/2026, dopo il giro all'Hotel Venezia. Nel CRM erano
+        // due macchine, una ferma alla pizzeria di due anni prima.
+        $altro = Customer::create(['tenant_id' => $this->tenant->id, 'company_name' => 'Pizzeria la Nuvola']);
+        $vecchia = $this->macchina('-0819352', 'MACINADOSATORE SUPER JOLLY');
+        $nuova = $this->macchina('0819352-013489', 'MACINADOSATORE SUPER JOLLY', cliente: $altro);
+
+        $proposte = ConfrontoMacchine::proposte(
+            MachineUnit::all(),
+            [ConfrontoMacchine::chiave('-0819352') => true, ConfrontoMacchine::chiave('0819352-013489') => true],
+            [
+                ConfrontoMacchine::chiave('-0819352') => ['cliente' => $this->cliente->id, 'data' => '2024-01-01'],
+                ConfrontoMacchine::chiave('0819352-013489') => ['cliente' => $this->cliente->id, 'data' => '2026-04-20'],
+            ],
+        );
+
+        $this->assertCount(1, $proposte);
+        $this->assertSame(ConfrontoMacchine::ENTRAMBE_SU_EUREKA, $proposte[0]['motivo']);
+        $this->assertSame($nuova->id, $proposte[0]['tenere']->id, 'Si tiene la scrittura della bolla piu\' recente.');
+        $this->assertSame($vecchia->id, $proposte[0]['assorbire']->id);
+    }
+
+    public function test_due_matricole_consegnate_a_clienti_diversi_restano_due(): void
+    {
+        $altro = Customer::create(['tenant_id' => $this->tenant->id, 'company_name' => 'Pizzeria la Nuvola']);
+        $this->macchina('-0819352', 'MACINADOSATORE SUPER JOLLY');
+        $this->macchina('0819352-013489', 'MACINADOSATORE SUPER JOLLY', cliente: $altro);
+
+        $proposte = ConfrontoMacchine::proposte(
+            MachineUnit::all(),
+            [ConfrontoMacchine::chiave('-0819352') => true, ConfrontoMacchine::chiave('0819352-013489') => true],
+            [
+                ConfrontoMacchine::chiave('-0819352') => ['cliente' => $this->cliente->id, 'data' => '2024-01-01'],
+                ConfrontoMacchine::chiave('0819352-013489') => ['cliente' => $altro->id, 'data' => '2026-04-20'],
+            ],
+        );
+
+        $this->assertSame([], $proposte);
+    }
+
     public function test_l_impianto_segnato_a_mano_e_quello_arrivato_da_eureka_sono_lo_stesso(): void
     {
         // Bar Miki, 23/09/2026: l'impianto alla spina era stato creato qui
@@ -259,17 +302,32 @@ class FusioneMacchineTest extends TestCase
         $this->assertSame('1919045', $proposte[0]['assorbire']->serial_number);
     }
 
-    /** Eureka le elenca tutte e due: per Eureka sono due apparecchi. */
-    public function test_due_matricole_su_eureka_non_si_fondono(): void
+    /**
+     * La stessa matricola scritta uguale due volte su Eureka: due
+     * apparecchi, non si propone niente ("031814" e "31814").
+     *
+     * Scritta in due modi diversi invece si propone, dal 23/09/2026: il
+     * macinadosatore 0819352 al Principe era proprio quello, e "1502475" /
+     * "1502475-CM103290" hanno la stessa forma — se sono due TEOREMA veri,
+     * la proposta si scarta e non torna.
+     */
+    public function test_la_stessa_matricola_scritta_uguale_due_volte_resta_due_macchine(): void
     {
-        $this->macchina('1502475', 'TEOREMA A2');
-        $this->macchina('1502475-CM103290', 'TEOREMA A2');
         $this->macchina('031814', 'CEADO');
         $this->macchina('31814', 'CEADO');
 
-        $eureka = ['1502475' => true, '1502475cm103290' => true, '031814' => true, '31814' => true];
+        $this->assertSame([], ConfrontoMacchine::proposte(MachineUnit::all(), ['031814' => true, '31814' => true]));
+    }
 
-        $this->assertSame([], ConfrontoMacchine::proposte(MachineUnit::all(), $eureka));
+    public function test_due_scritture_diverse_su_eureka_si_propongono_da_controllare(): void
+    {
+        $this->macchina('1502475', 'TEOREMA A2');
+        $this->macchina('1502475-CM103290', 'TEOREMA A2');
+
+        $proposte = ConfrontoMacchine::proposte(MachineUnit::all(), ['1502475' => true, '1502475cm103290' => true]);
+
+        $this->assertCount(1, $proposte);
+        $this->assertSame(ConfrontoMacchine::ENTRAMBE_SU_EUREKA, $proposte[0]['motivo']);
     }
 
     public function test_la_tenuta_prende_la_matricola_della_fusa(): void
