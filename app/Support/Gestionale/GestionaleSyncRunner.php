@@ -34,6 +34,14 @@ class GestionaleSyncRunner
     /** @var array<string, array<int, array<string, mixed>>>|null */
     private ?array $installedByCustomer = null;
 
+    /**
+     * I clienti il cui elenco installati non si e' riusciti a leggere,
+     * nemmeno riprovando: con un buco li' non si propongono spostamenti.
+     *
+     * @var array<int, int|string>
+     */
+    private array $installedFalliti = [];
+
     /** @var Collection<int, Customer> */
     private $linkedCustomers;
 
@@ -451,6 +459,40 @@ class GestionaleSyncRunner
         return $chiavi;
     }
 
+    /**
+     * Dove Eureka consegna oggi ciascuna matricola: chiave => id cliente
+     * CRM della bolla piu' recente.
+     *
+     * Serve a mettere a confronto due scritture della stessa matricola che
+     * nel CRM risultano ancora da due clienti diversi (23/09/2026:
+     * "-0819352" all'Hotel Principe Palace e "0819352-013489" rimasto alla
+     * pizzeria di due anni prima, mentre Eureka le consegna tutte e due al
+     * Principe).
+     *
+     * @return array<string, array{cliente: string, data: string}>
+     */
+    private function clienteSuEurekaPerMatricola(): array
+    {
+        $ultima = [];
+
+        foreach ($this->installedMachinesByCustomer() as $customerId => $righe) {
+            foreach ((array) $righe as $riga) {
+                $chiave = MachineUnit::chiaveMatricola((string) ($riga['matricola'] ?? ''));
+                $data = $this->parseEurekaDate($riga['data_documento'] ?? null);
+
+                if ($chiave === '' || ! $data) {
+                    continue;
+                }
+
+                if (! isset($ultima[$chiave]) || $data->gt($ultima[$chiave]['data'])) {
+                    $ultima[$chiave] = ['cliente' => (string) $customerId, 'data' => $data];
+                }
+            }
+        }
+
+        return array_map(fn (array $r) => ['cliente' => $r['cliente'], 'data' => $r['data']->toDateString()], $ultima);
+    }
+
     private function proponiFusioniMacchine(): array
     {
         // Le proposte gia' in piedi non si rifanno: una che una persona ha
@@ -460,7 +502,7 @@ class GestionaleSyncRunner
             // type serve a ConfrontoMacchine per riconoscere gli impianti.
             ->get(['id', 'serial_number', 'model_name', 'type', 'gestionale_code', 'current_customer_id', 'created_at']);
 
-        $proposte = ConfrontoMacchine::proposte($macchine, $this->matricoleSuEureka());
+        $proposte = ConfrontoMacchine::proposte($macchine, $this->matricoleSuEureka(), $this->clienteSuEurekaPerMatricola());
 
         foreach ($proposte as $proposta) {
             $proposta['assorbire']->update([
@@ -491,6 +533,14 @@ class GestionaleSyncRunner
     private function proponiSpostamentiMacchine(): array
     {
         $installed = $this->installedMachinesByCustomer();
+
+        // Con un elenco mancante non si sa dov'e' la consegna piu' recente:
+        // meglio nessuna proposta che una che porta la macchina dal cliente
+        // sbagliato. Le proposte gia' in piedi restano dove sono.
+        if ($this->installedFalliti !== []) {
+            return [];
+        }
+
         $clienti = $this->linkedCustomers->keyBy('id');
         $perMatricola = [];
 
@@ -834,10 +884,46 @@ class GestionaleSyncRunner
 
         $this->linkedCustomers = $customers;
 
-        return $this->installedByCustomer = $this->client->pooledGet(
-            '/show/q/art_installati',
-            $customers->mapWithKeys(fn (Customer $customer) => [$customer->id => ['q' => (int) $customer->gestionale_code]])->all(),
-        );
+        $parametri = $customers->mapWithKeys(fn (Customer $customer) => [$customer->id => ['q' => (int) $customer->gestionale_code]])->all();
+
+        $righe = $this->client->pooledGet('/show/q/art_installati', $parametri);
+        $falliti = $this->client->chiaviPooledFallite();
+
+        // Una chiamata caduta (Eureka ha i suoi 500 a raffica) torna vuota,
+        // indistinguibile da "questo cliente non ha macchine" — e li' la
+        // differenza vale uno spostamento sbagliato: senza l'elenco
+        // dell'Hotel Principe Palace, la consegna piu' recente della
+        // matricola 0819352 sembrava quella del 2025 a un altro albergo, e
+        // il sync proponeva di spostarla li' (23/09/2026). Si richiede solo
+        // quelle, un paio su duemila.
+        for ($tentativo = 0; $tentativo < 2 && $falliti !== []; $tentativo++) {
+            usleep(2_000_000);
+
+            $ripetute = $this->client->pooledGet(
+                '/show/q/art_installati',
+                array_intersect_key($parametri, array_flip($falliti)),
+            );
+
+            $ancora = $this->client->chiaviPooledFallite();
+
+            foreach ($ripetute as $chiave => $valore) {
+                if (! in_array($chiave, $ancora, true)) {
+                    $righe[$chiave] = $valore;
+                }
+            }
+
+            $falliti = $ancora;
+        }
+
+        $this->installedFalliti = $falliti;
+
+        if ($falliti !== []) {
+            RegistroSync::movimento('sync-anagrafiche', 'elenco installati incompleto', [
+                'clienti_non_letti' => count($falliti),
+            ]);
+        }
+
+        return $this->installedByCustomer = $righe;
     }
 
     /**

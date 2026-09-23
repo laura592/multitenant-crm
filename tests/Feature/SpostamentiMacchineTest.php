@@ -112,6 +112,34 @@ class SpostamentiMacchineTest extends TestCase
         $this->assertNull($m->fresh()->spostamento_suggerito_customer_id);
     }
 
+    public function test_con_un_elenco_non_letto_non_si_propone_niente(): void
+    {
+        // Eureka ha i suoi 500 a raffica: la chiamata caduta torna vuota,
+        // indistinguibile da "nessuna macchina". Senza l'elenco del
+        // Principe la consegna piu' recente sembrava quella vecchia
+        // dell'Agora', e il sync proponeva di riportarla li' (23/09/2026,
+        // macinadosatore 0819352).
+        $m = $this->macchina('1863540', $this->agora, '2024-05-14');
+
+        Http::fake(function (Request $request) {
+            if (! str_contains($request->url(), 'art_installati')) {
+                return Http::response([], 200);
+            }
+
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $q);
+
+            return match ((int) ($q['q'] ?? 0)) {
+                4 => Http::response([['id' => 1, 'matricola' => '1863540', 'numero_doc_t23' => 10, 'data_documento' => '2024-05-14T00:00:00.000+02:00']], 200),
+                916 => Http::response('errore interno', 500),
+                default => Http::response([], 200),
+            };
+        });
+
+        $this->artisan('gestionale:sync')->assertExitCode(0);
+
+        $this->assertNull($m->fresh()->spostamento_suggerito_customer_id, 'Con un buco nei dati non si propone.');
+    }
+
     public function test_scartata_non_ritorna(): void
     {
         $m = $this->macchina('1863540', $this->agora, '2024-05-14');
