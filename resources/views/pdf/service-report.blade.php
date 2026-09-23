@@ -103,7 +103,8 @@
         // senza gli upload, ...) — senza, dompdf prova comunque a caricare
         // un'immagine inesistente e stampa il testo alt al suo posto invece
         // del placeholder "Non ancora firmato".
-        $hasSignatureFile = $report->customer_signature_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($report->customer_signature_path);
+        $signatureFile = \App\Support\Rapportini\FirmaCliente::percorsoFile($report->customer_signature_path);
+        $hasSignatureFile = $signatureFile !== null;
         // Il rapportino inviato via email al cliente non deve MAI mostrare
         // prezzi (solo il download interno dell'operatore li mostra) — vedi
         // i due chiamanti di questa view: ServiceReportController::pdf()
@@ -279,7 +280,7 @@
                 <div class="signature-box">
                     <div class="frame">
                         @if($hasSignatureFile)
-                            <img src="{{ public_path('storage/'.$report->customer_signature_path) }}" alt="Firma">
+                            <img src="{{ $signatureFile }}" alt="Firma">
                         @else
                             <span class="placeholder">Non ancora firmato</span>
                         @endif

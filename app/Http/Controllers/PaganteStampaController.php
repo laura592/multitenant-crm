@@ -9,7 +9,6 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
-use Spatie\Permission\PermissionRegistrar;
 
 /**
  * L'elenco delle macchine che un pagante si accolla, da stampare e mandargli.
@@ -21,9 +20,10 @@ class PaganteStampaController extends Controller
 {
     public function __invoke(Request $request, string $pagante)
     {
-        // Rotta fuori dal pannello: ne' SetPermissionsTeamId ne' lo scope
-        // tenant automatico girano qui (vedi ServiceReportController::pdf()).
-        app(PermissionRegistrar::class)->setPermissionsTeamId(auth()->user()?->tenant_id);
+        // Il tenant per i ruoli lo collega SetPermissionsTeamId, middleware
+        // del gruppo di queste rotte (routes/web.php): fuori dal pannello
+        // Filament non risolve nessun tenant, e senza quel collegamento
+        // $user->can() non troverebbe i ruoli e negherebbe sempre.
 
         Gate::authorize('viewAny', MachineUnit::class);
 

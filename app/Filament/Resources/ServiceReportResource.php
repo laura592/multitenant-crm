@@ -21,6 +21,7 @@ use App\Support\Gestionale\FattureRapportino;
 use App\Support\Gestionale\SenzaFatturaCollegata;
 use App\Support\OutsideLivewireRender;
 use App\Support\Rapportini\DividiPerMacchina;
+use App\Support\Rapportini\FirmaCliente;
 use App\Support\Rapportini\LavaggioFields;
 use App\Support\TariffeIntervento;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -148,15 +149,15 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                     'class' => 'fi-quick-overview rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50 shadow-sm',
                 ])
                 ->schema([
-                    TextEntry::make('number')->label('Numero')->columnSpan(2),
-                    TextEntry::make('customer.full_name')->label('Cliente')->columnSpan(3)
+                    TextEntry::make('number')->label('Numero')->columnSpan(['default' => 1, 'lg' => 2]),
+                    TextEntry::make('customer.full_name')->label('Cliente')->columnSpan(['default' => 1, 'lg' => 3])
                         ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
-                    TextEntry::make('technician.name')->label('Tecnico')->columnSpan(3),
+                    TextEntry::make('technician.name')->label('Tecnico')->columnSpan(['default' => 1, 'lg' => 3]),
                     TextEntry::make('intervention_type')
                         ->label('Tipo intervento')
                         ->badge()
                         ->formatStateUsing(fn (string $state) => (static::interventionTypeLabels()[$state] ?? $state))
-                        ->columnSpan(2),
+                        ->columnSpan(['default' => 1, 'lg' => 2]),
                     TextEntry::make('intervention_date')->label('Data')->date()->columnSpan(1),
                     TextEntry::make('status')
                         ->label('Stato')
@@ -233,13 +234,17 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                         ->placeholder('—'),
                     ImageEntry::make('customer_signature_path')
                         ->label('')
-                        ->disk('public')
+                        // Nessun ->disk(): la firma sta sul disco privato e non
+                        // ha una URL pubblica. ImageEntry lascia passare di suo
+                        // una URL assoluta (getImageUrl), quindi le si da' la
+                        // rotta che chiede il permesso prima di servire il file.
+                        //
                         // Il path puo' restare in DB anche se il file non c'e' piu'
                         // su disco (es. storage non persistito): senza questo
                         // controllo l'ImageEntry prova comunque a caricare
                         // un'immagine rotta invece di mostrare il placeholder.
-                        ->getStateUsing(fn (ServiceReport $record) => ($record->customer_signature_path && Storage::disk('public')->exists($record->customer_signature_path))
-                            ? $record->customer_signature_path
+                        ->getStateUsing(fn (ServiceReport $record) => FirmaCliente::esiste($record->customer_signature_path)
+                            ? route('service-reports.firma', $record)
                             : null)
                         ->placeholder('Non ancora firmato'),
                 ]),
@@ -312,7 +317,7 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                         ->url(fn (ServiceReport $record) => $record->eurekaDestinazionePayer()
                             ? CustomerResource::getUrl('view', ['record' => $record->eurekaDestinazionePayer()], tenant: $record->tenant)
                             : null)
-                        ->columnSpan(2),
+                        ->columnSpan(['default' => 1, 'lg' => 2]),
                     TextEntry::make('gestionale_sync_error')->label('Errore')->placeholder('—')->columnSpanFull(),
                 ]),
         ]);
@@ -990,7 +995,7 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                             ->getSearchResultsUsing(fn (string $search): array => self::cercaMateriali($search))
                             ->getOptionLabelUsing(fn ($value): ?string => Material::find($value)?->display_label)
                             ->required()
-                            ->columnSpan(2),
+                            ->columnSpan(['default' => 1, 'lg' => 2]),
                         Forms\Components\TextInput::make('quantity')->label('Quantità / ore')->numeric()->default(1)->required(),
                     ])
                     // La riga manodopera (materiale ORE) non e' un default
@@ -1306,7 +1311,7 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                 // lunghezza fissa, quindi l'ordine alfabetico coincide con
                 // quello di emissione. Nessuna espressione da inventare.
                 Tables\Columns\TextColumn::make('number')->label('Numero')->searchable()->sortable(),
-                Tables\Columns\TextColumn::make('gestionale_number')
+                Tables\Columns\TextColumn::make('gestionale_number')->visibleFrom('md')
                     ->label('Numero gestionale')
                     ->placeholder('—')
                     ->searchable()
@@ -1325,10 +1330,10 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                     // default per non riportare via lo spazio recuperato
                     // sulla colonna Eureka — visibile via toggle colonne.
                     ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->searchable()
+                Tables\Columns\TextColumn::make('customer.company_name')->wrap()->label('Cliente')->searchable()
                     ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
-                Tables\Columns\TextColumn::make('technician.name')->label('Tecnico'),
-                Tables\Columns\TextColumn::make('intervention_type')
+                Tables\Columns\TextColumn::make('technician.name')->visibleFrom('md')->label('Tecnico'),
+                Tables\Columns\TextColumn::make('intervention_type')->visibleFrom('md')
                     ->label('Tipo')
                     ->badge()
                     ->formatStateUsing(fn (string $state) => (static::interventionTypeLabels(short: true)[$state] ?? $state)),
@@ -1341,7 +1346,7 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                 // La fattura Eureka su cui e' finita la scheda, annotata ogni
                 // notte da eureka:allinea-fatture-rapportini. Per l'ufficio:
                 // ai tecnici la fatturazione non serve, e la colonna non c'e'.
-                Tables\Columns\TextColumn::make('eureka_fatturato_il')
+                Tables\Columns\TextColumn::make('eureka_fatturato_il')->visibleFrom('md')
                     ->label('Fatturato')
                     ->visible(fn (): bool => self::vedeFatturazione())
                     // Senza fattura collegata si dice il perche', con la prova:
@@ -1375,7 +1380,7 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                     ->wrap()
                     ->sortable()
                     ->toggleable(),
-                Tables\Columns\IconColumn::make('gestionale_sync_status')
+                Tables\Columns\IconColumn::make('gestionale_sync_status')->visibleFrom('md')
                     ->label('Eureka')
                     // Icona invece del badge testuale per risparmiare
                     // spazio in tabella (stesso pattern di

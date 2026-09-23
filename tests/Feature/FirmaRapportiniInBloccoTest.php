@@ -36,7 +36,9 @@ class FirmaRapportiniInBloccoTest extends TestCase
     {
         parent::setUp();
 
-        Storage::fake('public');
+        // La firma sta sul disco privato, non piu' su "public": da /storage
+        // si apriva senza login (vedi App\Support\Rapportini\FirmaCliente).
+        Storage::fake('local');
 
         $this->tenant = Tenant::create(['name' => 'Alex', 'slug' => 'alex']);
         $this->tecnico = User::create(['tenant_id' => $this->tenant->id, 'name' => 'Tecnico', 'email' => 't@alex.it', 'password' => bcrypt('x')]);
@@ -80,7 +82,7 @@ class FirmaRapportiniInBloccoTest extends TestCase
             $this->assertNotNull($r->signed_at);
         }
         $this->assertSame($primo->customer_signature_path, $secondo->customer_signature_path, 'e\' la stessa firma');
-        Storage::disk('public')->assertExists($primo->customer_signature_path);
+        Storage::disk('local')->assertExists($primo->customer_signature_path);
 
         $this->assertNull($altroGiorno->fresh()->customer_signature_path, 'non era tra quelli scelti');
     }

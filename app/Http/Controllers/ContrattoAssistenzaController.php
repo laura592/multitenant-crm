@@ -9,7 +9,6 @@ use App\Support\Assistenza\ContrattoAssistenzaPdf;
 use App\Support\Assistenza\ModelloContrattoMancante;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
-use Spatie\Permission\PermissionRegistrar;
 
 /**
  * Il contratto di assistenza di una macchina del preventivo, da firmare:
@@ -19,9 +18,10 @@ class ContrattoAssistenzaController extends Controller
 {
     public function __invoke(Quote $quote, QuoteProduct $quoteProduct)
     {
-        // Fuori dal pannello: senza, i ruoli per tenant non si trovano (vedi
-        // QuoteController::pdf).
-        app(PermissionRegistrar::class)->setPermissionsTeamId(auth()->user()?->tenant_id);
+        // Il tenant per i ruoli lo collega SetPermissionsTeamId, middleware
+        // del gruppo di queste rotte (routes/web.php): fuori dal pannello
+        // Filament non risolve nessun tenant, e senza quel collegamento
+        // $user->can() non troverebbe i ruoli e negherebbe sempre.
 
         Gate::authorize('view', $quote);
 

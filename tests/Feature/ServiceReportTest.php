@@ -35,7 +35,9 @@ class ServiceReportTest extends TestCase
      */
     public function test_technician_compiles_and_signs_then_the_office_sends_it(): void
     {
-        Storage::fake('public');
+        // La firma sta sul disco privato, non piu' su "public": da /storage
+        // si apriva senza login (vedi App\Support\Rapportini\FirmaCliente).
+        Storage::fake('local');
         Mail::fake();
 
         $tenant = Tenant::create(['name' => 'Gifar', 'slug' => 'gifar']);
@@ -72,7 +74,7 @@ class ServiceReportTest extends TestCase
         $report->refresh();
         $this->assertNotNull($report->customer_signature_path);
         $this->assertStringStartsWith('signatures/', $report->customer_signature_path);
-        Storage::disk('public')->assertExists($report->customer_signature_path);
+        Storage::disk('local')->assertExists($report->customer_signature_path);
         $this->assertSame('firmato', $report->status);
 
         // PDF scaricabile

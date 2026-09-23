@@ -17,14 +17,20 @@ class SignaturePad extends Field
 {
     protected string $view = 'filament.forms.components.signature-pad';
 
-    protected string $signatureDisk = 'public';
+    /**
+     * Disco privato, non "public": una firma autografa e' un dato personale
+     * e da /storage si apriva senza login, a chiunque avesse l'indirizzo.
+     * Si serve dalla rotta service-reports.firma, che chiede il permesso.
+     * Vedi App\Support\Rapportini\FirmaCliente.
+     */
+    protected string $signatureDisk = 'local';
 
     protected string $signatureDirectory = 'signatures';
 
     /**
      * ~1.5MB decodificati (base64 e' ~33% piu' grande): ampiamente sufficiente per
      * un tratto di firma disegnato su canvas, previene un payload Livewire manomesso
-     * usato per scrivere file enormi su disco pubblico.
+     * usato per scrivere file enormi su disco.
      */
     private const MAX_BASE64_LENGTH = 2 * 1024 * 1024;
 
@@ -76,7 +82,7 @@ class SignaturePad extends Field
 
             // Verifica sui byte decodificati, non sul prefisso "data:image/..." del
             // client (falsificabile): solo cosi' siamo certi di scrivere su disco
-            // pubblico un'immagine vera e non un payload arbitrario.
+            // un'immagine vera e non un payload arbitrario.
             $imageInfo = @getimagesizefromstring($decoded);
 
             if ($imageInfo === false || ! in_array($imageInfo[2], [IMAGETYPE_PNG, IMAGETYPE_JPEG], true)) {

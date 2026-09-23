@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ContrattoAssistenzaController;
 use App\Http\Controllers\FatturaEurekaController;
+use App\Http\Controllers\FirmaRapportinoController;
 use App\Http\Controllers\CustomerSchedaAnagraficaController;
 use App\Http\Controllers\PaganteStampaController;
 use App\Http\Controllers\QuoteClientController;
@@ -9,6 +10,7 @@ use App\Http\Controllers\QuoteController;
 use App\Http\Controllers\RiepilogoRapportiniController;
 use App\Http\Controllers\ServiceReportController;
 use App\Http\Controllers\StampaTemporaneaController;
+use App\Http\Middleware\SetPermissionsTeamId;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -42,8 +44,15 @@ Route::prefix('preventivo/{token}')
             ->name('client.quote.respond');
     });
 
-Route::middleware(['auth'])->group(function () {
+// SetPermissionsTeamId: queste rotte stanno fuori dal pannello, dove
+// Filament non ha risolto nessun tenant e i ruoli per-team di
+// spatie/laravel-permission resterebbero invisibili a $user->can().
+// Come middleware del gruppo vale per tutte, comprese quelle che verranno.
+Route::middleware(['auth', SetPermissionsTeamId::class])->group(function () {
     Route::get('service-reports/{serviceReport}/pdf', [ServiceReportController::class, 'pdf'])->name('service-reports.pdf');
+    // La firma del cliente sta sul disco privato: si apre da qui, non da
+    // /storage (vedi App\Support\Rapportini\FirmaCliente).
+    Route::get('service-reports/{serviceReport}/firma', FirmaRapportinoController::class)->name('service-reports.firma');
     Route::get('service-reports/{serviceReport}/fatture/{idFattura}', FatturaEurekaController::class)
         ->whereNumber('idFattura')
         ->name('service-reports.fattura-eureka');

@@ -6,7 +6,6 @@ use App\Models\ServiceReport;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
-use Spatie\Permission\PermissionRegistrar;
 
 class ServiceReportController extends Controller
 {
@@ -25,13 +24,10 @@ class ServiceReportController extends Controller
      */
     public function pdf(ServiceReport $serviceReport, Request $request)
     {
-        // Route fuori dal pannello Filament: SetPermissionsTeamId (che collega
-        // il tenant al "team" di spatie/laravel-permission) e' un tenant
-        // middleware di Filament e qui non gira, quindi senza questa riga
-        // $user->can(...) non trova il ruolo dell'utente (assegnato con un
-        // tenant_id specifico in model_has_roles) e nega SEMPRE l'accesso,
-        // anche a chi ha davvero il permesso (visto su l.garbin, 2026-07-28).
-        app(PermissionRegistrar::class)->setPermissionsTeamId(auth()->user()?->tenant_id);
+        // Il tenant per i ruoli lo collega SetPermissionsTeamId, middleware
+        // del gruppo di queste rotte (routes/web.php): fuori dal pannello
+        // Filament non risolve nessun tenant, e senza quel collegamento
+        // $user->can() non troverebbe i ruoli e negherebbe sempre.
 
         // Route fuori dal pannello Filament: lo scope tenant automatico di
         // BelongsToTenant non si applica (nessun tenant Filament attivo in
