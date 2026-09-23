@@ -250,7 +250,7 @@ class MachineUnitResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('serial_number')->label('Matricola')->searchable(),
-                Tables\Columns\TextColumn::make('display_name')
+                Tables\Columns\TextColumn::make('display_name')->wrap()
                     ->label('Modello')
                     ->searchable(
                         query: fn ($query, string $search) => $query
@@ -260,13 +260,13 @@ class MachineUnitResource extends Resource
                                 ->where('type', 'like', "%{$search}%")
                                 ->orWhere('code', 'like', "%{$search}%")),
                     ),
-                Tables\Columns\TextColumn::make('currentCustomer.company_name')->label('Presso')->placeholder('In magazzino')->searchable()
+                Tables\Columns\TextColumn::make('currentCustomer.company_name')->wrap()->label('Presso')->placeholder('In magazzino')->searchable()
                     ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
-                Tables\Columns\TextColumn::make('type')
+                Tables\Columns\TextColumn::make('type')->visibleFrom('md')
                     ->label('Categoria')
                     ->formatStateUsing(fn (?string $state) => static::typeLabels()[$state] ?? '—')
                     ->toggleable(),
-                Tables\Columns\IconColumn::make('gestionale_code')
+                Tables\Columns\IconColumn::make('gestionale_code')->visibleFrom('md')
                     ->label('Da Eureka')
                     ->boolean()
                     ->trueIcon('heroicon-o-check-circle')

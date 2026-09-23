@@ -112,7 +112,7 @@ class DeadlineResource extends Resource
                     ->badge()
                     ->formatStateUsing(fn (string $state) => Deadline::typeLabels()[$state] ?? 'Altro')
                     ->sortable(),
-                Tables\Columns\TextColumn::make('deadlinable')
+                Tables\Columns\TextColumn::make('deadlinable')->wrap()
                     ->label('Collegata a')
                     // Un automezzo assegnato a un utente e' un mezzo
                     // personale (es. Range Rover/moto di Alessandro), non
@@ -131,7 +131,7 @@ class DeadlineResource extends Resource
                     // valore mostrato. Si ordina sul tipo (deadlinable_type), che
                     // almeno raggruppa insieme veicoli e aziende.
                     ->sortable(['deadlinable_type']),
-                Tables\Columns\TextColumn::make('policy_number')
+                Tables\Columns\TextColumn::make('policy_number')->visibleFrom('md')
                     ->label('Numero polizza')
                     ->placeholder('—')
                     ->sortable(),

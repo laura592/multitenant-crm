@@ -136,7 +136,7 @@ class PriceListResource extends Resource
         return $table
             ->defaultSort('valid_from', 'desc')
             ->columns([
-                Tables\Columns\TextColumn::make('name')->label('Nome')->searchable()->sortable(),
+                Tables\Columns\TextColumn::make('name')->wrap()->label('Nome')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('category')
                     ->label('Categoria')
                     ->badge()
@@ -147,9 +147,9 @@ class PriceListResource extends Resource
                         default => 'gray',
                     })
                     ->sortable(),
-                Tables\Columns\TextColumn::make('supplier.name')->label('Fornitore')->placeholder('—')->sortable(),
-                Tables\Columns\TextColumn::make('valid_from')->label('Valido dal')->date()->sortable()->placeholder('—'),
-                Tables\Columns\TextColumn::make('valid_to')->label('Valido fino al')->date()->sortable()->placeholder('—'),
+                Tables\Columns\TextColumn::make('supplier.name')->visibleFrom('md')->label('Fornitore')->placeholder('—')->sortable(),
+                Tables\Columns\TextColumn::make('valid_from')->visibleFrom('md')->label('Valido dal')->date()->sortable()->placeholder('—'),
+                Tables\Columns\TextColumn::make('valid_to')->visibleFrom('md')->label('Valido fino al')->date()->sortable()->placeholder('—'),
                 Tables\Columns\TextColumn::make('status')
                     ->label('Stato')
                     ->state(fn (PriceList $record) => $record->status())

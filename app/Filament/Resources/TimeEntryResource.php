@@ -156,7 +156,7 @@ class TimeEntryResource extends Resource
             ])
             ->defaultGroup('clock_in')
             ->columns([
-                Tables\Columns\TextColumn::make('user.name')->label('Dipendente')->searchable()->sortable(),
+                Tables\Columns\TextColumn::make('user.name')->wrap()->label('Dipendente')->searchable()->sortable(),
                 // Data in formato esteso ("lun 26 luglio 2026") in una
                 // colonna a parte: prima la data era ripetuta per intero sia
                 // in Entrata sia in Uscita, che invece mostrano solo l'ora.
@@ -168,16 +168,16 @@ class TimeEntryResource extends Resource
                     ->label('Giorno')
                     ->state(fn (TimeEntry $record) => $record->clock_in->translatedFormat('D d F Y'))
                     ->sortable(query: fn (Builder $query, string $direction) => $query->orderBy('clock_in', $direction)),
-                Tables\Columns\TextColumn::make('clock_in')->label('Entrata')->dateTime('H:i')->sortable(),
-                Tables\Columns\TextColumn::make('clock_out')->label('Uscita')->dateTime('H:i')->placeholder('In corso')->sortable(),
+                Tables\Columns\TextColumn::make('clock_in')->visibleFrom('md')->label('Entrata')->dateTime('H:i')->sortable(),
+                Tables\Columns\TextColumn::make('clock_out')->visibleFrom('md')->label('Uscita')->dateTime('H:i')->placeholder('In corso')->sortable(),
                 Tables\Columns\TextColumn::make('worked_hours')->label('Ore')->state(fn (TimeEntry $record) => $record->worked_hours)->placeholder('—'),
-                Tables\Columns\TextColumn::make('destinazione_trasferta')
+                Tables\Columns\TextColumn::make('destinazione_trasferta')->visibleFrom('md')
                     ->label('Trasferta')
                     ->icon(fn (TimeEntry $record) => $record->trasferta ? 'heroicon-o-map-pin' : null)
                     ->state(fn (TimeEntry $record) => $record->trasferta ? ($record->destinazione_trasferta ?: 'Sì') : null)
                     ->placeholder('—')
                     ->toggleable(),
-                Tables\Columns\TextColumn::make('source')
+                Tables\Columns\TextColumn::make('source')->visibleFrom('md')
                     ->label('Origine')
                     ->badge()
                     ->color(fn (string $state) => match ($state) {

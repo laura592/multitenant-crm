@@ -68,11 +68,11 @@ class SupplierResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('name')->label('Ragione sociale')->searchable()->sortable(),
-                Tables\Columns\TextColumn::make('city')->label('Città')->searchable()->sortable()->placeholder('—'),
+                Tables\Columns\TextColumn::make('name')->wrap()->label('Ragione sociale')->searchable()->sortable(),
+                Tables\Columns\TextColumn::make('city')->visibleFrom('md')->label('Città')->searchable()->sortable()->placeholder('—'),
                 Tables\Columns\TextColumn::make('phone')->label('Telefono')->placeholder('—'),
-                Tables\Columns\TextColumn::make('email')->label('Email')->placeholder('—'),
-                Tables\Columns\TextColumn::make('materials_count')->label('Materiali')->counts('materials'),
+                Tables\Columns\TextColumn::make('email')->visibleFrom('md')->label('Email')->placeholder('—'),
+                Tables\Columns\TextColumn::make('materials_count')->visibleFrom('md')->label('Materiali')->counts('materials'),
             ])
             ->defaultSort('name')
             ->actions([

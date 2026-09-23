@@ -41,14 +41,14 @@ class VehicleResource extends Resource
                     'class' => 'fi-quick-overview rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50 shadow-sm',
                 ])
                 ->schema([
-                    TextEntry::make('plate')->label('Targa')->columnSpan(2),
-                    TextEntry::make('brand')->label('Marca')->placeholder('—')->columnSpan(3),
-                    TextEntry::make('model')->label('Modello')->placeholder('—')->columnSpan(3),
+                    TextEntry::make('plate')->label('Targa')->columnSpan(['default' => 1, 'lg' => 2]),
+                    TextEntry::make('brand')->label('Marca')->placeholder('—')->columnSpan(['default' => 1, 'lg' => 3]),
+                    TextEntry::make('model')->label('Modello')->placeholder('—')->columnSpan(['default' => 1, 'lg' => 3]),
                     TextEntry::make('year')->label('Anno')->placeholder('—')->columnSpan(1),
                     TextEntry::make('assignedUser.name')
                         ->label('Assegnato a')
                         ->placeholder('Mezzo aziendale')
-                        ->columnSpan(3),
+                        ->columnSpan(['default' => 1, 'lg' => 3]),
                 ]),
             InfolistSection::make('Scadenze attive')
                 ->columns(3)
@@ -117,9 +117,9 @@ class VehicleResource extends Resource
             ->modifyQueryUsing(fn ($query) => $query->with('deadlines'))
             ->columns([
                 Tables\Columns\TextColumn::make('plate')->label('Targa')->searchable()->sortable(),
-                Tables\Columns\TextColumn::make('brand')->label('Marca')->sortable(),
-                Tables\Columns\TextColumn::make('model')->label('Modello')->sortable(),
-                Tables\Columns\TextColumn::make('year')->label('Anno')->sortable(),
+                Tables\Columns\TextColumn::make('brand')->visibleFrom('md')->label('Marca')->sortable(),
+                Tables\Columns\TextColumn::make('model')->wrap()->label('Modello')->sortable(),
+                Tables\Columns\TextColumn::make('year')->visibleFrom('md')->label('Anno')->sortable(),
                 Tables\Columns\TextColumn::make('insurance_due_date')
                     ->label('Assicurazione')
                     ->getStateUsing(fn (Vehicle $record) => $record->activeDeadline(Deadline::TYPE_ASSICURAZIONE)?->due_date)
@@ -132,7 +132,7 @@ class VehicleResource extends Resource
                     ->date()
                     ->placeholder('—')
                     ->color(fn (Vehicle $record) => self::deadlineColor($record->activeDeadline(Deadline::TYPE_REVISIONE))),
-                Tables\Columns\TextColumn::make('assignedUser.name')->label('Assegnato a')->sortable(),
+                Tables\Columns\TextColumn::make('assignedUser.name')->visibleFrom('md')->label('Assegnato a')->sortable(),
             ])
             ->defaultSort('plate')
             ->filters([

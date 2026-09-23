@@ -39,6 +39,15 @@ const EMAIL = process.env.CRM_EMAIL    || 'admin@test.it';
 const PASS  = process.env.CRM_PASSWORD || 'password';
 const OUT   = process.env.CRM_SHOTS    || '/tmp/crm-shots';
 
+/**
+ * Larghezza della finestra, per guardare il pannello come lo vede chi ci
+ * lavora dal telefono: CRM_VIEWPORT=360x800. Senza, la scrivania di sempre.
+ * I breakpoint che contano in Filament sono md (768) e lg (1024).
+ */
+const [VW, VH] = (process.env.CRM_VIEWPORT || '1500x1000')
+  .split('x')
+  .map((n) => parseInt(n, 10) || 0);
+
 const [cmd = 'smoke', arg] = process.argv.slice(2);
 const log = (...a) => console.log('·', ...a);
 mkdirSync(OUT, { recursive: true });
@@ -50,7 +59,11 @@ const settle = async (page) => {
 };
 
 const browser = await chromium.launch();
-const ctx = await browser.newContext({ viewport: { width: 1500, height: 1000 } });
+const ctx = await browser.newContext({
+  viewport: { width: VW || 1500, height: VH || 1000 },
+  isMobile: VW > 0 && VW < 768,
+  hasTouch: VW > 0 && VW < 768,
+});
 const page = await ctx.newPage();
 
 const errs = [];

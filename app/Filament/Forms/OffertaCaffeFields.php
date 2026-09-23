@@ -42,7 +42,7 @@ final class OffertaCaffeFields
                             $set('formato', $prodotto?->formato);
                             $set('prezzo', MoneyInput::format($prodotto?->prezzo));
                         })
-                        ->columnSpan(3),
+                        ->columnSpan(['default' => 1, 'lg' => 3]),
                     Forms\Components\Hidden::make('nome'),
                     Forms\Components\Hidden::make('gruppo'),
                     Forms\Components\TextInput::make('formato')
@@ -52,7 +52,7 @@ final class OffertaCaffeFields
                         ->label('Prezzo')
                         ->helperText('Solo per questa offerta: il listino non cambia.')
                         ->required()
-                        ->columnSpan(2),
+                        ->columnSpan(['default' => 1, 'lg' => 2]),
                 ])
                 ->columns(6)
                 ->defaultItems(1)

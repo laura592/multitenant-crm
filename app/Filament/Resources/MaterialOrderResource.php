@@ -74,10 +74,10 @@ class MaterialOrderResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('number')->label('Numero')->searchable()->sortable(),
-                Tables\Columns\TextColumn::make('supplier.name')->label('Fornitore')->placeholder('—'),
+                Tables\Columns\TextColumn::make('supplier.name')->wrap()->label('Fornitore')->placeholder('—'),
                 Tables\Columns\TextColumn::make('created_at')->label('Data')->dateTime('d/m/Y H:i')->sortable(),
-                Tables\Columns\TextColumn::make('items_count')->label('Materiali')->counts('items'),
-                Tables\Columns\TextColumn::make('notes')
+                Tables\Columns\TextColumn::make('items_count')->visibleFrom('md')->label('Materiali')->counts('items'),
+                Tables\Columns\TextColumn::make('notes')->visibleFrom('md')
                     ->label('Note')
                     ->limit(50)
                     ->placeholder('—')

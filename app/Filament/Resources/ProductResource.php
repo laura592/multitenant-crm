@@ -145,11 +145,11 @@ class ProductResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\ImageColumn::make('image')->label(''),
+                Tables\Columns\ImageColumn::make('image')->visibleFrom('md')->label(''),
                 Tables\Columns\TextColumn::make('sku')->label('SKU')->searchable()->sortable(),
-                Tables\Columns\TextColumn::make('name')->label('Nome')->searchable()->sortable()
+                Tables\Columns\TextColumn::make('name')->wrap()->label('Nome')->searchable()->sortable()
                     ->limit(40)->tooltip(fn (Product $record) => strlen($record->name) > 40 ? $record->name : null),
-                Tables\Columns\TextColumn::make('type')
+                Tables\Columns\TextColumn::make('type')->visibleFrom('md')
                     ->label('Tipo')
                     ->badge()
                     ->formatStateUsing(fn (string $state) => static::typeLabels()[$state] ?? $state)

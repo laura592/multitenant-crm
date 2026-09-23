@@ -64,7 +64,7 @@ class OffertaCaffeResource extends Resource
                         ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::customerOption($record))
                         ->searchable(['company_name', 'first_name', 'last_name'])
                         ->required()
-                        ->columnSpan(2),
+                        ->columnSpan(['default' => 1, 'lg' => 2]),
                     Forms\Components\DatePicker::make('date')
                         ->label('Data')
                         ->default(now())
@@ -84,12 +84,13 @@ class OffertaCaffeResource extends Resource
                 Tables\Columns\TextColumn::make('number')->label('Numero')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('customer.company_name')
                     ->label('Cliente')
+                    ->wrap()
                     ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state))
                     ->searchable()
                     ->sortable(),
                 Tables\Columns\TextColumn::make('date')->label('Data')->date('d/m/Y')->sortable(),
-                Tables\Columns\TextColumn::make('valida_fino')->label('Valida fino al')->date('d/m/Y')->placeholder('—')->sortable(),
-                Tables\Columns\TextColumn::make('righe')
+                Tables\Columns\TextColumn::make('valida_fino')->visibleFrom('md')->label('Valida fino al')->date('d/m/Y')->placeholder('—')->sortable(),
+                Tables\Columns\TextColumn::make('righe')->visibleFrom('md')
                     ->label('Caffè')
                     ->state(fn (OffertaCaffe $record) => collect($record->righe)->pluck('nome')->filter()->implode(', '))
                     ->limit(60)
@@ -99,7 +100,7 @@ class OffertaCaffeResource extends Resource
                     ->badge()
                     ->formatStateUsing(fn (string $state) => OffertaCaffe::STATI[$state] ?? $state)
                     ->color(fn (string $state) => $state === 'inviata' ? 'success' : 'gray'),
-                Tables\Columns\TextColumn::make('user.name')->label('Fatta da')->placeholder('—')->toggleable(),
+                Tables\Columns\TextColumn::make('user.name')->visibleFrom('md')->label('Fatta da')->placeholder('—')->toggleable(),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('status')->label('Stato')->options(OffertaCaffe::STATI),

@@ -87,8 +87,8 @@ class ProdottoCaffeResource extends Resource
                     ->getTitleFromRecordUsing(fn (ProdottoCaffe $record) => $record->etichettaGruppo())
             )
             ->columns([
-                Tables\Columns\TextColumn::make('nome')->label('Prodotto')->searchable(),
-                Tables\Columns\TextColumn::make('formato')
+                Tables\Columns\TextColumn::make('nome')->wrap()->label('Prodotto')->searchable(),
+                Tables\Columns\TextColumn::make('formato')->visibleFrom('md')
                     ->label('Formato')
                     ->placeholder('da completare')
                     ->color(fn (ProdottoCaffe $record) => blank($record->formato) ? 'warning' : null),

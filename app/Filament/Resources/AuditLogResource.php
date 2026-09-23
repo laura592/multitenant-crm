@@ -110,7 +110,7 @@ class AuditLogResource extends Resource
                     ->label('Quando')
                     ->dateTime('d/m/Y H:i:s')
                     ->sortable(),
-                Tables\Columns\TextColumn::make('subject_type')
+                Tables\Columns\TextColumn::make('subject_type')->wrap()
                     ->label('Modello')
                     ->formatStateUsing(fn (AuditLog $record) => $record->subjectLabel())
                     ->badge(),
@@ -119,15 +119,15 @@ class AuditLogResource extends Resource
                     ->badge()
                     ->color(fn (?string $state) => static::eventColors()[$state] ?? 'gray')
                     ->formatStateUsing(fn (?string $state) => static::eventLabels()[$state] ?? $state ?? '—'),
-                Tables\Columns\TextColumn::make('causer.name')
+                Tables\Columns\TextColumn::make('causer.name')->wrap()
                     ->label('Utente')
                     ->placeholder('Sistema')
                     ->searchable(),
-                Tables\Columns\TextColumn::make('tenant.name')
+                Tables\Columns\TextColumn::make('tenant.name')->visibleFrom('md')
                     ->label('Tenant')
                     ->placeholder('Catalogo condiviso')
                     ->toggleable(),
-                Tables\Columns\TextColumn::make('description')
+                Tables\Columns\TextColumn::make('description')->visibleFrom('md')
                     ->label('Descrizione')
                     ->limit(60)
                     ->toggleable(),

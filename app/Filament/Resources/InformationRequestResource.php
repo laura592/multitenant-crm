@@ -209,12 +209,12 @@ class InformationRequestResource extends Resource
             ->modifyQueryUsing(fn ($query) => $query->with(['customer', 'notes', 'quotes.quoteGroup']))
             ->columns([
                 Tables\Columns\TextColumn::make('number')->label('Numero')->searchable()->sortable(),
-                Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->searchable()->sortable()
+                Tables\Columns\TextColumn::make('customer.company_name')->wrap()->label('Cliente')->searchable()->sortable()
                     ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                 // Provincia in tabella: le richieste arrivano da tutto il
                 // Veneto e oltre, e capire "dov'e'" senza aprire il cliente
                 // e' il primo filtro mentale quando si decide chi richiamare.
-                Tables\Columns\TextColumn::make('customer.province')
+                Tables\Columns\TextColumn::make('customer.province')->visibleFrom('md')
                     ->label('Prov.')
                     ->badge()
                     ->color('gray')
@@ -237,7 +237,7 @@ class InformationRequestResource extends Resource
                 // per rispondere a una richiesta, quindi i due modi di
                 // rispondere si vedono subito (richiesta dell'ufficio,
                 // 03/09/2026).
-                Tables\Columns\TextColumn::make('customer_email')
+                Tables\Columns\TextColumn::make('customer_email')->visibleFrom('md')
                     ->label('Email')
                     ->getStateUsing(fn (InformationRequest $record) => $record->customer?->emails ?: null)
                     ->listWithLineBreaks()
@@ -266,7 +266,7 @@ class InformationRequestResource extends Resource
                 // (InformationRequest::syncStatusFromQuotes); qui basta il
                 // si'/no, come per le colonne Eureka: numeri, stati e offerta
                 // stanno nel tooltip e a un clic di distanza.
-                Tables\Columns\IconColumn::make('has_quote')
+                Tables\Columns\IconColumn::make('has_quote')->visibleFrom('md')
                     ->label('Prev.')
                     ->alignCenter()
                     ->state(fn (InformationRequest $record) => $record->quotes->isNotEmpty())
@@ -288,7 +288,7 @@ class InformationRequestResource extends Resource
                     ->url(fn (InformationRequest $record) => $record->quotes->count() === 1
                         ? QuoteResource::getUrl('edit', ['record' => $record->quotes->first()])
                         : null),
-                Tables\Columns\TextColumn::make('appointment_at')
+                Tables\Columns\TextColumn::make('appointment_at')->visibleFrom('md')
                     ->label('Appuntamento')
                     ->dateTime('d/m/Y H:i')
                     ->placeholder('—')
@@ -305,7 +305,7 @@ class InformationRequestResource extends Resource
                 // menu delle colonne non le leggeva nessuno. Ora si vedono
                 // quando ci sono — l'ultima in chiaro, le precedenti contate
                 // e per intero nel tooltip.
-                Tables\Columns\TextColumn::make('latest_note')
+                Tables\Columns\TextColumn::make('latest_note')->visibleFrom('md')
                     ->label('Note')
                     ->getStateUsing(function (InformationRequest $record) {
                         $note = $record->notes->first();

@@ -68,7 +68,7 @@ class CategoryResource extends Resource
                 ->orderBy('categories.name')
                 ->select('categories.*'))
             ->columns([
-                Tables\Columns\TextColumn::make('name')
+                Tables\Columns\TextColumn::make('name')->wrap()
                     ->label('Nome')
                     ->searchable()
                     ->formatStateUsing(fn (Category $record, string $state) => $record->parent_id ? "↳ {$state}" : $state),

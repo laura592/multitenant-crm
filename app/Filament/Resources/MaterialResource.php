@@ -165,9 +165,9 @@ class MaterialResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('code')->label('Codice')->searchable()->sortable(),
-                Tables\Columns\TextColumn::make('supplier.name')->label('Fornitore')->placeholder('—')->toggleable(),
-                Tables\Columns\TextColumn::make('category')->label('Categoria')->badge()->toggleable(),
-                Tables\Columns\TextColumn::make('type')->label('Tipo')->searchable()->wrap(),
+                Tables\Columns\TextColumn::make('supplier.name')->wrap()->label('Fornitore')->placeholder('—')->toggleable(),
+                Tables\Columns\TextColumn::make('category')->visibleFrom('md')->label('Categoria')->badge()->toggleable(),
+                Tables\Columns\TextColumn::make('type')->visibleFrom('md')->label('Tipo')->searchable()->wrap(),
                 Tables\Columns\TextColumn::make('list_price')->label('Prezzo di listino')->money('EUR')->placeholder('—')->sortable(),
             ])
             ->defaultSort('category')

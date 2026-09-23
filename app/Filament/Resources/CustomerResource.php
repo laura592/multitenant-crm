@@ -207,10 +207,10 @@ class CustomerResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('company_name')->label('Ragione sociale')->sortable()
+                Tables\Columns\TextColumn::make('company_name')->wrap()->label('Ragione sociale')->sortable()
                     ->searchable(query: fn (Builder $query, string $search) => static::cercaPerNome($query, $search))
                     ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
-                Tables\Columns\TextColumn::make('emails')
+                Tables\Columns\TextColumn::make('emails')->visibleFrom('md')
                     ->label('Email')
                     ->listWithLineBreaks()
                     // LIKE sul testo del JSON invece di JSON_SEARCH: stesso
@@ -243,7 +243,7 @@ class CustomerResource extends Resource
                     ->limit(30)
                     ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('city')->label('Città')->sortable(),
-                Tables\Columns\IconColumn::make('source')
+                Tables\Columns\IconColumn::make('source')->visibleFrom('md')
                     ->label('Eureka')
                     // Uniformato con la colonna "Da Eureka" di MachineUnitResource
                     // e "Eureka" di ServiceReportResource: icona invece del badge

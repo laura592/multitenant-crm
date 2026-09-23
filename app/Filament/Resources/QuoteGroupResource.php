@@ -102,15 +102,15 @@ class QuoteGroupResource extends Resource
             ->defaultSort('created_at', 'desc')
             ->columns([
                 Tables\Columns\TextColumn::make('number')->label('Numero')->searchable()->sortable(),
-                Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->searchable()->sortable()
+                Tables\Columns\TextColumn::make('customer.company_name')->wrap()->label('Cliente')->searchable()->sortable()
                     ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                 Tables\Columns\TextColumn::make('status')
                     ->label('Stato')
                     ->badge()
                     ->formatStateUsing(fn (string $state) => static::statusLabels()[$state] ?? ucfirst($state))
                     ->color(fn (string $state) => static::statusColors()[$state] ?? 'gray'),
-                Tables\Columns\TextColumn::make('quotes_count')->counts('quotes')->label('Soluzioni'),
-                Tables\Columns\TextColumn::make('sent_at')->label('Inviata il')->dateTime()->placeholder('—'),
+                Tables\Columns\TextColumn::make('quotes_count')->visibleFrom('md')->counts('quotes')->label('Soluzioni'),
+                Tables\Columns\TextColumn::make('sent_at')->visibleFrom('md')->label('Inviata il')->dateTime()->placeholder('—'),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('status')

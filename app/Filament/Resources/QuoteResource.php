@@ -87,16 +87,16 @@ class QuoteResource extends Resource
                     'class' => 'fi-quick-overview rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50 shadow-sm',
                 ])
                 ->schema([
-                    TextEntry::make('number')->label('Preventivo')->columnSpan(2),
-                    TextEntry::make('customer.full_name')->label('Cliente')->columnSpan(5)
+                    TextEntry::make('number')->label('Preventivo')->columnSpan(['default' => 1, 'lg' => 2]),
+                    TextEntry::make('customer.full_name')->label('Cliente')->columnSpan(['default' => 1, 'lg' => 5])
                         ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
-                    TextEntry::make('date')->label('Data')->date()->columnSpan(2),
+                    TextEntry::make('date')->label('Data')->date()->columnSpan(['default' => 1, 'lg' => 2]),
                     TextEntry::make('status')
                         ->label('Stato')
                         ->badge()
                         ->formatStateUsing(fn (string $state) => static::statusLabels()[$state] ?? ucfirst($state))
                         ->color(fn (string $state) => static::statusColors()[$state] ?? 'gray')
-                        ->columnSpan(3),
+                        ->columnSpan(['default' => 1, 'lg' => 3]),
                 ]),
             // Tab "Dati preventivo" / "Righe preventivo": stessa suddivisione e
             // stessa etichettatura della pagina di Modifica (dove "Dati
@@ -157,7 +157,7 @@ class QuoteResource extends Resource
                             \Filament\Infolists\Components\Grid::make(12)
                                 ->schema([
                                     InfolistSection::make('Dati preventivo')
-                                        ->columnSpan(8)
+                                        ->columnSpan(['default' => 1, 'lg' => 8])
                                         ->columns(2)
                                         ->extraAttributes([
                                             'class' => 'rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950',
@@ -170,7 +170,7 @@ class QuoteResource extends Resource
                                             TextEntry::make('notes')->label('Note')->placeholder('—')->html()->columnSpanFull(),
                                         ]),
                                     InfolistSection::make('Totali')
-                                        ->columnSpan(4)
+                                        ->columnSpan(['default' => 1, 'lg' => 4])
                                         ->columns(2)
                                         ->extraAttributes([
                                             'class' => 'rounded-2xl border border-slate-200 bg-slate-50 shadow-sm dark:border-slate-800 dark:bg-slate-900',
@@ -206,7 +206,7 @@ class QuoteResource extends Resource
                                     // bug segnalato "non ripetere più volte prodotto qtà").
                                     \Filament\Infolists\Components\Grid::make(6)
                                         ->schema([
-                                            TextEntry::make('header_product')->hiddenLabel()->state('Prodotto')->weight('bold')->size(TextEntry\TextEntrySize::ExtraSmall)->color('gray')->columnSpan(2),
+                                            TextEntry::make('header_product')->hiddenLabel()->state('Prodotto')->weight('bold')->size(TextEntry\TextEntrySize::ExtraSmall)->color('gray')->columnSpan(['default' => 1, 'lg' => 2]),
                                             TextEntry::make('header_quantity')->hiddenLabel()->state('Qtà')->weight('bold')->size(TextEntry\TextEntrySize::ExtraSmall)->color('gray')->alignCenter(),
                                             TextEntry::make('header_price')->hiddenLabel()->state('Prezzo unit.')->weight('bold')->size(TextEntry\TextEntrySize::ExtraSmall)->color('gray')->alignRight(),
                                             TextEntry::make('header_discount')->hiddenLabel()->state('Sconto')->weight('bold')->size(TextEntry\TextEntrySize::ExtraSmall)->color('gray')->alignRight(),
@@ -216,7 +216,7 @@ class QuoteResource extends Resource
                                         ->hiddenLabel()
                                         ->contained(false)
                                         ->schema([
-                                            TextEntry::make('product.name')->hiddenLabel()->weight('bold')->columnSpan(2),
+                                            TextEntry::make('product.name')->hiddenLabel()->weight('bold')->columnSpan(['default' => 1, 'lg' => 2]),
                                             TextEntry::make('quantity')->hiddenLabel()->alignCenter(),
                                             TextEntry::make('price')->hiddenLabel()->money('EUR')->alignRight(),
                                             TextEntry::make('discount')->hiddenLabel()->suffix('%')->alignRight(),
@@ -228,7 +228,7 @@ class QuoteResource extends Resource
                                                 ->visible(fn ($record) => $record->options->isNotEmpty())
                                                 ->columnSpanFull()
                                                 ->schema([
-                                                    TextEntry::make('product.name')->hiddenLabel()->formatStateUsing(fn (string $state) => "↳ {$state}")->columnSpan(2),
+                                                    TextEntry::make('product.name')->hiddenLabel()->formatStateUsing(fn (string $state) => "↳ {$state}")->columnSpan(['default' => 1, 'lg' => 2]),
                                                     TextEntry::make('quantity')->hiddenLabel()->alignCenter(),
                                                     TextEntry::make('price')->hiddenLabel()->money('EUR')->alignRight(),
                                                     TextEntry::make('discount')->hiddenLabel()->suffix('%')->alignRight(),
@@ -442,7 +442,7 @@ class QuoteResource extends Resource
             $schema[] = Forms\Components\Grid::make(12)
                 ->schema([
                     Forms\Components\Section::make('Dati preventivo')
-                        ->columnSpan(8)
+                        ->columnSpan(['default' => 1, 'lg' => 8])
                         ->extraAttributes([
                             'class' => 'rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950',
                         ])
@@ -454,7 +454,7 @@ class QuoteResource extends Resource
                                         ->required()
                                         ->disabled(fn (?Quote $record) => $record !== null)
                                         ->dehydrated()
-                                        ->columnSpan(3)
+                                        ->columnSpan(['default' => 1, 'lg' => 3])
                                         ->default(fn () => Quote::nextNumberForTenant(Filament::getTenant()?->id)),
                                     Forms\Components\Select::make('customer_id')
                                         ->label('Cliente')
@@ -472,7 +472,7 @@ class QuoteResource extends Resource
                                         ->dehydrated()
                                         ->live()
                                         ->afterStateUpdated(fn (Set $set, ?string $state) => $set('information_request_id', static::richiestaUnica($state)))
-                                        ->columnSpan(4)
+                                        ->columnSpan(['default' => 1, 'lg' => 4])
                                         ->createOptionForm([
                                             Forms\Components\TextInput::make('company_name')->label('Ragione sociale'),
                                             Forms\Components\TextInput::make('first_name')->label('Nome'),
@@ -483,43 +483,43 @@ class QuoteResource extends Resource
                                     Forms\Components\DatePicker::make('date')
                                         ->label('Data')
                                         ->required()
-                                        ->columnSpan(4)
+                                        ->columnSpan(['default' => 1, 'lg' => 4])
                                         ->default(now()),
                                     Forms\Components\Select::make('status')
                                         ->label('Stato')
                                         ->options(static::statusLabels())
                                         ->default('bozza')
                                         ->required()
-                                        ->columnSpan(4),
-                                    static::informationRequestField()->columnSpan(4),
+                                        ->columnSpan(['default' => 1, 'lg' => 4]),
+                                    static::informationRequestField()->columnSpan(['default' => 1, 'lg' => 4]),
                                     Forms\Components\Select::make('payment_method')
                                         ->label('Metodo di pagamento')
                                         ->options(fn () => PaymentMethod::query()->where('is_active', true)->pluck('name', 'slug'))
                                         ->live()
-                                        ->columnSpan(4),
+                                        ->columnSpan(['default' => 1, 'lg' => 4]),
                                     MoneyInput::make('rental_monthly_fee')
                                         ->label('Canone mensile noleggio (€)')
-                                        ->columnSpan(4)
+                                        ->columnSpan(['default' => 1, 'lg' => 4])
                                         ->visible(fn (Get $get) => $get('payment_method') === 'noleggio-operativo'),
                                     Forms\Components\TextInput::make('rental_months')
                                         ->label('Durata (mesi)')
                                         ->numeric()
                                         ->default(60)
-                                        ->columnSpan(4)
+                                        ->columnSpan(['default' => 1, 'lg' => 4])
                                         ->visible(fn (Get $get) => $get('payment_method') === 'noleggio-operativo'),
                                     Forms\Components\TextInput::make('discount')
                                         ->label('Sconto generale (%)')
                                         ->numeric()
                                         ->suffix('%')
                                         ->default(0)
-                                        ->columnSpan(4),
+                                        ->columnSpan(['default' => 1, 'lg' => 4]),
                                     Forms\Components\TextInput::make('extra_discount')
                                         ->label('Sconto extra (%)')
                                         ->helperText('Si applica su quanto resta dopo lo sconto generale, come i listini 30+5.')
                                         ->numeric()
                                         ->suffix('%')
                                         ->default(0)
-                                        ->columnSpan(4),
+                                        ->columnSpan(['default' => 1, 'lg' => 4]),
                                     Forms\Components\RichEditor::make('notes')
                                         ->label('Note')
                                         ->toolbarButtons(['bold'])
@@ -528,7 +528,7 @@ class QuoteResource extends Resource
                                 ]),
                         ]),
                     Forms\Components\Section::make('Totali')
-                        ->columnSpan(4)
+                        ->columnSpan(['default' => 1, 'lg' => 4])
                         ->columns(2)
                         ->extraAttributes([
                             'class' => 'rounded-2xl border border-slate-200 bg-slate-50 shadow-sm dark:border-slate-800 dark:bg-slate-900',
@@ -576,18 +576,18 @@ class QuoteResource extends Resource
             ->defaultSort('number', 'desc')
             ->columns([
                 Tables\Columns\TextColumn::make('number')->label('Numero')->searchable()->sortable(),
-                Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->searchable()->sortable()
+                Tables\Columns\TextColumn::make('customer.company_name')->wrap()->label('Cliente')->searchable()->sortable()
                     ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                 // Come in Richieste Informazioni: la zona e' il primo filtro
                 // mentale quando si scorre un elenco di clienti.
-                Tables\Columns\TextColumn::make('customer.province')
+                Tables\Columns\TextColumn::make('customer.province')->visibleFrom('md')
                     ->label('Prov.')
                     ->badge()
                     ->color('gray')
                     ->searchable()
                     ->sortable()
                     ->placeholder('—'),
-                Tables\Columns\TextColumn::make('date')->label('Data')->date()->sortable(),
+                Tables\Columns\TextColumn::make('date')->visibleFrom('md')->label('Data')->date()->sortable(),
                 Tables\Columns\TextColumn::make('status')
                     ->label('Stato')
                     ->badge()
@@ -595,7 +595,7 @@ class QuoteResource extends Resource
                     ->color(fn (string $state) => static::statusColors()[$state] ?? 'gray'),
                 Tables\Columns\TextColumn::make('total')->label('Totale')->money('EUR')->sortable(),
                 // Il cliente ha aperto il link nella mail? (vedi HasClientLink)
-                Tables\Columns\TextColumn::make('client_last_viewed_at')
+                Tables\Columns\TextColumn::make('client_last_viewed_at')->visibleFrom('md')
                     ->label('Visto')
                     ->since()
                     ->tooltip(fn (Quote $record) => $record->client_view_count

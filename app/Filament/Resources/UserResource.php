@@ -165,12 +165,12 @@ class UserResource extends Resource
         return $table
             ->defaultSort('name')
             ->columns([
-                Tables\Columns\TextColumn::make('name')->label('Nome')->searchable(),
-                Tables\Columns\TextColumn::make('email')->label('Email')->searchable(),
+                Tables\Columns\TextColumn::make('name')->wrap()->label('Nome')->searchable(),
+                Tables\Columns\TextColumn::make('email')->visibleFrom('md')->label('Email')->searchable(),
                 Tables\Columns\TextColumn::make('roles.name')->label('Ruolo')->badge(),
-                Tables\Columns\IconColumn::make('is_super_admin')->label('Staff master')->boolean(),
+                Tables\Columns\IconColumn::make('is_super_admin')->visibleFrom('md')->label('Staff master')->boolean(),
                 Tables\Columns\IconColumn::make('is_active')->label('Attivo')->boolean(),
-                Tables\Columns\TextColumn::make('created_at')->label('Creato il')->date(),
+                Tables\Columns\TextColumn::make('created_at')->visibleFrom('md')->label('Creato il')->date(),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('roles')

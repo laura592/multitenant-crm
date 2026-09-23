@@ -116,18 +116,18 @@ class LeaveRequestResource extends Resource
         return $table
             ->defaultSort('date_from', 'desc')
             ->columns([
-                Tables\Columns\TextColumn::make('user.name')->label('Dipendente')->searchable()->sortable(),
+                Tables\Columns\TextColumn::make('user.name')->wrap()->label('Dipendente')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('type')
                     ->label('Tipo')
                     ->badge()
                     ->formatStateUsing(fn (string $state) => static::typeLabels()[$state] ?? $state)
                     ->color(fn (string $state) => static::typeColors()[$state] ?? 'gray'),
                 Tables\Columns\TextColumn::make('date_from')->label('Dal')->date()->sortable(),
-                Tables\Columns\TextColumn::make('date_to')->label('Al')->date()->sortable(),
+                Tables\Columns\TextColumn::make('date_to')->visibleFrom('md')->label('Al')->date()->sortable(),
                 // Il "permesso" e' orario: mostrare "1 giorno" (getDaysAttribute
                 // conta sempre almeno un giorno, dal=al) nascondeva del tutto le
                 // ore richieste, il dato che conta davvero per questo tipo.
-                Tables\Columns\TextColumn::make('days')
+                Tables\Columns\TextColumn::make('days')->visibleFrom('md')
                     ->label('Giorni/Ore')
                     ->state(fn (LeaveRequest $record) => $record->type === 'permesso'
                         ? number_format((float) $record->hours, 2).' h'

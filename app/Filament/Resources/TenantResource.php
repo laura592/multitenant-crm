@@ -111,7 +111,7 @@ class TenantResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('name')->label('Nome')->searchable(),
+                Tables\Columns\TextColumn::make('name')->wrap()->label('Nome')->searchable(),
                 Tables\Columns\IconColumn::make('is_master')->label('Master')->boolean(),
                 Tables\Columns\IconColumn::make('is_active')->label('Attivo')->boolean(),
             ])

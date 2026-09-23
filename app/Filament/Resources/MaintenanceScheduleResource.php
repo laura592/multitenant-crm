@@ -164,7 +164,7 @@ class MaintenanceScheduleResource extends Resource
                     'class' => 'fi-quick-overview rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50 shadow-sm',
                 ])
                 ->schema([
-                    TextEntry::make('customer.full_name')->label('Cliente')->columnSpan(4)
+                    TextEntry::make('customer.full_name')->label('Cliente')->columnSpan(['default' => 1, 'lg' => 4])
                         ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                     // Al colpo d'occhio conta di piu' "cosa" (birra/vino/... e
                     // quante vie) che il semplice "lavaggio vs manutenzione":
@@ -175,19 +175,19 @@ class MaintenanceScheduleResource extends Resource
                         ->state(fn (MaintenanceSchedule $record) => static::impiantoHero($record))
                         ->badge()
                         ->color(fn (MaintenanceSchedule $record) => static::beverageColors()[$record->beverage_type] ?? 'gray')
-                        ->columnSpan(3),
+                        ->columnSpan(['default' => 1, 'lg' => 3]),
                     TextEntry::make('status')
                         ->label('Stato')
                         ->badge()
                         ->formatStateUsing(fn (string $state) => static::statusLabels()[$state] ?? 'Attivo')
                         ->color(fn (string $state) => static::statusColors()[$state] ?? 'success')
-                        ->columnSpan(2),
-                    TextEntry::make('next_due_date')->label('Prossima scadenza')->date()->placeholder('—')->columnSpan(3),
+                        ->columnSpan(['default' => 1, 'lg' => 2]),
+                    TextEntry::make('next_due_date')->label('Prossima scadenza')->date()->placeholder('—')->columnSpan(['default' => 1, 'lg' => 3]),
                 ]),
             InfolistGrid::make(12)
                 ->schema([
                     InfolistSection::make('Cliente e macchina')
-                        ->columnSpan(6)
+                        ->columnSpan(['default' => 1, 'lg' => 6])
                         ->schema([
                             TextEntry::make('machineUnit.display_name')
                                 ->label('Macchina')
@@ -207,7 +207,7 @@ class MaintenanceScheduleResource extends Resource
                                 ->state(fn (MaintenanceSchedule $record) => static::billingSummary($record->customer_id, $record->machine_unit_id)),
                         ]),
                     InfolistSection::make('Pianificazione')
-                        ->columnSpan(6)
+                        ->columnSpan(['default' => 1, 'lg' => 6])
                         ->schema([
                             TextEntry::make('frequency')
                                 ->label('Frequenza')
@@ -373,7 +373,7 @@ class MaintenanceScheduleResource extends Resource
             ])
             ->defaultGroup('customer.company_name')
             ->columns([
-                Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->searchable()->sortable()
+                Tables\Columns\TextColumn::make('customer.company_name')->wrap()->label('Cliente')->searchable()->sortable()
                     ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                 Tables\Columns\TextColumn::make('type')
                     ->label('Tipo')
@@ -382,7 +382,7 @@ class MaintenanceScheduleResource extends Resource
                     ->color(fn (string $state) => static::typeColors()[$state] ?? 'gray')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('beverage_type')
+                Tables\Columns\TextColumn::make('beverage_type')->visibleFrom('md')
                     ->label('Impianto')
                     ->badge()
                     ->formatStateUsing(fn (?string $state) => static::beverageLabels()[$state] ?? '—')
@@ -395,7 +395,7 @@ class MaintenanceScheduleResource extends Resource
                     ->toggleable(),
                 Tables\Columns\TextColumn::make('machineUnit.display_name')->label('Macchina')->placeholder('—')
                     ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('impianti')
+                Tables\Columns\TextColumn::make('impianti')->visibleFrom('md')
                     ->label('Impianti')
                     ->state(fn (MaintenanceSchedule $record) => static::equipmentSummary($record->customer_id, $record->machine_unit_id))
                     ->wrap()
@@ -411,7 +411,7 @@ class MaintenanceScheduleResource extends Resource
                     ->formatStateUsing(fn (string $state) => static::statusLabels()[$state] ?? 'Attivo')
                     ->color(fn (string $state) => static::statusColors()[$state] ?? 'success')
                     ->sortable(),
-                Tables\Columns\TextColumn::make('frequenza_label')
+                Tables\Columns\TextColumn::make('frequenza_label')->visibleFrom('md')
                     ->label('Frequenza')
                     ->state(function (MaintenanceSchedule $record) {
                         if ($record->type !== MaintenanceSchedule::TYPE_LAVAGGIO) {
@@ -426,7 +426,7 @@ class MaintenanceScheduleResource extends Resource
                     ->placeholder('—')
                     ->sortable()
                     ->color(fn (?MaintenanceSchedule $record) => $record?->next_due_date?->isPast() ? 'danger' : null),
-                Tables\Columns\TextColumn::make('ultimo')
+                Tables\Columns\TextColumn::make('ultimo')->visibleFrom('md')
                     ->label('Ultimo')
                     ->state(fn (MaintenanceSchedule $record) => $record->type === MaintenanceSchedule::TYPE_LAVAGGIO
                         ? $record->lastLavaggio?->data?->format('d/m/Y')
