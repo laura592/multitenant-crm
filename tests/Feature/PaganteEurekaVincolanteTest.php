@@ -92,6 +92,47 @@ class PaganteEurekaVincolanteTest extends TestCase
         $this->assertTrue($scheda['trovato']);
     }
 
+    public function test_quando_nome_e_codice_della_destinazione_dicono_due_aziende_vale_il_nome(): void
+    {
+        // SL-251/2024: intestata "DERSUT CAFFE' SPA" ma col codice di
+        // Goppion, e la fattura e' di Dersut. Correggendo la scheda a mano
+        // Eureka si tiene il codice di prima (23/09/2026).
+        $goppion = Customer::create(['tenant_id' => $this->tenant->id, 'company_name' => 'Goppion Caffe SPA', 'gestionale_code' => 782]);
+
+        $scheda = PaganteEureka::daScheda(
+            ['id_intestatario' => 2905, 'destinazione' => ['id_eureka' => 782, 'rag_sociale' => 'DERSUT CAFFE']],
+            [], $this->tenant->id, $this->chiosco->id,
+        );
+
+        $this->assertSame($this->dersut->id, $scheda['customer_id'], 'Il nome e\' quello che si legge sul documento.');
+        $this->assertTrue($scheda['trovato']);
+        $this->assertNotSame($goppion->id, $scheda['customer_id']);
+    }
+
+    public function test_un_nome_che_corrisponde_a_due_clienti_non_scavalca_il_codice(): void
+    {
+        Customer::create(['tenant_id' => $this->tenant->id, 'company_name' => 'Goppion Caffe SPA', 'gestionale_code' => 782]);
+        $omonimo = Customer::create(['tenant_id' => $this->tenant->id, 'company_name' => 'Dersut Caffe', 'gestionale_code' => 201]);
+
+        $scheda = PaganteEureka::daScheda(
+            ['id_intestatario' => 2905, 'destinazione' => ['id_eureka' => 782, 'rag_sociale' => 'DERSUT CAFFE']],
+            [], $this->tenant->id, $this->chiosco->id,
+        );
+
+        $this->assertNotSame($this->dersut->id, $scheda['customer_id'], 'Due clienti con quel nome: non si sceglie a caso.');
+        $this->assertNotSame($omonimo->id, $scheda['customer_id']);
+    }
+
+    public function test_nome_e_codice_d_accordo_restano_il_codice(): void
+    {
+        $scheda = PaganteEureka::daScheda(
+            ['id_intestatario' => 2905, 'destinazione' => ['id_eureka' => 50, 'rag_sociale' => 'MARTELLOZZO LORENZO & C. SAS']],
+            [], $this->tenant->id, $this->chiosco->id,
+        );
+
+        $this->assertSame($this->martellozzo->id, $scheda['customer_id']);
+    }
+
     public function test_destinazione_vuota_paga_l_intestatario_e_non_la_macchina(): void
     {
         $r = $this->nelGestionale();

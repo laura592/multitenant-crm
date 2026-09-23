@@ -32,8 +32,8 @@ class PaganteEureka
      * @param  array<string, mixed>  $detail
      * @param  array<string, mixed>  $summary
      * @return array{customer_id: ?string, code: ?int, label: ?string, trovato: bool}
-     *   trovato=false: la scheda indica un pagante che nel CRM non si ritrova
-     *   (codice o nome sconosciuti, o nome che corrisponde a piu' clienti).
+     *                                                                                trovato=false: la scheda indica un pagante che nel CRM non si ritrova
+     *                                                                                (codice o nome sconosciuti, o nome che corrisponde a piu' clienti).
      */
     public static function daScheda(array $detail, array $summary, string $tenantId, ?string $clienteId): array
     {
@@ -51,6 +51,16 @@ class PaganteEureka
 
             $id = Customer::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('gestionale_code', $codice)->value('id');
 
+            // Nome e codice che dicono due aziende diverse: vale il NOME
+            // (23/09/2026). Sulle schede corrette a mano Eureka si tiene il
+            // codice di prima — SL-251/2024 e' intestata "DERSUT CAFFE' SPA"
+            // col codice 782, che e' Goppion, e la fattura e' di Dersut. Il
+            // nome e' quello che si legge sul documento: se corrisponde a un
+            // cliente solo, e' quello che paga.
+            if ($id !== null && $nome !== '' && ($daNome = static::unicoPerNome($tenantId, $nome)) && $daNome !== $id) {
+                return ['customer_id' => $daNome, 'code' => $codice, 'label' => $nome, 'trovato' => true];
+            }
+
             return ['customer_id' => $id, 'code' => $codice, 'label' => $nome ?: null, 'trovato' => $id !== null];
         }
 
@@ -64,10 +74,20 @@ class PaganteEureka
             return $intestatarioPaga;
         }
 
-        $trovati = static::clientiPerNome($tenantId)[static::normalizza($nome)] ?? [];
-        $id = count($trovati) === 1 ? $trovati[0] : null;
+        $id = static::unicoPerNome($tenantId, $nome);
 
         return ['customer_id' => $id, 'code' => null, 'label' => $nome, 'trovato' => $id !== null];
+    }
+
+    /**
+     * L'unico cliente che si chiama cosi', o null se non c'e' o se sono piu'
+     * d'uno: su un nome ambiguo non si sceglie a caso.
+     */
+    private static function unicoPerNome(string $tenantId, string $nome): ?string
+    {
+        $trovati = static::clientiPerNome($tenantId)[static::normalizza($nome)] ?? [];
+
+        return count($trovati) === 1 ? $trovati[0] : null;
     }
 
     /**
@@ -76,8 +96,8 @@ class PaganteEureka
      *
      * @param  Collection<int, ServiceReport>  $rapportini
      * @return array{letti: int, cambiati: array<int, array{0: ServiceReport, 1: ?string, 2: ?string}>, non_trovati: array<int, array{0: ServiceReport, 1: ?string}>, non_letti: int, da_scrivere: array<int, array{0: ServiceReport, 1: array<string, mixed>}>}
-     *   cambiati: [rapportino, pagante prima, pagante dopo]. Con $scrivi=false
-     *   non scrive niente: da_scrivere si passa poi a scrivi().
+     *                                                                                                                                                                                                                                                           cambiati: [rapportino, pagante prima, pagante dopo]. Con $scrivi=false
+     *                                                                                                                                                                                                                                                           non scrive niente: da_scrivere si passa poi a scrivi().
      */
     public static function rileggiSchede(Collection $rapportini, bool $scrivi = true): array
     {
