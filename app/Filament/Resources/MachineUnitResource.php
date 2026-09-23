@@ -6,6 +6,7 @@ use App\Filament\Resources\MachineUnitResource\Pages;
 use App\Filament\Resources\MachineUnitResource\RelationManagers\PlacementsRelationManager;
 use App\Models\Customer;
 use App\Models\MachineUnit;
+use App\Models\MachineUnitPlacement;
 use App\Models\Material;
 use App\Models\Product;
 use App\Support\DisplayName;
@@ -200,8 +201,48 @@ class MachineUnitResource extends Resource
                         ->badge()
                         ->formatStateUsing(fn (string $state) => static::statusLabels()[$state] ?? 'In magazzino')
                         ->color(fn (string $state) => static::statusColors()[$state] ?? 'gray'),
+                    // Dove e' stata prima, subito sotto: la tabella in fondo
+                    // alla pagina serve a correggere, questa riga a capire
+                    // (23/09/2026, "lo storico non lo vedo"). Il periodo
+                    // attuale non si ripete: e' quello qui sopra.
+                    TextEntry::make('prima_di_adesso')
+                        ->label('Prima di adesso')
+                        ->columnSpanFull()
+                        ->listWithLineBreaks()
+                        ->placeholder('Non si è mai mossa da qui.')
+                        ->state(fn (MachineUnit $record) => static::righeStorico($record)),
                 ]),
         ]);
+    }
+
+    /**
+     * Lo storico in una riga per periodo, dal piu' recente: "dal → al,
+     * presso chi, pagava chi". Oltre i sei si rimanda alla tabella in fondo,
+     * che li ha tutti.
+     *
+     * @return array<int, string>
+     */
+    private static function righeStorico(MachineUnit $record): array
+    {
+        $passati = $record->placements()
+            ->whereNotNull('removed_at')
+            ->with(['customer.billingCustomer', 'billingCustomer'])
+            ->orderByDesc('placed_at')
+            ->get();
+
+        $righe = $passati->take(6)->map(function (MachineUnitPlacement $p) {
+            $dove = $p->customer ? DisplayName::titleCase($p->customer->company_name) : 'in magazzino';
+            $pagava = $p->paganteInParole();
+
+            return $p->placed_at->format('d/m/Y').' → '.$p->removed_at->format('d/m/Y').'   '.$dove
+                .($pagava !== '—' ? '   (pagava: '.$pagava.')' : '');
+        })->all();
+
+        if ($passati->count() > 6) {
+            $righe[] = '…e altri '.($passati->count() - 6).' periodi, nella tabella qui sotto.';
+        }
+
+        return $righe;
     }
 
     public static function table(Table $table): Table
