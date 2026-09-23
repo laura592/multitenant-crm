@@ -139,14 +139,23 @@ class AdminPanelProvider extends PanelProvider
                         rules: [Password::default()->min(8)],
                         requiresCurrentPassword: true,
                     )
-                    // Temporaneamente NON forzata (era `force: true`): il flusso di
-                    // conferma di filament-breezy e' rotto (BreezyCore::verify() legge
-                    // decrypt($user->two_factor_secret) come se fosse una colonna diretta,
-                    // ma il trait TwoFactorAuthenticatable installato salva il segreto sul
-                    // modello correlato BreezySession) - con force:true nessun utente
-                    // riesce ad attivarla ne' quindi ad entrare. Rimettere a `force: true`
-                    // (o alla condizione precedente `! app()->environment('testing')`)
-                    // una volta risolto l'allineamento fra le due parti del pacchetto.
+                    // Disponibile per chi la vuole, non imposta a tutti.
+                    //
+                    // Era stata messa a false perche' il giro di filament-breezy
+                    // era rotto: con force:true nessuno riusciva ad attivarla e
+                    // quindi nessuno riusciva piu' a entrare. Quel guasto non
+                    // c'e' piu' (verificato il 23/09/2026 dopo l'aggiornamento
+                    // del pacchetto: attivazione, segreto, codice giusto e
+                    // codice sbagliato, vedi DueFattoriTest, che sta li' apposta
+                    // per accorgersi se un composer update lo rimette).
+                    //
+                    // Resta a false perche' ora e' una decisione di chi manda
+                    // avanti l'azienda, non piu' un guasto: con force:true al
+                    // primo accesso OGNI utente deve installare un'app TOTP e
+                    // registrarla prima di poter fare qualunque cosa — tecnici
+                    // sul tablet in giro compresi. Da accendere quando si e'
+                    // pronti ad accompagnarli, meglio se non tutti lo stesso
+                    // giorno.
                     ->enableTwoFactorAuthentication(force: false)
             )
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
