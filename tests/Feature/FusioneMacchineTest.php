@@ -58,6 +58,48 @@ class FusioneMacchineTest extends TestCase
         return ConfrontoMacchine::proposte(MachineUnit::all());
     }
 
+    public function test_l_impianto_segnato_a_mano_e_quello_arrivato_da_eureka_sono_lo_stesso(): void
+    {
+        // Bar Miki, 23/09/2026: l'impianto alla spina era stato creato qui
+        // con un codice nostro, poi il gestionale l'ha registrato come
+        // SPINAMIKI. Le due matricole non si somigliano in niente.
+        $aMano = $this->macchina('IMP-SPINA-022', 'Impianto Spina (birra+vino)');
+        $daEureka = $this->macchina('SPINAMIKI', 'IMPIANTO ALLA SPINA 2 VIE');
+        $this->macchina('V24003882', 'DALLA CORTE');
+
+        $proposte = ConfrontoMacchine::proposte(MachineUnit::all(), [ConfrontoMacchine::chiave('SPINAMIKI') => true]);
+
+        $this->assertCount(1, $proposte);
+        $this->assertSame(ConfrontoMacchine::IMPIANTO_ORA_SU_EUREKA, $proposte[0]['motivo']);
+        $this->assertSame($daEureka->id, $proposte[0]['tenere']->id, 'Si tiene quella che il gestionale conosce.');
+        $this->assertSame($aMano->id, $proposte[0]['assorbire']->id);
+    }
+
+    public function test_l_impianto_acqua_non_si_fonde_con_quello_alla_spina(): void
+    {
+        $this->macchina('CASETTA-ACQUA-1', 'Casetta dell\'acqua');
+        $this->macchina('SPINAMIKI', 'IMPIANTO ALLA SPINA 2 VIE');
+
+        $this->assertSame([], ConfrontoMacchine::proposte(MachineUnit::all(), [ConfrontoMacchine::chiave('SPINAMIKI') => true]));
+    }
+
+    public function test_due_impianti_alla_spina_dallo_stesso_cliente_non_si_indovinano(): void
+    {
+        $this->macchina('IMP-SPINA-022', 'Impianto Spina (birra+vino)');
+        $this->macchina('IMP-SPINA-023', 'Impianto Spina (selz)');
+        $this->macchina('SPINAMIKI', 'IMPIANTO ALLA SPINA 2 VIE');
+
+        $this->assertSame([], ConfrontoMacchine::proposte(MachineUnit::all(), [ConfrontoMacchine::chiave('SPINAMIKI') => true]));
+    }
+
+    public function test_un_impianto_che_eureka_non_elenca_non_e_una_proposta(): void
+    {
+        $this->macchina('IMP-SPINA-022', 'Impianto Spina (birra+vino)');
+        $this->macchina('SPINAMIKI', 'IMPIANTO ALLA SPINA 2 VIE');
+
+        $this->assertSame([], ConfrontoMacchine::proposte(MachineUnit::all()));
+    }
+
     public function test_la_punteggiatura_non_fa_due_macchine(): void
     {
         $this->macchina('BRL003020002113218', 'ORZINA', 140);

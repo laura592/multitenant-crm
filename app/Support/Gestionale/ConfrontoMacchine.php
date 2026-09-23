@@ -33,6 +33,16 @@ class ConfrontoMacchine
 
     public const MATRICOLA_CONTENUTA = 'la matricola di una contiene quella dell\'altra';
 
+    public const IMPIANTO_ORA_SU_EUREKA = 'impianto segnato a mano, ora arriva dal gestionale';
+
+    /**
+     * Gli impianti nati nel CRM: non hanno una matricola, hanno un codice
+     * nostro (IMP-SPINA-022, CASETTA-ACQUA-1). Quando poi il gestionale
+     * registra lo stesso impianto, la matricola e' un'altra e nessuna
+     * regola sulle matricole li mette insieme.
+     */
+    private const MATRICOLE_NOSTRE = ['IMP-', 'IMPIANTO-', 'CASETTA'];
+
     /**
      * La chiave con cui due matricole si confrontano: senza punteggiatura,
      * che in un numero di serie non porta informazione.
@@ -154,7 +164,77 @@ class ConfrontoMacchine
             }
         }
 
+        // 3) L'impianto segnato a mano che ora il gestionale registra con una
+        //    matricola sua (23/09/2026, Bar Miki: "IMP-SPINA-022" scritto qui
+        //    e "SPINAMIKI" arrivato da Eureka sono lo stesso impianto alla
+        //    spina). Le matricole non si somigliano per niente: l'unico
+        //    appiglio e' che presso quel cliente c'e' un impianto solo di
+        //    quel genere per parte. Se ce n'e' piu' d'uno non si propone
+        //    niente: quale sia quale non lo si puo' dire.
+        foreach ($macchine->groupBy('current_customer_id') as $cliente => $gruppo) {
+            if ((string) $cliente === '' || $gruppo->count() < 2) {
+                continue;
+            }
+
+            $disponibili = $gruppo->reject(fn (MachineUnit $m) => isset($gia[$m->id]));
+
+            foreach (['spina', 'acqua'] as $genere) {
+                $nostri = $disponibili->filter(fn (MachineUnit $m) => self::matricolaNostra($m) && self::genereImpianto($m) === $genere);
+                $loro = $disponibili->filter(fn (MachineUnit $m) => ! self::matricolaNostra($m) && self::genereImpianto($m) === $genere && $suEureka($m));
+
+                if ($nostri->count() !== 1 || $loro->count() !== 1) {
+                    continue;
+                }
+
+                $assorbire = $nostri->first();
+                $proposte[] = ['tenere' => $loro->first(), 'assorbire' => $assorbire, 'motivo' => self::IMPIANTO_ORA_SU_EUREKA];
+                $gia[$assorbire->id] = true;
+            }
+        }
+
         return $proposte;
+    }
+
+    /** La matricola non e' una matricola: e' un codice messo da noi. */
+    private static function matricolaNostra(MachineUnit $macchina): bool
+    {
+        $matricola = mb_strtoupper(trim((string) $macchina->serial_number));
+
+        foreach (self::MATRICOLE_NOSTRE as $inizio) {
+            if (str_starts_with($matricola, $inizio)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Che genere di impianto e': alla spina (birra, vino, selz) o acqua
+     * (casette e impianti acqua). Null quando non e' un impianto — una
+     * macchina da caffe' non si fonde con niente per somiglianza di nome.
+     */
+    private static function genereImpianto(MachineUnit $macchina): ?string
+    {
+        $nome = mb_strtolower(trim($macchina->model_name.' '.$macchina->serial_number));
+
+        if ($macchina->type === MachineUnit::TYPE_IMPIANTO_ACQUA) {
+            return 'acqua';
+        }
+
+        if ($macchina->type === MachineUnit::TYPE_COLONNA_SPINA) {
+            return 'spina';
+        }
+
+        if (str_contains($nome, 'casetta') || str_contains($nome, 'casa dell\'acqua') || str_contains($nome, 'impianto acqua')) {
+            return 'acqua';
+        }
+
+        if (str_contains($nome, 'spina') || str_contains($nome, 'birra')) {
+            return 'spina';
+        }
+
+        return null;
     }
 
     /**
