@@ -134,7 +134,7 @@ class StoricoMacchineDaBolle extends Command
 
             $lavoro = $this->confronta($macchina, $periodi);
 
-            if ($lavoro['nuovi'] === [] && $lavoro['chiusure'] === []) {
+            if ($lavoro['nuovi'] === [] && $lavoro['chiusure'] === [] && $lavoro['inizio'] === null) {
                 continue;
             }
 
@@ -153,12 +153,15 @@ class StoricoMacchineDaBolle extends Command
         }
 
         $this->table(
-            ['Matricola', 'Periodi da aggiungere', 'Chiusure da correggere'],
+            ['Matricola', 'Periodi da aggiungere', 'Chiusure da correggere', 'Adesso e\' li\' dal'],
             collect($daFare)->map(fn (array $r) => [
                 $r['macchina']->serial_number,
                 collect($r['nuovi'])->map(fn (array $p) => $p['dal']->format('d/m/Y').' → '.DisplayName::titleCase($nomi[$p['cliente']] ?? '?'))->implode("\n") ?: '—',
                 collect($r['chiusure'])->map(fn (array $c) => $c['riga']->placed_at->format('d/m/Y').': '
                     .($c['riga']->removed_at?->format('d/m/Y') ?? 'aperto').' → '.$c['nuova']->format('d/m/Y'))->implode("\n") ?: '—',
+                $r['inizio']
+                    ? $r['inizio']['riga']->placed_at->format('d/m/Y').' → '.$r['inizio']['nuovo']->format('d/m/Y')
+                    : '—',
             ])->all(),
         );
 
@@ -175,6 +178,10 @@ class StoricoMacchineDaBolle extends Command
         }
 
         foreach ($daFare as $r) {
+            if ($r['inizio']) {
+                $r['inizio']['riga']->update(['placed_at' => $r['inizio']['nuovo']]);
+            }
+
             foreach ($r['chiusure'] as $chiusura) {
                 $chiusura['riga']->update(['removed_at' => $chiusura['nuova']]);
             }
@@ -237,39 +244,87 @@ class StoricoMacchineDaBolle extends Command
     }
 
     /**
-     * Cosa manca e cosa va chiuso diversamente, senza mai toccare il
-     * posizionamento aperto piu' recente (quello dice dov'e' la macchina
-     * adesso, e puo' venire da uno "Sposta" fatto a mano).
+     * Cosa manca, cosa va chiuso diversamente e da quando vale il
+     * posizionamento di adesso.
+     *
+     * La macchina non si sposta mai da qui: se il cliente di adesso e'
+     * quello dell'ultima bolla, pero', l'inizio di quel periodo e' la data
+     * della bolla, non quella della prima consegna di anni prima — senza
+     * questa correzione una macchina mai spostata a mano si mangia tutta la
+     * storia in mezzo (23/09/2026: in produzione il comando non trovava
+     * niente da fare proprio sulle macchine che ne avevano piu' bisogno).
+     * Se invece adesso e' da un altro, lo spostamento lo propone il sync e
+     * qui ci si ferma prima.
      *
      * @param  array<int, array{cliente: string, dal: Carbon, al: ?Carbon, bolla: int, pagante: ?int}>  $periodi
-     * @return array{nuovi: array<int, array<string, mixed>>, chiusure: array<int, array{riga: MachineUnitPlacement, nuova: Carbon}>}
+     * @return array{nuovi: array<int, array<string, mixed>>, chiusure: array<int, array{riga: MachineUnitPlacement, nuova: Carbon}>, inizio: ?array{riga: MachineUnitPlacement, nuovo: Carbon}}
      */
     private function confronta(MachineUnit $macchina, array $periodi): array
     {
         $esistenti = $macchina->placements->sortBy('placed_at')->values();
         $attuale = $esistenti->last(fn (MachineUnitPlacement $p) => $p->removed_at === null);
+        $ultimo = end($periodi) ?: null;
+
+        // Da dove in poi la storia la racconta il posizionamento di adesso.
+        $confine = $attuale?->placed_at->copy()->startOfDay();
+        $inizio = null;
+
+        if ($attuale && $ultimo && $attuale->customer_id === $ultimo['cliente'] && $confine->lt($ultimo['dal'])) {
+            $confine = $ultimo['dal']->copy();
+            $inizio = ['riga' => $attuale, 'nuovo' => $ultimo['dal']->copy()];
+        }
 
         $nuovi = [];
 
+        // Spostando in avanti la riga aperta si perderebbe il periodo che
+        // raccontava: quello resta, chiuso quando comincia la consegna dopo.
+        if ($inizio) {
+            $primaConsegnaDopo = collect($periodi)
+                ->pluck('dal')
+                ->first(fn (Carbon $d) => $d->gt($attuale->placed_at->copy()->startOfDay()));
+
+            if ($primaConsegnaDopo && ! $attuale->placed_at->copy()->startOfDay()->isSameDay($primaConsegnaDopo)) {
+                $nuovi[] = [
+                    'cliente' => $attuale->customer_id,
+                    'dal' => $attuale->placed_at->copy()->startOfDay(),
+                    'al' => $primaConsegnaDopo->copy(),
+                    'bolla' => 0,
+                    'pagante' => $attuale->eureka_billing_customer_code,
+                ];
+            }
+        }
+
+        // La riga aperta, se la spostiamo in avanti, e' quella dell'ultima
+        // bolla: non vale piu' come "periodo gia' presente" per la consegna
+        // di anni prima, che va riscritta come periodo chiuso.
+        $confronto = $inizio ? $esistenti->reject(fn (MachineUnitPlacement $p) => $p->is($attuale)) : $esistenti;
+
         foreach ($periodi as $periodo) {
-            $gia = $esistenti->first(fn (MachineUnitPlacement $p) => $p->customer_id === $periodo['cliente']
+            $gia = $confronto->first(fn (MachineUnitPlacement $p) => $p->customer_id === $periodo['cliente']
                 && $p->placed_at->isSameDay($periodo['dal']));
 
-            // Il periodo aperto attuale vince su quello che dicono le bolle:
-            // se la macchina e' stata spostata a mano dopo l'ultima bolla,
-            // la storia nuova si ferma li'.
-            if ($gia || ($attuale && $periodo['dal']->gte($attuale->placed_at->copy()->startOfDay()))) {
+            if ($gia || ($confine && $periodo['dal']->gte($confine))) {
                 continue;
             }
 
-            $nuovi[] = $periodo;
+            // L'ultimo periodo resterebbe aperto: se la macchina adesso e'
+            // altrove, si chiude quando comincia quello di adesso — due
+            // posizionamenti aperti insieme non devono mai esistere.
+            $nuovi[] = ['al' => $periodo['al'] ?? $confine] + $periodo;
         }
+
+        // Lo stesso periodo puo' arrivare due volte: dalla riga aperta che
+        // si sposta in avanti e dalla bolla che lo apriva.
+        $nuovi = collect($nuovi)
+            ->unique(fn (array $p) => $p['cliente'].'|'.$p['dal']->toDateString())
+            ->values()
+            ->all();
 
         $inizi = collect($periodi)->pluck('dal');
         $chiusure = [];
 
         foreach ($esistenti as $riga) {
-            // Il posizionamento aperto piu' recente resta aperto.
+            // Il posizionamento aperto resta aperto: al massimo comincia dopo.
             if ($attuale && $riga->is($attuale)) {
                 continue;
             }
@@ -281,7 +336,7 @@ class StoricoMacchineDaBolle extends Command
             }
         }
 
-        return ['nuovi' => $nuovi, 'chiusure' => $chiusure];
+        return ['nuovi' => $nuovi, 'chiusure' => $chiusure, 'inizio' => $inizio];
     }
 
     private function data(mixed $valore): ?Carbon
