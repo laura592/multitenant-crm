@@ -23,17 +23,28 @@ use Illuminate\Support\Collection;
  */
 class ControlloPaganteFattura
 {
+    /** Le colonne dei fogli sui rapportini che una fattura non ce l'hanno. */
+    private const COLONNE_SENZA_FATTURA = ['Rapportino', 'N. gestionale', 'Data', 'Cliente', 'Pagante nel CRM', 'Fattura', 'Indizio'];
+
     /**
-     * I tre problemi, ognuno con il suo foglio nell'Excel e le sue colonne:
-     * le schede da correggere non vanno confuse con le decine di rapportini
-     * senza fattura, che sono un'altra cosa.
+     * Un foglio per problema, con le sue colonne. Il titolo sta sotto i 31
+     * caratteri che Excel concede, conteggio compreso.
+     *
+     * I rapportini senza fattura sono divisi per motivo (23/09/2026): in un
+     * foglio solo erano 121 righe di lavori diversi — quelli lasciati fuori
+     * da una fattura del periodo si controllano uno per uno, i doppioni si
+     * guardano al volo, e mescolati non si lavoravano.
      *
      * @var array<string, array{0: string, 1: array<int, string>}>
      */
     public const CATEGORIE = [
         'da_correggere' => ['Da correggere su Eureka', ['Rapportino', 'N. gestionale', 'Data', 'Cliente', 'Pagante nel CRM', 'Destinazione sulla scheda', 'Fattura', 'Fattura intestata a']],
         'destinazione' => ['Destinazione incoerente', ['Rapportino', 'N. gestionale', 'Data', 'Cliente', 'Pagante nel CRM', 'Destinazione sulla scheda']],
-        'senza_fattura' => ['Senza fattura', ['Problema', 'Rapportino', 'N. gestionale', 'Data', 'Cliente', 'Pagante nel CRM', 'Fattura', 'Indizio']],
+        SenzaFatturaCollegata::NON_NELLA_FATTURA => ['Fuori dalla fattura', self::COLONNE_SENZA_FATTURA],
+        SenzaFatturaCollegata::DA_VERIFICARE => ['Da verificare', self::COLONNE_SENZA_FATTURA],
+        SenzaFatturaCollegata::DOPPIONE => ['Doppioni gia fatturati', self::COLONNE_SENZA_FATTURA],
+        SenzaFatturaCollegata::FATTURA_NON_COLLEGATA => ['Forse fattura a mano', self::COLONNE_SENZA_FATTURA],
+        'senza_fattura' => ['Senza fattura, da capire', self::COLONNE_SENZA_FATTURA],
     ];
 
     /**
@@ -140,7 +151,7 @@ class ControlloPaganteFattura
                 'Categoria' => match (true) {
                     $daCorreggere => 'da_correggere',
                     $destinazione => 'destinazione',
-                    default => 'senza_fattura',
+                    default => isset(self::CATEGORIE[(string) $r->eureka_fattura_motivo]) ? (string) $r->eureka_fattura_motivo : 'senza_fattura',
                 },
                 'Problema' => implode(' + ', $problemi),
                 'Rapportino' => $r->number,

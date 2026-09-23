@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Exports\ProblemiGestionaleExport;
+use App\Filament\Pages\GestionaleSyncReview;
 use App\Filament\Widgets\Gestionale\GestionaleSchedeDaCorreggereWidget;
 use App\Models\Customer;
 use App\Models\EurekaFattura;
@@ -244,6 +245,17 @@ class PaganteEurekaVincolanteTest extends TestCase
             ->assertTableActionDoesNotExist('applica');
     }
 
+    public function test_senza_schede_da_correggere_il_riquadro_non_si_vede(): void
+    {
+        // Scheda e fattura tornano: niente da correggere, niente tabella
+        // (23/09/2026).
+        $r = $this->nelGestionale(['billing_customer_id' => $this->martellozzo->id]);
+        $r->registraFattureEureka($this->fatturaA($this->martellozzo));
+        ControlloPaganteFattura::segnala($this->tenant);
+
+        $this->assertFalse(GestionaleSchedeDaCorreggereWidget::canView());
+    }
+
     public function test_l_export_contiene_solo_differenze_ed_errori(): void
     {
         $daCorreggere = $this->nelGestionale(['billing_customer_id' => $this->chiosco->id]);
@@ -266,15 +278,20 @@ class PaganteEurekaVincolanteTest extends TestCase
 
         Excel::fake();
 
-        Livewire::test(GestionaleSchedeDaCorreggereWidget::class)
-            ->callTableAction('esporta');
+        // L'export sta nell'intestazione della pagina, non nel riquadro: il
+        // riquadro sparisce quando non c'e' niente da correggere, l'elenco
+        // dei rapportini da controllare serve comunque (23/09/2026).
+        Livewire::test(GestionaleSyncReview::class)
+            ->callAction('esportaDaControllare');
 
         Excel::assertDownloaded('rapportini-gestionale-da-controllare-'.now()->format('Y-m-d').'.xlsx');
     }
 
     /**
      * Un foglio per problema: le schede da correggere sono una ventina e in
-     * un foglio unico sparivano fra i rapportini senza fattura.
+     * un foglio unico sparivano fra i rapportini senza fattura. E i senza
+     * fattura sono divisi per motivo: in un foglio solo erano 121 righe di
+     * lavori diversi (23/09/2026).
      */
     public function test_l_excel_ha_un_foglio_per_problema_con_quante_righe_sono(): void
     {
@@ -286,11 +303,20 @@ class PaganteEurekaVincolanteTest extends TestCase
 
         $fogli = (new ProblemiGestionaleExport($this->tenant))->sheets();
 
+        // I fogli vuoti non si scrivono: "Destinazione incoerente" non c'e'.
         $this->assertSame([
             'Da correggere su Eureka (1)',
-            'Destinazione incoerente (0)',
-            'Senza fattura (2)',
+            'Fuori dalla fattura (1)',
+            'Da verificare (1)',
         ], array_map(fn ($foglio) => $foglio->title(), $fogli));
+
+        // Senza niente da controllare il file si scarica lo stesso, con un
+        // foglio che lo dice.
+        ServiceReport::query()->update(['pagante_fattura_customer_id' => null, 'eureka_fattura_motivo' => 'recente']);
+        $this->assertSame(
+            ['Niente da controllare'],
+            array_map(fn ($foglio) => $foglio->title(), (new ProblemiGestionaleExport($this->tenant))->sheets()),
+        );
 
         // Sul primo foglio il numero della scheda c'e': prima, esportando la
         // tabella, restava nella descrizione e non usciva.

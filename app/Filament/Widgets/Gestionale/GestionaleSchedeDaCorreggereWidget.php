@@ -2,7 +2,6 @@
 
 namespace App\Filament\Widgets\Gestionale;
 
-use App\Exports\ProblemiGestionaleExport;
 use App\Filament\Resources\ServiceReportResource;
 use App\Models\Customer;
 use App\Models\ServiceReport;
@@ -15,10 +14,6 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
 use Illuminate\Database\Eloquent\Collection;
-use Maatwebsite\Excel\Facades\Excel;
-use pxlrbt\FilamentExcel\Actions\Tables\ExportAction;
-use pxlrbt\FilamentExcel\Columns\Column;
-use pxlrbt\FilamentExcel\Exports\ExcelExport;
 
 /**
  * Schede Eureka il cui pagante non torna con la fattura
@@ -34,11 +29,12 @@ class GestionaleSchedeDaCorreggereWidget extends BaseWidget
     // Vedi GestionaleDaRivedereWidget per il perche'.
     protected static bool $isLazy = false;
 
-    // Sempre visibile: anche senza schede da correggere serve l'export
-    // delle differenze e degli errori per il controllo a mano.
+    // Niente da correggere, niente riquadro: l'export dei rapportini da
+    // controllare sta nell'intestazione della pagina, e resta li' anche
+    // quando qui non c'e' piu' niente (23/09/2026).
     public static function canView(): bool
     {
-        return true;
+        return static::baseQuery()->exists();
     }
 
     private static function baseQuery()
@@ -74,44 +70,6 @@ class GestionaleSchedeDaCorreggereWidget extends BaseWidget
             ->emptyStateHeading('Nessuna scheda da correggere')
             ->emptyStateDescription('Scheda e fattura tornano su tutti i rapportini gia\' fatturati.')
             ->headerActions([
-                Tables\Actions\Action::make('esporta')
-                    ->label('Esporta in Excel')
-                    ->tooltip('Un foglio per problema: le schede da correggere, le destinazioni incoerenti e i rapportini senza fattura, con quante sono nel nome del foglio.')
-                    ->icon('heroicon-o-arrow-down-tray')
-                    ->color('gray')
-                    ->action(fn () => Excel::download(
-                        new ProblemiGestionaleExport(Filament::getTenant()),
-                        'rapportini-gestionale-da-controllare-'.now()->format('Y-m-d').'.xlsx',
-                    )),
-                ExportAction::make('esporta_tabella')
-                    ->label('Esporta solo questa tabella')
-                    ->color('gray')
-                    ->exports([
-                        // Colonne scritte a mano e non ->fromTable(): li' il
-                        // numero della scheda sta nella descrizione sotto il
-                        // rapportino, e le descrizioni non si esportano.
-                        ExcelExport::make('schede-da-correggere')
-                            ->withFilename('schede-da-correggere-'.now()->format('Y-m-d'))
-                            ->withColumns([
-                                Column::make('number')->heading('Rapportino'),
-                                Column::make('gestionale_number')->heading('N. gestionale'),
-                                Column::make('eureka_service_report_id')->heading('Id scheda Eureka'),
-                                Column::make('intervention_date')->heading('Data')
-                                    ->formatStateUsing(fn ($state) => $state?->format('d/m/Y')),
-                                Column::make('customer.company_name')->heading('Cliente')
-                                    ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
-                                Column::make('pagante_scheda')->heading('Pagante sulla scheda')
-                                    ->getStateUsing(fn (ServiceReport $record) => DisplayName::titleCase(rescue(fn () => $record->invoiceRecipient()->company_name, null, false))),
-                                Column::make('scritto_sulla_scheda')->heading('Scritto sulla scheda Eureka')
-                                    ->getStateUsing(fn (ServiceReport $record) => $record->eureka_destinazione_label
-                                        ? $record->eureka_destinazione_label.($record->eureka_destinazione_code ? ' (codice '.$record->eureka_destinazione_code.')' : '')
-                                        : null),
-                                Column::make('pagante_fattura')->heading('Fattura intestata a')
-                                    ->getStateUsing(fn (ServiceReport $record) => DisplayName::titleCase(Customer::withoutGlobalScopes()->whereKey($record->pagante_fattura_customer_id)->value('company_name'))),
-                                Column::make('fattura')->heading('Fattura')
-                                    ->getStateUsing(fn (ServiceReport $record) => $record->etichettaFatturaEureka()),
-                            ]),
-                    ]),
                 Tables\Actions\Action::make('ricontrolla_tutte')
                     ->label('Ricontrolla tutte su Eureka')
                     ->icon('heroicon-o-arrow-path')

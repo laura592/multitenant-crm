@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Exports\ProblemiGestionaleExport;
 use App\Filament\Widgets\Gestionale\EurekaUltimiAggiornamentiWidget;
 use App\Filament\Widgets\Gestionale\GestionaleCollegamentiClientiWidget;
 use App\Filament\Widgets\Gestionale\GestionaleCollegamentiMacchinariWidget;
@@ -24,6 +25,7 @@ use Filament\Forms;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\Auth;
+use Maatwebsite\Excel\Facades\Excel;
 
 /**
  * Punto unico per rivedere cosa il sync automatico con Eureka
@@ -168,6 +170,18 @@ class GestionaleSyncReview extends Page
                         ->success()
                         ->send();
                 }),
+            // Stava nel riquadro delle schede da correggere, che ora sparisce
+            // quando non c'e' niente da correggere: l'elenco dei rapportini
+            // da controllare serve comunque (23/09/2026).
+            Action::make('esportaDaControllare')
+                ->label('Rapportini da controllare (Excel)')
+                ->icon('heroicon-o-arrow-down-tray')
+                ->color('gray')
+                ->tooltip('Un foglio per problema: schede da correggere su Eureka, destinazioni incoerenti e rapportini senza fattura, con quante sono nel nome del foglio.')
+                ->action(fn () => Excel::download(
+                    new ProblemiGestionaleExport(Filament::getTenant()),
+                    'rapportini-gestionale-da-controllare-'.now()->format('Y-m-d').'.xlsx',
+                )),
             // Gira gia' ogni lunedi' alle 6:00 via cron (100 ricerche a 2
             // cifre, vedi routes/console.php) — bottone per non aspettare
             // fino a lunedi' se serve un giro extra subito.

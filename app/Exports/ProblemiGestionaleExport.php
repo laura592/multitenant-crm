@@ -28,9 +28,18 @@ class ProblemiGestionaleExport implements WithMultipleSheets
 
         foreach (ControlloPaganteFattura::CATEGORIE as $categoria => [$titolo, $colonne]) {
             $gruppo = $righe->get($categoria, collect());
+
+            // Un foglio vuoto per ogni problema che non c'e' e' solo rumore:
+            // si scrivono quelli con qualcosa dentro (23/09/2026).
+            if ($gruppo->isEmpty()) {
+                continue;
+            }
+
             $fogli[] = new FoglioProblemiGestionale($titolo.' ('.$gruppo->count().')', $colonne, $gruppo);
         }
 
-        return $fogli;
+        // Excel vuole almeno un foglio, e "non c'e' niente da controllare" e'
+        // gia' una risposta: il file si scarica lo stesso.
+        return $fogli ?: [new FoglioProblemiGestionale('Niente da controllare', ['Rapportino'], collect())];
     }
 }
