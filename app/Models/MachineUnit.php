@@ -152,7 +152,11 @@ class MachineUnit extends Model
      */
     public function moveTo(?Customer $customer, ?string $notes = null, ?\DateTimeInterface $placedAt = null, ?Customer $pagante = null, ?int $codicePaganteEureka = null): void
     {
-        $paganteId = $customer && $pagante && $pagante->id !== $customer->id ? $pagante->id : null;
+        // Il cliente stesso si puo' scegliere: vuol dire "paga lui, non chi
+        // paga per lui" (Bar Miki, 23/09/2026: l'impianto spina e' suo, ma in
+        // anagrafica per il bar paga Dersut). Vuoto invece vuol dire "come il
+        // cliente", cioe' si eredita il suo pagante.
+        $paganteId = $customer && $pagante ? $pagante->id : null;
 
         $quando = $placedAt ? Carbon::instance($placedAt) : now();
 

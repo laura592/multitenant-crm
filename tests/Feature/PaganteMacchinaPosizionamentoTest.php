@@ -121,6 +121,30 @@ class PaganteMacchinaPosizionamentoTest extends TestCase
         $this->assertSame($this->rtg->id, $m->placements()->whereNull('removed_at')->sole()->billing_customer_id);
     }
 
+    /**
+     * Bar Miki (23/09/2026): in anagrafica per il bar paga Dersut, ma
+     * l'impianto spina e' suo. Sulla macchina si puo' dire "paga il cliente
+     * stesso", e quello vince sul pagante dell'anagrafica.
+     */
+    public function test_una_macchina_puo_pagarsela_il_cliente_anche_se_per_lui_paga_un_altro(): void
+    {
+        $bar = Customer::create(['tenant_id' => $this->tenant->id, 'company_name' => 'Bar Miki', 'billing_customer_id' => $this->dersut->id]);
+        $impianto = MachineUnit::create(['tenant_id' => $this->tenant->id, 'serial_number' => 'IMP-SPINA-022', 'model_name' => 'Impianto Spina']);
+        $impianto->moveTo($bar, placedAt: Carbon::parse('2026-01-10'));
+
+        // Senza dire niente sulla macchina: paga chi paga per il bar.
+        $this->assertSame($this->dersut->id, $bar->invoiceRecipient()->id);
+        $this->assertNull($impianto->fresh()->billing_customer_id);
+        $this->assertSame('come il cliente (Dersut Caffe)', $impianto->placements()->whereNull('removed_at')->sole()->paganteInParole());
+
+        $impianto->placements()->whereNull('removed_at')->sole()->cambiaPagante($bar);
+
+        $impianto->refresh();
+        $this->assertSame($bar->id, $impianto->billing_customer_id, 'Il cliente stesso e\' una scelta, non un vuoto.');
+        $this->assertSame($bar->id, $impianto->billingCustomer->id);
+        $this->assertSame('il cliente stesso', $impianto->placements()->whereNull('removed_at')->sole()->paganteInParole());
+    }
+
     public function test_cambia_pagante_su_una_riga_dello_storico(): void
     {
         $user = User::create(['tenant_id' => $this->tenant->id, 'name' => 'Admin', 'email' => 'a@alex.it', 'password' => bcrypt('x')]);

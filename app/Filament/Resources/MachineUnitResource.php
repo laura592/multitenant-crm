@@ -192,12 +192,9 @@ class MachineUnitResource extends Resource
                         ->date('d/m/Y')
                         ->placeholder('—'),
                     TextEntry::make('fatturare_a')->label('Fatturare a')
-                        // Il cliente stesso si dice "il cliente", come nello storico.
-                        ->state(fn (MachineUnit $record) => $record->billing_customer_id && $record->billing_customer_id !== $record->current_customer_id
-                            ? $record->billingCustomer?->full_name
-                            : null)
-                        ->placeholder(fn (MachineUnit $record) => $record->current_customer_id ? 'il cliente' : '—')
-                        ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
+                        // Come nello storico: "il cliente stesso" e' una scelta,
+                        // "come il cliente" vuol dire che vale l'anagrafica.
+                        ->state(fn (MachineUnit $record) => $record->placements()->whereNull('removed_at')->first()?->paganteInParole() ?? '—'),
                     TextEntry::make('status')
                         ->label('Stato')
                         ->badge()
@@ -389,7 +386,7 @@ class MachineUnitResource extends Resource
                 // (22/09/2026): vuoto = il nuovo cliente, o chi paga per lui.
                 Forms\Components\Select::make('billing_customer_id')
                     ->label('Fatturare a')
-                    ->helperText('Lascia vuoto se paga il cliente presso cui va (o chi paga già per lui).')
+                    ->helperText('Vuoto = come dice l\'anagrafica del cliente (se per lui paga un altro, paga quello). Scegli il cliente stesso se per questa macchina paga lui.')
                     ->options(fn () => Customer::query()->orderBy('company_name')->get()->mapWithKeys(
                         fn (Customer $customer) => [$customer->id => DisplayName::customerOption($customer) ?: 'Cliente senza nome']
                     ))

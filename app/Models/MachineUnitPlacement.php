@@ -92,6 +92,32 @@ class MachineUnitPlacement extends Model
     }
 
     /**
+     * Come si legge chi pagava in questo periodo: il cliente stesso, un
+     * altro, oppure "come il cliente" quando sulla macchina non e' stato
+     * deciso e vale il pagante dell'anagrafica.
+     */
+    public function paganteInParole(): string
+    {
+        if (! $this->customer_id) {
+            return '—';
+        }
+
+        if ($this->billing_customer_id === $this->customer_id) {
+            return 'il cliente stesso';
+        }
+
+        if ($this->billingCustomer) {
+            return DisplayName::customerOption($this->billingCustomer);
+        }
+
+        $delCliente = $this->customer?->billingCustomer;
+
+        return $delCliente
+            ? 'come il cliente ('.DisplayName::titleCase($delCliente->company_name).')'
+            : 'il cliente';
+    }
+
+    /**
      * Cambia chi paga.
      *
      * Sulla posizione attuale, con una data: la macchina resta dov'e', ma da
@@ -102,7 +128,9 @@ class MachineUnitPlacement extends Model
      */
     public function cambiaPagante(?Customer $pagante, ?\DateTimeInterface $dal = null): void
     {
-        $id = $pagante && $pagante->id !== $this->customer_id ? $pagante->id : null;
+        // Il cliente stesso e' una scelta valida: "paga lui, non chi paga
+        // per lui" (Bar Miki, 23/09/2026).
+        $id = $pagante?->id;
 
         if ($this->removed_at === null && $this->machineUnit) {
             if ($dal && Carbon::instance($dal)->startOfDay()->gt($this->placed_at->copy()->startOfDay())) {

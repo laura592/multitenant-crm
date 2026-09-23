@@ -45,16 +45,11 @@ class PlacementsRelationManager extends RelationManager
                     ->formatStateUsing(fn ($state, $record) => DisplayName::customerOption($record->customer)),
                 // Chi pagava in quel periodo (22/09/2026). Per le posizioni
                 // vecchie si sa solo il codice Eureka: si risolve al volo.
+                // "il cliente stesso" e' una scelta esplicita, diversa da
+                // "come il cliente": li' vale il pagante dell'anagrafica.
                 Tables\Columns\TextColumn::make('pagato_da')->label('Pagato da')
-                    ->state(function (MachineUnitPlacement $record): ?string {
-                        $pagante = $record->billingCustomer
-                            ?? ($record->eureka_billing_customer_code
-                                ? Customer::query()->where('gestionale_code', $record->eureka_billing_customer_code)->first()
-                                : null);
-
-                        return $pagante && $pagante->id !== $record->customer_id ? DisplayName::customerOption($pagante) : null;
-                    })
-                    ->placeholder(fn (MachineUnitPlacement $record) => $record->customer_id ? 'il cliente' : '—'),
+                    ->state(fn (MachineUnitPlacement $record) => $record->paganteInParole())
+                    ->color(fn (MachineUnitPlacement $record) => $record->billing_customer_id ? null : 'gray'),
                 Tables\Columns\TextColumn::make('placed_at')->label('Dal')->dateTime('d/m/Y H:i'),
                 Tables\Columns\TextColumn::make('removed_at')->label('Al')->dateTime('d/m/Y H:i')->placeholder('In corso'),
                 Tables\Columns\TextColumn::make('notes')->label('Note')->limit(50)->tooltip(fn ($state) => $state),
@@ -72,7 +67,9 @@ class PlacementsRelationManager extends RelationManager
                     ->form(fn (MachineUnitPlacement $record) => [
                         Select::make('billing_customer_id')
                             ->label('Fatturare a')
-                            ->helperText('Lascia vuoto se pagava il cliente stesso.')
+                            ->helperText(fn () => 'Vuoto = come dice l\'anagrafica del cliente'
+                                .($record->customer?->billingCustomer ? ' (oggi: '.DisplayName::titleCase($record->customer->billingCustomer->company_name).')' : '')
+                                .'. Scegli il cliente stesso se per questa macchina paga lui.')
                             ->options(fn () => Customer::query()->orderBy('company_name')->get()->mapWithKeys(
                                 fn (Customer $c) => [$c->id => DisplayName::customerOption($c) ?: 'Cliente senza nome']
                             ))
