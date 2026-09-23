@@ -7,6 +7,7 @@ use App\Filament\Pages\ScadutoClienti;
 use App\Filament\Widgets\Contabilita\ScadutoOverviewWidget;
 use App\Models\Customer;
 use App\Models\EurekaPartitaAperta;
+use App\Models\EurekaSaldoAnagrafica;
 use App\Models\Tenant;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -66,8 +67,9 @@ class ScadutoWidgetTest extends TestCase
             'data_fattura' => '2023-12-15', 'data_scadenza' => '2023-12-15', 'saldo' => 1658.83,
         ]);
 
-        // Scrittura di apertura: nessun numero di fattura, non e' esigibile
-        // verso un documento preciso e non deve comparire.
+        // Scrittura di apertura: nessun numero di fattura, nessuna
+        // scadenza. E' un credito vero (dal 23/09/2026 entra nell'elenco) e
+        // la sua scadenza e' la data del riporto.
         EurekaPartitaAperta::create([
             'tenant_id' => $tenant->id, 'tipo' => EurekaPartitaAperta::TIPO_CLIENTE,
             'gestionale_code' => 1368, 'ragione_sociale' => 'Riporto Apertura',
@@ -115,7 +117,11 @@ class ScadutoWidgetTest extends TestCase
             ->assertOk()
             ->assertSee('Hotel Marco Polo')
             ->assertSee('Pasti Fabio')
-            ->assertDontSee('Riporto Apertura');
+            // Chi ha solo il riporto di apertura e' comunque qualcuno da
+            // chiamare: prima spariva dall'elenco e i suoi 738,47 non li
+            // chiedeva nessuno.
+            ->assertSee('Riporto Apertura')
+            ->assertSee('riporto di apertura € 738,47');
 
         // I giorni si mostrano interi: diffInDays() di Carbon torna un float,
         // e senza cast in colonna compariva "397.73471022177 giorni".
@@ -141,14 +147,14 @@ class ScadutoWidgetTest extends TestCase
         // Ordinamenti: il default resta il peso (importo x ritardo), che
         // mette in cima Pasti Fabio; cliccando "Cliente" comanda l'alfabeto.
         $this->assertSame(
-            [1366, 18, 3033],
+            [1366, 1368, 18, 3033],
             Livewire::test(ScadutoClienti::class)->instance()->getTableRecords()
                 ->pluck('gestionale_code')->all(),
             'senza ordinamento scelto comanda il peso',
         );
 
         $this->assertSame(
-            [18, 3033, 1366],
+            [18, 3033, 1366, 1368],
             Livewire::test(ScadutoClienti::class)
                 ->sortTable('ragione_sociale')
                 ->instance()->getTableRecords()
@@ -169,12 +175,124 @@ class ScadutoWidgetTest extends TestCase
 
         Livewire::test(ScadutoOverviewWidget::class)
             ->assertOk()
-            // Nel riquadro debiti e crediti NON si compensano, al contrario
-            // della tabella sotto: 174,92 + 300,00 + 1.658,83 + 40,00 da
-            // incassare, 260,00 di crediti mostrati a parte. Il riporto di
-            // apertura da 738,47 resta fuori perche' privo di numero fattura.
-            ->assertSee('2.173,75')
-            ->assertSee('260,00');
+            // In "Da incassare" debiti e crediti NON si compensano, al
+            // contrario della tabella sotto: 174,92 + 300,00 + 1.658,83 +
+            // 40,00 + 738,47 di riporto da incassare, 260,00 di crediti
+            // mostrati a parte.
+            ->assertSee('2.912,22')
+            ->assertSee('260,00')
+            // "Saldo clienti" e' il netto, cioe' il numero del gestionale:
+            // 2.912,22 - 260,00 = 2.652,22.
+            ->assertSee('2.652,22')
+            ->assertSee('riporti compresi');
+    }
+
+    /**
+     * Gli incassi che Eureka non abbina a nessuna fattura sono soldi gia'
+     * arrivati. Finche' l'elenco li scartava (stesso filtro dei riporti:
+     * niente numero di fattura) capitava di chiamare un cliente per
+     * chiedergli quello che aveva gia' pagato — caso reale, Pizzeria la
+     * Strana Coppia, data da chiamare per 335,74 mentre il gestionale la
+     * dava a credito di 118,01.
+     */
+    public function test_gli_incassi_non_imputati_abbassano_quello_che_si_chiede(): void
+    {
+        $tenant = Tenant::create(['name' => 'Alex', 'slug' => 'alex', 'is_master' => true]);
+        $user = User::create([
+            'tenant_id' => $tenant->id, 'name' => 'Amm', 'email' => 'amm@alex.it', 'password' => bcrypt('password'),
+        ]);
+        $this->giveRole($user, $tenant, 'admin');
+        $user->update(['is_super_admin' => true]);
+
+        $partita = function (array $dati) use ($tenant) {
+            EurekaPartitaAperta::create($dati + [
+                'tenant_id' => $tenant->id,
+                'tipo' => EurekaPartitaAperta::TIPO_CLIENTE,
+                'anno' => 2026,
+            ]);
+        };
+
+        // Ha pagato piu' di quanto deve: sparisce dall'elenco.
+        $partita(['gestionale_code' => 1423, 'ragione_sociale' => 'Strana Coppia', 'numero_fattura' => '428',
+            'data_fattura' => '2026-09-01', 'data_scadenza' => '2026-09-01', 'saldo' => 391.13]);
+        $partita(['gestionale_code' => 1423, 'ragione_sociale' => 'Strana Coppia', 'numero_fattura' => null,
+            'data_fattura' => '2026-06-10', 'data_scadenza' => null, 'saldo' => -195.84]);
+        $partita(['gestionale_code' => 1423, 'ragione_sociale' => 'Strana Coppia', 'numero_fattura' => null,
+            'data_fattura' => '2026-07-09', 'data_scadenza' => null, 'saldo' => -257.91]);
+
+        // Ha pagato in parte: resta in elenco, ma per la differenza.
+        $partita(['gestionale_code' => 900, 'ragione_sociale' => 'Pagamento Parziale', 'numero_fattura' => '12',
+            'data_fattura' => '2026-01-10', 'data_scadenza' => '2026-01-31', 'saldo' => 500.00]);
+        $partita(['gestionale_code' => 900, 'ragione_sociale' => 'Pagamento Parziale', 'numero_fattura' => null,
+            'data_fattura' => '2026-02-10', 'data_scadenza' => null, 'saldo' => -100.00]);
+
+        $this->actingAs($user);
+        Filament::setTenant($tenant);
+
+        $elenco = Livewire::test(ScadutoClienti::class)->assertOk();
+
+        $elenco->assertDontSee('Strana Coppia');
+        $elenco->assertSee('Pagamento Parziale')
+            ->assertSee('400,00')
+            // Un incasso non e' una nota di credito: chiamarlo cosi' manda
+            // il cliente a cercare un documento che non esiste.
+            ->assertSee('di incassi non imputati');
+
+        $this->assertSame(
+            [900],
+            Livewire::test(ScadutoClienti::class)->instance()->getTableRecords()
+                ->pluck('gestionale_code')->all(),
+            'chi ha gia'."'".' pagato non e'."'".' qualcuno da chiamare',
+        );
+    }
+
+    /**
+     * Il saldo complessivo e' l'unico numero della pagina confrontabile con
+     * l'estratto conto del gestionale: se non torna col saldo che Eureka
+     * dichiara per anagrafica, il riquadro lo dichiara invece di lasciare
+     * che se ne accorga chi legge.
+     */
+    public function test_il_saldo_clienti_segnala_quando_eureka_dice_un_altro_numero(): void
+    {
+        $tenant = Tenant::create(['name' => 'Alex', 'slug' => 'alex', 'is_master' => true]);
+        $user = User::create([
+            'tenant_id' => $tenant->id, 'name' => 'Amm', 'email' => 'amm@alex.it', 'password' => bcrypt('password'),
+        ]);
+        $this->giveRole($user, $tenant, 'admin');
+        $user->update(['is_super_admin' => true]);
+
+        EurekaPartitaAperta::create([
+            'tenant_id' => $tenant->id, 'tipo' => EurekaPartitaAperta::TIPO_CLIENTE,
+            'gestionale_code' => 18, 'ragione_sociale' => 'A & A SNC',
+            'anno' => 2026, 'numero_fattura' => '43',
+            'data_fattura' => '2026-02-28', 'data_scadenza' => '2026-02-28', 'saldo' => 1000.00,
+        ]);
+
+        $this->actingAs($user);
+        Filament::setTenant($tenant);
+
+        // Senza saldi dichiarati non c'e' niente da confrontare: nessun
+        // allarme, e soprattutto nessun "Eureka ne dichiara € 0,00".
+        Livewire::test(ScadutoOverviewWidget::class)
+            ->assertOk()
+            ->assertSee('1.000,00')
+            ->assertDontSee('Eureka ne dichiara');
+
+        EurekaSaldoAnagrafica::create([
+            'tenant_id' => $tenant->id, 'tipo' => EurekaPartitaAperta::TIPO_CLIENTE,
+            'gestionale_code' => 18, 'ragione_sociale' => 'A & A SNC', 'saldo' => 1200.00,
+        ]);
+
+        Livewire::test(ScadutoOverviewWidget::class)
+            ->assertOk()
+            ->assertSee('Eureka ne dichiara € 1.200,00');
+
+        // Allineati: il riquadro tace, non festeggia.
+        EurekaSaldoAnagrafica::query()->update(['saldo' => 1000.00]);
+
+        Livewire::test(ScadutoOverviewWidget::class)
+            ->assertOk()
+            ->assertDontSee('Eureka ne dichiara');
     }
 
     /**

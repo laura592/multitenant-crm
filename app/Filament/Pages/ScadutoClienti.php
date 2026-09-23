@@ -36,10 +36,26 @@ use Illuminate\Support\Carbon;
  * 500 € fermi da un anno vengono prima di 2.000 € scaduti la settimana
  * scorsa, perché è la telefonata più urgente.
  *
- * Esclusi in modo permanente, non con un filtro: le scritture di apertura
- * del nuovo gestionale (riconoscibili dal numero di fattura mancante: sono
- * un saldo riportato, non un credito verso una fattura precisa) e i
- * fornitori.
+ * Esclusi in modo permanente, non con un filtro: i fornitori.
+ *
+ * Le partite SENZA numero di fattura invece ci sono, dal 23/09/2026. Prima
+ * venivano scartate tutte perche' "non corrispondono a un credito verso un
+ * documento preciso", ma sotto quella regola cadevano due cose diverse e
+ * l'elenco sbagliava in entrambe le direzioni:
+ *
+ *  - i riporti di apertura del vecchio gestionale sono crediti veri, e
+ *    qualcuno ci paga sopra (su Santa Sofia Venezia il riporto da 641,32 ha
+ *    un incasso da 351,78 imputato): Cose Buone risultava dovere 261,08
+ *    invece di 4.405,01, e nove clienti le cui partite sono solo riporti
+ *    non comparivano affatto, per 22.230,25;
+ *  - gli incassi che Eureka non abbina a una fattura precisa sono soldi
+ *    gia' arrivati: la Strana Coppia figurava da chiamare per 335,74 mentre
+ *    il gestionale la dava a credito di 118,01.
+ *
+ * Adesso l'elenco somma le stesse partite del dettaglio cliente
+ * (DettaglioScaduto), che e' la schermata che si tiene aperta al telefono:
+ * due pagine che per lo stesso cliente dicono numeri diversi sono un modo
+ * sicuro di non farsi credere da nessuna delle due.
  *
  * L'importo e' NETTO delle note di credito, come il saldo del dettaglio:
  * al telefono si chiede quello che il cliente deve davvero, non il lordo
@@ -52,6 +68,8 @@ use Illuminate\Support\Carbon;
  */
 class ScadutoClienti extends Page implements HasTable
 {
+    use ApreStampeInNuovaScheda, InteractsWithTable;
+
     /**
      * Numeri contabili dell'azienda. Fino al 03/09/2026 il cancello era
      * is_super_admin nel codice: o eri staff master o non li vedevi, e la
@@ -64,8 +82,6 @@ class ScadutoClienti extends Page implements HasTable
      * cambia e' che ora si puo' concedere a un ruolo.
      */
     use HasPageShield;
-
-    use ApreStampeInNuovaScheda, InteractsWithTable;
 
     protected static ?string $navigationIcon = 'heroicon-o-phone-arrow-up-right';
 
@@ -83,8 +99,23 @@ class ScadutoClienti extends Page implements HasTable
 
     public function getSubheading(): ?string
     {
-        return 'Chi chiamare, in ordine di urgenza. Importi al netto delle note di credito; il riporto di apertura 2023 è escluso.';
+        return 'Chi chiamare, in ordine di urgenza. Importi al netto di note di credito e incassi non ancora imputati, riporti di apertura compresi: quello che il cliente deve davvero.';
     }
+
+    /**
+     * Partite senza numero di fattura: i riporti di apertura del nuovo
+     * gestionale (a dare) e gli incassi che Eureka non ha abbinato a una
+     * fattura precisa (ad avere). Fino al 23/09/2026 erano scartate tutte
+     * e due, con lo stesso filtro — vedi il commento di classe.
+     */
+    private const SENZA_NUMERO = "(numero_fattura IS NULL OR numero_fattura = '')";
+
+    /**
+     * La data entro cui la partita andava pagata. Un riporto di apertura non
+     * ha scadenza: vale la sua data, che e' il giorno in cui il saldo e'
+     * stato riportato (01/01/2023), ed e' abbondantemente passata.
+     */
+    private const SCADENZA_EFFETTIVA = 'COALESCE(data_scadenza, data_fattura)';
 
     /**
      * La scadenza piu' vecchia si misura SOLO sul dare, ovunque la si usi:
@@ -93,7 +124,7 @@ class ScadutoClienti extends Page implements HasTable
      * di una nota di credito e far sembrare ferma da anni una fattura di
      * ieri.
      */
-    private const SCADENZA_PIU_VECCHIA = 'MIN(CASE WHEN saldo > 0 THEN data_scadenza END)';
+    private const SCADENZA_PIU_VECCHIA = 'MIN(CASE WHEN saldo > 0 THEN '.self::SCADENZA_EFFETTIVA.' END)';
 
     /**
      * Ordinamento per peso: importo × giorni di ritardo.
@@ -130,11 +161,61 @@ class ScadutoClienti extends Page implements HasTable
     }
 
     /**
+     * Di che cosa e' fatto il debito, sotto il nome del cliente: quante
+     * fatture e, se c'e', il riporto di apertura. Il riporto va nominato
+     * perche' al telefono non si puo' citare un numero di documento — si
+     * dice "il saldo riportato dal vecchio gestionale".
+     */
+    private static function composizione(mixed $record): string
+    {
+        $parti = [];
+
+        if (($fatture = (int) $record->fatture) > 0) {
+            $parti[] = $fatture.' '.($fatture === 1 ? 'fattura' : 'fatture');
+        }
+
+        if ((float) $record->riporti > 0) {
+            $parti[] = 'riporto di apertura '.self::euro($record->riporti);
+        }
+
+        return implode(' · ', $parti);
+    }
+
+    /**
+     * Il conto in chiaro solo quando serve: se non c'e' niente ad avere,
+     * netto e lordo coincidono e ripeterlo sarebbe rumore.
+     *
+     * Note di credito e incassi non imputati si nominano per quello che
+     * sono: chiamare "nota di credito" un incasso farebbe cercare al
+     * cliente un documento che non esiste.
+     */
+    private static function detrazioni(mixed $record): ?string
+    {
+        $crediti = abs((float) $record->crediti);
+
+        if ($crediti === 0.0) {
+            return null;
+        }
+
+        $incassi = abs((float) $record->incassi);
+
+        $voce = match (true) {
+            $incassi === 0.0 => 'di note di credito',
+            $incassi >= $crediti => 'di incassi non imputati',
+            default => 'fra note di credito e incassi non imputati',
+        };
+
+        return self::euro($record->lordo).' − '.self::euro($crediti).' '.$voce;
+    }
+
+    /**
      * Stampa dell'elenco: e' la lista con cui si telefona, e al telefono si
      * segna a penna. Esce quello che si vede a schermo — stesso ordine,
-     * stessa ricerca (getFilteredSortedTableQuery), senza la paginazione:
-     * stampare solo i primi 25 di una lista ordinata per urgenza vorrebbe
-     * dire perdere per strada proprio chi va richiamato domani.
+     * stessa ricerca (getFilteredSortedTableQuery), stesse diciture sotto i
+     * nomi (composizione/detrazioni sono le stesse dei due TextColumn),
+     * senza la paginazione: stampare solo i primi 25 di una lista ordinata
+     * per urgenza vorrebbe dire perdere per strada proprio chi va
+     * richiamato domani.
      */
     protected function getHeaderActions(): array
     {
@@ -146,10 +227,9 @@ class ScadutoClienti extends Page implements HasTable
                 ->action(function () {
                     $righe = $this->getFilteredSortedTableQuery()->get()->map(fn ($record) => [
                         'cliente' => DisplayName::titleCase($record->ragione_sociale),
-                        'fatture' => (int) $record->fatture,
+                        'composizione' => self::composizione($record),
+                        'detrazioni' => self::detrazioni($record),
                         'scaduto' => (float) $record->scaduto,
-                        'lordo' => (float) $record->lordo,
-                        'crediti' => abs((float) $record->crediti),
                         'giorni' => $record->piu_vecchia ? self::giorni($record->piu_vecchia) : null,
                         'piu_vecchia' => $record->piu_vecchia ? Carbon::parse($record->piu_vecchia)->format('d/m/Y') : null,
                     ])->all();
@@ -192,30 +272,25 @@ class ScadutoClienti extends Page implements HasTable
                 ->selectRaw('SUM(saldo) as scaduto')
                 ->selectRaw('SUM(CASE WHEN saldo > 0 THEN saldo ELSE 0 END) as lordo')
                 ->selectRaw('SUM(CASE WHEN saldo < 0 THEN saldo ELSE 0 END) as crediti')
-                // Le fatture si contano e si datano solo sul dare: una nota
-                // di credito non e' una fattura da sollecitare e non e' mai
-                // la partita "ferma da piu' tempo".
-                ->selectRaw('SUM(CASE WHEN saldo > 0 THEN 1 ELSE 0 END) as fatture')
+                // Riporti e incassi non imputati si tengono a parte solo
+                // per poterli NOMINARE sotto al totale: nel totale ci sono
+                // gia' dentro.
+                ->selectRaw('SUM(CASE WHEN saldo > 0 AND '.self::SENZA_NUMERO.' THEN saldo ELSE 0 END) as riporti')
+                ->selectRaw('SUM(CASE WHEN saldo < 0 AND '.self::SENZA_NUMERO.' THEN saldo ELSE 0 END) as incassi')
+                // Le fatture si contano solo sul dare e solo dove un numero
+                // di documento c'e': una nota di credito non e' una fattura
+                // da sollecitare, e un riporto non ha un numero da citare.
+                ->selectRaw('SUM(CASE WHEN saldo > 0 AND NOT '.self::SENZA_NUMERO.' THEN 1 ELSE 0 END) as fatture')
                 ->selectRaw(self::SCADENZA_PIU_VECCHIA.' as piu_vecchia')
                 ->where('tenant_id', Filament::getTenant()?->id)
                 ->where('tipo', EurekaPartitaAperta::TIPO_CLIENTE)
-                // Si escludono le scritture di apertura del nuovo gestionale
-                // riconoscendole dal NUMERO DI FATTURA mancante, non
-                // dall'anno. Filtrare "anno > 2023" sembrava equivalente ma
-                // buttava via anche le fatture vere del 2023: Pasti Fabio
-                // aveva la 513 del 15/12/2023 da 1.658,83 EUR che spariva
-                // dall'elenco, e il cliente risultava dovere 200 EUR invece
-                // di 1.859,52.
-                ->whereNotNull('numero_fattura')
-                ->where('numero_fattura', '<>', '')
                 // Del dare entra solo cio' che e' gia' scaduto, dell'avere
                 // tutto: una nota di credito abbassa quello che il cliente
                 // deve a prescindere dalla sua data.
                 ->where(fn (Builder $q) => $q
                     ->where(fn (Builder $q) => $q
                         ->where('saldo', '>', 0)
-                        ->whereNotNull('data_scadenza')
-                        ->whereDate('data_scadenza', '<', now()))
+                        ->whereRaw(self::SCADENZA_EFFETTIVA.' < ?', [now()->toDateString()]))
                     ->orWhere('saldo', '<', 0))
                 ->groupBy('gestionale_code')
                 // Il netto positivo e' la condizione per comparire, e visto
@@ -235,7 +310,7 @@ class ScadutoClienti extends Page implements HasTable
                     ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderByRaw("MAX(ragione_sociale) {$direction}"))
                     ->weight('medium')
                     ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state))
-                    ->description(fn ($record) => $record->fatture.' '.($record->fatture == 1 ? 'fattura' : 'fatture')),
+                    ->description(fn ($record) => self::composizione($record)),
 
                 Tables\Columns\TextColumn::make('scaduto')
                     ->label('Scaduto')
@@ -243,12 +318,7 @@ class ScadutoClienti extends Page implements HasTable
                     ->money('EUR')
                     ->alignEnd()
                     ->weight('bold')
-                    // Il conto in chiaro solo quando serve: se non ci sono
-                    // note di credito netto e lordo coincidono e ripeterlo
-                    // sarebbe rumore.
-                    ->description(fn ($record) => (float) $record->crediti !== 0.0
-                        ? self::euro($record->lordo).' − '.self::euro(abs((float) $record->crediti)).' di note di credito'
-                        : null),
+                    ->description(fn ($record) => self::detrazioni($record)),
 
                 Tables\Columns\TextColumn::make('piu_vecchia')
                     ->label('Ferma da')

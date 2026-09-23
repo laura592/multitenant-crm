@@ -37,7 +37,7 @@
 <div class="sottotitolo">
     {{ $tenant?->name }} — situazione al {{ $data }}
     @if($ricerca) · filtrato per “{{ $ricerca }}” @endif
-    · importi al netto delle note di credito
+    · importi al netto di note di credito e incassi non imputati, riporti di apertura compresi
 </div>
 
 <table class="riepilogo">
@@ -73,10 +73,12 @@
                 <td>{{ $i + 1 }}</td>
                 <td>
                     <span class="cliente">{{ $riga['cliente'] }}</span>
+                    {{-- Stesse diciture dello schermo: la stampa e' quella
+                         lista, non una sua riscrittura. --}}
                     <div class="nota">
-                        {{ $riga['fatture'] }} {{ $riga['fatture'] == 1 ? 'fattura' : 'fatture' }}
-                        @if($riga['crediti'] > 0)
-                            · € {{ number_format($riga['lordo'], 2, ',', '.') }} meno € {{ number_format($riga['crediti'], 2, ',', '.') }} di note di credito
+                        {{ $riga['composizione'] }}
+                        @if($riga['detrazioni'])
+                            · {{ $riga['detrazioni'] }}
                         @endif
                     </div>
                 </td>
