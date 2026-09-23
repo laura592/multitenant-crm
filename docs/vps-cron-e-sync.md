@@ -73,6 +73,7 @@ concentrato ha causato un disservizio dell'API del fornitore.
 | 04:00 | `eureka:import-service-reports` | i rapportini degli ultimi 7 giorni, con dettaglio |
 | 05:00 | `eureka:refresh-material-prices` | i listini |
 | 05:30 | `eureka:import-partite-aperte` | lo scadenzario (prima delle fatture: è la pagina su cui si agisce la mattina) |
+| 14:00 | `eureka:import-partite-aperte` | secondo giro: gli incassi della mattina si vedono nel pomeriggio, non il giorno dopo |
 | 05:45 | `eureka:import-fatture` | le fatture registrate |
 | 06:15 | `eureka:import-kpi-contabili` | fatturato mensile e cash flow |
 | 06:45 | `eureka:allinea-fatture-rapportini` | su quale fattura è finito ogni rapportino (colonna «Fatturato») |

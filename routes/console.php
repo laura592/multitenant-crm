@@ -107,7 +107,22 @@ Schedule::command('queue:work --queue=default,eureka-bulk --stop-when-empty --ma
 //
 // Le partite per prime: sono la fotografia da cui dipende lo scaduto, cioe'
 // l'unica di queste pagine su cui qualcuno agisce la mattina dopo.
-Schedule::command('eureka:import-partite-aperte', ['--tenant' => 'alex'])->dailyAt('05:30');
+// Le partite (e con loro i saldi per anagrafica) due volte al giorno, non
+// una: la mattina si telefona con la fotografia della notte, ma gli incassi
+// arrivati in giornata e le note di credito emesse in mattinata resterebbero
+// invisibili fino al giorno dopo — cioe' si richiamerebbe chi ha gia' pagato.
+// Il secondo giro e' dopo pranzo (indicazione dell'utente, 23/09/2026).
+//
+// withoutOverlapping: se il giro delle 14 trova Eureka lenta e sfora, quello
+// dopo non parte sopra al precedente (l'API va in 500 sotto carico).
+Schedule::command('eureka:import-partite-aperte', ['--tenant' => 'alex'])
+    ->dailyAt('05:30')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/eureka-import.log'));
+Schedule::command('eureka:import-partite-aperte', ['--tenant' => 'alex'])
+    ->dailyAt('14:00')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/eureka-import.log'));
 Schedule::command('eureka:import-fatture', ['--tenant' => 'alex'])->dailyAt('05:45');
 Schedule::command('eureka:import-kpi-contabili', ['--tenant' => 'alex'])->dailyAt('06:15');
 
