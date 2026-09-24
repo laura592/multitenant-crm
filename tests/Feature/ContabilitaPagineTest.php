@@ -4,10 +4,12 @@ namespace Tests\Feature;
 
 use App\Filament\Pages\AnalisiContabili;
 use App\Filament\Pages\CashFlow;
+use App\Filament\Pages\DettaglioScaduto;
 use App\Filament\Widgets\Contabilita\CashflowOverviewWidget;
 use App\Filament\Widgets\Contabilita\FatturatoOverviewWidget;
 use App\Filament\Widgets\Contabilita\RibaWidget;
 use App\Filament\Widgets\Contabilita\SaldiDivergentiWidget;
+use App\Filament\Widgets\Contabilita\SaldiFornitoriDivergentiWidget;
 use App\Models\EurekaCashflowMese;
 use App\Models\EurekaCashflowVoce;
 use App\Models\EurekaFattura;
@@ -127,6 +129,39 @@ class ContabilitaPagineTest extends TestCase
     }
 
     /**
+     * Lo stesso controllo, di la' (24/09/2026): le partite si importano
+     * anche per i fornitori, e anche li' il saldo dichiarato e la somma
+     * delle partite possono non coincidere.
+     */
+    public function test_i_fornitori_hanno_il_loro_riquadro_dei_saldi_divergenti(): void
+    {
+        $this->saldo(4001, 'Caffe Del Doge Srl', -2500.00, EurekaPartitaAperta::TIPO_FORNITORE);
+        $this->partita(4001, 'FA-12', -900.00, EurekaPartitaAperta::TIPO_FORNITORE);
+        // Un cliente che diverge non deve finire fra i fornitori.
+        $this->saldo(972, 'Impronta Snc', -1431.79);
+
+        $righe = Livewire::test(SaldiFornitoriDivergentiWidget::class)
+            ->assertOk()
+            // Il nome passa da DisplayName::titleCase: "Del" diventa "del".
+            ->assertSee('Doge')
+            ->assertSee('Fornitore')
+            ->assertDontSee('Impronta Snc')
+            ->instance()->getTableRecords();
+
+        $this->assertSame([4001], $righe->pluck('gestionale_code')->all());
+        $this->assertEqualsWithDelta(-1600.00, (float) $righe->first()->scarto, 0.01);
+
+        // E il dettaglio mostra le partite del fornitore, non quelle del
+        // cliente con lo stesso codice.
+        $this->partita(4001, 'FT-99', 500.00);
+
+        Livewire::test(DettaglioScaduto::class, ['codice' => 4001])
+            ->assertOk()
+            ->assertSee('FT-99')
+            ->assertDontSee('FA-12');
+    }
+
+    /**
      * Il riquadro del cash flow conta SOLO il futuro: il periodo che Eureka
      * restituisce parte da gennaio, e sommare mesi già passati darebbe una
      * "previsione" che per metà è storia.
@@ -210,18 +245,18 @@ class ContabilitaPagineTest extends TestCase
         ]);
     }
 
-    private function saldo(int $codice, string $nome, float $saldo): void
+    private function saldo(int $codice, string $nome, float $saldo, string $tipo = EurekaPartitaAperta::TIPO_CLIENTE): void
     {
         EurekaSaldoAnagrafica::create([
-            'tenant_id' => $this->tenant->id, 'tipo' => EurekaPartitaAperta::TIPO_CLIENTE,
+            'tenant_id' => $this->tenant->id, 'tipo' => $tipo,
             'gestionale_code' => $codice, 'ragione_sociale' => $nome, 'saldo' => $saldo,
         ]);
     }
 
-    private function partita(int $codice, string $numero, float $saldo): void
+    private function partita(int $codice, string $numero, float $saldo, string $tipo = EurekaPartitaAperta::TIPO_CLIENTE): void
     {
         EurekaPartitaAperta::create([
-            'tenant_id' => $this->tenant->id, 'tipo' => EurekaPartitaAperta::TIPO_CLIENTE,
+            'tenant_id' => $this->tenant->id, 'tipo' => $tipo,
             'gestionale_code' => $codice, 'ragione_sociale' => 'Cliente '.$codice,
             'anno' => 2026, 'numero_fattura' => $numero,
             'data_fattura' => '2026-01-01', 'data_scadenza' => '2026-02-01', 'saldo' => $saldo,

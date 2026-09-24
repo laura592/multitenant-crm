@@ -49,6 +49,13 @@ class DettaglioScaduto extends Page implements HasTable
      */
     public int $codice = 0;
 
+    /**
+     * Cliente o fornitore: lo stesso codice esiste in tutte e due le
+     * anagrafiche di Eureka e sono due posizioni diverse (24/09/2026, il
+     * riquadro "Fornitori dove Eureka e le partite non tornano" manda qui).
+     */
+    public string $tipo = EurekaPartitaAperta::TIPO_CLIENTE;
+
     public ?Customer $cliente = null;
 
     /**
@@ -69,10 +76,18 @@ class DettaglioScaduto extends Page implements HasTable
         abort_unless(static::canAccess(), 403);
 
         $this->codice = $codice;
-        $this->cliente = Customer::query()
-            ->where('tenant_id', Filament::getTenant()?->id)
-            ->where('gestionale_code', $codice)
-            ->first();
+        $this->tipo = request()->query('tipo') === EurekaPartitaAperta::TIPO_FORNITORE
+            ? EurekaPartitaAperta::TIPO_FORNITORE
+            : EurekaPartitaAperta::TIPO_CLIENTE;
+
+        // I fornitori non sono in anagrafica clienti: niente scheda da
+        // aprire, e il nome lo dice la partita.
+        $this->cliente = $this->tipo === EurekaPartitaAperta::TIPO_CLIENTE
+            ? Customer::query()
+                ->where('tenant_id', Filament::getTenant()?->id)
+                ->where('gestionale_code', $codice)
+                ->first()
+            : null;
     }
 
     public function getTitle(): string
@@ -92,7 +107,7 @@ class DettaglioScaduto extends Page implements HasTable
             ?: EurekaPartitaAperta::query()
                 ->where('tenant_id', Filament::getTenant()?->id)
                 ->where('gestionale_code', $this->codice)
-                ->where('tipo', EurekaPartitaAperta::TIPO_CLIENTE)
+                ->where('tipo', $this->tipo)
                 ->value('ragione_sociale');
 
         return DisplayName::titleCase($nome) ?: "Anagrafica {$this->codice}";
@@ -126,7 +141,8 @@ class DettaglioScaduto extends Page implements HasTable
             $parti[] = 'saldo '.$euro($saldo);
         }
 
-        return implode(' · ', $parti).' — codice Eureka '.$this->codice;
+        return implode(' · ', $parti).' — codice Eureka '.$this->codice
+            .($this->tipo === EurekaPartitaAperta::TIPO_FORNITORE ? ' (fornitore)' : '');
     }
 
     /** @return Collection<int, EurekaPartitaAperta> */
@@ -135,7 +151,7 @@ class DettaglioScaduto extends Page implements HasTable
         return EurekaPartitaAperta::query()
             ->where('tenant_id', Filament::getTenant()?->id)
             ->where('gestionale_code', $this->codice)
-            ->where('tipo', EurekaPartitaAperta::TIPO_CLIENTE)
+            ->where('tipo', $this->tipo)
             ->get();
     }
 
@@ -163,7 +179,7 @@ class DettaglioScaduto extends Page implements HasTable
             ->query(fn (): Builder => EurekaPartitaAperta::query()
                 ->where('tenant_id', Filament::getTenant()?->id)
                 ->where('gestionale_code', $this->codice)
-                ->where('tipo', EurekaPartitaAperta::TIPO_CLIENTE)
+                ->where('tipo', $this->tipo)
                 // Qui NON si filtra nulla: davanti al cliente serve il suo
                 // partitario intero — note di credito comprese, altrimenti
                 // gli si chiede una cifra che lui sa di aver compensato, e

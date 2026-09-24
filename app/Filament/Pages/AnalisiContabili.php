@@ -7,6 +7,7 @@ use App\Filament\Widgets\Contabilita\FatturatoMensileWidget;
 use App\Filament\Widgets\Contabilita\FatturatoOverviewWidget;
 use App\Filament\Widgets\Contabilita\RibaWidget;
 use App\Filament\Widgets\Contabilita\SaldiDivergentiWidget;
+use App\Filament\Widgets\Contabilita\SaldiFornitoriDivergentiWidget;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Pages\Page;
 
@@ -66,6 +67,7 @@ class AnalisiContabili extends Page
             RibaWidget::class,
             AccontiSenzaSaldoWidget::class,
             SaldiDivergentiWidget::class,
+            SaldiFornitoriDivergentiWidget::class,
         ];
     }
 

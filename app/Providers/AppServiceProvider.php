@@ -9,6 +9,7 @@ use App\Filament\Widgets\Contabilita\FatturatoMensileWidget;
 use App\Filament\Widgets\Contabilita\FatturatoOverviewWidget;
 use App\Filament\Widgets\Contabilita\RibaWidget;
 use App\Filament\Widgets\Contabilita\SaldiDivergentiWidget;
+use App\Filament\Widgets\Contabilita\SaldiFornitoriDivergentiWidget;
 use App\Filament\Widgets\Contabilita\ScadutoOverviewWidget;
 use App\Filament\Widgets\Gestionale\EurekaUltimiAggiornamentiWidget;
 use App\Filament\Widgets\Gestionale\GestionaleCollegamentiClientiWidget;
@@ -182,6 +183,7 @@ class AppServiceProvider extends ServiceProvider
             AccontiSenzaSaldoWidget::class,
             ScadutoOverviewWidget::class,
             SaldiDivergentiWidget::class,
+            SaldiFornitoriDivergentiWidget::class,
             FatturatoOverviewWidget::class,
             FatturatoMensileWidget::class,
             RibaWidget::class,

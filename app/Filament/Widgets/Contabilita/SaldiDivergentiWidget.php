@@ -34,6 +34,11 @@ class SaldiDivergentiWidget extends TableWidget
 
     protected static ?string $description = 'Prima di chiamarli, il numero va verificato sul gestionale.';
 
+    /** Lo stesso controllo vale per i fornitori: vedi SaldiFornitoriDivergentiWidget. */
+    protected static string $tipo = EurekaPartitaAperta::TIPO_CLIENTE;
+
+    protected static string $etichettaAnagrafica = 'Cliente';
+
     protected int|string|array $columnSpan = 'full';
 
     // Vedi AppServiceProvider: registrato con Livewire perche' vive dentro
@@ -46,7 +51,7 @@ class SaldiDivergentiWidget extends TableWidget
             ->query(fn (): Builder => $this->query())
             ->columns([
                 Tables\Columns\TextColumn::make('ragione_sociale')
-                    ->label('Cliente')
+                    ->label(static::$etichettaAnagrafica)
                     ->searchable()
                     ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state))
                     ->weight('medium'),
@@ -72,11 +77,12 @@ class SaldiDivergentiWidget extends TableWidget
                 Tables\Actions\Action::make('dettaglio')
                     ->label('Vedi partite')
                     ->icon('heroicon-m-arrow-right')
-                    ->url(fn ($record) => DettaglioScaduto::getUrl(['codice' => $record->gestionale_code])),
+                    ->url(fn ($record) => DettaglioScaduto::getUrl(['codice' => $record->gestionale_code])
+                        .(static::$tipo === EurekaPartitaAperta::TIPO_FORNITORE ? '?tipo='.EurekaPartitaAperta::TIPO_FORNITORE : '')),
             ])
             ->defaultPaginationPageOption(10)
             ->emptyStateHeading('Tutto torna')
-            ->emptyStateDescription('Per ogni cliente il saldo di Eureka coincide con la somma delle sue partite.');
+            ->emptyStateDescription('Per ogni anagrafica il saldo di Eureka coincide con la somma delle sue partite.');
     }
 
     /**
@@ -99,7 +105,7 @@ class SaldiDivergentiWidget extends TableWidget
 
         return EurekaSaldoAnagrafica::query()
             ->where('tenant_id', $tenantId)
-            ->where('tipo', EurekaPartitaAperta::TIPO_CLIENTE)
+            ->where('tipo', static::$tipo)
             ->select('*')
             ->selectRaw("{$sommaPartite} as saldo_partite")
             ->selectRaw("saldo - {$sommaPartite} as scarto")
