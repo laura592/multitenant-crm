@@ -4,6 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Concerns\ScopesToOwnUserUnlessResponsabile;
 use App\Filament\Resources\TimeEntryResource\Pages;
+use App\Exports\TimbratureExport;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Carbon\Carbon;
@@ -14,8 +15,7 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use pxlrbt\FilamentExcel\Actions\Tables\ExportAction;
-use pxlrbt\FilamentExcel\Exports\ExcelExport;
+use Maatwebsite\Excel\Facades\Excel;
 
 class TimeEntryResource extends Resource
 {
@@ -324,11 +324,13 @@ class TimeEntryResource extends Resource
                     }),
                 // Export dei dati grezzi (non l'aggregato di RiepilogoOre):
                 // prima non esisteva alcun export per le timbrature stesse.
-                ExportAction::make()
+                Tables\Actions\Action::make('esporta')
                     ->label('Esporta')
-                    ->exports([
-                        ExcelExport::make('presenze')->fromTable(),
-                    ]),
+                    ->icon('heroicon-o-table-cells')
+                    ->action(fn ($livewire) => Excel::download(
+                        new TimbratureExport($livewire->getFilteredSortedTableQuery()->with('user')->get()),
+                        'presenze-'.now()->format('Y-m-d').'.xlsx',
+                    )),
             ])
             ->actions([
                 Tables\Actions\ActionGroup::make([

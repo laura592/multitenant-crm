@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Concerns\ScopesToOwnUserUnlessResponsabile;
 use App\Filament\Resources\LeaveRequestResource\Pages;
 use App\Mail\LeaveRequestDecisionMail;
+use App\Exports\FeriePermessiExport;
 use App\Models\LeaveRequest;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -15,8 +16,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use pxlrbt\FilamentExcel\Actions\Tables\ExportAction;
-use pxlrbt\FilamentExcel\Exports\ExcelExport;
+use Maatwebsite\Excel\Facades\Excel;
 
 class LeaveRequestResource extends Resource
 {
@@ -141,11 +141,13 @@ class LeaveRequestResource extends Resource
             ->headerActions([
                 // Prima esisteva solo l'aggregato di RiepilogoOre: nessun export
                 // delle singole richieste ferie/permesso/malattia.
-                ExportAction::make()
+                Tables\Actions\Action::make('esporta')
                     ->label('Esporta')
-                    ->exports([
-                        ExcelExport::make('ferie-permessi')->fromTable(),
-                    ]),
+                    ->icon('heroicon-o-table-cells')
+                    ->action(fn ($livewire) => Excel::download(
+                        new FeriePermessiExport($livewire->getFilteredSortedTableQuery()->with('user')->get()),
+                        'ferie-permessi-'.now()->format('Y-m-d').'.xlsx',
+                    )),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('status')

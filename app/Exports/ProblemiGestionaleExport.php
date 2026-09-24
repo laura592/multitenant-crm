@@ -4,6 +4,7 @@ namespace App\Exports;
 
 use App\Models\Tenant;
 use App\Support\Gestionale\ControlloPaganteFattura;
+use Maatwebsite\Excel\Concerns\Export;
 use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 
 /**
@@ -14,7 +15,7 @@ use Maatwebsite\Excel\Concerns\WithMultipleSheets;
  * una ventina, sparivano fra le centinaia di rapportini senza fattura. Il
  * nome del foglio dice anche quante righe ci sono.
  */
-class ProblemiGestionaleExport implements WithMultipleSheets
+class ProblemiGestionaleExport implements Export, WithMultipleSheets
 {
     public function __construct(private readonly Tenant $tenant) {}
 

@@ -1,6 +1,12 @@
 parameters:
 	ignoreErrors:
 		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Exports/FeriePermessiExport.php
+
+		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$material\.$#'
 			identifier: property.notFound
 			count: 11
@@ -17,6 +23,12 @@ parameters:
 			identifier: argument.unresolvableType
 			count: 1
 			path: app/Exports/MaterialOrderExport.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Exports/TimbratureExport.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$component\.$#'
@@ -1793,6 +1805,12 @@ parameters:
 			identifier: staticClassAccess.privateMethod
 			count: 2
 			path: app/Filament/Widgets/Gestionale/GestionaleSpostamentiMacchineWidget.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$city\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Filament/Widgets/IlMioGiroWidget.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$company_name\.$#'
