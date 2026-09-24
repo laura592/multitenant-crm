@@ -1,64 +1,75 @@
-# Le migration compattate in un file solo
+# Le migration, otto invece di centocinquantotto
 
-Dal 24/09/2026 `database/migrations/` è **vuota**: lo schema del database sta in
-`database/schema/mysql-schema.sql` (e in `sqlite-schema.sql` per i test).
+Fino al 24/09/2026 `database/migrations/` conteneva **158 file**, scritti uno
+alla volta in quattordici mesi: crea la tabella, aggiungi una colonna, cambia
+un enum, aggiungine un'altra. Per sapere com'era fatta `service_reports`
+bisognava leggerne una dozzina in ordine cronologico.
 
-Erano **158 file**, scritti in quattordici mesi. Nessuno li leggeva più, e
-ricostruire il database da zero voleva dire eseguirli tutti in fila — con tre
-di loro che nel frattempo si erano rotti (vedi `docs/prova-postgres.md`).
+Ora sono **otto, una per argomento**, più quella del listino caffè:
 
-## Cosa cambia, in pratica
+| File | Cosa contiene |
+|---|---|
+| `000100_fondamenta` | utenti, sessioni, code, tenant, ruoli e permessi, registro attività |
+| `000200_anagrafiche` | clienti, fornitori, metodi di pagamento, mezzi |
+| `000300_catalogo` | prodotti, famiglie, listini, materiali e ordini materiali |
+| `000400_preventivi` | preventivi, gruppi, risposte del cliente, richieste informazioni |
+| `000500_interventi` | rapportini, macchine, posizionamenti, lavaggi, manutenzioni, scadenze |
+| `000600_gestionale` | Eureka: esecuzioni, fatture, partite aperte, saldi, contabilità |
+| `000700_offerte_caffe` | listino caffè e documenti d'offerta |
+| `000800_personale` | ore lavorate e richieste di ferie |
 
-**In produzione, niente.** Le 159 migration risultano già eseguite: `migrate`
-non trova nulla da fare, esattamente come prima. Il file di schema viene letto
-solo quando la tabella `migrations` è **vuota**, cioè su un database nuovo.
+Una tabella si cerca per argomento, non per data.
 
-**Su un database nuovo** (una macchina nuova, i test, un collega che parte da
-zero) il database si costruisce in **un secondo** invece che in quaranta, e le
-159 righe della tabella `migrations` vengono scritte come se fossero girate.
+## Come sono state scritte
 
-**Da qui in avanti** si scrivono migration nuove come sempre, in
-`database/migrations/`. Quando saranno tante e vecchie, si rifà
-`php artisan schema:dump --prune`.
+Non a mano: uno script ha riletto lo schema dal database vero (colonne, tipi,
+indici, chiavi esterne) e ha scritto le otto migration. Poi si è costruito un
+database da zero con quelle e si è confrontato con l'originale:
 
-## I dati, che lo schema non porta
+| | riferimento | ricostruito |
+|---|---|---|
+| tabelle | 68 | 68 |
+| colonne | 783 | 783 |
+| chiavi esterne | 121 | 121 |
+| indici | 246 | 246 |
+| colonne con tipo diverso | — | 0 |
 
-Lo schema porta le tabelle, non il loro contenuto. Delle 158 migration solo
-**tre** scrivevano dati, e due erano backfill (riempire un campo nuovo partendo
-da uno vecchio): su un database vuoto non avrebbero nulla da spostare.
+Identico. Lo script è servito una volta sola e non è rimasto nel progetto.
 
-La terza invece contava: **il listino del caffè**, che entra da una migration e
-non da un seeder perché `update.sh` i seeder non li lancia. Compattando è
-sparito, e nove test lo hanno detto subito. È tornato come
-`2026_09_24_090000_listino_caffe_iniziale`, che scrive **solo se la tabella è
-vuota** — in produzione il listino c'è già, e può essere stato ritoccato dal
-pannello. Ci sono anche i formati che due migration successive correggevano
-(Lyrae da 1 kg, cioccolato da 500 g): tre migration diventate una riga sola.
+## Cosa cambia in produzione
 
-Quello che serve a un'installazione nuova — tenant, ruoli, permessi — resta nei
-**seeder**, dove deve stare.
+**Niente.** Ogni tabella si crea solo se non esiste già (`Schema::hasTable`), e
+ogni chiave esterna solo se non c'è. Al primo `./update.sh` le otto migration
+risultano nuove, girano, e **non fanno niente**: le tabelle ci sono tutte. Il
+loro nome finisce nella tabella `migrations` e da lì in poi non si guardano
+più.
 
-**La regola da ricordare**: prima di compattare, cercare le migration che
-scrivono dati, non solo schema. Quelle vanno riscritte come migration nuove e
-idempotenti, o il database nuovo nasce vuoto dove dovrebbe nascere pieno.
-
-## Rigenerare lo schema
-
-```bash
-# MySQL: da un database appena migrato, non dalla copia di produzione
-docker compose exec -e DB_DATABASE=testing laravel.test php artisan schema:dump
-
-# SQLite (i test)
-docker compose exec laravel.test bash -lc \
-  'DB_CONNECTION=sqlite DB_DATABASE=/tmp/s.sqlite php artisan migrate:fresh --force \
-   && DB_CONNECTION=sqlite DB_DATABASE=/tmp/s.sqlite php artisan schema:dump'
-```
-
-## Se serve ripescare una vecchia migration
-
-Sono nella storia di git, non sono sparite:
+Le 158 vecchie restano nella storia di git:
 
 ```bash
 git log --diff-filter=D --name-only -- database/migrations | head -40
 git show <commit>^:database/migrations/2026_07_09_120000_create_customers_and_quotes_tables.php
 ```
+
+## I dati, che lo schema non porta
+
+Delle 158 solo **tre** scrivevano dati, e due erano backfill (riempire un campo
+nuovo partendo da uno vecchio): su un database vuoto non hanno niente da fare.
+
+La terza contava: **il listino del caffè**, che entra da una migration e non da
+un seeder perché `update.sh` i seeder non li lancia. È
+`2026_09_24_090000_listino_caffe_iniziale`, e scrive **solo se la tabella è
+vuota** — in produzione il listino c'è già e può essere stato ritoccato dal
+pannello. Dentro ci sono anche i formati che due migration successive
+correggevano (Lyrae da 1 kg, cioccolato da 500 g): tre migration diventate una.
+
+**La regola da ricordare**: prima di compattare, cercare le migration che
+scrivono dati e non solo schema. Quelle vanno riscritte idempotenti, o il
+database nuovo nasce vuoto dove dovrebbe nascere pieno. Qui se ne sono accorti
+nove test.
+
+## Da qui in avanti
+
+Le migration nuove si scrivono come sempre, una per modifica. Quando saranno di
+nuovo tante, si rifà questo giro: si rilegge lo schema, si riscrivono i gruppi,
+si verifica col confronto qui sopra.
