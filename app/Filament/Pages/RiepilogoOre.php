@@ -9,6 +9,7 @@ use App\Filament\Resources\TimeEntryResource;
 use App\Models\LeaveRequest;
 use App\Models\TimeEntry;
 use App\Models\User;
+use App\Support\Presenze\Festivi;
 use App\Support\Presenze\GiornataLavorativa;
 use Barryvdh\DomPDF\Facade\Pdf;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
@@ -216,12 +217,12 @@ class RiepilogoOre extends Page implements HasForms
         $straordinario = $straordinarioGiornaliero + $straordinarioSettimanale;
 
         $ferieGiorni = $leaveRequests->where('type', 'ferie')
-            ->sum(fn (LeaveRequest $lr) => $lr->days);
+            ->sum(fn (LeaveRequest $lr) => $lr->daysWithin($start, $end));
 
         // Malattia mancava dal riepilogo mensile inviato al commercialista:
         // il tipo esiste ed e' richiedibile ma non veniva mai sommato qui.
         $malattiaGiorni = $leaveRequests->where('type', 'malattia')
-            ->sum(fn (LeaveRequest $lr) => $lr->days);
+            ->sum(fn (LeaveRequest $lr) => $lr->daysWithin($start, $end));
 
         $permessiOre = (float) $leaveRequests->where('type', 'permesso')
             ->filter(fn (LeaveRequest $lr) => $lr->date_from->between($start, $end))
@@ -288,6 +289,12 @@ class RiepilogoOre extends Page implements HasForms
                 );
 
                 $inTrasferta = $trasferte->has($key);
+
+                // Sabati, domeniche e festivi non si scalano dalle ferie (vedi
+                // LeaveRequest::daysWithin()): nel dettaglio non vanno segnati.
+                if ($leave?->type === LeaveRequest::TYPE_FERIE && Festivi::isNonLavorativo($day)) {
+                    $leave = null;
+                }
 
                 if ($worked <= 0 && ! $leave && ! $inTrasferta) {
                     continue;

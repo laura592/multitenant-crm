@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\LogsAuditTrail;
+use App\Support\Presenze\Festivi;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -81,7 +82,38 @@ class LeaveRequest extends Model
 
     public function getDaysAttribute(): int
     {
-        return $this->date_from->diffInDays($this->date_to) + 1;
+        return $this->daysWithin();
+    }
+
+    /**
+     * Giorni della richiesta, eventualmente ritagliati su un periodo (il
+     * riepilogo mensile non deve contare i giorni di una richiesta a cavallo
+     * di due mesi due volte). Le ferie si scalano solo nei giorni lavorativi:
+     * 8-18 settembre 2026 sono 9 giorni, non gli 11 di calendario. Neanche i
+     * festivi sono ferie: o sono festa o sono lavorati (Festivi). La malattia
+     * resta a giorni di calendario, come la conta l'INPS.
+     */
+    public function daysWithin(?\Carbon\CarbonInterface $from = null, ?\Carbon\CarbonInterface $to = null): int
+    {
+        $start = $from && $from->gt($this->date_from) ? $from->copy()->startOfDay() : $this->date_from->copy();
+        $end = $to && $to->lt($this->date_to) ? $to->copy()->startOfDay() : $this->date_to->copy();
+
+        if ($start->gt($end)) {
+            return 0;
+        }
+
+        if ($this->type !== self::TYPE_FERIE) {
+            return (int) $start->diffInDays($end) + 1;
+        }
+
+        $days = 0;
+        for ($day = $start; $day->lte($end); $day->addDay()) {
+            if (! Festivi::isNonLavorativo($day)) {
+                $days++;
+            }
+        }
+
+        return $days;
     }
 
     /**
