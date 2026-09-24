@@ -23,11 +23,24 @@ zero) il database si costruisce in **un secondo** invece che in quaranta, e le
 
 ## I dati, che lo schema non porta
 
-Le vecchie migration contenevano anche dei backfill (riempire un campo nuovo
-partendo da uno vecchio). Quei passaggi sono già avvenuti sul database vero, e
-su un database vuoto non avrebbero comunque nulla da spostare. Quello che serve
-a un'installazione nuova — tenant, ruoli, permessi — sta nei **seeder**, dove
-deve stare.
+Lo schema porta le tabelle, non il loro contenuto. Delle 158 migration solo
+**tre** scrivevano dati, e due erano backfill (riempire un campo nuovo partendo
+da uno vecchio): su un database vuoto non avrebbero nulla da spostare.
+
+La terza invece contava: **il listino del caffè**, che entra da una migration e
+non da un seeder perché `update.sh` i seeder non li lancia. Compattando è
+sparito, e nove test lo hanno detto subito. È tornato come
+`2026_09_24_090000_listino_caffe_iniziale`, che scrive **solo se la tabella è
+vuota** — in produzione il listino c'è già, e può essere stato ritoccato dal
+pannello. Ci sono anche i formati che due migration successive correggevano
+(Lyrae da 1 kg, cioccolato da 500 g): tre migration diventate una riga sola.
+
+Quello che serve a un'installazione nuova — tenant, ruoli, permessi — resta nei
+**seeder**, dove deve stare.
+
+**La regola da ricordare**: prima di compattare, cercare le migration che
+scrivono dati, non solo schema. Quelle vanno riscritte come migration nuove e
+idempotenti, o il database nuovo nasce vuoto dove dovrebbe nascere pieno.
 
 ## Rigenerare lo schema
 
