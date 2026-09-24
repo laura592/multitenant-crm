@@ -87,39 +87,81 @@ autenticato verso `mail.alexcaffe.com`.
 
 ## Fase 1 — La VPS, prima che sappia di esistere
 
-Immagine **Ubuntu 26.04 LTS**. Al primo accesso, prima di qualsiasi altra
-cosa:
+> **Aggiornato il 24/09/2026, dopo averci guardato dentro.** Due cose che
+> questo runbook dava per scontate non reggono piu':
+>
+> 1. **PHP 8.4 da pacchetto non esiste su Ubuntu 26.04.** Il PPA ondrej non
+>    copre questa release (l'ultima supportata e' `noble`, la 24.04), e
+>    l'archivio di 26.04 porta **PHP 8.5**. Le due strade erano reinstallare
+>    il sistema con la 24.04, oppure portare il progetto a 8.5: scelta la
+>    seconda. L'unico pacchetto che teneva fermo il progetto era
+>    `pxlrbt/filament-excel` (vedi commit `d7e666b`), ora tolto.
+> 2. **`deploy` non ha sudo utilizzabile, ed e' voluto.** L'utente esiste,
+>    possiede i file dell'app ed e' nel gruppo sudo, ma essendo creato senza
+>    password non puo' usarlo. Le operazioni di sistema si fanno con
+>    `ubuntu`, che sull'immagine OVH ha gia' sudo senza password. Un utente
+>    che fa girare un'applicazione esposta su internet non ha motivo di
+>    poter diventare root.
+
+Stato al 24/09/2026: utente `deploy` creato con le chiavi SSH copiate e
+login verificato. **Tutto il resto qui sotto e' ancora da fare.**
 
 ```bash
-# utente non-root, chiave SSH, niente password
-adduser deploy && usermod -aG sudo deploy
-rsync --archive --chown=deploy:deploy ~/.ssh /home/deploy
-# in /etc/ssh/sshd_config: PasswordAuthentication no, PermitRootLogin no
-systemctl restart ssh
-
-apt update && apt full-upgrade -y
-apt install -y ufw fail2ban
-ufw allow OpenSSH && ufw allow 80 && ufw allow 443 && ufw enable
+# gia' fatto, lasciato come riferimento se si riparte da zero
+sudo adduser --disabled-password --gecos "" deploy
+sudo usermod -aG sudo deploy
+sudo rsync --archive --chown=deploy:deploy ~/.ssh /home/deploy/
+sudo chmod 700 /home/deploy/.ssh
 ```
 
-Lo stack, nativo (il perché è in fondo, §"Perché non Docker"):
+Blindatura SSH — **da fare**, e da fare restando collegata in un secondo
+terminale finche' non hai verificato di riuscire a rientrare:
 
 ```bash
-apt install -y nginx mysql-server supervisor certbot python3-certbot-nginx \
-               git unzip curl
-# PHP 8.4: non dare per scontata la versione in archivio, fissala col PPA
-# ondrej (composer.json chiede ^8.2, ma lo sviluppo gira su 8.4 - vedi
-# docker/8.4 - e la parità con il locale è metà del motivo per cui sei qui).
-add-apt-repository -y ppa:ondrej/php && apt update
-apt install -y php8.4-fpm php8.4-mysql php8.4-mbstring php8.4-xml \
-               php8.4-curl php8.4-zip php8.4-gd php8.4-bcmath php8.4-intl
-# composer + node (per npm run build)
-curl -sS https://getcomposer.org/installer | php8.4 -- --install-dir=/usr/local/bin --filename=composer
-curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt install -y nodejs
+sudo tee /etc/ssh/sshd_config.d/99-blindatura.conf >/dev/null <<EOF
+PasswordAuthentication no
+PermitRootLogin no
+KbdInteractiveAuthentication no
+EOF
+sudo sshd -t && sudo systemctl reload ssh
+```
+
+Aggiornamento, firewall e stack:
+
+```bash
+export DEBIAN_FRONTEND=noninteractive
+sudo apt-get update && sudo apt-get -y full-upgrade
+sudo apt-get install -y ufw fail2ban
+sudo ufw allow OpenSSH && sudo ufw allow 80 && sudo ufw allow 443
+sudo ufw --force enable
+
+sudo apt-get install -y nginx mysql-server supervisor certbot \
+     python3-certbot-nginx git unzip curl
+
+# PHP 8.5: dall'archivio di 26.04, niente PPA
+sudo apt-get install -y php8.5-fpm php8.5-mysql php8.5-mbstring php8.5-xml \
+     php8.5-curl php8.5-zip php8.5-gd php8.5-bcmath php8.5-intl
+
+curl -sS https://getcomposer.org/installer | php8.5 -- \
+     --install-dir=/usr/local/bin --filename=composer
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt-get install -y nodejs
 ```
 
 `gd` e `zip` non sono opzionali: servono a dompdf/TCPDF per i PDF e a
-`pxlrbt/filament-excel` per gli export.
+`maatwebsite/excel` per gli export.
+
+**Il collaudo vero e' qui.** Laravel 12 e Filament 3 su PHP 8.5 non sono mai
+girati: sbloccato non vuol dire verificato, e la suite di test non c'e' piu'
+per dirlo. Appena l'app e' installata, prima di ogni altra cosa:
+
+```bash
+php8.5 artisan about          # deve stampare senza errori
+php8.5 artisan route:list | wc -l
+```
+
+e poi il giro a mano della Fase 2, con attenzione a export Excel e PDF, che
+sono i due punti dove le dipendenze sono cambiate di piu'.
 
 **MySQL solo in locale.** In `/etc/mysql/mysql.conf.d/mysqld.cnf` verifica
 `bind-address = 127.0.0.1` e non aprire mai la 3306 sul firewall. `DB_HOST`
