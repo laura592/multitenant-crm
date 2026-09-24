@@ -91,6 +91,40 @@ class PaganteMacchinaEurekaTest extends TestCase
         $this->assertSame($this->bar->id, $rapportino->fresh()->billing_customer_id, 'Chiuso oggi, resta suo anche domani.');
     }
 
+    public function test_un_pagante_che_non_ha_deciso_nessuno_non_si_congela(): void
+    {
+        // RT-2026-0842 (24/09/2026): chiuso senza pagante sull'impianto, il
+        // giorno dopo l'impianto diventa di Sic SRL e il rapportino restava
+        // indietro. Un pagante che nessuno ha scelto non si scrive sul
+        // documento: si rilegge, e si corregge da solo.
+        $senzaPagante = Customer::create(['tenant_id' => $this->tenant->id, 'company_name' => 'Ristorante Terrazza', 'gestionale_code' => 4242]);
+        $sic = Customer::create(['tenant_id' => $this->tenant->id, 'company_name' => 'Sic SRL', 'gestionale_code' => 4243]);
+
+        $impianto = MachineUnit::create(['tenant_id' => $this->tenant->id, 'serial_number' => 'IMP-SPINA-023', 'model_name' => 'Impianto Spina']);
+        $impianto->moveTo($senzaPagante, placedAt: Carbon::parse('2026-08-18'));
+
+        $tecnico = User::create(['tenant_id' => $this->tenant->id, 'name' => 'T', 'email' => 't2@alex.it', 'password' => bcrypt('x')]);
+        $r = ServiceReport::create([
+            'tenant_id' => $this->tenant->id,
+            'customer_id' => $senzaPagante->id,
+            'technician_id' => $tecnico->id,
+            'machine_unit_id' => $impianto->id,
+            'source' => ServiceReport::SOURCE_MANUALE,
+            'intervention_type' => 'manutenzione',
+            'intervention_date' => '2026-09-23',
+        ]);
+
+        $r->freezeInvoiceRecipient();
+
+        $this->assertNull($r->fresh()->billing_customer_id, 'Nessuno ha deciso: non si scrive niente.');
+        $this->assertSame($senzaPagante->id, $r->fresh()->invoiceRecipient()->id, 'E intanto paga il cliente.');
+
+        // Il giorno dopo l'impianto diventa di Sic: il rapportino si adegua.
+        $impianto->placements()->whereNull('removed_at')->sole()->cambiaPagante($sic);
+
+        $this->assertSame($sic->id, $r->fresh()->invoiceRecipient()->id);
+    }
+
     public function test_se_eureka_indica_un_altro_paga_quello(): void
     {
         $macchina = $this->macchina('V24003882', 580);

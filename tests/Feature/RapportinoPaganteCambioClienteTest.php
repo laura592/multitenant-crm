@@ -66,13 +66,14 @@ class RapportinoPaganteCambioClienteTest extends TestCase
         $giusto = $this->cliente('Perenzin Latteria SRL');
 
         $report = $this->rapportino($sbagliato);
-        // Chiuso alla creazione: il pagante si e' gia' congelato sul cliente
-        // sbagliato, ed e' esattamente lo stato da cui si parte.
-        $this->assertSame($sbagliato->id, $report->fresh()->billing_customer_id);
+        // Nessuno ha deciso un pagante diverso dal cliente: sul documento non
+        // si scrive niente e paga il cliente del rapportino (24/09/2026).
+        $this->assertNull($report->fresh()->billing_customer_id);
+        $this->assertSame($sbagliato->id, $report->fresh()->invoiceRecipient()->id);
 
         $report->update(['customer_id' => $giusto->id]);
 
-        $this->assertSame($giusto->id, $report->fresh()->billing_customer_id);
+        $this->assertNull($report->fresh()->billing_customer_id);
         $this->assertSame('Perenzin Latteria SRL', $report->fresh()->invoiceRecipient()->company_name);
     }
 

@@ -998,11 +998,23 @@ class ServiceReport extends Model
             return;
         }
 
-        // Come invoiceRecipient(): sul rapportino di una macchina decide la
-        // macchina, compreso il "paga il cliente stesso" che dice Eureka.
-        $pagante = $this->machineUnit?->paganteEffettivo() ?? $this->customer->invoiceRecipient();
+        // Si congela solo un pagante DECISO da qualcuno: quello scritto sulla
+        // macchina (o che dice Eureka) o quello dell'anagrafica del cliente.
+        //
+        // Se non l'ha deciso nessuno paga il cliente, ed e' inutile scriverlo
+        // sul documento: scriverlo lo inchioda, e il giorno che qualcuno mette
+        // il pagante sulla macchina il rapportino resta indietro (24/09/2026,
+        // RT-2026-0842: chiuso il 23 senza pagante sull'impianto, il 24
+        // l'impianto diventa di Sic SRL e il rapportino continuava a dire il
+        // cliente). Lasciandolo vuoto, invoiceRecipient() lo rilegge ogni
+        // volta e si corregge da solo.
+        $deciso = $this->machineUnit?->paganteEffettivo() ?? $this->customer->billingCustomer;
 
-        $this->forceFill(['billing_customer_id' => $pagante->id])->saveQuietly();
+        if (! $deciso) {
+            return;
+        }
+
+        $this->forceFill(['billing_customer_id' => $deciso->id])->saveQuietly();
     }
 
     public function getMachineUnitDisplayNameAttribute(): ?string
