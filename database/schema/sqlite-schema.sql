@@ -84,25 +84,27 @@ CREATE TABLE IF NOT EXISTS "tenants"(
   "is_active" tinyint(1) not null default '1',
   "logo_path" varchar,
   "primary_color" varchar,
-  "machine_discount_percent" numeric not null default '30',
-  "default_commission_scenario" varchar check("default_commission_scenario" in('A', 'B', 'C')),
-  "scenario_a_commission_percent" numeric not null default '10',
-  "scenario_b_installation_fee" numeric not null default '1500',
-  "scenario_c_preinstallation_fee" numeric not null default '500',
-  "exclusive_supply_required" tinyint(1) not null default '1',
-  "territory_exclusive" tinyint(1) not null default '0',
-  "territory_notes" text,
-  "contract_start_date" date,
-  "contract_duration_months" integer not null default '36',
-  "notice_period_days" integer not null default '90',
-  "saas_billing_enabled" tinyint(1) not null default '0',
-  "saas_plan_fee" numeric,
-  "saas_billing_cycle" varchar check("saas_billing_cycle" in('monthly', 'annual')),
   "created_at" datetime,
   "updated_at" datetime,
   "sdi" varchar,
   "fax" varchar,
   "notify_staff_emails" text,
+  "notify_information_request_emails" text,
+  "notify_leave_request_emails" text,
+  "notify_quote_emails" text,
+  "notify_quote_group_emails" text,
+  "notify_deadline_emails" text,
+  "notify_customer_gestionale_emails" text,
+  "notify_customer_gestionale_review_emails" text,
+  "notify_gestionale_sync_digest_emails" text,
+  "notify_gestionale_sync_failed_emails" text,
+  "notify_service_report_emails" text,
+  "deleted_at" datetime,
+  "iban" varchar,
+  "notify_lavaggio_emails" text,
+  "client_contact_name" varchar,
+  "client_contact_phone" varchar,
+  "notify_quote_response_emails" text,
   primary key("id")
 );
 CREATE INDEX "tenants_is_active_index" on "tenants"("is_active");
@@ -126,6 +128,10 @@ CREATE TABLE IF NOT EXISTS "users"(
   "two_factor_secret" text,
   "two_factor_recovery_codes" text,
   "two_factor_confirmed_at" datetime,
+  "default_morning_in" time,
+  "default_morning_out" time,
+  "default_afternoon_in" time,
+  "default_afternoon_out" time,
   foreign key("tenant_id") references "tenants"("id") on delete set null,
   primary key("id")
 );
@@ -263,34 +269,6 @@ CREATE TABLE IF NOT EXISTS "payment_methods"(
   primary key("id")
 );
 CREATE UNIQUE INDEX "payment_methods_slug_unique" on "payment_methods"("slug");
-CREATE TABLE IF NOT EXISTS "customers"(
-  "id" varchar not null,
-  "tenant_id" varchar not null,
-  "first_name" varchar,
-  "last_name" varchar,
-  "company_name" varchar,
-  "street" varchar,
-  "postal_code" varchar,
-  "city" varchar,
-  "province" varchar,
-  "tax_code" varchar,
-  "vat_number" varchar,
-  "sdi" varchar,
-  "created_at" datetime,
-  "updated_at" datetime,
-  "latitude" numeric,
-  "longitude" numeric,
-  "source" varchar not null default 'app',
-  "gestionale_code" integer,
-  "approved_for_gestionale_at" datetime,
-  "sent_to_gestionale_at" datetime,
-  "emails" text,
-  "phones" text,
-  "pec" varchar,
-  foreign key("tenant_id") references "tenants"("id") on delete cascade,
-  primary key("id")
-);
-CREATE INDEX "customers_tenant_id_index" on "customers"("tenant_id");
 CREATE TABLE IF NOT EXISTS "quote_groups"(
   "id" varchar not null,
   "tenant_id" varchar not null,
@@ -301,6 +279,11 @@ CREATE TABLE IF NOT EXISTS "quote_groups"(
   "notes" text,
   "created_at" datetime,
   "updated_at" datetime,
+  "deleted_at" datetime,
+  "public_token" varchar,
+  "client_first_viewed_at" datetime,
+  "client_last_viewed_at" datetime,
+  "client_view_count" integer not null default '0',
   foreign key("tenant_id") references "tenants"("id") on delete cascade,
   foreign key("customer_id") references "customers"("id") on delete cascade,
   primary key("id")
@@ -309,42 +292,6 @@ CREATE UNIQUE INDEX "quote_groups_tenant_id_number_unique" on "quote_groups"(
   "tenant_id",
   "number"
 );
-CREATE TABLE IF NOT EXISTS "quotes"(
-  "id" varchar not null,
-  "tenant_id" varchar not null,
-  "quote_group_id" varchar,
-  "customer_id" varchar not null,
-  "number" varchar not null,
-  "date" date not null,
-  "status" varchar not null default 'bozza',
-  "discount" numeric not null default '0',
-  "notes" text,
-  "payment_method" varchar,
-  "subtotal" numeric not null default '0',
-  "tax_total" numeric not null default '0',
-  "total" numeric not null default '0',
-  "commission_scenario" varchar check("commission_scenario" in('A', 'B', 'C')),
-  "commission_rate_snapshot" numeric,
-  "commission_amount" numeric,
-  "commission_direction" varchar check("commission_direction" in('partner_to_master', 'master_to_partner')),
-  "commission_status" varchar check("commission_status" in('da_fatturare', 'fatturata', 'pagata')),
-  "commission_invoice_number" varchar,
-  "commission_invoiced_at" date,
-  "commission_due_at" date,
-  "commission_paid_at" date,
-  "created_at" datetime,
-  "updated_at" datetime,
-  foreign key("tenant_id") references "tenants"("id") on delete cascade,
-  foreign key("quote_group_id") references "quote_groups"("id") on delete set null,
-  foreign key("customer_id") references "customers"("id") on delete cascade,
-  primary key("id")
-);
-CREATE UNIQUE INDEX "quotes_tenant_id_number_unique" on "quotes"(
-  "tenant_id",
-  "number"
-);
-CREATE INDEX "quotes_customer_id_index" on "quotes"("customer_id");
-CREATE INDEX "quotes_commission_status_index" on "quotes"("commission_status");
 CREATE TABLE IF NOT EXISTS "quote_products"(
   "id" varchar not null,
   "quote_id" varchar not null,
@@ -357,6 +304,8 @@ CREATE TABLE IF NOT EXISTS "quote_products"(
   "total" numeric not null default '0',
   "created_at" datetime,
   "updated_at" datetime,
+  "deleted_at" datetime,
+  "contratto_assistenza" varchar,
   foreign key("quote_id") references "quotes"("id") on delete cascade,
   foreign key("product_id") references "products"("id") on delete restrict,
   foreign key("parent_quote_product_id") references "quote_products"("id") on delete cascade,
@@ -378,6 +327,7 @@ CREATE TABLE IF NOT EXISTS "quote_emails"(
   "error_message" text,
   "created_at" datetime,
   "updated_at" datetime,
+  "deleted_at" datetime,
   foreign key("quote_id") references "quotes"("id") on delete cascade,
   foreign key("user_id") references "users"("id") on delete set null,
   primary key("id")
@@ -395,6 +345,7 @@ CREATE TABLE IF NOT EXISTS "quote_group_emails"(
   "error_message" text,
   "created_at" datetime,
   "updated_at" datetime,
+  "deleted_at" datetime,
   foreign key("quote_group_id") references "quote_groups"("id") on delete cascade,
   foreign key("user_id") references "users"("id") on delete set null,
   primary key("id")
@@ -409,10 +360,15 @@ CREATE TABLE IF NOT EXISTS "information_requests"(
   "number" varchar not null,
   "request_details" text,
   "status" varchar not null default 'nuova',
-  "handled_by" varchar,
   "handled_by_user_id" varchar,
   "created_at" datetime,
   "updated_at" datetime,
+  "appointment_at" datetime,
+  "appointment_notes" text,
+  "source" varchar not null default 'crm',
+  "origin_url" varchar,
+  "raw_payload" text,
+  "external_id" varchar,
   foreign key("tenant_id") references "tenants"("id") on delete cascade,
   foreign key("customer_id") references "customers"("id") on delete cascade,
   foreign key("handled_by_user_id") references "users"("id") on delete set null,
@@ -439,75 +395,6 @@ CREATE UNIQUE INDEX "info_request_product_unique" on "information_request_produc
   "information_request_id",
   "product_id"
 );
-CREATE TABLE IF NOT EXISTS "comodato_macchine"(
-  "id" varchar not null,
-  "tenant_id" varchar not null,
-  "customer_id" varchar,
-  "nome_macchina" varchar not null,
-  "costo_macchina" numeric not null,
-  "costo_attrezzatura" numeric not null default '0',
-  "anni_ammortamento" integer not null,
-  "prezzo_annuale_consumabili" numeric not null default '0',
-  "costi_manutenzione_annui" numeric not null default '0',
-  "costo_caffe_per_battitura" numeric not null default '0',
-  "erogazioni_annuali_minime" integer,
-  "erogazioni_previste_annue" integer,
-  "canone_fisso_annuale" numeric not null default '0',
-  "margine_percentuale" numeric not null default '0',
-  "note" text,
-  "created_at" datetime,
-  "updated_at" datetime,
-  foreign key("tenant_id") references "tenants"("id") on delete cascade,
-  foreign key("customer_id") references "customers"("id") on delete set null,
-  primary key("id")
-);
-CREATE INDEX "comodato_macchine_tenant_id_index" on "comodato_macchine"(
-  "tenant_id"
-);
-CREATE TABLE IF NOT EXISTS "service_reports"(
-  "id" varchar not null,
-  "tenant_id" varchar not null,
-  "number" varchar not null,
-  "customer_id" varchar not null,
-  "comodato_macchina_id" varchar,
-  "quote_id" varchar,
-  "machine_product_id" varchar,
-  "machine_serial_number" varchar,
-  "technician_id" varchar not null,
-  "intervention_type" varchar check("intervention_type" in('installazione', 'manutenzione_ordinaria', 'manutenzione_straordinaria', 'riparazione', 'garanzia')) not null,
-  "intervention_date" date not null,
-  "arrival_at" datetime,
-  "departure_at" datetime,
-  "problem_description" text,
-  "work_performed" text,
-  "status" varchar check("status" in('bozza', 'completato', 'firmato', 'inviato')) not null default 'bozza',
-  "customer_signature_path" varchar,
-  "technician_signature_path" varchar,
-  "signed_at" datetime,
-  "notes" text,
-  "created_at" datetime,
-  "updated_at" datetime,
-  foreign key("tenant_id") references "tenants"("id") on delete cascade,
-  foreign key("customer_id") references "customers"("id") on delete cascade,
-  foreign key("comodato_macchina_id") references "comodato_macchine"("id") on delete set null,
-  foreign key("quote_id") references "quotes"("id") on delete set null,
-  foreign key("machine_product_id") references "products"("id") on delete set null,
-  foreign key("technician_id") references "users"("id") on delete restrict,
-  primary key("id")
-);
-CREATE UNIQUE INDEX "service_reports_tenant_id_number_unique" on "service_reports"(
-  "tenant_id",
-  "number"
-);
-CREATE INDEX "service_reports_customer_id_index" on "service_reports"(
-  "customer_id"
-);
-CREATE INDEX "service_reports_technician_id_index" on "service_reports"(
-  "technician_id"
-);
-CREATE INDEX "service_reports_intervention_type_index" on "service_reports"(
-  "intervention_type"
-);
 CREATE TABLE IF NOT EXISTS "service_report_products"(
   "id" varchar not null,
   "service_report_id" varchar not null,
@@ -517,6 +404,7 @@ CREATE TABLE IF NOT EXISTS "service_report_products"(
   "notes" text,
   "created_at" datetime,
   "updated_at" datetime,
+  "deleted_at" datetime,
   foreign key("service_report_id") references "service_reports"("id") on delete cascade,
   foreign key("product_id") references "products"("id") on delete restrict,
   primary key("id")
@@ -536,6 +424,7 @@ CREATE TABLE IF NOT EXISTS "service_report_emails"(
   "error_message" text,
   "created_at" datetime,
   "updated_at" datetime,
+  "deleted_at" datetime,
   foreign key("service_report_id") references "service_reports"("id") on delete cascade,
   foreign key("user_id") references "users"("id") on delete set null,
   primary key("id")
@@ -555,6 +444,8 @@ CREATE TABLE IF NOT EXISTS "time_entries"(
   "notes" text,
   "created_at" datetime,
   "updated_at" datetime,
+  "trasferta" tinyint(1) not null default '0',
+  "destinazione_trasferta" varchar,
   foreign key("tenant_id") references "tenants"("id") on delete cascade,
   foreign key("user_id") references "users"("id") on delete cascade,
   foreign key("entered_by_user_id") references "users"("id") on delete set null,
@@ -580,6 +471,8 @@ CREATE TABLE IF NOT EXISTS "leave_requests"(
   "notes" text,
   "created_at" datetime,
   "updated_at" datetime,
+  "time_from" time,
+  "time_to" time,
   foreign key("tenant_id") references "tenants"("id") on delete cascade,
   foreign key("user_id") references "users"("id") on delete cascade,
   foreign key("approved_by_user_id") references "users"("id") on delete set null,
@@ -606,54 +499,6 @@ CREATE TABLE IF NOT EXISTS "vehicles"(
   primary key("id")
 );
 CREATE INDEX "vehicles_tenant_id_index" on "vehicles"("tenant_id");
-CREATE TABLE IF NOT EXISTS "deadlines"(
-  "id" varchar not null,
-  "tenant_id" varchar not null,
-  "deadlinable_type" varchar not null,
-  "deadlinable_id" varchar not null,
-  "type" varchar check("type" in('assicurazione', 'revisione', 'polizza_rct', 'manutenzione_ordinaria', 'licenza', 'contratto', 'altro')) not null,
-  "due_date" date not null,
-  "reminder_days_before" integer not null default '30',
-  "status" varchar check("status" in('attiva', 'scaduta', 'rinnovata')) not null default 'attiva',
-  "notes" text,
-  "created_at" datetime,
-  "updated_at" datetime,
-  "amount" numeric,
-  "paid_at" date,
-  "policy_number" varchar,
-  foreign key("tenant_id") references "tenants"("id") on delete cascade,
-  primary key("id")
-);
-CREATE INDEX "deadlines_deadlinable_type_deadlinable_id_index" on "deadlines"(
-  "deadlinable_type",
-  "deadlinable_id"
-);
-CREATE INDEX "deadlines_tenant_id_due_date_index" on "deadlines"(
-  "tenant_id",
-  "due_date"
-);
-CREATE INDEX "deadlines_type_index" on "deadlines"("type");
-CREATE TABLE IF NOT EXISTS "maintenance_schedules"(
-  "id" varchar not null,
-  "tenant_id" varchar not null,
-  "customer_id" varchar not null,
-  "comodato_macchina_id" varchar,
-  "frequency" varchar check("frequency" in('mensile', 'trimestrale', 'semestrale', 'annuale')) not null,
-  "last_service_report_id" varchar,
-  "next_due_date" date not null,
-  "notes" text,
-  "created_at" datetime,
-  "updated_at" datetime,
-  foreign key("tenant_id") references "tenants"("id") on delete cascade,
-  foreign key("customer_id") references "customers"("id") on delete cascade,
-  foreign key("comodato_macchina_id") references "comodato_macchine"("id") on delete set null,
-  foreign key("last_service_report_id") references "service_reports"("id") on delete set null,
-  primary key("id")
-);
-CREATE INDEX "maintenance_schedules_tenant_id_next_due_date_index" on "maintenance_schedules"(
-  "tenant_id",
-  "next_due_date"
-);
 CREATE TABLE IF NOT EXISTS "brands"(
   "id" varchar not null,
   "name" varchar not null,
@@ -676,6 +521,10 @@ CREATE TABLE IF NOT EXISTS "products"(
   "created_at" datetime,
   "updated_at" datetime,
   "brand_id" varchar,
+  "gestionale_code" integer,
+  "gestionale_suggested_code" integer,
+  "gestionale_suggested_label" varchar,
+  "eureka_article_id" integer,
   foreign key("product_family_id") references product_families("id") on delete set null on update no action,
   foreign key("category_id") references categories("id") on delete set null on update no action,
   foreign key("tenant_id") references tenants("id") on delete cascade on update no action,
@@ -719,7 +568,6 @@ CREATE TABLE IF NOT EXISTS "product_option_slot_items"(
   "id" varchar not null,
   "slot_id" varchar not null,
   "component_product_id" varchar not null,
-  "price_delta_override" numeric,
   "sort_order" integer not null default '0',
   "created_at" datetime,
   "updated_at" datetime,
@@ -763,49 +611,6 @@ CREATE INDEX "municipality_postal_codes_municipality_name_index" on "municipalit
 );
 CREATE INDEX "municipality_postal_codes_postal_code_index" on "municipality_postal_codes"(
   "postal_code"
-);
-CREATE TABLE IF NOT EXISTS "machine_units"(
-  "id" varchar not null,
-  "tenant_id" varchar not null,
-  "product_id" varchar,
-  "current_customer_id" varchar,
-  "serial_number" varchar not null,
-  "model_name" varchar,
-  "owner_name" varchar not null,
-  "status" varchar check("status" in('in_magazzino', 'installata', 'rimossa')) not null default 'in_magazzino',
-  "notes" text,
-  "created_at" datetime,
-  "updated_at" datetime,
-  foreign key("tenant_id") references "tenants"("id") on delete cascade,
-  foreign key("product_id") references "products"("id") on delete set null,
-  foreign key("current_customer_id") references "customers"("id") on delete set null,
-  primary key("id")
-);
-CREATE UNIQUE INDEX "machine_units_tenant_id_serial_number_unique" on "machine_units"(
-  "tenant_id",
-  "serial_number"
-);
-CREATE INDEX "machine_units_current_customer_id_index" on "machine_units"(
-  "current_customer_id"
-);
-CREATE TABLE IF NOT EXISTS "machine_unit_placements"(
-  "id" varchar not null,
-  "tenant_id" varchar not null,
-  "machine_unit_id" varchar not null,
-  "customer_id" varchar,
-  "placed_at" datetime not null,
-  "removed_at" datetime,
-  "notes" text,
-  "created_at" datetime,
-  "updated_at" datetime,
-  foreign key("tenant_id") references "tenants"("id") on delete cascade,
-  foreign key("machine_unit_id") references "machine_units"("id") on delete cascade,
-  foreign key("customer_id") references "customers"("id") on delete set null,
-  primary key("id")
-);
-CREATE INDEX "machine_unit_placements_machine_unit_id_placed_at_index" on "machine_unit_placements"(
-  "machine_unit_id",
-  "placed_at"
 );
 CREATE TABLE IF NOT EXISTS "material_order_items"(
   "id" varchar not null,
@@ -855,6 +660,10 @@ CREATE TABLE IF NOT EXISTS "materials"(
   "created_at" datetime,
   "updated_at" datetime,
   "supplier_id" varchar,
+  "source" varchar not null default 'manuale',
+  "gestionale_code" integer,
+  "list_price" numeric,
+  "maintenance_code" varchar,
   foreign key("tenant_id") references tenants("id") on delete cascade on update no action,
   foreign key("supplier_id") references "suppliers"("id") on delete set null,
   primary key("id")
@@ -870,7 +679,6 @@ CREATE TABLE IF NOT EXISTS "material_orders"(
   "updated_at" datetime,
   "number" varchar,
   "supplier_id" varchar,
-  "status" varchar check("status" in('bozza', 'inviato', 'ricevuto')) not null default 'bozza',
   foreign key("tenant_id") references tenants("id") on delete cascade on update no action,
   foreign key("supplier_id") references "suppliers"("id") on delete set null,
   primary key("id")
@@ -881,25 +689,6 @@ CREATE INDEX "material_orders_tenant_id_index" on "material_orders"(
 CREATE UNIQUE INDEX "material_orders_tenant_id_number_unique" on "material_orders"(
   "tenant_id",
   "number"
-);
-CREATE TABLE IF NOT EXISTS "material_order_emails"(
-  "id" varchar not null,
-  "material_order_id" varchar not null,
-  "user_id" varchar,
-  "recipient_email" varchar not null,
-  "cc_email" varchar,
-  "subject" varchar not null,
-  "message" text,
-  "status" varchar not null default 'sent',
-  "error_message" text,
-  "created_at" datetime,
-  "updated_at" datetime,
-  foreign key("material_order_id") references "material_orders"("id") on delete cascade,
-  foreign key("user_id") references "users"("id") on delete set null,
-  primary key("id")
-);
-CREATE INDEX "material_order_emails_material_order_id_index" on "material_order_emails"(
-  "material_order_id"
 );
 CREATE TABLE IF NOT EXISTS "breezy_sessions"(
   "id" integer primary key autoincrement not null,
@@ -965,6 +754,7 @@ CREATE TABLE IF NOT EXISTS "price_lists"(
   "notes" text,
   "created_at" datetime,
   "updated_at" datetime,
+  "category" varchar not null default 'listino',
   foreign key("tenant_id") references "tenants"("id") on delete cascade,
   foreign key("supplier_id") references "suppliers"("id") on delete set null,
   primary key("id")
@@ -974,9 +764,134 @@ CREATE INDEX "price_lists_valid_from_valid_to_index" on "price_lists"(
   "valid_from",
   "valid_to"
 );
-CREATE INDEX "customers_source_index" on "customers"("source");
+CREATE TABLE IF NOT EXISTS "deadlines"(
+  "id" varchar not null,
+  "tenant_id" varchar not null,
+  "deadlinable_type" varchar not null,
+  "deadlinable_id" varchar not null,
+  "type" varchar check("type" in('assicurazione', 'bollo', 'revisione', 'polizza_rct', 'manutenzione_ordinaria', 'licenza', 'contratto', 'altro')) not null,
+  "due_date" date not null,
+  "reminder_days_before" integer not null default('30'),
+  "status" varchar not null default('attiva'),
+  "created_at" datetime,
+  "updated_at" datetime,
+  "policy_number" varchar,
+  foreign key("tenant_id") references tenants("id") on delete cascade on update no action,
+  primary key("id")
+);
+CREATE INDEX "deadlines_deadlinable_type_deadlinable_id_index" on "deadlines"(
+  "deadlinable_type",
+  "deadlinable_id"
+);
+CREATE INDEX "deadlines_tenant_id_due_date_index" on "deadlines"(
+  "tenant_id",
+  "due_date"
+);
+CREATE INDEX "deadlines_type_index" on "deadlines"("type");
+CREATE INDEX "products_eureka_article_id_index" on "products"(
+  "eureka_article_id"
+);
+CREATE INDEX "materials_gestionale_code_index" on "materials"(
+  "gestionale_code"
+);
+CREATE TABLE IF NOT EXISTS "service_report_materials"(
+  "id" varchar not null,
+  "service_report_id" varchar not null,
+  "material_id" varchar not null,
+  "quantity" numeric not null default '1',
+  "unit_cost_snapshot" numeric,
+  "notes" text,
+  "created_at" datetime,
+  "updated_at" datetime,
+  "deleted_at" datetime,
+  "line_total_snapshot" numeric,
+  foreign key("service_report_id") references "service_reports"("id") on delete cascade,
+  foreign key("material_id") references "materials"("id") on delete restrict,
+  primary key("id")
+);
+CREATE INDEX "service_report_materials_service_report_id_index" on "service_report_materials"(
+  "service_report_id"
+);
+CREATE TABLE IF NOT EXISTS "customers"(
+  "id" varchar not null,
+  "tenant_id" varchar not null,
+  "first_name" varchar,
+  "last_name" varchar,
+  "company_name" varchar,
+  "street" varchar,
+  "postal_code" varchar,
+  "city" varchar,
+  "province" varchar,
+  "tax_code" varchar,
+  "vat_number" varchar,
+  "sdi" varchar,
+  "created_at" datetime,
+  "updated_at" datetime,
+  "latitude" numeric,
+  "longitude" numeric,
+  "source" varchar not null default('app'),
+  "gestionale_code" integer,
+  "approved_for_gestionale_at" datetime,
+  "sent_to_gestionale_at" datetime,
+  "emails" text,
+  "phones" text,
+  "pec" varchar,
+  "website" varchar,
+  "website_checked_at" datetime,
+  "billing_customer_id" varchar,
+  "gestionale_review_flagged_at" datetime,
+  "gestionale_review_note" text,
+  "gestionale_suggested_code" integer,
+  "gestionale_suggested_label" varchar,
+  "deleted_at" datetime,
+  "consent_privacy_at" datetime,
+  "consent_marketing_at" datetime,
+  "consent_source" varchar,
+  "eureka_note" text,
+  foreign key("billing_customer_id") references customers("id") on delete set null on update no action,
+  foreign key("tenant_id") references tenants("id") on delete cascade on update no action,
+  primary key("id")
+);
 CREATE UNIQUE INDEX "customers_gestionale_code_unique" on "customers"(
   "gestionale_code"
+);
+CREATE INDEX "customers_source_index" on "customers"("source");
+CREATE INDEX "customers_tenant_id_index" on "customers"("tenant_id");
+CREATE TABLE IF NOT EXISTS "maintenance_schedules"(
+  "id" varchar not null,
+  "tenant_id" varchar not null,
+  "customer_id" varchar not null,
+  "frequency" varchar,
+  "last_service_report_id" varchar,
+  "next_due_date" date,
+  "notes" text,
+  "created_at" datetime,
+  "updated_at" datetime,
+  "type" varchar not null default('manutenzione'),
+  "frequency_days" integer,
+  "last_lavaggio_id" varchar,
+  "status" varchar not null default('attivo'),
+  "beverage_type" varchar,
+  "filter_validity_days" integer,
+  "last_filter_change_id" varchar,
+  "machine_unit_id" varchar,
+  "lines_count" integer,
+  foreign key("last_lavaggio_id") references lavaggi("id") on delete set null on update no action,
+  foreign key("tenant_id") references tenants("id") on delete cascade on update no action,
+  foreign key("customer_id") references customers("id") on delete cascade on update no action,
+  foreign key("last_service_report_id") references service_reports("id") on delete set null on update no action,
+  foreign key("last_filter_change_id") references lavaggi("id") on delete set null on update no action,
+  foreign key("machine_unit_id") references "machine_units"("id") on delete set null,
+  primary key("id")
+);
+CREATE INDEX "maintenance_schedules_tenant_id_next_due_date_index" on "maintenance_schedules"(
+  "tenant_id",
+  "next_due_date"
+);
+CREATE INDEX "maintenance_schedules_tenant_id_type_next_due_date_index" on "maintenance_schedules"(
+  "tenant_id",
+  "type",
+  "next_due_date"
 );
 CREATE TABLE IF NOT EXISTS "lavaggi"(
   "id" varchar not null,
@@ -985,19 +900,534 @@ CREATE TABLE IF NOT EXISTS "lavaggi"(
   "machine_unit_id" varchar,
   "data" date not null,
   "descrizione" varchar not null,
-  "note" text,
   "created_at" datetime,
   "updated_at" datetime,
-  foreign key("tenant_id") references "tenants"("id") on delete cascade,
-  foreign key("customer_id") references "customers"("id") on delete cascade,
-  foreign key("machine_unit_id") references "machine_units"("id") on delete set null,
+  "maintenance_schedule_id" varchar,
+  "filtro_sostituito" tinyint(1) not null default('0'),
+  "service_report_id" varchar,
+  "lines_washed" integer,
+  foreign key("maintenance_schedule_id") references maintenance_schedules("id") on delete set null on update no action,
+  foreign key("tenant_id") references tenants("id") on delete cascade on update no action,
+  foreign key("customer_id") references customers("id") on delete cascade on update no action,
+  foreign key("machine_unit_id") references machine_units("id") on delete set null on update no action,
+  foreign key("service_report_id") references "service_reports"("id") on delete cascade,
   primary key("id")
 );
+CREATE INDEX "lavaggi_data_index" on "lavaggi"("data");
 CREATE INDEX "lavaggi_tenant_id_customer_id_index" on "lavaggi"(
   "tenant_id",
   "customer_id"
 );
-CREATE INDEX "lavaggi_data_index" on "lavaggi"("data");
+CREATE UNIQUE INDEX "lavaggi_service_report_id_maintenance_schedule_id_unique" on "lavaggi"(
+  "service_report_id",
+  "maintenance_schedule_id"
+);
+CREATE TABLE IF NOT EXISTS "service_report_maintenance_schedule"(
+  "service_report_id" varchar not null,
+  "maintenance_schedule_id" varchar not null,
+  foreign key("service_report_id") references "service_reports"("id") on delete cascade,
+  foreign key("maintenance_schedule_id") references "maintenance_schedules"("id") on delete cascade,
+  primary key("service_report_id", "maintenance_schedule_id")
+);
+CREATE TABLE IF NOT EXISTS "information_request_notes"(
+  "id" varchar not null,
+  "tenant_id" varchar not null,
+  "information_request_id" varchar not null,
+  "logged_at" date not null,
+  "body" text not null,
+  "created_at" datetime,
+  "updated_at" datetime,
+  foreign key("tenant_id") references "tenants"("id") on delete cascade,
+  foreign key("information_request_id") references "information_requests"("id") on delete cascade,
+  primary key("id")
+);
+CREATE INDEX "information_request_notes_information_request_id_index" on "information_request_notes"(
+  "information_request_id"
+);
+CREATE TABLE IF NOT EXISTS "tour_views"(
+  "id" varchar not null,
+  "user_id" varchar not null,
+  "tenant_id" varchar not null,
+  "page_slug" varchar not null,
+  "viewed_at" datetime not null,
+  "created_at" datetime,
+  "updated_at" datetime,
+  foreign key("user_id") references "users"("id") on delete cascade,
+  foreign key("tenant_id") references "tenants"("id") on delete cascade,
+  primary key("id")
+);
+CREATE UNIQUE INDEX "tour_views_user_id_page_slug_unique" on "tour_views"(
+  "user_id",
+  "page_slug"
+);
+CREATE UNIQUE INDEX "information_requests_tenant_id_external_id_unique" on "information_requests"(
+  "tenant_id",
+  "external_id"
+);
+CREATE TABLE IF NOT EXISTS "quotes"(
+  "id" varchar not null,
+  "tenant_id" varchar not null,
+  "quote_group_id" varchar,
+  "customer_id" varchar not null,
+  "number" varchar not null,
+  "date" date not null,
+  "status" varchar not null default('bozza'),
+  "discount" numeric not null default('0'),
+  "notes" text,
+  "payment_method" varchar,
+  "subtotal" numeric not null default('0'),
+  "tax_total" numeric not null default('0'),
+  "total" numeric not null default('0'),
+  "created_at" datetime,
+  "updated_at" datetime,
+  "rental_monthly_fee" numeric,
+  "rental_months" integer,
+  "deleted_at" datetime,
+  "information_request_id" varchar,
+  "billing_customer_id" varchar,
+  "extra_discount" numeric not null default '0',
+  "public_token" varchar,
+  "client_first_viewed_at" datetime,
+  "client_last_viewed_at" datetime,
+  "client_view_count" integer not null default '0',
+  foreign key("information_request_id") references information_requests("id") on delete set null on update no action,
+  foreign key("tenant_id") references tenants("id") on delete cascade on update no action,
+  foreign key("quote_group_id") references quote_groups("id") on delete set null on update no action,
+  foreign key("customer_id") references customers("id") on delete cascade on update no action,
+  foreign key("billing_customer_id") references "customers"("id") on delete set null,
+  primary key("id")
+);
+CREATE INDEX "quotes_customer_id_index" on "quotes"("customer_id");
+CREATE UNIQUE INDEX "quotes_tenant_id_number_unique" on "quotes"(
+  "tenant_id",
+  "number"
+);
+CREATE TABLE IF NOT EXISTS "eureka_partite_aperte"(
+  "id" varchar not null,
+  "tenant_id" varchar not null,
+  "tipo" varchar not null,
+  "gestionale_code" integer not null,
+  "customer_id" varchar,
+  "ragione_sociale" varchar,
+  "anno" integer not null,
+  "numero_fattura" varchar,
+  "data_fattura" date,
+  "data_scadenza" date,
+  "saldo" numeric not null,
+  "created_at" datetime,
+  "updated_at" datetime,
+  "tipo_pagamento" varchar,
+  foreign key("tenant_id") references "tenants"("id") on delete cascade,
+  foreign key("customer_id") references "customers"("id") on delete set null,
+  primary key("id")
+);
+CREATE INDEX "eureka_partite_aperte_tenant_id_tipo_index" on "eureka_partite_aperte"(
+  "tenant_id",
+  "tipo"
+);
+CREATE INDEX "eureka_partite_aperte_tenant_id_data_scadenza_index" on "eureka_partite_aperte"(
+  "tenant_id",
+  "data_scadenza"
+);
+CREATE INDEX "eureka_partite_aperte_customer_id_index" on "eureka_partite_aperte"(
+  "customer_id"
+);
+CREATE TABLE IF NOT EXISTS "eureka_fatture"(
+  "id" varchar not null,
+  "tenant_id" varchar not null,
+  "tipo" varchar not null,
+  "id_eureka" integer not null,
+  "gestionale_code" integer,
+  "customer_id" varchar,
+  "ragione_sociale" varchar,
+  "partita_iva" varchar,
+  "numero_doc" varchar,
+  "data_doc" date,
+  "totale_doc" numeric not null default '0',
+  "imponibile" numeric not null default '0',
+  "pagamento" varchar,
+  "causale" varchar,
+  "id_b10_origine" integer,
+  "created_at" datetime,
+  "updated_at" datetime,
+  "e_acconto" tinyint(1) not null default '0',
+  "detrae_acconto_numero" varchar,
+  "detrazione_ambigua" tinyint(1) not null default '0',
+  foreign key("tenant_id") references "tenants"("id") on delete cascade,
+  foreign key("customer_id") references "customers"("id") on delete set null,
+  primary key("id")
+);
+CREATE UNIQUE INDEX "eureka_fatture_tenant_id_tipo_id_eureka_unique" on "eureka_fatture"(
+  "tenant_id",
+  "tipo",
+  "id_eureka"
+);
+CREATE INDEX "eureka_fatture_tenant_id_tipo_data_doc_index" on "eureka_fatture"(
+  "tenant_id",
+  "tipo",
+  "data_doc"
+);
+CREATE INDEX "eureka_fatture_customer_id_index" on "eureka_fatture"(
+  "customer_id"
+);
+CREATE TABLE IF NOT EXISTS "eureka_saldi_anagrafiche"(
+  "id" varchar not null,
+  "tenant_id" varchar not null,
+  "tipo" varchar not null,
+  "gestionale_code" integer not null,
+  "ragione_sociale" varchar,
+  "saldo" numeric not null,
+  "created_at" datetime,
+  "updated_at" datetime,
+  foreign key("tenant_id") references "tenants"("id") on delete cascade,
+  primary key("id")
+);
+CREATE UNIQUE INDEX "eureka_saldi_anagrafiche_tenant_id_tipo_gestionale_code_unique" on "eureka_saldi_anagrafiche"(
+  "tenant_id",
+  "tipo",
+  "gestionale_code"
+);
+CREATE TABLE IF NOT EXISTS "eureka_fatturato_mesi"(
+  "id" varchar not null,
+  "tenant_id" varchar not null,
+  "tipo" varchar not null,
+  "anno" integer not null,
+  "mese" integer not null,
+  "dare" numeric not null default '0',
+  "avere" numeric not null default '0',
+  "netto" numeric not null default '0',
+  "created_at" datetime,
+  "updated_at" datetime,
+  foreign key("tenant_id") references "tenants"("id") on delete cascade,
+  primary key("id")
+);
+CREATE UNIQUE INDEX "eureka_fatturato_mesi_tenant_id_tipo_anno_mese_unique" on "eureka_fatturato_mesi"(
+  "tenant_id",
+  "tipo",
+  "anno",
+  "mese"
+);
+CREATE TABLE IF NOT EXISTS "eureka_cashflow_mesi"(
+  "id" varchar not null,
+  "tenant_id" varchar not null,
+  "anno" integer not null,
+  "mese" integer not null,
+  "entrate" numeric not null default '0',
+  "uscite" numeric not null default '0',
+  "entrate_ftc" numeric not null default '0',
+  "entrate_oc" numeric not null default '0',
+  "entrate_bc" numeric not null default '0',
+  "uscite_ftf" numeric not null default '0',
+  "uscite_of" numeric not null default '0',
+  "uscite_bf" numeric not null default '0',
+  "saldo_mese" numeric not null default '0',
+  "saldo_progressivo" numeric not null default '0',
+  "created_at" datetime,
+  "updated_at" datetime,
+  foreign key("tenant_id") references "tenants"("id") on delete cascade,
+  primary key("id")
+);
+CREATE UNIQUE INDEX "eureka_cashflow_mesi_tenant_id_anno_mese_unique" on "eureka_cashflow_mesi"(
+  "tenant_id",
+  "anno",
+  "mese"
+);
+CREATE TABLE IF NOT EXISTS "eureka_cashflow_voci"(
+  "id" varchar not null,
+  "tenant_id" varchar not null,
+  "anno" integer not null,
+  "mese" integer not null,
+  "data_documento" date,
+  "data_scadenza" date,
+  "numero" varchar,
+  "descrizione" varchar,
+  "tipo" varchar,
+  "importo_totale" numeric not null default '0',
+  "importo" numeric not null default '0',
+  "created_at" datetime,
+  "updated_at" datetime,
+  foreign key("tenant_id") references "tenants"("id") on delete cascade,
+  primary key("id")
+);
+CREATE INDEX "eureka_cashflow_voci_tenant_id_anno_mese_index" on "eureka_cashflow_voci"(
+  "tenant_id",
+  "anno",
+  "mese"
+);
+CREATE TABLE IF NOT EXISTS "prodotti_caffe"(
+  "id" varchar not null,
+  "gruppo" varchar not null,
+  "nome" varchar not null,
+  "formato" varchar,
+  "prezzo" numeric not null,
+  "ordinamento" integer not null default '0',
+  "attivo" tinyint(1) not null default '1',
+  "created_at" datetime,
+  "updated_at" datetime,
+  primary key("id")
+);
+CREATE TABLE IF NOT EXISTS "offerte_caffe"(
+  "id" varchar not null,
+  "tenant_id" varchar not null,
+  "customer_id" varchar not null,
+  "user_id" varchar,
+  "number" varchar not null,
+  "date" date not null,
+  "valida_fino" date,
+  "righe" text not null,
+  "note" text,
+  "status" varchar not null default 'bozza',
+  "created_at" datetime,
+  "updated_at" datetime,
+  "deleted_at" datetime,
+  foreign key("tenant_id") references "tenants"("id") on delete cascade,
+  foreign key("customer_id") references "customers"("id") on delete cascade,
+  foreign key("user_id") references "users"("id") on delete set null,
+  primary key("id")
+);
+CREATE INDEX "offerte_caffe_tenant_id_number_index" on "offerte_caffe"(
+  "tenant_id",
+  "number"
+);
+CREATE TABLE IF NOT EXISTS "offerta_caffe_emails"(
+  "id" varchar not null,
+  "offerta_caffe_id" varchar not null,
+  "user_id" varchar,
+  "inviata_con" varchar,
+  "recipient_email" varchar not null,
+  "cc_email" varchar,
+  "subject" varchar,
+  "message" text,
+  "status" varchar not null default 'sent',
+  "error_message" text,
+  "created_at" datetime,
+  "updated_at" datetime,
+  foreign key("offerta_caffe_id") references "offerte_caffe"("id") on delete cascade,
+  foreign key("user_id") references "users"("id") on delete set null,
+  primary key("id")
+);
+CREATE INDEX "price_lists_category_index" on "price_lists"("category");
+CREATE UNIQUE INDEX "quotes_public_token_unique" on "quotes"("public_token");
+CREATE UNIQUE INDEX "quote_groups_public_token_unique" on "quote_groups"(
+  "public_token"
+);
+CREATE TABLE IF NOT EXISTS "quote_responses"(
+  "id" varchar not null,
+  "tenant_id" varchar,
+  "quote_id" varchar,
+  "quote_group_id" varchar,
+  "type" varchar not null,
+  "signer_name" varchar,
+  "signer_role" varchar,
+  "email" varchar,
+  "phone" varchar,
+  "preferred_time" varchar,
+  "reason" varchar,
+  "message" text,
+  "signature_path" varchar,
+  "accepted_pdf_path" varchar,
+  "accepted_pdf_sha256" varchar,
+  "ip_address" varchar,
+  "user_agent" varchar,
+  "handled_at" datetime,
+  "handled_by" varchar,
+  "created_at" datetime,
+  "updated_at" datetime,
+  foreign key("tenant_id") references "tenants"("id") on delete set null,
+  foreign key("quote_id") references "quotes"("id") on delete set null,
+  foreign key("quote_group_id") references "quote_groups"("id") on delete set null,
+  foreign key("handled_by") references "users"("id") on delete set null,
+  primary key("id")
+);
+CREATE INDEX "quote_responses_type_handled_at_index" on "quote_responses"(
+  "type",
+  "handled_at"
+);
+CREATE TABLE IF NOT EXISTS "machine_unit_placements"(
+  "id" varchar not null,
+  "tenant_id" varchar not null,
+  "machine_unit_id" varchar not null,
+  "customer_id" varchar,
+  "placed_at" datetime not null,
+  "removed_at" datetime,
+  "notes" text,
+  "created_at" datetime,
+  "updated_at" datetime,
+  "deleted_at" datetime,
+  "billing_customer_id" varchar,
+  "eureka_billing_customer_code" integer,
+  foreign key("customer_id") references customers("id") on delete set null on update no action,
+  foreign key("machine_unit_id") references machine_units("id") on delete cascade on update no action,
+  foreign key("tenant_id") references tenants("id") on delete cascade on update no action,
+  foreign key("billing_customer_id") references "customers"("id") on delete set null,
+  primary key("id")
+);
+CREATE INDEX "machine_unit_placements_machine_unit_id_placed_at_index" on "machine_unit_placements"(
+  "machine_unit_id",
+  "placed_at"
+);
+CREATE TABLE IF NOT EXISTS "esecuzioni_eureka"(
+  "id" integer primary key autoincrement not null,
+  "comando" varchar not null,
+  "avviata_il" datetime not null,
+  "finita_il" datetime,
+  "esito" varchar not null default 'in_corso',
+  "riepilogo" text,
+  "errore" text,
+  "created_at" datetime,
+  "updated_at" datetime
+);
+CREATE INDEX "esecuzioni_eureka_comando_avviata_il_index" on "esecuzioni_eureka"(
+  "comando",
+  "avviata_il"
+);
+CREATE INDEX "esecuzioni_eureka_comando_index" on "esecuzioni_eureka"(
+  "comando"
+);
+CREATE TABLE IF NOT EXISTS "service_reports"(
+  "id" varchar not null,
+  "tenant_id" varchar not null,
+  "number" varchar not null,
+  "customer_id" varchar not null,
+  "quote_id" varchar,
+  "machine_product_id" varchar,
+  "machine_serial_number" varchar,
+  "technician_id" varchar not null,
+  "intervention_type" varchar not null,
+  "intervention_date" date not null,
+  "arrival_at" datetime,
+  "departure_at" datetime,
+  "problem_description" text,
+  "work_performed" text,
+  "status" varchar not null default('bozza'),
+  "customer_signature_path" varchar,
+  "technician_signature_path" varchar,
+  "signed_at" datetime,
+  "notes" text,
+  "created_at" datetime,
+  "updated_at" datetime,
+  "machine_unit_id" varchar,
+  "gestionale_scheda_lavoro_id" integer,
+  "gestionale_sync_status" varchar,
+  "gestionale_sync_error" text,
+  "gestionale_synced_at" datetime,
+  "eureka_service_report_id" integer,
+  "customer_signature_name" varchar,
+  "deleted_at" datetime,
+  "source" varchar not null default('manuale'),
+  "gestionale_number" varchar,
+  "gestionale_document_date" date,
+  "eureka_destinazione_code" integer,
+  "eureka_destinazione_label" varchar,
+  "eureka_stato_documento" integer,
+  "eureka_stato_label" varchar,
+  "machine_material_id" varchar,
+  "billing_customer_id" varchar,
+  "lavaggio_vie_count" integer,
+  "duplicato_suggerito_id" varchar,
+  "duplicato_suggerito_motivo" varchar,
+  "eureka_fatture" text,
+  "eureka_fatturato_il" date,
+  "eureka_fatture_controllate_il" datetime,
+  "eureka_fattura_motivo" varchar,
+  "eureka_fattura_indizio" varchar,
+  "visita_id" varchar,
+  "pagante_fattura_customer_id" varchar,
+  "pagante_fattura_rilevato_il" datetime,
+  "pagante_fattura_ok" varchar,
+  foreign key("duplicato_suggerito_id") references service_reports("id") on delete set null on update no action,
+  foreign key("machine_material_id") references materials("id") on delete set null on update no action,
+  foreign key("machine_unit_id") references machine_units("id") on delete set null on update no action,
+  foreign key("tenant_id") references tenants("id") on delete cascade on update no action,
+  foreign key("customer_id") references customers("id") on delete cascade on update no action,
+  foreign key("quote_id") references quotes("id") on delete set null on update no action,
+  foreign key("machine_product_id") references products("id") on delete set null on update no action,
+  foreign key("technician_id") references users("id") on delete restrict on update no action,
+  foreign key("billing_customer_id") references customers("id") on delete set null on update no action,
+  foreign key("pagante_fattura_customer_id") references "customers"("id") on delete set null,
+  primary key("id")
+);
+CREATE INDEX "service_reports_customer_id_index" on "service_reports"(
+  "customer_id"
+);
+CREATE INDEX "service_reports_eureka_service_report_id_index" on "service_reports"(
+  "eureka_service_report_id"
+);
+CREATE INDEX "service_reports_intervention_type_index" on "service_reports"(
+  "intervention_type"
+);
+CREATE INDEX "service_reports_technician_id_index" on "service_reports"(
+  "technician_id"
+);
+CREATE INDEX "service_reports_tenant_id_eureka_fattura_motivo_index" on "service_reports"(
+  "tenant_id",
+  "eureka_fattura_motivo"
+);
+CREATE INDEX "service_reports_tenant_id_eureka_fatturato_il_index" on "service_reports"(
+  "tenant_id",
+  "eureka_fatturato_il"
+);
+CREATE UNIQUE INDEX "service_reports_tenant_id_number_unique" on "service_reports"(
+  "tenant_id",
+  "number"
+);
+CREATE INDEX "service_reports_visita_id_index" on "service_reports"(
+  "visita_id"
+);
+CREATE INDEX "sr_status_index" on "service_reports"("status");
+CREATE INDEX "sr_tenant_data_index" on "service_reports"(
+  "tenant_id",
+  "intervention_date"
+);
+CREATE TABLE IF NOT EXISTS "machine_units"(
+  "id" varchar not null,
+  "tenant_id" varchar not null,
+  "product_id" varchar,
+  "current_customer_id" varchar,
+  "serial_number" varchar not null,
+  "model_name" varchar,
+  "status" varchar not null default('in_magazzino'),
+  "notes" text,
+  "created_at" datetime,
+  "updated_at" datetime,
+  "billing_customer_id" varchar,
+  "gestionale_code" integer,
+  "gestionale_suggested_code" integer,
+  "gestionale_suggested_label" varchar,
+  "source" varchar not null default('manuale'),
+  "deleted_at" datetime,
+  "type" varchar,
+  "eureka_billing_customer_code" integer,
+  "material_id" varchar,
+  "fusione_suggerita_id" varchar,
+  "fusione_suggerita_motivo" varchar,
+  "maintenance_code" varchar,
+  "spostamento_suggerito_customer_id" varchar,
+  "spostamento_suggerito_il" date,
+  "spostamento_suggerito_motivo" varchar,
+  "spostamento_scartato" varchar,
+  "spostamento_suggerito_pagante_code" integer,
+  "fusa_in_id" varchar,
+  foreign key("spostamento_suggerito_customer_id") references customers("id") on delete set null on update no action,
+  foreign key("material_id") references materials("id") on delete set null on update no action,
+  foreign key("current_customer_id") references customers("id") on delete set null on update no action,
+  foreign key("product_id") references products("id") on delete set null on update no action,
+  foreign key("tenant_id") references tenants("id") on delete cascade on update no action,
+  foreign key("billing_customer_id") references customers("id") on delete set null on update no action,
+  foreign key("fusione_suggerita_id") references machine_units("id") on delete set null on update no action,
+  foreign key("fusa_in_id") references "machine_units"("id") on delete set null,
+  primary key("id")
+);
+CREATE INDEX "machine_units_billing_customer_id_index" on "machine_units"(
+  "billing_customer_id"
+);
+CREATE INDEX "machine_units_current_customer_id_index" on "machine_units"(
+  "current_customer_id"
+);
+CREATE UNIQUE INDEX "machine_units_tenant_id_serial_number_unique" on "machine_units"(
+  "tenant_id",
+  "serial_number"
+);
 
 INSERT INTO migrations VALUES(1,'0001_01_01_000000_create_users_table',1);
 INSERT INTO migrations VALUES(2,'0001_01_01_000001_create_cache_table',1);
@@ -1045,3 +1475,116 @@ INSERT INTO migrations VALUES(43,'2026_07_22_140000_add_notify_staff_emails_to_t
 INSERT INTO migrations VALUES(44,'2026_07_22_152102_add_source_and_gestionale_sync_to_customers_table',1);
 INSERT INTO migrations VALUES(45,'2026_07_22_154706_create_lavaggi_table',1);
 INSERT INTO migrations VALUES(46,'2026_07_23_090000_add_multi_contact_fields_to_customers_table',1);
+INSERT INTO migrations VALUES(47,'2026_07_23_080917_add_website_fields_to_customers_table',2);
+INSERT INTO migrations VALUES(48,'2026_07_23_154200_add_bollo_to_deadlines_type_enum',2);
+INSERT INTO migrations VALUES(49,'2026_07_24_090000_add_rental_fields_to_quotes_table',2);
+INSERT INTO migrations VALUES(50,'2026_07_24_100000_add_lavaggio_schedule_to_customers_table',2);
+INSERT INTO migrations VALUES(51,'2026_07_24_120000_add_billing_customer_id_to_customers_table',2);
+INSERT INTO migrations VALUES(52,'2026_07_24_171000_add_notification_recipient_groups_to_tenants_table',2);
+INSERT INTO migrations VALUES(53,'2026_07_26_130000_add_legacy_id_for_reimportable_tables',2);
+INSERT INTO migrations VALUES(54,'2026_07_27_150000_merge_lavaggio_into_maintenance_schedules',2);
+INSERT INTO migrations VALUES(55,'2026_07_27_160000_add_default_shift_times_to_users_table',2);
+INSERT INTO migrations VALUES(56,'2026_07_27_170000_add_billing_customer_id_to_machine_units_table',2);
+INSERT INTO migrations VALUES(57,'2026_07_27_170100_add_machine_unit_id_to_service_reports_table',2);
+INSERT INTO migrations VALUES(58,'2026_07_28_090000_add_gestionale_eureka_credentials_to_tenants_table',2);
+INSERT INTO migrations VALUES(59,'2026_07_28_090100_add_gestionale_code_to_products_table',2);
+INSERT INTO migrations VALUES(60,'2026_07_28_090200_add_gestionale_sync_to_service_reports_table',2);
+INSERT INTO migrations VALUES(61,'2026_07_28_100000_add_notify_deadline_emails_to_tenants_table',2);
+INSERT INTO migrations VALUES(62,'2026_07_30_083758_add_status_and_nullable_due_date_to_maintenance_schedules_table',2);
+INSERT INTO migrations VALUES(63,'2026_07_30_090000_add_notify_customer_gestionale_emails_to_tenants_table',2);
+INSERT INTO migrations VALUES(64,'2026_07_30_090100_add_gestionale_review_to_customers_table',2);
+INSERT INTO migrations VALUES(65,'2026_07_30_100000_add_gestionale_suggested_code_to_customers_and_products',2);
+INSERT INTO migrations VALUES(66,'2026_07_31_090000_add_gestionale_code_to_machine_units_table',2);
+INSERT INTO migrations VALUES(67,'2026_08_02_090000_add_gestionale_suggested_label_to_customers_products_machine_units',2);
+INSERT INTO migrations VALUES(68,'2026_08_03_090000_add_beverage_type_to_maintenance_schedules_table',2);
+INSERT INTO migrations VALUES(69,'2026_08_03_090100_add_filtro_sostituito_to_lavaggi_table',2);
+INSERT INTO migrations VALUES(70,'2026_08_03_150000_create_machine_unit_proposals_table',2);
+INSERT INTO migrations VALUES(71,'2026_08_04_090000_add_dismissed_at_to_machine_unit_proposals_table',2);
+INSERT INTO migrations VALUES(72,'2026_08_04_090000_add_eureka_ids_to_products_and_machine_units',2);
+INSERT INTO migrations VALUES(73,'2026_08_04_090100_add_eureka_service_report_id_to_service_reports',2);
+INSERT INTO migrations VALUES(74,'2026_08_04_154532_drop_material_order_emails_table',2);
+INSERT INTO migrations VALUES(75,'2026_08_04_154533_drop_status_from_material_orders_table',2);
+INSERT INTO migrations VALUES(76,'2026_08_04_160000_add_customer_signature_name_to_service_reports_table',2);
+INSERT INTO migrations VALUES(77,'2026_08_05_115551_add_source_and_gestionale_code_to_materials_table',2);
+INSERT INTO migrations VALUES(78,'2026_08_05_115551_add_source_to_machine_units_table',2);
+INSERT INTO migrations VALUES(79,'2026_08_05_115551_create_service_report_materials_table',2);
+INSERT INTO migrations VALUES(80,'2026_08_05_120115_drop_machine_unit_proposals_table',2);
+INSERT INTO migrations VALUES(81,'2026_08_05_123944_widen_gestionale_review_note_on_customers_table',2);
+INSERT INTO migrations VALUES(82,'2026_08_05_130000_drop_owner_name_from_machine_units_table',2);
+INSERT INTO migrations VALUES(83,'2026_08_05_161236_clean_rtf_from_service_report_notes',2);
+INSERT INTO migrations VALUES(84,'2026_08_06_090000_make_vino_maintenance_schedules_a_chiamata',2);
+INSERT INTO migrations VALUES(85,'2026_08_06_100000_replace_comodato_macchina_with_machine_unit_on_maintenance_schedules',2);
+INSERT INTO migrations VALUES(86,'2026_08_06_110000_drop_comodato_macchine',2);
+INSERT INTO migrations VALUES(87,'2026_08_06_130727_add_lines_count_to_maintenance_schedules_table',2);
+INSERT INTO migrations VALUES(88,'2026_08_10_140000_split_gestionale_notification_emails_and_add_service_report',2);
+INSERT INTO migrations VALUES(89,'2026_08_10_150000_add_deleted_at_to_soft_deletable_tables',2);
+INSERT INTO migrations VALUES(90,'2026_08_10_150000_add_service_report_id_to_lavaggi_table',2);
+INSERT INTO migrations VALUES(91,'2026_08_11_090000_add_source_to_service_reports_table',2);
+INSERT INTO migrations VALUES(92,'2026_08_11_100000_add_gestionale_number_to_service_reports_table',2);
+INSERT INTO migrations VALUES(93,'2026_08_11_101628_drop_unused_legacy_and_eureka_columns',2);
+INSERT INTO migrations VALUES(94,'2026_08_12_090000_add_gestionale_document_date_to_service_reports_table',2);
+INSERT INTO migrations VALUES(95,'2026_08_12_100000_add_line_total_snapshot_to_service_report_materials_table',2);
+INSERT INTO migrations VALUES(96,'2026_08_12_110000_add_iban_to_tenants_table',2);
+INSERT INTO migrations VALUES(97,'2026_08_12_110000_add_time_from_to_to_leave_requests_table',2);
+INSERT INTO migrations VALUES(98,'2026_08_12_120000_drop_gestionale_eureka_credentials_from_tenants_table',2);
+INSERT INTO migrations VALUES(99,'2026_08_12_130000_drop_partner_commercial_fields_from_tenants_table',2);
+INSERT INTO migrations VALUES(100,'2026_08_12_130100_drop_commission_fields_from_quotes_table',2);
+INSERT INTO migrations VALUES(101,'2026_08_13_090000_drop_note_from_lavaggi_table',2);
+INSERT INTO migrations VALUES(102,'2026_08_13_120221_add_sanificazione_to_service_reports_intervention_type',2);
+INSERT INTO migrations VALUES(103,'2026_08_13_140000_add_eureka_destinazione_to_service_reports_table',2);
+INSERT INTO migrations VALUES(104,'2026_08_17_090000_drop_notes_from_deadlines_table',2);
+INSERT INTO migrations VALUES(105,'2026_08_17_090448_add_rifiutato_to_service_reports_status',2);
+INSERT INTO migrations VALUES(106,'2026_08_18_081040_create_service_report_maintenance_schedule_table',2);
+INSERT INTO migrations VALUES(107,'2026_08_18_120000_drop_amount_and_paid_at_from_deadlines_table',2);
+INSERT INTO migrations VALUES(108,'2026_08_19_090000_add_appointment_fields_to_information_requests_table',2);
+INSERT INTO migrations VALUES(109,'2026_08_19_100000_create_information_request_notes_table',2);
+INSERT INTO migrations VALUES(110,'2026_08_19_110000_add_lines_washed_to_lavaggi_table',2);
+INSERT INTO migrations VALUES(111,'2026_08_19_110100_add_type_to_machine_units_table',2);
+INSERT INTO migrations VALUES(112,'2026_08_19_123341_remove_price_delta_override_from_product_option_slot_items_table',2);
+INSERT INTO migrations VALUES(113,'2026_08_20_140000_add_list_price_to_materials_table',2);
+INSERT INTO migrations VALUES(114,'2026_08_24_090000_create_tour_views_table',2);
+INSERT INTO migrations VALUES(115,'2026_08_24_140000_add_eureka_stato_documento_to_service_reports_table',2);
+INSERT INTO migrations VALUES(116,'2026_08_24_140100_add_eureka_billing_customer_code_to_machine_units_table',2);
+INSERT INTO migrations VALUES(117,'2026_08_26_100000_add_lead_intake_fields',2);
+INSERT INTO migrations VALUES(118,'2026_08_27_100000_add_machine_material_id_to_service_reports_table',2);
+INSERT INTO migrations VALUES(119,'2026_08_27_110000_add_material_id_to_machine_units_table',2);
+INSERT INTO migrations VALUES(120,'2026_08_28_120000_add_information_request_id_to_quotes_table',2);
+INSERT INTO migrations VALUES(121,'2026_08_31_120000_add_billing_customer_id_to_service_reports_table',2);
+INSERT INTO migrations VALUES(122,'2026_08_31_130000_add_in_gestionale_status_to_service_reports_table',2);
+INSERT INTO migrations VALUES(123,'2026_08_31_150000_add_billing_customer_id_to_quotes_table',2);
+INSERT INTO migrations VALUES(124,'2026_08_31_160000_add_extra_discount_to_quotes_table',2);
+INSERT INTO migrations VALUES(125,'2026_08_31_170000_add_sorting_indexes_to_service_reports_table',2);
+INSERT INTO migrations VALUES(126,'2026_08_31_180000_add_lavaggio_vie_count_to_service_reports_table',2);
+INSERT INTO migrations VALUES(127,'2026_09_01_090000_add_eureka_note_to_customers_table',2);
+INSERT INTO migrations VALUES(128,'2026_09_01_100000_create_eureka_partite_aperte_table',2);
+INSERT INTO migrations VALUES(129,'2026_09_01_110000_add_notify_lavaggio_emails_to_tenants_table',2);
+INSERT INTO migrations VALUES(130,'2026_09_01_110100_seed_notify_lavaggio_emails_for_master_tenant',2);
+INSERT INTO migrations VALUES(131,'2026_09_01_160000_add_tipo_pagamento_to_eureka_partite_aperte',2);
+INSERT INTO migrations VALUES(132,'2026_09_01_180000_create_eureka_fatture_table',2);
+INSERT INTO migrations VALUES(133,'2026_09_01_190000_add_acconto_flags_to_eureka_fatture',2);
+INSERT INTO migrations VALUES(134,'2026_09_02_100000_add_detrazione_ambigua_to_eureka_fatture',2);
+INSERT INTO migrations VALUES(135,'2026_09_02_110000_create_eureka_saldi_anagrafiche_table',2);
+INSERT INTO migrations VALUES(136,'2026_09_02_120000_create_eureka_fatturato_mesi_table',2);
+INSERT INTO migrations VALUES(137,'2026_09_02_130000_create_eureka_cashflow_tables',2);
+INSERT INTO migrations VALUES(138,'2026_09_02_140000_add_duplicato_suggerito_to_service_reports',2);
+INSERT INTO migrations VALUES(139,'2026_09_02_180000_add_fusione_suggerita_to_machine_units',2);
+INSERT INTO migrations VALUES(140,'2026_09_04_100000_add_maintenance_code_to_materials_table',2);
+INSERT INTO migrations VALUES(141,'2026_09_04_140000_add_maintenance_code_to_machine_units_table',2);
+INSERT INTO migrations VALUES(142,'2026_09_21_100000_add_trasferta_to_time_entries_table',2);
+INSERT INTO migrations VALUES(143,'2026_09_21_110000_create_prodotti_caffe_table',2);
+INSERT INTO migrations VALUES(144,'2026_09_21_120000_add_contratto_assistenza_to_quote_products_table',2);
+INSERT INTO migrations VALUES(145,'2026_09_21_130000_lyrae_formato_1kg_in_prodotti_caffe',2);
+INSERT INTO migrations VALUES(146,'2026_09_21_140000_add_eureka_fatture_to_service_reports_table',2);
+INSERT INTO migrations VALUES(147,'2026_09_21_140000_create_offerte_caffe_table',2);
+INSERT INTO migrations VALUES(148,'2026_09_21_150000_cioccolato_formato_500g_in_prodotti_caffe',2);
+INSERT INTO migrations VALUES(149,'2026_09_21_160000_add_eureka_fattura_motivo_to_service_reports_table',2);
+INSERT INTO migrations VALUES(150,'2026_09_21_170000_add_category_to_price_lists_table',2);
+INSERT INTO migrations VALUES(151,'2026_09_21_180000_create_quote_responses_table',2);
+INSERT INTO migrations VALUES(152,'2026_09_21_181000_add_client_contact_to_tenants_table',2);
+INSERT INTO migrations VALUES(153,'2026_09_22_090000_add_disinstallazione_to_service_reports_intervention_type',2);
+INSERT INTO migrations VALUES(154,'2026_09_22_120000_add_spostamento_suggerito_to_machine_units',2);
+INSERT INTO migrations VALUES(155,'2026_09_22_140000_add_pagante_to_machine_unit_placements',2);
+INSERT INTO migrations VALUES(156,'2026_09_22_160000_add_visita_id_to_service_reports',2);
+INSERT INTO migrations VALUES(157,'2026_09_22_180000_create_esecuzioni_eureka_table',2);
+INSERT INTO migrations VALUES(158,'2026_09_22_190000_add_controllo_pagante_fattura_to_service_reports',2);
+INSERT INTO migrations VALUES(159,'2026_09_22_200000_add_fusa_in_to_machine_units',2);
