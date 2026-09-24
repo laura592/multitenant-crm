@@ -16,6 +16,7 @@ use App\Support\Rapportini\DividiPerMacchina;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Tests\Concerns\AssignsPermissionRoles;
 use Tests\TestCase;
@@ -341,6 +342,70 @@ class RapportiniAPassiTest extends TestCase
         $this->assertSame('Manutenzione x20 1951052', $r->fresh()->work_performed);
         $this->assertSame('completato', $r->fresh()->status);
         $this->assertSame($r->visita_id, $nuovo->fresh()->visita_id, 'resta nella sua visita');
+    }
+
+    public function test_svuotare_fatturare_a_torna_al_pagante_della_macchina(): void
+    {
+        // RT-2026-0842 (24/09/2026): pagante congelato sul cliente, poi
+        // l'impianto passa a Sic SRL. Svuotando "Fatturare a" il salvataggio
+        // ricaricava il cliente dalla relazione e non cambiava niente.
+        $ristorante = $this->cliente('Ristorante Terrazza');
+        $sic = $this->cliente('Sic SRL');
+        $impianto = $this->macchina($ristorante, 'IMP-SPINA-023', ['billing_customer_id' => $sic->id]);
+
+        $r = ServiceReport::create([
+            'tenant_id' => $this->tenant->id, 'customer_id' => $ristorante->id, 'technician_id' => $this->tecnico->id,
+            'machine_unit_id' => $impianto->id, 'source' => ServiceReport::SOURCE_MANUALE,
+            'intervention_type' => ServiceReport::TYPE_SANIFICAZIONE, 'intervention_date' => '2026-09-23',
+            'work_performed' => 'Sanificazione impianto spina', 'status' => 'completato',
+        ]);
+        $r->forceFill(['billing_customer_id' => $ristorante->id])->saveQuietly();
+
+        Livewire::test(RapportiniAPassi::class, ['record' => $r->getKey()])
+            ->set("data.lavori.{$r->id}.billing_customer_id", null)
+            ->call('salva')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame($sic->id, $r->fresh()->invoiceRecipient()->id);
+    }
+
+    public function test_con_una_macchina_sola_la_matricola_si_corregge(): void
+    {
+        // RT-2026-0845 (24/09/2026): la macchina era bloccata su ogni
+        // rapportino gia' salvato, anche aperto da solo. Il tecnico aveva
+        // scelto l'impianto acqua invece di quello a spina e non poteva
+        // piu' correggersi.
+        $chiosco = $this->cliente('Chiosco Soleado Beach');
+        $acqua = $this->macchina($chiosco, 'IMP-ACQUA-005', ['model_name' => 'Impianto Acqua']);
+        $spina = $this->macchina($chiosco, 'IMP-SPINA-009', ['model_name' => 'Impianto Spina']);
+
+        $r = ServiceReport::create([
+            'tenant_id' => $this->tenant->id, 'customer_id' => $chiosco->id, 'technician_id' => $this->tecnico->id,
+            'machine_unit_id' => $acqua->id, 'machine_serial_number' => $acqua->serial_number,
+            'source' => ServiceReport::SOURCE_MANUALE, 'visita_id' => (string) Str::uuid(),
+            'intervention_type' => ServiceReport::TYPE_MANUTENZIONE_ORDINARIA, 'intervention_date' => '2026-09-24',
+            'work_performed' => 'Lavaggio 2 vie', 'status' => 'bozza',
+        ]);
+
+        Livewire::test(RapportiniAPassi::class, ['record' => $r->getKey()])
+            ->assertFormFieldIsEnabled("lavori.{$r->id}.machine_unit_id", 'form')
+            ->set("data.lavori.{$r->id}.machine_unit_id", $spina->id)
+            ->call('salva')
+            ->assertHasNoFormErrors();
+
+        $r->refresh();
+        $this->assertSame($spina->id, $r->machine_unit_id, 'La matricola scelta e\' quella salvata.');
+        $this->assertSame('IMP-SPINA-009', $r->machine_serial_number, 'E si porta dietro la matricola scritta.');
+    }
+
+    public function test_in_una_visita_di_piu_macchine_la_matricola_resta_del_passo(): void
+    {
+        [, , $x2, $r] = $this->olandaDaDividere();
+        $nuovo = DividiPerMacchina::esegui($r, $x2, []);
+
+        Livewire::withQueryParams(['tutta_la_visita' => 1])
+            ->test(RapportiniAPassi::class, ['record' => $nuovo->getKey()])
+            ->assertFormFieldIsDisabled("lavori.{$nuovo->id}.machine_unit_id", 'form');
     }
 
     public function test_dalla_matricola_si_trova_il_cliente(): void

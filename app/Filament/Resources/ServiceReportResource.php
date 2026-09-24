@@ -543,7 +543,9 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                             $set('customer_id', $machineUnit->current_customer_id);
                         }
                     })
-                    ->helperText('Scegliendo la matricola si compilano da soli cliente, modello e matricola qui sotto.')
+                    ->helperText($macchinaDellaVisita
+                        ? 'In una visita su piu\' macchine la matricola e\' quella del passo: per cambiarla torna al passo "Macchine".'
+                        : 'Scegliendo la matricola si compilano da soli cliente, modello e matricola qui sotto.')
                     // Se la matricola non e' ancora tracciata in CRM, prima
                     // bisognava uscire da qui e crearla da Macchinari — stesso
                     // "+" gia' presente sul cliente. moveTo() (non un
@@ -658,7 +660,23 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                             ->live(onBlur: true),
                     ])
                     ->columns(2)
-                    ->visible(fn (Get $get) => $get('intervention_type') === ServiceReport::TYPE_SANIFICAZIONE)
+                    // Si vede appena c'e' un lavaggio, non solo sulle
+                    // sanificazioni: RT-2026-0844 era una manutenzione
+                    // straordinaria con tre vie lavate, il selettore non
+                    // compariva, e il lavaggio e' finito su nessun piano
+                    // (24/09/2026).
+                    ->visible(fn (Get $get) => $get('intervention_type') === ServiceReport::TYPE_SANIFICAZIONE
+                        || (bool) $get('_lavaggio_vie_eseguito')
+                        || filled($get('lavaggio_vie_count')))
+                    // Obbligatorio quando il cliente ha piu' di un impianto:
+                    // senza scegliere, il lavaggio verrebbe segnato su TUTTI
+                    // i piani attivi — birra, vino e selz "fatti" avendone
+                    // lavato uno solo. Con un impianto solo non c'e' niente
+                    // da sbagliare e si puo' lasciare vuoto.
+                    ->minItems(fn (Get $get) => self::piuImpiantiDaLavare($get) ? 1 : 0)
+                    ->helperText(fn (Get $get) => self::piuImpiantiDaLavare($get)
+                        ? 'Questo cliente ha più impianti: scegli quali hai lavato, o il lavaggio risulterà fatto su tutti.'
+                        : null)
                     // Le vie si scrivono qui, in cima al rapportino: da
                     // qui discendono il toggle "Lavaggio eseguito" e le
                     // righe LAV2/ULTERIORE VIA piu' in basso, invece di
@@ -729,10 +747,23 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                         ? 'Scelta per questo rapportino. Svuota il campo per tornare al pagante abituale.'
                         : 'Vuoto = pagante abituale: '.(DisplayName::titleCase(self::resolvePayer($get)?->full_name) ?? '—'))
                     ->placeholder(fn (Get $get) => DisplayName::titleCase(self::resolvePayer($get)?->full_name) ?? '—')
-                    ->relationship('billingCustomer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
-                    ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::customerOption($record))
-                    ->searchable(['company_name', 'first_name', 'last_name', 'city'])
-                    ->preload()
+                    // Niente ->relationship(): su una BelongsTo, a campo
+                    // vuoto Filament ricarica il valore dalla relazione a
+                    // ogni getState(), e "svuota per tornare al pagante
+                    // abituale" non si salvava mai (24/09/2026, RT-2026-0842:
+                    // svuotato, restava il cliente congelato).
+                    ->searchable()
+                    ->getSearchResultsUsing(fn (string $search) => Customer::query()
+                        ->where(fn ($q) => $q->where('company_name', 'like', "%{$search}%")
+                            ->orWhere('first_name', 'like', "%{$search}%")
+                            ->orWhere('last_name', 'like', "%{$search}%")
+                            ->orWhere('city', 'like', "%{$search}%"))
+                        ->orderBy('company_name')
+                        ->limit(50)
+                        ->get()
+                        ->mapWithKeys(fn (Customer $c) => [$c->id => DisplayName::customerOption($c)])
+                        ->all())
+                    ->getOptionLabelUsing(fn ($value) => ($c = Customer::find($value)) ? DisplayName::customerOption($c) : null)
                     ->live()
                     // Scorciatoia per il caso che ha fatto nascere il
                     // campo: il guasto e' colpa del cliente, si fattura a
@@ -2259,6 +2290,28 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
             ServiceReport::TYPE_GARANZIA => 'Garanzia',
             ServiceReport::TYPE_SANIFICAZIONE => 'Sanificazione',
         ];
+    }
+
+    /**
+     * Il cliente ha piu' di un piano lavaggio attivo?
+     *
+     * E' la condizione in cui "non scegliere" fa danno: senza selezione il
+     * lavaggio si segna su tutti i piani del cliente, e tre impianti
+     * risultano lavati avendone lavato uno (24/09/2026).
+     */
+    public static function piuImpiantiDaLavare(Get $get): bool
+    {
+        $customerId = $get('customer_id') ?? $get('../../customer_id');
+
+        if (! $customerId) {
+            return false;
+        }
+
+        return MaintenanceSchedule::query()
+            ->where('customer_id', $customerId)
+            ->where('type', MaintenanceSchedule::TYPE_LAVAGGIO)
+            ->where('status', MaintenanceSchedule::STATUS_ATTIVO)
+            ->count() > 1;
     }
 
     public static function statusLabels(): array

@@ -7,6 +7,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Support\RolePermissions;
 use Illuminate\Database\Seeder;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
 
 /**
@@ -55,12 +56,32 @@ class RolesAndPermissionsSeeder extends Seeder
                 // su quelli esistenti i permessi restano come sono, vedi il
                 // commento in testa alla classe.
                 if ($role->wasRecentlyCreated) {
-                    $role->syncPermissions(RolePermissions::for($roleName));
+                    $role->syncPermissions(self::permessiEsistenti(RolePermissions::for($roleName)));
                 }
             }
         });
 
         $this->assignTestUsers();
+    }
+
+    /**
+     * I permessi, creandoli se mancano.
+     *
+     * Su un database appena installato la tabella dei permessi e' vuota —
+     * li scrive Shield leggendo le risorse — e assegnarli faceva fallire
+     * tutto il seeding con "There is no permission named view_any_brand"
+     * (24/09/2026, provando un'installazione da zero). Qui si creano prima
+     * di assegnarli: su un database gia' avviato non cambia niente, perche'
+     * ci sono gia' tutti.
+     *
+     * @param  array<int, string>  $nomi
+     * @return array<int, Permission>
+     */
+    private static function permessiEsistenti(array $nomi): array
+    {
+        return collect($nomi)
+            ->map(fn (string $nome) => Permission::firstOrCreate(['name' => $nome, 'guard_name' => 'web']))
+            ->all();
     }
 
     private function assignTestUsers(): void

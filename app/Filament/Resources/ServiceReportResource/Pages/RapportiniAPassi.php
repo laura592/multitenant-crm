@@ -491,7 +491,14 @@ class RapportiniAPassi extends Page
                         ServiceReportResource::campoTipoIntervento(),
                         // Senza una macchina precisa la matricola resta da
                         // scegliere, se serve, come sul modulo.
-                        ServiceReportResource::sezioneMacchina(macchinaDellaVisita: $macchina !== null),
+                        //
+                        // Su una visita di piu' macchine il passo *e'* la
+                        // macchina — cambiarla qui vorrebbe dire spostare il
+                        // passo, e due passi finirebbero sulla stessa. Li' si
+                        // cambia dal passo "Macchine". Con una macchina sola
+                        // il passo e' il rapportino e basta: la matricola si
+                        // corregge dove si vede (24/09/2026).
+                        ServiceReportResource::sezioneMacchina(macchinaDellaVisita: $macchina !== null && $n > 1),
                         ServiceReportResource::sezioneDescrizione(),
                         ServiceReportResource::sezioneRicambi(),
                     ]),
@@ -573,7 +580,10 @@ class RapportiniAPassi extends Page
             $impianti = $lavoro['lavaggio_impianti'] ?? [];
             unset($lavoro['lavaggio_impianti']);
 
-            $macchinaDelPasso = ($macchina && ! $rapportino) ? [
+            // La macchina del passo vale finche' il passo non la dice da se':
+            // con un passo solo la Select e' modificabile, e quello che ha
+            // scelto il tecnico vince (24/09/2026).
+            $macchinaDelPasso = ($macchina && ! $rapportino && blank($lavoro['machine_unit_id'] ?? null)) ? [
                 'machine_unit_id' => $macchina->id,
                 'machine_product_id' => $macchina->product_id,
                 'machine_material_id' => $macchina->material_id,

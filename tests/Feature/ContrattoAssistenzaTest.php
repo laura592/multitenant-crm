@@ -56,7 +56,7 @@ class ContrattoAssistenzaTest extends TestCase
         // I modelli dei contratti stanno in Documenti: qui quelli dell'ufficio.
         Storage::fake('public');
         foreach (PriceList::CONTRATTI as $tipo => $categoria) {
-            Storage::disk('public')->put("price-lists/{$tipo}.pdf", file_get_contents(base_path("database/seeders/contratti/{$tipo}-service.pdf")));
+            Storage::disk('public')->put("price-lists/{$tipo}.pdf", file_get_contents(base_path("tests/fixtures/contratti/{$tipo}-service.pdf")));
             PriceList::create(['category' => $categoria, 'name' => "Contratto {$tipo}", 'file_path' => "price-lists/{$tipo}.pdf"]);
         }
 
