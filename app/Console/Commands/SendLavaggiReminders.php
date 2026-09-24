@@ -52,7 +52,9 @@ class SendLavaggiReminders extends Command
             $schedules = MaintenanceSchedule::query()
                 ->where('tenant_id', $tenant->id)
                 ->where('type', MaintenanceSchedule::TYPE_LAVAGGIO)
-                ->where('status', MaintenanceSchedule::STATUS_ATTIVO)
+                // inCorso(): attivo e non in pausa stagionale — d'inverno i
+                // campeggi sono chiusi e il promemoria non serve a nessuno.
+                ->inCorso()
                 // I piani "a chiamata" non hanno una scadenza (next_due_date
                 // nullo, vedi recalculateLavaggioNextDue): non sono in ritardo,
                 // aspettano una telefonata del cliente.

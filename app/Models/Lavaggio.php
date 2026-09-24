@@ -69,7 +69,9 @@ class Lavaggio extends Model
             // Eloquent non invalida la relazione BelongsTo gia' risolta e
             // ricalcolerebbe il piano sbagliato (quello vecchio).
             if ($lavaggio->maintenance_schedule_id) {
-                MaintenanceSchedule::find($lavaggio->maintenance_schedule_id)?->recalculateLavaggioNextDue();
+                $piano = MaintenanceSchedule::find($lavaggio->maintenance_schedule_id);
+                $piano?->recalculateLavaggioNextDue();
+                $lavaggio->seguiLaStagione($piano);
             }
 
             // Se il lavaggio e' stato spostato su un altro piano (es. cambio
@@ -88,6 +90,37 @@ class Lavaggio extends Model
                 MaintenanceSchedule::find($lavaggio->maintenance_schedule_id)?->recalculateLavaggioNextDue();
             }
         });
+    }
+
+    /**
+     * Chiusura e apertura di stagione, come le scrivono i tecnici
+     * (24/09/2026).
+     *
+     * "2 Vie + Chiusura" non e' un lavaggio come gli altri: e' l'ultimo
+     * prima che il locale chiuda. Da li' il piano si ferma, se no scade
+     * tutto l'inverno e a gennaio il tecnico riceve la lista dei campeggi
+     * chiusi. "Apertura" fa il contrario e lo rimette in moto.
+     *
+     * Nessun campo nuovo da compilare: la parola sta gia' nella descrizione,
+     * normalizzata da LavaggioDescrizione.
+     */
+    public function seguiLaStagione(?MaintenanceSchedule $piano): void
+    {
+        if (! $piano || $piano->type !== MaintenanceSchedule::TYPE_LAVAGGIO) {
+            return;
+        }
+
+        $descrizione = mb_strtolower((string) $this->descrizione);
+
+        if (str_contains($descrizione, 'chiusura')) {
+            $piano->mettiInPausa(null, 'Chiusura stagionale del '.$this->data->format('d/m/Y'));
+
+            return;
+        }
+
+        if (str_contains($descrizione, 'apertura') && $piano->in_pausa) {
+            $piano->riprendi();
+        }
     }
 
     /**

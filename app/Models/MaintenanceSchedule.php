@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\LogsAuditTrail;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -58,11 +59,16 @@ class MaintenanceSchedule extends Model
         'last_lavaggio_id',
         'last_filter_change_id',
         'next_due_date',
+        'in_pausa',
+        'in_pausa_fino_al',
+        'pausa_motivo',
         'notes',
     ];
 
     protected $casts = [
         'next_due_date' => 'date',
+        'in_pausa' => 'boolean',
+        'in_pausa_fino_al' => 'date',
     ];
 
     protected const FREQUENCY_MONTHS = [
@@ -71,6 +77,49 @@ class MaintenanceSchedule extends Model
         'semestrale' => 6,
         'annuale' => 12,
     ];
+
+    /**
+     * In pausa per la stagione: il piano resta attivo e tiene la sua storia,
+     * ma non scade e non entra nei promemoria (24/09/2026).
+     *
+     * Senza data la pausa dura finche' qualcuno non riapre; con una data il
+     * piano riprende da solo quel giorno, senza che nessuno se ne ricordi a
+     * marzo.
+     */
+    public function inPausa(): bool
+    {
+        if (! $this->in_pausa) {
+            return false;
+        }
+
+        return $this->in_pausa_fino_al === null || $this->in_pausa_fino_al->isFuture();
+    }
+
+    /** I piani che oggi valgono: attivi e non in pausa. */
+    public function scopeInCorso(Builder $query): Builder
+    {
+        return $query->where('status', self::STATUS_ATTIVO)
+            ->where(fn (Builder $q) => $q->where('in_pausa', false)
+                ->orWhereNotNull('in_pausa_fino_al')->whereDate('in_pausa_fino_al', '<=', now()));
+    }
+
+    /**
+     * Mette in pausa: la chiusura di fine stagione non deve lasciare il
+     * piano a scadere tutto l'inverno.
+     */
+    public function mettiInPausa(?\DateTimeInterface $finoAl = null, ?string $motivo = null): void
+    {
+        $this->update([
+            'in_pausa' => true,
+            'in_pausa_fino_al' => $finoAl,
+            'pausa_motivo' => $motivo,
+        ]);
+    }
+
+    public function riprendi(): void
+    {
+        $this->update(['in_pausa' => false, 'in_pausa_fino_al' => null, 'pausa_motivo' => null]);
+    }
 
     public function customer(): BelongsTo
     {

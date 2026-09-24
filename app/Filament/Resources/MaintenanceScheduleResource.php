@@ -15,9 +15,12 @@ use Filament\Infolists\Components\Grid as InfolistGrid;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 class MaintenanceScheduleResource extends Resource
 {
@@ -26,7 +29,6 @@ class MaintenanceScheduleResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-wrench-screwdriver';
 
     protected static ?string $navigationGroup = 'Interventi tecnici';
-
 
     protected static ?int $navigationSort = 2;
 
@@ -47,14 +49,14 @@ class MaintenanceScheduleResource extends Resource
      * lavaggio) - senza questa cache ogni riga rilancerebbe le stesse query
      * su MachineUnit/Customer (N+1 su liste lunghe).
      *
-     * @var array<string, \Illuminate\Support\Collection<int, MachineUnit>>
+     * @var array<string, Collection<int, MachineUnit>>
      */
     private static array $machineUnitsCache = [];
 
     /** @var array<string, Customer|null> */
     private static array $customerCache = [];
 
-    private static function machineUnitsFor(string $customerId): \Illuminate\Support\Collection
+    private static function machineUnitsFor(string $customerId): Collection
     {
         return static::$machineUnitsCache[$customerId] ??= MachineUnit::where('current_customer_id', $customerId)
             ->with('billingCustomer')
@@ -408,8 +410,17 @@ class MaintenanceScheduleResource extends Resource
                 Tables\Columns\TextColumn::make('status')
                     ->label('Stato')
                     ->badge()
-                    ->formatStateUsing(fn (string $state) => static::statusLabels()[$state] ?? 'Attivo')
-                    ->color(fn (string $state) => static::statusColors()[$state] ?? 'success')
+                    // Un piano in pausa resta "attivo": senza dirlo qui, la
+                    // colonna mentirebbe (24/09/2026).
+                    ->formatStateUsing(fn (string $state, MaintenanceSchedule $record) => $record->inPausa()
+                        ? 'In pausa'
+                        : (static::statusLabels()[$state] ?? 'Attivo'))
+                    ->color(fn (string $state, MaintenanceSchedule $record) => $record->inPausa()
+                        ? 'warning'
+                        : (static::statusColors()[$state] ?? 'success'))
+                    ->description(fn (MaintenanceSchedule $record) => $record->inPausa()
+                        ? trim($record->pausa_motivo.($record->in_pausa_fino_al ? ' — riprende il '.$record->in_pausa_fino_al->format('d/m/Y') : ''))
+                        : null)
                     ->sortable(),
                 Tables\Columns\TextColumn::make('frequenza_label')->visibleFrom('md')
                     ->label('Frequenza')
@@ -473,6 +484,47 @@ class MaintenanceScheduleResource extends Resource
             ->actions([
                 Tables\Actions\ViewAction::make()
                     ->color('gray'),
+                // Chiusura di fine stagione: il piano si ferma senza essere
+                // chiuso, e a primavera riparte con la sua storia.
+                Tables\Actions\Action::make('metti_in_pausa')
+                    ->label('Metti in pausa')
+                    ->icon('heroicon-o-pause-circle')
+                    ->color('warning')
+                    ->visible(fn (MaintenanceSchedule $record) => ! $record->inPausa() && $record->status === MaintenanceSchedule::STATUS_ATTIVO)
+                    ->modalHeading('Fermare il piano per la stagione?')
+                    ->modalDescription('Non scade e non entra nei promemoria finché non riprende. Lo storico e la cadenza restano.')
+                    ->form([
+                        Forms\Components\DatePicker::make('in_pausa_fino_al')
+                            ->label('Riprende il')
+                            ->helperText('Vuoto = riprende quando lo riattivi tu, o al primo lavaggio di apertura.')
+                            ->native(false)
+                            ->displayFormat('d/m/Y')
+                            ->minDate(now()),
+                        Forms\Components\TextInput::make('pausa_motivo')
+                            ->label('Motivo')
+                            ->default('Chiusura stagionale'),
+                    ])
+                    ->action(function (MaintenanceSchedule $record, array $data) {
+                        $record->mettiInPausa(
+                            $data['in_pausa_fino_al'] ? Carbon::parse($data['in_pausa_fino_al']) : null,
+                            $data['pausa_motivo'] ?: null,
+                        );
+
+                        Notification::make()->title('Piano in pausa')->success()->send();
+                    }),
+
+                Tables\Actions\Action::make('riprendi')
+                    ->label('Riprendi')
+                    ->icon('heroicon-o-play-circle')
+                    ->color('success')
+                    ->visible(fn (MaintenanceSchedule $record) => $record->inPausa())
+                    ->requiresConfirmation()
+                    ->modalDescription('Il piano torna a scadere e a comparire nei promemoria.')
+                    ->action(function (MaintenanceSchedule $record) {
+                        $record->riprendi();
+                        Notification::make()->title('Piano ripreso')->success()->send();
+                    }),
+
                 Tables\Actions\ActionGroup::make([
                     Tables\Actions\EditAction::make(),
                     Tables\Actions\DeleteAction::make(),
@@ -486,7 +538,7 @@ class MaintenanceScheduleResource extends Resource
                         ->color('gray')
                         ->requiresConfirmation()
                         ->modalDescription('Imposta la cadenza standard (birra 30 giorni, vino 90 giorni) sui piani selezionati con impianto birra o vino e ricalcola la prossima scadenza. I piani acqua o senza tipo impianto assegnato vengono ignorati.')
-                        ->action(function (\Illuminate\Support\Collection $records) {
+                        ->action(function (Collection $records) {
                             $records
                                 ->filter(fn (MaintenanceSchedule $schedule) => isset(MaintenanceSchedule::STANDARD_FREQUENCY_DAYS[$schedule->beverage_type]))
                                 ->each(function (MaintenanceSchedule $schedule) {
