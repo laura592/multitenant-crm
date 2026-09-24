@@ -88,7 +88,7 @@ return new class extends Migration
             $table->uuid('id')->primary();
             $table->foreignUuid('quote_id')->constrained()->cascadeOnDelete();
             $table->foreignUuid('product_id')->constrained()->restrictOnDelete();
-            $table->foreignUuid('parent_quote_product_id')->nullable()->constrained('quote_products')->cascadeOnDelete();
+            $table->uuid('parent_quote_product_id')->nullable();
 
             $table->decimal('quantity', 10, 2)->default(1);
             $table->decimal('price', 10, 2)->default(0);
@@ -99,6 +99,15 @@ return new class extends Migration
 
             $table->index('quote_id');
             $table->index('parent_quote_product_id');
+        });
+
+        // La chiave esterna su se stessa si aggiunge dopo la creazione:
+        // Postgres pretende che la primary key referenziata esista gia',
+        // MySQL la accetta dentro la CREATE (prova-postgres, 24/09/2026).
+        Schema::table('quote_products', function (Blueprint $table) {
+            $table->foreign('parent_quote_product_id')
+                ->references('id')->on('quote_products')
+                ->cascadeOnDelete();
         });
 
         Schema::create('quote_emails', function (Blueprint $table) {

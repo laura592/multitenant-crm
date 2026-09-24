@@ -47,9 +47,33 @@ services:
                 - '-p${DB_PASSWORD}'
             retries: 3
             timeout: 5s
+    # Solo sul ramo prova-postgres: serve a misurare davvero quanto costa
+    # cambiare motore, invece di discuterne. Non tocca il MySQL di sopra.
+    pgsql:
+        image: 'postgres:17'
+        ports:
+            - '${FORWARD_PG_PORT:-5433}:5432'
+        environment:
+            POSTGRES_DB: '${DB_DATABASE}'
+            POSTGRES_USER: '${DB_USERNAME}'
+            POSTGRES_PASSWORD: '${DB_PASSWORD}'
+        volumes:
+            - 'sail-pgsql:/var/lib/postgresql/data'
+        networks:
+            - sail
+        healthcheck:
+            test:
+                - CMD
+                - pg_isready
+                - '-U'
+                - '${DB_USERNAME}'
+            retries: 3
+            timeout: 5s
 networks:
     sail:
         driver: bridge
 volumes:
+    sail-pgsql:
+        driver: local
     sail-mysql:
         driver: local

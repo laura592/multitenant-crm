@@ -10,9 +10,13 @@ return new class extends Migration
     public function up(): void
     {
         // Porta ogni compatibilita' esistente sul nuovo modello a slot prima
-        // di eliminare le vecchie tabelle (vedi
-        // App\Console\Commands\MigrateCompatibilitiesToSlots).
-        Artisan::call('products:migrate-compatibilities-to-slots');
+        // di eliminare le vecchie tabelle. Il comando che lo faceva e' stato
+        // tolto dal progetto a conversione avvenuta: su un database gia'
+        // migrato non c'e' piu' niente da spostare, ma su un database VUOTO
+        // (migrate:fresh) questa riga faceva fallire tutta la catena.
+        if (Artisan::all()['products:migrate-compatibilities-to-slots'] ?? false) {
+            Artisan::call('products:migrate-compatibilities-to-slots');
+        }
 
         Schema::dropIfExists('product_compatibilities');
         Schema::dropIfExists('product_option_groups');
