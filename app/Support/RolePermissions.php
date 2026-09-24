@@ -122,6 +122,9 @@ class RolePermissions
                 // copia allegare, e scrivere al pagante, sono dell'ufficio
                 // (send_email_completo_service::report).
                 'send_email_service::report',
+                // Il giro programmato: il tecnico lo legge e lo spunta, non
+                // lo prepara (a quello ci pensa l'ufficio). Niente create.
+                ...self::expand('intervento::programmato', ['view_any', 'view', 'update']),
                 ...self::expand('maintenance::schedule', self::MANAGE_NO_DELETE),
                 ...self::expand('machine::unit', self::MANAGE_NO_DELETE),
                 ...self::expand('lavaggio', self::MANAGE_NO_DELETE),
@@ -188,6 +191,8 @@ class RolePermissions
                 // che il diff di ruoli:sincronizza stava per toglierglieli —
                 // un materiale nuovo era stato inserito il giorno prima).
                 // Niente ordini materiali: quelli restano di chi compra.
+                // Prepara il giro dei tecnici: e' il suo lavoro.
+                ...self::expand('intervento::programmato', self::UFFICIO),
                 ...self::expand('machine::unit', self::UFFICIO),
                 ...self::expand('maintenance::schedule', self::UFFICIO),
                 ...self::expand('material', self::UFFICIO),
@@ -224,6 +229,7 @@ class RolePermissions
                 // con articoli, con articoli e prezzi) e puo' spedire anche
                 // al pagante, non solo al luogo di intervento.
                 'send_email_completo_service::report',
+                ...self::expand('intervento::programmato', self::MANAGE),
                 ...self::expand('maintenance::schedule', self::MANAGE),
                 ...self::expand('deadline', self::MANAGE),
                 ...self::expand('vehicle', self::MANAGE),
@@ -285,6 +291,7 @@ class RolePermissions
                 // L'invio al cliente e' un gesto verso l'esterno: parte a
                 // nome dell'azienda e non si richiama indietro.
                 'send_email_service::report',
+                ...self::expand('intervento::programmato', self::MANAGE_NO_DELETE),
                 ...self::expand('maintenance::schedule', self::MANAGE_NO_DELETE),
                 ...self::expand('deadline', self::MANAGE_NO_DELETE),
                 ...self::expand('vehicle', self::MANAGE_NO_DELETE),

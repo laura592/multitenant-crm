@@ -6,6 +6,7 @@ use App\Filament\Forms\Components\SignaturePad;
 use App\Filament\Resources\MaintenanceScheduleResource;
 use App\Filament\Resources\ServiceReportResource;
 use App\Models\Customer;
+use App\Models\InterventoProgrammato;
 use App\Models\Lavaggio;
 use App\Models\MachineUnit;
 use App\Models\MaintenanceSchedule;
@@ -102,6 +103,14 @@ class RapportiniAPassi extends Page
     public ?string $chiaveLavaggioDiPartenza = null;
 
     /**
+     * Arrivando da "Fai il rapportino" su una riga della programmazione
+     * (?programmato_id=): a lavoro salvato l'intervento si spunta da solo,
+     * cosi' il tecnico non deve segnarlo due volte. Pubblica perche' deve
+     * arrivare fino al salvataggio, che e' un'altra richiesta Livewire.
+     */
+    public ?string $programmatoDiPartenza = null;
+
+    /**
      * Le macchine per cliente, dentro la singola richiesta: le chiedono
      * elenco, descrizioni e passi a ogni render. Non pubblica, quindi non
      * sopravvive tra una richiesta Livewire e l'altra (e non deve).
@@ -156,6 +165,7 @@ class RapportiniAPassi extends Page
         ], fn ($valore) => filled($valore));
 
         $this->lavaggioDiPartenza = request()->query('lavaggio_id');
+        $this->programmatoDiPartenza = request()->query('programmato_id');
 
         // Senza macchina ma con qualcosa da scrivere (un lavaggio di tutti
         // gli impianti): va sulla voce "Senza una macchina precisa".
@@ -610,6 +620,8 @@ class RapportiniAPassi extends Page
                 $this->collegaLavaggioDiPartenza($rapportino);
             }
 
+            $this->spuntaInterventoProgrammato($rapportino);
+
             return $rapportino;
         }));
 
@@ -635,6 +647,26 @@ class RapportiniAPassi extends Page
      * collega la riga di partenza, cosi' restano le note, le vie e il filtro
      * scritti a mano invece del generico "Generato da rapportino ...".
      */
+    /**
+     * Il giro si chiude qui: l'intervento che ha portato a questo rapportino
+     * passa a "fatto" e si collega al documento che lo racconta. Vale per il
+     * primo rapportino salvato — una visita a piu' macchine nasce da una riga
+     * sola di programma.
+     */
+    private function spuntaInterventoProgrammato(ServiceReport $rapportino): void
+    {
+        if (! $this->programmatoDiPartenza) {
+            return;
+        }
+
+        $intervento = InterventoProgrammato::find($this->programmatoDiPartenza);
+        $this->programmatoDiPartenza = null;
+
+        if ($intervento && $intervento->stato === InterventoProgrammato::STATO_DA_FARE) {
+            $intervento->segnaFatto($rapportino);
+        }
+    }
+
     private function collegaLavaggioDiPartenza(ServiceReport $rapportino): void
     {
         $partenza = $this->lavaggioDiPartenza ? Lavaggio::find($this->lavaggioDiPartenza) : null;

@@ -5,6 +5,7 @@ namespace App\Providers\Filament;
 use App\Filament\Widgets\CreaPreventivoWidget;
 use App\Filament\Widgets\DashboardStatsWidget;
 use App\Filament\Widgets\FailedGestionaleServiceReportsWidget;
+use App\Filament\Widgets\IlMioGiroWidget;
 use App\Filament\Widgets\LatestQuotesWidget;
 use App\Filament\Widgets\MagazzinoStatsWidget;
 use App\Filament\Widgets\PrioritaWidget;
@@ -185,6 +186,7 @@ class AdminPanelProvider extends PanelProvider
                 TimbraWidget::class,
 
                 SezioneDaFare::class,
+                IlMioGiroWidget::class,
                 PrioritaWidget::class,
                 UpcomingDeadlinesWidget::class,
                 FailedGestionaleServiceReportsWidget::class,

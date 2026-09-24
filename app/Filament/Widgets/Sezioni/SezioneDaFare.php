@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets\Sezioni;
 
 use App\Filament\Widgets\FailedGestionaleServiceReportsWidget;
+use App\Filament\Widgets\IlMioGiroWidget;
 use App\Filament\Widgets\PrioritaWidget;
 use App\Filament\Widgets\UpcomingDeadlinesWidget;
 use App\Filament\Widgets\UpcomingMaintenanceWidget;
@@ -34,6 +35,7 @@ class SezioneDaFare extends SezioneWidget
     public static function contenuto(): array
     {
         return [
+            IlMioGiroWidget::class,
             PrioritaWidget::class,
             UpcomingDeadlinesWidget::class,
             FailedGestionaleServiceReportsWidget::class,
