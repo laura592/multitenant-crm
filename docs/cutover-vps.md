@@ -175,6 +175,26 @@ Se coincidono non e' rimasto indietro niente. Se non coincidono **fermati
 qui**: cPanel e' ancora intatto e il DNS non l'hai toccato, quindi non e'
 successo nulla di irreparabile — rifai il dump.
 
+### Il fuso orario, prima di proseguire
+
+Le colonne `created_at` sono di tipo `timestamp`: MySQL le tiene in UTC e le
+converte secondo il fuso del **sistema**, e Laravel non imposta niente sulla
+connessione. cPanel e' su ora italiana, una VPS appena installata e' su UTC —
+e cosi' tutto lo storico si legge due ore indietro.
+
+```bash
+ssh crm
+sudo timedatectl set-timezone Europe/Rome
+sudo systemctl restart mysql          # il fuso SYSTEM lo legge all'avvio
+sudo systemctl restart php8.5-fpm
+```
+
+La prova: l'ultimo rapportino deve avere lo stesso orario che aveva su cPanel.
+
+```bash
+mysql -u crm -p"$PW" crm -e "select number, created_at from service_reports order by created_at desc limit 3;"
+```
+
 ## Passo 4 — Il puntamento
 
 Ora, e non prima: il certificato del passo dopo funziona solo se il dominio
