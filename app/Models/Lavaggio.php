@@ -110,17 +110,49 @@ class Lavaggio extends Model
             return;
         }
 
-        $descrizione = mb_strtolower((string) $this->descrizione);
+        $testo = mb_strtolower($this->testoDellaStagione());
+        $chiude = str_contains($testo, 'chiusura');
+        $apre = str_contains($testo, 'apertura');
 
-        if (str_contains($descrizione, 'chiusura')) {
+        // Tutte e due insieme non vogliono dire niente: "Apertura/Chiusura
+        // Stagionale (Acqua)" e' un'etichetta generica che Camping
+        // Mediterraneo porta anche sul lavaggio del 30 marzo, cioe' quando
+        // si apre. Meglio non toccare il piano che chiuderlo a primavera.
+        if ($chiude === $apre) {
+            return;
+        }
+
+        if ($chiude) {
             $piano->mettiInPausa(null, 'Chiusura stagionale del '.$this->data->format('d/m/Y'));
 
             return;
         }
 
-        if (str_contains($descrizione, 'apertura') && $piano->in_pausa) {
+        if ($piano->in_pausa) {
             $piano->riprendi();
         }
+    }
+
+    /**
+     * Dove cercare "chiusura" e "apertura" (28/09/2026).
+     *
+     * Non basta la descrizione del lavaggio: quando la riga nasce da un
+     * rapportino quella descrizione e' "Generato da rapportino RT-...", e la
+     * parola sta nel testo del rapportino. Le Soleil, 25/09: i due lavaggi
+     * dicevano "Chiusura stagionale chiosco" e "Chiusura stagionale
+     * terrazza" — ma sul rapportino — e i piani sono rimasti attivi con
+     * scadenza al 25 ottobre, cioe' esattamente il promemoria a locale
+     * chiuso che la pausa doveva evitare.
+     *
+     * Si guardano tutte e due, perche' il lavaggio scritto a mano nella
+     * lista del cliente resta un modo legittimo di registrarlo.
+     */
+    private function testoDellaStagione(): string
+    {
+        return trim(implode(' ', array_filter([
+            (string) $this->descrizione,
+            (string) $this->serviceReport?->work_performed,
+        ])));
     }
 
     /**

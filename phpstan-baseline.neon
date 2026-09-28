@@ -2197,6 +2197,12 @@ parameters:
 			path: app/Models/Lavaggio.php
 
 		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$work_performed\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Models/Lavaggio.php
+
+		-
 			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:invoiceRecipient\(\)\.$#'
 			identifier: method.notFound
 			count: 1
