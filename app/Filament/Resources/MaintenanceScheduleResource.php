@@ -395,8 +395,20 @@ class MaintenanceScheduleResource extends Resource
                     ->placeholder('—')
                     ->sortable()
                     ->toggleable(),
-                Tables\Columns\TextColumn::make('machineUnit.display_name')->label('Macchina')->placeholder('—')
-                    ->toggleable(isToggledHiddenByDefault: true),
+                // Visibile di default dal 28/09/2026: da quando una macchina
+                // che teneva insieme due impianti si puo' dividere
+                // (macchine:dividi-impianto), la macchina e' l'UNICA cosa che
+                // distingue due piani dello stesso cliente e della stessa
+                // bevanda. Le Soleil ne ha due per birra, vino e selz:
+                // nascosta, la lista mostrava sei righe uguali.
+                Tables\Columns\TextColumn::make('machineUnit.display_name')->label('Impianto')->placeholder('—')
+                    ->description(fn (MaintenanceSchedule $record) => $record->machineUnit?->serial_number)
+                    ->searchable(query: fn ($query, string $search) => $query->whereHas(
+                        'machineUnit',
+                        fn ($q) => $q->where('serial_number', 'like', "%{$search}%")->orWhere('model_name', 'like', "%{$search}%"),
+                    ))
+                    ->wrap()
+                    ->toggleable(),
                 Tables\Columns\TextColumn::make('impianti')->visibleFrom('md')
                     ->label('Impianti')
                     ->state(fn (MaintenanceSchedule $record) => static::equipmentSummary($record->customer_id, $record->machine_unit_id))

@@ -751,6 +751,12 @@ parameters:
 			path: app/Filament/Resources/MaintenanceScheduleResource.php
 
 		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$serial_number\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Filament/Resources/MaintenanceScheduleResource.php
+
+		-
 			message: '#^Unsafe access to private property App\\Filament\\Resources\\MaintenanceScheduleResource\:\:\$customerCache through static\:\:\.$#'
 			identifier: staticClassAccess.privateProperty
 			count: 1
