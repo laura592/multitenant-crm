@@ -8,13 +8,20 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 PHP_BIN="${PHP_BIN:-php}"
 COMPOSER_BIN="${COMPOSER_BIN:-composer}"
 
+# Sulla VPS si installa senza le dipendenze di sviluppo:
+#     PHP_BIN=php8.5 COMPOSER_FLAGS="--no-dev --optimize-autoloader" ./update.sh
+# Senza --no-dev, composer rimette in produzione laravel/pail e compagnia, e
+# bootstrap/cache torna a citare un service provider che in produzione non ci
+# deve stare: e' il 500 su ogni pagina del 28/09/2026.
+COMPOSER_FLAGS="${COMPOSER_FLAGS:-}"
+
 echo "==> PHP in uso: $($PHP_BIN -v | head -1)"
 
 echo "==> Git pull"
 git pull
 
 echo "==> Composer install"
-"$PHP_BIN" "$(command -v "$COMPOSER_BIN")" install --no-interaction --prefer-dist
+"$PHP_BIN" "$(command -v "$COMPOSER_BIN")" install --no-interaction --prefer-dist $COMPOSER_FLAGS
 
 echo "==> NPM install + build"
 npm install
