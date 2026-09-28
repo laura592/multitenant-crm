@@ -119,6 +119,29 @@ class AppServiceProvider extends ServiceProvider
         Table::$defaultDateDisplayFormat = 'd/m/Y';
         Infolist::$defaultDateDisplayFormat = 'd/m/Y';
 
+        // Via "Tutti" dal selettore delle righe per pagina (28/09/2026).
+        //
+        // Filament lo offre su ogni tabella ([5, 10, 25, 50, 'all']) e la
+        // scelta se la ricorda nella sessione, per sempre. Su Parco macchine
+        // qualcuno l'aveva premuto: da allora ogni caricamento disegnava
+        // tutte le 807 macchine invece di dieci — 30 KB di HTML a riga fanno
+        // 25 MB di pagina, 1,7 MB compressi contro i 25-100 KB di ogni altro
+        // elenco. Il server la componeva in un secondo: a non farcela era il
+        // browser, e nel log di nginx si vedevano i 499 di chi rinunciava.
+        //
+        // Non e' un difetto di quella pagina: capita a qualunque elenco che
+        // cresca. Il 100 resta per chi deve scorrere molto in fretta.
+        //
+        // Le tabelle che impostano le proprie opzioni (->paginated([...]))
+        // non vengono toccate: il loro table() gira dopo questo.
+        //
+        // Le sessioni che hanno gia' 'all' salvato si curano da sole:
+        // getDefaultTableRecordsPerPageSelectOption() scarta un valore che
+        // non e' piu' fra le opzioni e riparte dalla prima.
+        Table::configureUsing(function (Table $table) {
+            $table->paginationPageOptions([10, 25, 50, 100]);
+        });
+
         // Segnalato: i toast di conferma erano poco evidenti (sfondo
         // bianco, solo l'icona colorata) - facile non accorgersene su
         // tablet/cellulare. Devono pero' comparire e sparire da soli (non
