@@ -116,11 +116,20 @@ Sempre su cPanel:
 ```bash
 cd ~/multitenant-crm
 PW=$(grep '^DB_PASSWORD=' .env | cut -d= -f2-)
-mysqldump --single-transaction --routines --default-character-set=utf8mb4 \
+mysqldump --single-transaction --routines --no-tablespaces --default-character-set=utf8mb4 \
   -u nbalexca_crm -p"$PW" nbalexca_multitenant_crm | gzip > ~/cutover.sql.gz
-ls -lh ~/cutover.sql.gz     # una ventina di MB
+gunzip -c ~/cutover.sql.gz | tail -1    # deve dire "-- Dump completed on ..."
 exit
 ```
+
+**`--no-tablespaces` non e' opzionale**: su hosting condiviso l'utente del
+database non ha il privilegio `PROCESS`, e senza quel flag mysqldump si ferma
+con `Access denied ... when trying to dump tablespaces`.
+
+E il controllo si fa sull'ultima riga, non sulla dimensione: il dump
+compresso sta sui 2,6 MB (una ventina di MB di SQL), quindi un file troncato
+a meta' sembrerebbe comunque plausibile. `-- Dump completed on ...` c'e' solo
+se mysqldump e' arrivato in fondo.
 
 Dal Mac, il database e i documenti gia' generati (PDF, firme, allegati):
 
