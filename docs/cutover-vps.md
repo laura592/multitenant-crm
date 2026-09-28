@@ -51,6 +51,39 @@ Poi aspetta un'ora. Nel frattempo non e' cambiato niente per nessuno.
 
 ## Passo 1 — Spegnere il CRM su cPanel
 
+### Prima: c'e' qualcuno che sta lavorando?
+
+Le sessioni stanno nel database, quindi questa non e' una stima: e' la lista
+di chi e' collegato davvero.
+
+```bash
+ssh -p 10223 nbalexca@alexcaffe.com
+cd ~/multitenant-crm
+PW=$(grep '^DB_PASSWORD=' .env | cut -d= -f2-)
+mysql -u nbalexca_crm -p"$PW" nbalexca_multitenant_crm -e "
+select u.name, u.email, from_unixtime(s.last_activity) ultimo_click
+from sessions s join users u on u.id = s.user_id
+where s.last_activity > unix_timestamp(now() - interval 30 minute)
+order by s.last_activity desc;"
+```
+
+Vuota: si procede. Se invece c'e' un tecnico, aspetta: l'unica cosa che il
+cutover puo' portare via e' **il rapportino che qualcuno sta compilando
+nell'istante in cui spegni**, cioe' un form non ancora salvato. Tutto quello
+che e' gia' salvato finisce nel dump del Passo 2, che si fa apposta *dopo*
+aver spento.
+
+Segnati il punto di partenza, serve al Passo 8:
+
+```bash
+mysql -u nbalexca_crm -p"$PW" nbalexca_multitenant_crm -e "
+select count(*) rapportini, max(created_at) ultimo from service_reports;
+select count(*) lavaggi from lavaggi;
+select count(*) clienti from customers;"
+```
+
+### Poi: il cron
+
 **Prima il cron, e non e' un dettaglio.** Se i due scheduler girano insieme,
 tutti e due mandano documenti a Eureka: escono doppi, e su Eureka non si
 cancellano.
@@ -120,12 +153,18 @@ php8.5 artisan migrate --force
 php8.5 artisan optimize:clear
 ```
 
-Controlla che i numeri siano quelli di oggi prima di andare avanti:
+Controlla che i numeri siano **identici** a quelli segnati al Passo 1:
 
 ```bash
-mysql -u crm -p"$PW" crm -e "select count(*) clienti from customers;
-  select count(*) rapportini, max(created_at) ultimo from service_reports;"
+mysql -u crm -p"$PW" crm -e "
+select count(*) rapportini, max(created_at) ultimo from service_reports;
+select count(*) lavaggi from lavaggi;
+select count(*) clienti from customers;"
 ```
+
+Se coincidono non e' rimasto indietro niente. Se non coincidono **fermati
+qui**: cPanel e' ancora intatto e il DNS non l'hai toccato, quindi non e'
+successo nulla di irreparabile — rifai il dump.
 
 ## Passo 4 — Il puntamento
 
