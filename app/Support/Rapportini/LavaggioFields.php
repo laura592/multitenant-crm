@@ -250,9 +250,16 @@ class LavaggioFields
         // lavano a vie (30 piani acqua su 31 non hanno nemmeno lines_count
         // compilato), si sanificano a corpo. Sommarli qui li faceva
         // fatturare come LAVAGGIO 2 VIE.
-        $totaleVie = $righe
-            ->reject(fn (array $riga) => in_array($riga['maintenance_schedule_id'] ?? null, $idAcqua, true))
-            ->sum(fn (array $riga) => filled($riga['lines_washed'] ?? null) ? (int) $riga['lines_washed'] : 0);
+        $aVie = $righe->reject(fn (array $riga) => in_array($riga['maintenance_schedule_id'] ?? null, $idAcqua, true));
+
+        $totaleVie = $aVie->sum(fn (array $riga) => filled($riga['lines_washed'] ?? null) ? (int) $riga['lines_washed'] : 0);
+
+        // Le righe sono per PIANO (birra, vino, selz), non per impianto: al
+        // chiosco di Le Soleil una via di birra e una di vino sono due righe
+        // dello stesso attacco. Le vie vanno quindi raggruppate per macchina
+        // prima di contare, altrimenti due impianti da due vie diventano un
+        // lavaggio da quattro (28/09/2026).
+        $viePerImpianto = self::viePerImpianto($aVie->all());
 
         $sanificazioni = $righe
             ->filter(fn (array $riga) => in_array($riga['maintenance_schedule_id'] ?? null, $idAcqua, true))
@@ -273,6 +280,17 @@ class LavaggioFields
         if ($totaleVie >= 1) {
             $set($su.'_lavaggio_vie_eseguito', true);
             $set($su.'lavaggio_vie_count', $totaleVie);
+            // Un LAVAGGIO 2 VIE per ogni impianto: il minimo di due vie e'
+            // dovuto a ogni attacco, non alla visita. E' come Le Soleil e'
+            // sempre stato fatturato — due rapportini lo stesso giorno, uno
+            // per impianto, ciascuno col suo LAV2.
+            $set($su.'_lavaggio_impianti_count', max(1, count($viePerImpianto)));
+            // Le vie ulteriori si contano DENTRO ogni impianto: 3+2 vie fanno
+            // una via ulteriore sola, non tre.
+            $set($su.'_lavaggio_vie_ulteriori', array_sum(array_map(
+                fn (int $vie) => max(0, $vie - 2),
+                $viePerImpianto,
+            )));
         }
 
         if ($sanificazioni >= 1) {
@@ -280,6 +298,43 @@ class LavaggioFields
         }
 
         self::syncLavaggioViaMaterials($set, $get, $su);
+    }
+
+    /**
+     * Vie raggruppate per impianto (macchina), partendo dalle righe che sono
+     * per piano. Un piano senza macchina sta per conto suo: meglio un
+     * lavaggio in piu' che accorpare cose che non si sa se stiano insieme.
+     *
+     * @param  array<int, array<string, mixed>>  $righe
+     * @return array<string, int>
+     */
+    private static function viePerImpianto(array $righe): array
+    {
+        $ids = collect($righe)->pluck('maintenance_schedule_id')->filter()->all();
+
+        if ($ids === []) {
+            return [];
+        }
+
+        $macchinaDelPiano = MaintenanceSchedule::query()
+            ->whereIn('id', $ids)
+            ->pluck('machine_unit_id', 'id');
+
+        $perImpianto = [];
+
+        foreach ($righe as $riga) {
+            $piano = $riga['maintenance_schedule_id'] ?? null;
+            $vie = filled($riga['lines_washed'] ?? null) ? (int) $riga['lines_washed'] : 0;
+
+            if (! $piano || $vie < 1) {
+                continue;
+            }
+
+            $chiave = $macchinaDelPiano[$piano] ?? 'piano-'.$piano;
+            $perImpianto[$chiave] = ($perImpianto[$chiave] ?? 0) + $vie;
+        }
+
+        return $perImpianto;
     }
 
     /**
@@ -365,18 +420,27 @@ class LavaggioFields
 
                 if (! $baseGiaPresente) {
                     $newBaseKey = (string) Str::uuid();
-                    $materialsUsed[$newBaseKey] = ['material_id' => $baseMaterial->id, 'quantity' => 1];
+                    $materialsUsed[$newBaseKey] = [
+                        'material_id' => $baseMaterial->id,
+                        'quantity' => max(1, (int) $get($su.'_lavaggio_impianti_count')),
+                    ];
                 }
             }
 
-            if ($ultMaterial && $vieCount > 2) {
+            // Senza impianti collegati (vie digitate a mano) vale la regola di
+            // sempre su un impianto solo: tutto quello che eccede le due vie.
+            $ulteriori = $get($su.'_lavaggio_impianti_count') !== null
+                ? (int) $get($su.'_lavaggio_vie_ulteriori')
+                : max(0, $vieCount - 2);
+
+            if ($ultMaterial && $ulteriori > 0) {
                 $ultGiaPresente = collect($materialsUsed)->contains(
                     fn (array $item) => ($item['material_id'] ?? null) === $ultMaterial->id
                 );
 
                 if (! $ultGiaPresente) {
                     $newUltKey = (string) Str::uuid();
-                    $materialsUsed[$newUltKey] = ['material_id' => $ultMaterial->id, 'quantity' => $vieCount - 2];
+                    $materialsUsed[$newUltKey] = ['material_id' => $ultMaterial->id, 'quantity' => $ulteriori];
                 }
             }
         } else {

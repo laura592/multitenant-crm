@@ -876,6 +876,13 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                 Forms\Components\Hidden::make('_sanificazione_count')
                     ->dehydrated(false)
                     ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['sanificazioni_count']),
+                // Quanti impianti si sono lavati e quante vie eccedono le due
+                // DENTRO ciascuno: il lavaggio base e' dovuto per attacco, non
+                // per visita (vedi LavaggioFields::viePerImpianto()).
+                Forms\Components\Hidden::make('_lavaggio_impianti_count')
+                    ->dehydrated(false),
+                Forms\Components\Hidden::make('_lavaggio_vie_ulteriori')
+                    ->dehydrated(false),
                 // Scorciatoie che aggiungono/rimuovono righe materiale da sole
                 // (stesso meccanismo per key, dehydrated(false), per entrambe):
                 // "Chiamata" per il ricambio CHIVE/CHIORD (tariffa base
