@@ -72,6 +72,18 @@ class RapportiniAPassi extends Page
     public bool $modifica = false;
 
     /**
+     * Sbloccato apposta: il cliente di un rapportino gia' salvato si cambia
+     * solo dopo averlo chiesto (28/09/2026).
+     *
+     * Prima era impossibile e basta. Ma il tecnico che sbaglia cliente —
+     * o che sceglie chi paga invece del locale dove ha lavorato — lasciava
+     * un rapportino che nessuno poteva piu' raddrizzare dal pannello:
+     * RT-2026-0881 era su Supermercati Cattel invece che sul Centro Vacanze
+     * Pra' delle Torri, e c'e' voluto un comando a mano.
+     */
+    public bool $cambiaCliente = false;
+
+    /**
      * La visita dei rapportini in modifica, se ne hanno una.
      */
     public ?string $visita = null;
@@ -382,9 +394,26 @@ class RapportiniAPassi extends Page
                         ->required()
                         ->live()
                         ->afterStateUpdated(fn (?string $state) => $this->scegliCliente($state))
-                        // I rapportini salvati sono di un cliente: in modifica
-                        // non si cambia qui.
-                        ->disabled(fn () => $this->modifica)
+                        // In modifica resta chiuso finche' non lo si chiede:
+                        // cambiare cliente azzera macchine e lavori (vedi
+                        // scegliCliente), e un clic distratto su un
+                        // rapportino gia' compilato lo svuoterebbe.
+                        ->disabled(fn () => $this->modifica && ! $this->cambiaCliente)
+                        ->hintAction(
+                            Forms\Components\Actions\Action::make('cambia_cliente')
+                                ->label('Cambia cliente')
+                                ->icon('heroicon-m-pencil-square')
+                                ->link()
+                                // Nessun controllo sul blocco: un rapportino
+                                // gia' in gestionale non arriva nemmeno qui,
+                                // caricaRapportino() fa 403 (riga ~208).
+                                ->visible(fn () => $this->modifica && ! $this->cambiaCliente)
+                                ->requiresConfirmation()
+                                ->modalHeading('Cambiare il cliente di questo rapportino?')
+                                ->modalDescription('Le macchine scelte e il lavoro scritto per ciascuna vengono azzerati: appartenevano al cliente di prima. Il numero del rapportino, la data e il tecnico restano.')
+                                ->modalSubmitActionLabel('Si, cambio cliente')
+                                ->action(fn () => $this->cambiaCliente = true),
+                        )
                         ->columnSpan(['default' => 1, 'md' => 3]),
                     Forms\Components\Select::make('technician_id')
                         ->label('Tecnico')
