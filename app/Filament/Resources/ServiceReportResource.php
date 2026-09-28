@@ -187,9 +187,9 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                 ]),
             InfolistSection::make('Descrizione')
                 ->schema([
-                    TextEntry::make('problem_description')->label('Problema riscontrato')->placeholder('—'),
-                    TextEntry::make('work_performed')->label('Lavoro svolto'),
-                    TextEntry::make('notes')->label('Note')->placeholder('—'),
+                    self::conACapo(TextEntry::make('problem_description')->label('Problema riscontrato')->placeholder('—')),
+                    self::conACapo(TextEntry::make('work_performed')->label('Lavoro svolto')),
+                    self::conACapo(TextEntry::make('notes')->label('Note')->placeholder('—')),
                 ]),
             InfolistSection::make('Ricambi/materiali utilizzati')
                 ->schema([
@@ -2136,6 +2136,25 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
         };
     }
 
+    /**
+     * Mostra un testo libero mantenendo gli a capo che il tecnico ha scritto.
+     *
+     * TextEntry emette HTML, e l'HTML ignora i ritorni a capo: le tre righe
+     * di lavoro svolto di RT-2026-0853 finivano tutte attaccate (28/09/2026).
+     * Il PDF lo faceva gia' giusto con white-space: pre-line, la scheda a
+     * video no — da qui l'impressione che il testo non andasse a capo, mentre
+     * nel database gli a capo c'erano sempre stati.
+     *
+     * Si escappa prima e si converte dopo: nl2br non protegge da niente, e
+     * ->html() da' per buono quello che riceve.
+     */
+    protected static function conACapo(TextEntry $entry): TextEntry
+    {
+        return $entry
+            ->formatStateUsing(fn (?string $state) => filled($state) ? nl2br(e($state)) : null)
+            ->html();
+    }
+
     protected static function defaultServiceReportEmailBody(ServiceReport $record): string
     {
         $customerName = DisplayName::titleCase($record->customer?->company_name) ?: (DisplayName::titleCase($record->customer?->full_name) ?? 'Cliente');
@@ -2144,7 +2163,7 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
         return implode('', [
             '<p>Gentile '.e($customerName).',</p>',
             '<p>in allegato il rapportino relativo all\'intervento del '.e($interventionDate).'.</p>',
-            '<p><strong>Lavoro svolto:</strong> '.e($record->work_performed).'</p>',
+            '<p><strong>Lavoro svolto:</strong> '.nl2br(e($record->work_performed)).'</p>',
         ]);
     }
 

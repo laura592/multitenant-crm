@@ -706,7 +706,7 @@ class RapportiniAPassi extends Page
                 .'<td class="py-2 pe-4 align-top font-medium text-gray-950 dark:text-white">'.e(static::nomePasso($voce)).'</td>'
                 .'<td class="py-2 align-top text-gray-700 dark:text-gray-300">'
                 .'<div class="font-medium">'.e($tipi[$lavoro['intervention_type'] ?? ''] ?? '—').'</div>'
-                .'<div>'.e($lavoro['work_performed'] ?? '').'</div>'
+                .'<div>'.nl2br(e($lavoro['work_performed'] ?? '')).'</div>'
                 .($voci !== '' ? '<div class="text-sm text-gray-500 dark:text-gray-400">'.$voci.'</div>' : '')
                 .'</td></tr>';
         }
