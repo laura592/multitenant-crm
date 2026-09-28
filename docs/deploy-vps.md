@@ -202,7 +202,7 @@ aggiornata.
 se un plugin WordPress impazzisce e satura i suoi worker, il CRM continua a
 rispondere. Copia `/etc/php/8.4/fpm/pool.d/www.conf` in `crm.conf` e
 `wordpress.conf`, e in ciascuno cambia nome del pool, socket
-(`/run/php/php8.4-fpm-crm.sock`) e `pm.max_children`. Poi elimina il pool
+(`/run/php/php8.5-fpm-crm.sock`) e `pm.max_children`. Poi elimina il pool
 `www` di default.
 
 ---
@@ -224,8 +224,8 @@ cd /var/www/multitenant-crm
 composer install --no-dev --optimize-autoloader
 npm ci && npm run build
 cp .env.production.example .env
-php8.4 artisan key:generate
-php8.4 artisan storage:link
+php8.5 artisan key:generate
+php8.5 artisan storage:link
 chown -R www-data:www-data storage bootstrap/cache
 ```
 
@@ -248,8 +248,46 @@ rapportini può fare parecchie email in pochi minuti, e i piani condivisi
 hanno soglie oltre le quali smettono di accettare.
 
 nginx: un server block per `vps.alexcaffe.com` con root
-`/var/www/multitenant-crm/public` e `fastcgi_pass unix:/run/php/php8.4-fpm-crm.sock`,
+`/var/www/multitenant-crm/public` e `fastcgi_pass unix:/run/php/php8.5-fpm-crm.sock`,
 poi `certbot --nginx -d vps.alexcaffe.com`.
+
+### Aggiornare il codice dal Mac
+
+Finche' il repo non e' raggiungibile dalla VPS il codice si porta con `rsync`.
+**Le esclusioni non sono facoltative:**
+
+```bash
+rsync -az --delete \
+  --exclude '.git' --exclude 'node_modules' --exclude 'vendor' \
+  --exclude 'bootstrap/cache' --exclude 'storage' --exclude '.env' \
+  -e "ssh -i ~/.ssh/crm-ovh" \
+  ~/Documents/multitenant-crm/ deploy@<IP-VPS>:/var/www/multitenant-crm/
+```
+
+Poi, **sempre come `deploy`**:
+
+```bash
+cd /var/www/multitenant-crm
+composer install --no-dev --optimize-autoloader
+php8.5 artisan migrate --force
+php8.5 artisan optimize:clear
+```
+
+Tre inciampi, tutti visti il 28/09/2026:
+
+- **`bootstrap/cache` va escluso.** Il `packages.php` del Mac elenca anche i
+  pacchetti di sviluppo; sulla VPS, dove `composer install --no-dev` non li ha
+  installati, il primo che incontra fa cadere tutto con
+  `Class "Laravel\Pail\PailServiceProvider" not found`: HTTP 500 su ogni
+  pagina, senza che una riga di codice sia sbagliata.
+- **`--delete` porta via `storage/framework/views`** se `storage` non e'
+  escluso, e Blade non la ricrea da solo: va rifatta a mano con
+  `mkdir -p storage/framework/{views,cache/data,sessions} storage/logs`.
+- **L'app e' di `deploy`, il `sudo` e' di `ubuntu`.** `ssh crm` entra come
+  `ubuntu`: da li' ogni `composer` o `artisan` finisce in "Permission denied",
+  e `git` ci aggiunge un "dubious ownership" che sembra un altro problema ma
+  e' lo stesso. Non serve riconnettersi: da una sessione `ubuntu` si passa
+  all'altro utente con `sudo -u deploy bash -lc '...'`.
 
 ### Portare i dati
 
@@ -271,8 +309,8 @@ rsync -avz ./storage-app/ deploy@<IP-VPS>:/var/www/multitenant-crm/storage/app/
 ```
 
 Sono ~42 MB di database e ~43 MB di file: minuti, non una finestra di
-manutenzione. Poi `php8.4 artisan migrate --force` e
-`php8.4 artisan optimize:clear`.
+manutenzione. Poi `php8.5 artisan migrate --force` e
+`php8.5 artisan optimize:clear`.
 
 ### Cron e coda
 
@@ -280,7 +318,7 @@ Una riga sola, con il **percorso assoluto** del binario — è l'inciampo che ha
 già tenuto ferma la produzione su cPanel:
 
 ```cron
-* * * * * cd /var/www/multitenant-crm && /usr/bin/php8.4 artisan schedule:run >> /dev/null 2>&1
+* * * * * cd /var/www/multitenant-crm && /usr/bin/php8.5 artisan schedule:run >> /dev/null 2>&1
 ```
 
 Il worker passa sotto supervisor (file di configurazione pronto in
@@ -303,8 +341,8 @@ Su `https://vps.alexcaffe.com`, con i dati reali importati:
 - [ ] generazione PDF di un preventivo e di un rapportino
 - [ ] **email di prova a te stessa**, e controlla negli header che SPF e DKIM
       risultino `pass`
-- [ ] `php8.4 artisan schedule:list` mostra tutti gli otto lavori Eureka
-- [ ] un `MAIL_MAILER=log php8.4 artisan eureka:sincronizza-tutto --tenant=alex`
+- [ ] `php8.5 artisan schedule:list` mostra tutti gli otto lavori Eureka
+- [ ] un `MAIL_MAILER=log php8.5 artisan eureka:sincronizza-tutto --tenant=alex`
       arriva in fondo senza fallimenti (`MAIL_MAILER=log` perché
       `gestionale:sync` manda il digest all'ufficio, e da una macchina di
       prova non deve partire)
