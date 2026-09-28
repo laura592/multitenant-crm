@@ -33,6 +33,8 @@ class DividiImpianto extends Command
                             {--nome= : nome del nuovo impianto (es. "Impianto Spina Chiosco")}
                             {--vie= : vie del NUOVO impianto, es. birra:1,vino:1,selz:1}
                             {--resta= : vie che restano sull\'esistente, es. birra:2,vino:1,selz:1}
+                            {--matricola= : matricola del nuovo impianto (default: il numero successivo)}
+                            {--rinomina= : nuova matricola per quello esistente, se il numero non dice niente}
                             {--tenant=alex : slug del tenant}
                             {--dry-run : mostra cosa cambierebbe senza scrivere}';
 
@@ -70,7 +72,21 @@ class DividiImpianto extends Command
         }
 
         $nome = (string) ($this->option('nome') ?: $vecchia->model_name.' (2)');
-        $matricolaNuova = $this->prossimaMatricola($tenant, $vecchia->serial_number);
+        $matricolaNuova = (string) ($this->option('matricola')
+            ?: $this->prossimaMatricola($tenant, $vecchia->serial_number));
+
+        // Una matricola gia' in uso farebbe due macchine indistinguibili:
+        // e' proprio il problema che stiamo risolvendo.
+        foreach (array_filter([$matricolaNuova, (string) $this->option('rinomina')]) as $m) {
+            if ($m !== $vecchia->serial_number && MachineUnit::query()->withoutGlobalScopes()
+                ->where('tenant_id', $tenant->id)->where('serial_number', $m)->exists()) {
+                $this->error("La matricola {$m} e' gia' in uso.");
+
+                return self::FAILURE;
+            }
+        }
+
+        $matricolaEsistente = (string) ($this->option('rinomina') ?: $vecchia->serial_number);
 
         $pianiEsistenti = MaintenanceSchedule::query()
             ->withoutGlobalScopes()
@@ -98,11 +114,13 @@ class DividiImpianto extends Command
         }
 
         $this->table(
-            ['Bevanda', 'Vie adesso', $vecchia->serial_number, $matricolaNuova],
+            ['Bevanda', 'Vie adesso', $matricolaEsistente, $matricolaNuova],
             $righe,
         );
 
-        $this->line('  Esistente: '.$vecchia->serial_number.' — '.mb_substr((string) $vecchia->model_name, 0, 50));
+        $this->line('  Esistente: '.$matricolaEsistente
+            .($matricolaEsistente !== $vecchia->serial_number ? ' (era '.$vecchia->serial_number.')' : '')
+            .' — '.mb_substr((string) $vecchia->model_name, 0, 50));
         $rapportini = \App\Models\ServiceReport::query()->withoutGlobalScopes()
             ->where('machine_unit_id', $vecchia->id)->count();
         $this->line('             tiene i suoi '.$rapportini.' rapportini e lo storico');
@@ -120,7 +138,7 @@ class DividiImpianto extends Command
             return self::SUCCESS;
         }
 
-        DB::transaction(function () use ($vecchia, $tenant, $nome, $matricolaNuova, $nuove, $restano, $pianiEsistenti) {
+        DB::transaction(function () use ($vecchia, $tenant, $nome, $matricolaNuova, $matricolaEsistente, $nuove, $restano, $pianiEsistenti) {
             $nuovaMacchina = MachineUnit::create([
                 'tenant_id' => $tenant->id,
                 'current_customer_id' => $vecchia->current_customer_id,
@@ -159,13 +177,23 @@ class DividiImpianto extends Command
             // Il nome non deve piu' dire "2 impianti": era la nota che
             // segnalava il problema, e il problema adesso non c'e' piu'.
             $ripulito = trim(preg_replace('/\s*\(?\s*2 impianti[^)]*\)?/i', '', (string) $vecchia->model_name));
+            $cambi = [];
             if ($ripulito !== '' && $ripulito !== $vecchia->model_name) {
-                $vecchia->update(['model_name' => $ripulito]);
+                $cambi['model_name'] = $ripulito;
+            }
+            // La matricola dell'esistente cambia solo se glielo si chiede: i
+            // rapportini gia' fatti conservano quella vecchia scritta dentro
+            // (machine_serial_number), e va bene — dice cosa c'era allora.
+            if ($matricolaEsistente !== $vecchia->serial_number) {
+                $cambi['serial_number'] = $matricolaEsistente;
+            }
+            if ($cambi !== []) {
+                $vecchia->update($cambi);
             }
         });
 
-        $this->info('Fatto. '.$vecchia->serial_number.' e '.$matricolaNuova.' sono due impianti distinti.');
-        $this->line('Controlla i piani dal dettaglio del cliente: lo storico dei lavaggi e\' rimasto su '.$vecchia->serial_number.'.');
+        $this->info('Fatto. '.$matricolaEsistente.' e '.$matricolaNuova.' sono due impianti distinti.');
+        $this->line('Controlla i piani dal dettaglio del cliente: lo storico dei lavaggi e\' rimasto su '.$matricolaEsistente.'.');
 
         return self::SUCCESS;
     }
