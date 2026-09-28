@@ -646,7 +646,17 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                         Forms\Components\TextInput::make('lines_washed')
                             ->label('Vie lavate')
                             ->numeric()
-                            ->minValue(0)
+                            // Obbligatorio dal 28/09/2026: e' il campo su cui
+                            // si fattura, e senza vincolo non si compilava.
+                            // Su 989 lavaggi, 293 erano senza vie: 201 si sono
+                            // recuperati dalla descrizione o dal piano, 92 no.
+                            // Non sugli impianti acqua: quelli si sanificano
+                            // a corpo e le vie non vogliono dire niente.
+                            ->required(fn (Get $get) => ! self::impiantoSenzaVie($get('maintenance_schedule_id')))
+                            ->visible(fn (Get $get) => ! self::impiantoSenzaVie($get('maintenance_schedule_id')))
+                            // Zero vie non e' un lavaggio: se la riga c'e',
+                            // qualcosa e' stato lavato.
+                            ->minValue(1)
                             // live() perche' il totale vie di questo
                             // repeater accende da solo il lavaggio e le
                             // sue righe tariffa piu' in basso: senza,
@@ -673,19 +683,30 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                     // i piani attivi — birra, vino e selz "fatti" avendone
                     // lavato uno solo. Con un impianto solo non c'e' niente
                     // da sbagliare e si puo' lasciare vuoto.
-                    ->minItems(fn (Get $get) => self::piuImpiantiDaLavare($get) ? 1 : 0)
-                    ->helperText(fn (Get $get) => self::piuImpiantiDaLavare($get)
-                        ? 'Questo cliente ha più impianti: scegli quali hai lavato, o il lavaggio risulterà fatto su tutti.'
-                        : null)
+                    // Dal 28/09/2026 basta UN piano perche' sia obbligatorio,
+                    // non due: anche con un impianto solo serve sapere quante
+                    // vie sono state lavate, ed e' il campo su cui si fattura.
+                    // Saltando il riquadro il lavaggio nasceva senza vie — 92
+                    // di quelli registrati non si sono piu' potuti ricostruire.
+                    // Con zero piani resta libero: non ci sarebbe niente da
+                    // scegliere e il salvataggio si bloccherebbe senza uscita.
+                    ->minItems(fn (Get $get) => self::impiantiDaLavare($get) >= 1 ? 1 : 0)
+                    ->helperText(fn (Get $get) => match (true) {
+                        self::piuImpiantiDaLavare($get) => 'Questo cliente ha più impianti: scegli quali hai lavato e quante vie per ciascuno, o il lavaggio risulterà fatto su tutti.',
+                        self::impiantiDaLavare($get) === 1 => 'Indica quante vie hai lavato: è il dato su cui si fattura.',
+                        default => null,
+                    })
                     // Le vie si scrivono qui, in cima al rapportino: da
                     // qui discendono il toggle "Lavaggio eseguito" e le
                     // righe LAV2/ULTERIORE VIA piu' in basso, invece di
                     // farle ridigitare (e di lasciare senza voci da
                     // fatturare chi si ferma a questo riquadro).
                     ->afterStateUpdated(fn (Forms\Set $set, Get $get) => LavaggioFields::syncVieDaImpianti($set, $get))
-                    ->helperText('Lascia vuoto (nessuna riga) per applicarla a tutti i piani lavaggio attivi del cliente, senza vie specifiche per impianto (comportamento di sempre). Aggiungi una riga per ogni impianto coperto da questa visita: le vie totali accendono da sole il lavaggio e le sue voci tra i ricambi.')
                     ->addActionLabel('Aggiungi impianto')
-                    ->defaultItems(0)
+                    // Una riga gia' aperta al primo colpo d'occhio: con
+                    // defaultItems(0) il riquadro sembrava facoltativo, e si
+                    // passava oltre. Solo se un piano c'e' da scegliere.
+                    ->defaultItems(fn (Get $get) => self::impiantiDaLavare($get) >= 1 ? 1 : 0)
                     ->columnSpanFull(),
                 // Il collegamento Eureka manca spesso solo per il rapportino
                 // (vedi ServiceReport::gestionaleValidationErrors()), ma finora
@@ -2308,17 +2329,39 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
      */
     public static function piuImpiantiDaLavare(Get $get): bool
     {
+        return self::impiantiDaLavare($get) > 1;
+    }
+
+    /**
+     * Quanti piani lavaggio attivi ha questo cliente.
+     *
+     * Serve a decidere se la scelta dell'impianto si puo' pretendere: con
+     * zero piani non c'e' niente da scegliere, e obbligare bloccherebbe il
+     * salvataggio senza via d'uscita.
+     */
+    public static function impiantiDaLavare(Get $get): int
+    {
         $customerId = $get('customer_id') ?? $get('../../customer_id');
 
         if (! $customerId) {
-            return false;
+            return 0;
         }
 
         return MaintenanceSchedule::query()
             ->where('customer_id', $customerId)
             ->where('type', MaintenanceSchedule::TYPE_LAVAGGIO)
             ->where('status', MaintenanceSchedule::STATUS_ATTIVO)
-            ->count() > 1;
+            ->count();
+    }
+
+    /**
+     * Un impianto acqua non si lava "a vie": si sanifica, e si fattura a
+     * corpo. Le vie non vanno quindi pretese su quelle righe.
+     */
+    public static function impiantoSenzaVie(?string $scheduleId): bool
+    {
+        return $scheduleId
+            && MaintenanceSchedule::find($scheduleId)?->beverage_type === MaintenanceSchedule::BEVERAGE_ACQUA;
     }
 
     public static function statusLabels(): array
