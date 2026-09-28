@@ -117,9 +117,16 @@ class AssegnaImpiantiRapportino extends Command
         // di un rapportino pero' puo' venire dalla macchina o essere stato
         // congelato alla chiusura, quindi glielo si mette in mano gia'
         // risolto: setRelation non scrive niente, cambia solo cosa legge.
+        //
+        // E conta il pagante dell'impianto di DESTINAZIONE, non di quello su
+        // cui il rapportino sta adesso: chi paga dipende dalla macchina, e qui
+        // la macchina la stiamo cambiando. RT-2026-0859 era sull'impianto
+        // acqua, che paga Le Soleil, e alla prima passata e' uscito LAV2
+        // invece di LAV2MART — ci sono volute due esecuzioni (28/09/2026).
         $cliente = $rapportino->customer;
+        $pagante = $impianto->paganteEffettivo() ?? $rapportino->invoiceRecipient();
 
-        if ($cliente && ($pagante = $rapportino->invoiceRecipient())) {
+        if ($cliente && $pagante) {
             $cliente->setRelation('billingCustomer', $pagante);
         }
 
@@ -138,7 +145,7 @@ class AssegnaImpiantiRapportino extends Command
 
         $this->line('  Rapportino: '.$rapportino->number.' del '.$rapportino->intervention_date?->format('d/m/Y'));
         $this->line('  Cliente:    '.DisplayName::titleCase($rapportino->customer?->company_name));
-        $this->line('  Pagante:    '.(DisplayName::titleCase($rapportino->invoiceRecipient()?->company_name) ?? '—'));
+        $this->line('  Pagante:    '.(DisplayName::titleCase($pagante?->company_name) ?? '—').' (dell\'impianto di destinazione)');
         $this->newLine();
 
         $righeAttuali = $rapportino->materialsUsed

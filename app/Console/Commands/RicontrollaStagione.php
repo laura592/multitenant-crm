@@ -42,9 +42,22 @@ class RicontrollaStagione extends Command
             ->orderBy('data')
             ->get();
 
-        $daFare = [];
+        // Di ogni piano conta solo l'ULTIMO evento stagionale, non tutti.
+        // Applicandoli tutti, un'apertura di aprile annullava la chiusura di
+        // settembre: su Chiosco Soleado il comando ha prima ripreso i piani
+        // con il lavaggio del 15/04 e solo al giro dopo li ha rimessi in
+        // pausa con quello del 23/09 (28/09/2026).
+        $ultimoPerPiano = [];
 
         foreach ($lavaggi as $lavaggio) {
+            if ($lavaggio->maintenance_schedule_id) {
+                $ultimoPerPiano[$lavaggio->maintenance_schedule_id] = $lavaggio;
+            }
+        }
+
+        $daFare = [];
+
+        foreach ($ultimoPerPiano as $lavaggio) {
             $piano = $lavaggio->maintenanceSchedule;
 
             if (! $piano) {
