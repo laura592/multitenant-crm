@@ -27,7 +27,13 @@ trait BelongsToTenant
             // "tenant_id non toccato dal form" da "impostato esplicitamente a
             // null" - il secondo caso serve al catalogo condiviso (§4.2/§11.2),
             // dove un master admin sceglie deliberatamente NULL = condiviso.
-            if (! array_key_exists('tenant_id', $model->getAttributes()) && $tenant = Filament::getTenant()) {
+            // instanceof e non un truthy: Filament::getTenant() e' tipizzato
+            // ?Model, e senza il controllo l'analisi statica non sa che quel
+            // Model ha un id. Il comportamento non cambia — il tenant e'
+            // sempre un Tenant — ma il tipo adesso e' dichiarato.
+            $tenant = Filament::getTenant();
+
+            if (! array_key_exists('tenant_id', $model->getAttributes()) && $tenant instanceof Tenant) {
                 $model->tenant_id = $tenant->id;
             }
         });
@@ -37,7 +43,8 @@ trait BelongsToTenant
                 return;
             }
 
-            $tenantId = Filament::getTenant()?->id;
+            $tenant = Filament::getTenant();
+            $tenantId = $tenant instanceof Tenant ? $tenant->id : null;
 
             if (! $tenantId) {
                 return;

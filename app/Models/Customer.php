@@ -43,6 +43,8 @@ class Customer extends Model
         'pec',
         'tax_code',
         'vat_number',
+        'regime_iva',
+        'esenzione_articolo',
         'sdi',
         'website',
         'website_checked_at',
@@ -148,6 +150,21 @@ class Customer extends Model
      * Vedi Customer::booted(): usato per bloccare la cancellazione (soft
      * delete incluso) finche' il cliente ha ancora dati collegati.
      */
+    /**
+     * I documenti consegnati: visura, esenzione IVA, mandato, documento
+     * d'identita'. Vedi CustomerDocument.
+     */
+    public function documenti(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(CustomerDocument::class);
+    }
+
+    /** Se a questo cliente l'IVA non si applica, e per quale articolo. */
+    public function esenteIva(): bool
+    {
+        return $this->regime_iva === 'esente';
+    }
+
     public function hasBlockingRelatedRecords(): bool
     {
         return $this->quotes()->exists()

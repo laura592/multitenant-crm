@@ -7,6 +7,7 @@ use App\Filament\Forms\CustomerContactFields;
 use App\Filament\Forms\CustomerFiscalFields;
 use App\Filament\Forms\ItalianAddressFields;
 use App\Filament\Resources\CustomerResource\Pages;
+use App\Filament\Resources\CustomerResource\RelationManagers\DocumentiRelationManager;
 use App\Filament\Resources\CustomerResource\RelationManagers\LavaggiRelationManager;
 use App\Filament\Resources\CustomerResource\RelationManagers\MacchinariRelationManager;
 use App\Filament\Resources\CustomerResource\RelationManagers\QuotesRelationManager;
@@ -464,6 +465,7 @@ class CustomerResource extends Resource
     public static function getRelations(): array
     {
         return [
+            DocumentiRelationManager::class,
             MacchinariRelationManager::class,
             QuotesRelationManager::class,
             LavaggiRelationManager::class,
