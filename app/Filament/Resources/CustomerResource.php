@@ -110,7 +110,7 @@ class CustomerResource extends Resource
                             ->when($record, fn ($q) => $q->whereKeyNot($record->id))
                             ->orderBy('company_name'))
                         ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::titleCase($record->full_name))
-                        ->searchable(['company_name', 'first_name', 'last_name'])
+                        ->searchable(['search_name', 'company_name', 'first_name', 'last_name'])
                         ->preload()
                         ->columnSpanFull()
                         ->helperText('Lascia vuoto se il cliente paga per se stesso. Imposta un altro cliente se qualcun altro paga al posto suo (es. un gestore che ha messo una macchina in comodato presso questo cliente): preventivi e rapportini restano su questo cliente, ma verranno intestati/inviati al cliente scelto qui.')

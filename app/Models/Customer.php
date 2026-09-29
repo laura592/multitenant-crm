@@ -116,6 +116,32 @@ class Customer extends Model
                 return false;
             }
         });
+
+        // Il nome senza apostrofi, tenuto aggiornato a ogni salvataggio.
+        // Serve alla ricerca del pannello: Eureka scrive gli accenti
+        // all'italiana ("Agora'", "Caffe'", "Pra' delle Torri") e digitando
+        // il nome senza apostrofo non usciva niente. Vedi la migrazione
+        // 2026_09_28_140000.
+        static::saving(function (self $customer) {
+            $customer->search_name = self::nomeCercabile(
+                $customer->company_name,
+                $customer->first_name,
+                $customer->last_name,
+            );
+        });
+    }
+
+    /**
+     * Toglie gli apostrofi — dritto e tipografico — da nome e ragione
+     * sociale, per il confronto testuale.
+     *
+     * Gli accenti NON si toccano: la collation utf8mb4_unicode_ci li ignora
+     * gia' nel confronto, quindi "caffe" trova "caffe'" e "caffe" con
+     * l'accento. Toglierli qui non aggiungerebbe niente.
+     */
+    public static function nomeCercabile(?string ...$pezzi): string
+    {
+        return trim(str_replace(["'", '’'], '', implode(' ', array_filter($pezzi))));
     }
 
     /**

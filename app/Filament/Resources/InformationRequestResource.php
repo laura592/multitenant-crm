@@ -78,7 +78,7 @@ class InformationRequestResource extends Resource
                         // franchising con più punti vendita): la città in coda aiuta a
                         // distinguerli nell'elenco invece di vederli tutti uguali.
                         ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::customerOption($record))
-                        ->searchable(['company_name', 'first_name', 'last_name'])
+                        ->searchable(['search_name', 'company_name', 'first_name', 'last_name'])
                         ->preload()
                         ->required()
                         ->extraAttributes(['data-tour' => 'information-requests-field-customer'])

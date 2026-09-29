@@ -80,7 +80,7 @@ class QuoteGroupResource extends Resource
                         ->label('Cliente')
                         ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
                         ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::titleCase($record->full_name))
-                        ->searchable(['company_name', 'first_name', 'last_name'])
+                        ->searchable(['search_name', 'company_name', 'first_name', 'last_name'])
                         ->preload()
                         ->required()
                         ->extraAttributes(['data-tour' => 'quote-groups-field-customer']),

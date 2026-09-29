@@ -370,7 +370,7 @@ class QuoteResource extends Resource
                         ->label('Cliente')
                         ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
                         ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::customerOption($record))
-                        ->searchable(['company_name', 'first_name', 'last_name'])
+                        ->searchable(['search_name', 'company_name', 'first_name', 'last_name'])
                         ->preload()
                         ->required()
                         // Creando da dentro un'Offerta il cliente e' quello
@@ -460,7 +460,7 @@ class QuoteResource extends Resource
                                         ->label('Cliente')
                                         ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
                                         ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::customerOption($record))
-                                        ->searchable(['company_name', 'first_name', 'last_name'])
+                                        ->searchable(['search_name', 'company_name', 'first_name', 'last_name'])
                                         ->preload()
                                         ->required()
                                         // Creando da dentro un'Offerta il cliente e' quello

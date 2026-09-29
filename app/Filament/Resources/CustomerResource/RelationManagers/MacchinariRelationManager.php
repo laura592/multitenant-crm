@@ -42,7 +42,7 @@ class MacchinariRelationManager extends RelationManager
                 ->label('Fatturare a')
                 ->relationship('billingCustomer', 'company_name')
                 ->getOptionLabelFromRecordUsing(fn (Customer $record) => DisplayName::titleCase($record->full_name))
-                ->searchable(['company_name', 'first_name', 'last_name'])
+                ->searchable(['search_name', 'company_name', 'first_name', 'last_name'])
                 ->preload()
                 ->helperText('Lascia vuoto se paga il cliente presso cui è installata questa macchina.'),
         ]);

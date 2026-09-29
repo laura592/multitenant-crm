@@ -413,7 +413,7 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                     ->extraAttributes(['data-tour' => 'service-reports-field-customer'])
                     ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
                     ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::customerOption($record))
-                    ->searchable(['company_name', 'first_name', 'last_name', 'city'])
+                    ->searchable(['search_name', 'company_name', 'first_name', 'last_name', 'city'])
                     ->preload()
                     ->required()
                     ->live()
@@ -775,7 +775,8 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                     // svuotato, restava il cliente congelato).
                     ->searchable()
                     ->getSearchResultsUsing(fn (string $search) => Customer::query()
-                        ->where(fn ($q) => $q->where('company_name', 'like', "%{$search}%")
+                        ->where(fn ($q) => $q->where('search_name', 'like', '%'.Customer::nomeCercabile($search).'%')
+                                ->orWhere('company_name', 'like', "%{$search}%")
                             ->orWhere('first_name', 'like', "%{$search}%")
                             ->orWhere('last_name', 'like', "%{$search}%")
                             ->orWhere('city', 'like', "%{$search}%"))

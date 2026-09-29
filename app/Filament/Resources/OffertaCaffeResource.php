@@ -62,7 +62,7 @@ class OffertaCaffeResource extends Resource
                         ->label('Cliente')
                         ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
                         ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::customerOption($record))
-                        ->searchable(['company_name', 'first_name', 'last_name'])
+                        ->searchable(['search_name', 'company_name', 'first_name', 'last_name'])
                         ->required()
                         ->columnSpan(['default' => 1, 'lg' => 2]),
                     Forms\Components\DatePicker::make('date')
