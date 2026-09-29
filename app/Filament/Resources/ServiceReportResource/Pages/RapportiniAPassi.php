@@ -432,19 +432,33 @@ class RapportiniAPassi extends Page
                         ...$this->macchineDelCliente($get('customer_id'))
                             ->mapWithKeys(fn (MachineUnit $m) => [$m->id => static::nomeMacchina($m)])
                             ->all(),
-                        self::GENERALE => 'Senza una macchina precisa',
+                        // "Senza una macchina precisa" non si offre piu' su un
+                        // rapportino nuovo (28/09/2026). Era la via da cui
+                        // nascevano i 162 rapportini che fatturano un lavaggio
+                        // senza avere la macchina: senza macchina il lavaggio
+                        // non viene generato, e la scadenza del piano resta
+                        // indietro per sempre.
+                        //
+                        // Resta visibile solo aprendo in modifica un
+                        // rapportino che quella scelta ce l'ha gia': togliergli
+                        // l'opzione significherebbe non poterlo piu' salvare.
+                        ...(in_array(null, $this->esistenti, true)
+                            ? [self::GENERALE => 'Senza una macchina precisa']
+                            : []),
                     ])
                     ->descriptions(fn (Get $get) => [
                         ...$this->macchineDelCliente($get('customer_id'))
                             ->mapWithKeys(fn (MachineUnit $m) => [$m->id => $this->descrizioneMacchina($m)])
                             ->all(),
-                        self::GENERALE => 'Per esempio il lavaggio di tutti gli impianti del cliente.',
+                        ...(in_array(null, $this->esistenti, true)
+                            ? [self::GENERALE => 'Scelta di un rapportino gia\' scritto cosi\': sui nuovi la macchina e\' obbligatoria.']
+                            : []),
                     ])
                     // In modifica le macchine con un rapportino restano: per
                     // toglierne una si cancella il suo rapportino.
                     ->disableOptionWhen(fn (string $value) => in_array($value === self::GENERALE ? null : $value, $this->esistenti, true))
                     ->required(fn () => ! $this->modifica)
-                    ->validationMessages(['required' => 'Spunta almeno una macchina.'])
+                    ->validationMessages(['required' => 'Spunta almeno una macchina: senza, il lavaggio non viene generato e la scadenza del piano resta indietro.'])
                     ->live()
                     ->afterStateUpdated(fn (?array $state) => collect($state ?? [])->each(fn ($id) => $this->preparaLavoro($id)))
                     ->visible(fn (Get $get) => filled($get('customer_id')))
