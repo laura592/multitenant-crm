@@ -258,8 +258,8 @@ Finche' il repo non e' raggiungibile dalla VPS il codice si porta con `rsync`.
 
 ```bash
 rsync -az --delete \
-  --exclude '.git' --exclude 'node_modules' --exclude 'vendor' \
-  --exclude 'bootstrap/cache' --exclude 'storage' --exclude '.env' \
+  --exclude '/.git' --exclude '/node_modules' --exclude '/vendor' \
+  --exclude '/bootstrap/cache' --exclude '/storage' --exclude '/.env' \
   -e "ssh -i ~/.ssh/crm-ovh" \
   ~/Documents/multitenant-crm/ deploy@<IP-VPS>:/var/www/multitenant-crm/
 ```
