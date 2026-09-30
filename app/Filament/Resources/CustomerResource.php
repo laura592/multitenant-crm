@@ -6,6 +6,7 @@ use App\Filament\Actions\ContattaCliente;
 use App\Filament\Forms\CustomerContactFields;
 use App\Filament\Forms\CustomerFiscalFields;
 use App\Filament\Forms\ItalianAddressFields;
+use App\Filament\RelationManagers\CronologiaRelationManager;
 use App\Filament\Resources\CustomerResource\Pages;
 use App\Filament\Resources\CustomerResource\RelationManagers\DocumentiRelationManager;
 use App\Filament\Resources\CustomerResource\RelationManagers\LavaggiRelationManager;
@@ -470,6 +471,7 @@ class CustomerResource extends Resource
             QuotesRelationManager::class,
             LavaggiRelationManager::class,
             ServiceReportsRelationManager::class,
+            CronologiaRelationManager::class,
         ];
     }
 }

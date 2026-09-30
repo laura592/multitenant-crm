@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\HasClientLink;
+use App\Models\Concerns\LogsAuditTrail;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -12,7 +13,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class QuoteGroup extends Model
 {
-    use BelongsToTenant, HasClientLink, HasUuids, SoftDeletes;
+    use BelongsToTenant, HasClientLink, HasUuids, LogsAuditTrail, SoftDeletes;
 
     protected $fillable = [
         'tenant_id',

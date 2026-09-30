@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\LogsAuditTrail;
 use App\Models\Concerns\SharedAcrossTenants;
 use App\Support\Assistenza\ContrattoAssistenza;
 use App\Support\PdfCompressor;
@@ -26,7 +27,7 @@ use Illuminate\Support\Str;
  */
 class PriceList extends Model
 {
-    use BelongsToTenant, HasUuids, SharedAcrossTenants;
+    use BelongsToTenant, HasUuids, LogsAuditTrail, SharedAcrossTenants;
 
     public const CARTELLA = 'price-lists';
 

@@ -4,6 +4,8 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\SharedAcrossTenants;
+use Filament\Facades\Filament;
+use Filament\Resources\Resource;
 use Spatie\Activitylog\Models\Activity;
 
 /**
@@ -60,7 +62,107 @@ class AuditLog extends Activity
             LeaveRequest::class => 'Richiesta ferie/permesso',
             InformationRequest::class => 'Richiesta informazioni',
             InformationRequestNote::class => 'Nota richiesta informazioni',
+            CustomerDocument::class => 'Documento del cliente',
+            InterventoProgrammato::class => 'Intervento programmato',
+            // Dal 30/09/2026: i preventivi non lasciavano traccia di chi
+            // cambiava un prezzo o uno stato, che e' esattamente il tipo di
+            // domanda che arriva dopo.
+            Quote::class => 'Preventivo',
+            QuoteProduct::class => 'Riga preventivo',
+            QuoteGroup::class => 'Gruppo di preventivi',
+            Deadline::class => 'Scadenza',
+            Vehicle::class => 'Veicolo',
+            PriceList::class => 'Listino',
         ];
+    }
+
+    /**
+     * Link alla scheda del record toccato, quando esiste una Resource che lo
+     * sa mostrare: dall'audit si deve poter arrivare al dato, altrimenti
+     * "chi ha cambiato cosa" resta una notizia e non una cosa su cui agire.
+     * Per le righe figlie (una riga materiale, una collocazione) si apre il
+     * documento che le contiene, che e' l'unico posto dove si vedono.
+     */
+    public function urlRecord(): ?string
+    {
+        $subject = $this->subject;
+
+        if (! $subject) {
+            return null;
+        }
+
+        $apribile = match (true) {
+            $subject instanceof ServiceReportMaterial,
+            $subject instanceof ServiceReportProduct => $subject->serviceReport,
+            $subject instanceof MaterialOrderItem => $subject->order,
+            $subject instanceof MachineUnitPlacement => $subject->machineUnit,
+            $subject instanceof InformationRequestNote => $subject->informationRequest,
+            $subject instanceof ProductPrice => $subject->product,
+            $subject instanceof Lavaggio => $subject->machineUnit,
+            default => $subject,
+        };
+
+        if (! $apribile) {
+            return null;
+        }
+
+        $panel = Filament::getCurrentPanel();
+
+        if (! $panel) {
+            return null;
+        }
+
+        foreach ($panel->getResources() as $resource) {
+            /** @var class-string<Resource> $resource */
+            if ($resource::getModel() !== $apribile::class) {
+                continue;
+            }
+
+            $pagina = collect(['view', 'edit', 'index'])
+                ->first(fn (string $nome) => array_key_exists($nome, $resource::getPages()));
+
+            if (! $pagina) {
+                return null;
+            }
+
+            try {
+                return $resource::getUrl(
+                    $pagina,
+                    $pagina === 'index' ? [] : ['record' => $apribile->getKey()],
+                    panel: $panel->getId(),
+                    tenant: self::tenantPerUrl($apribile->getAttribute('tenant_id')),
+                );
+            } catch (\Throwable) {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    private static function stringaONull(mixed $valore): ?string
+    {
+        return is_string($valore) && $valore !== '' ? $valore : null;
+    }
+
+    /** @var array<string, ?Tenant> */
+    private static array $tenantiPerUrl = [];
+
+    private static function tenantPerUrl(?string $tenantId): ?Tenant
+    {
+        $corrente = Filament::getTenant();
+        $corrente = $corrente instanceof Tenant ? $corrente : null;
+
+        if (! $tenantId || $corrente?->getKey() === $tenantId) {
+            return $corrente;
+        }
+
+        if (! array_key_exists($tenantId, self::$tenantiPerUrl)) {
+            $tenant = Tenant::query()->find($tenantId);
+            self::$tenantiPerUrl[$tenantId] = $tenant instanceof Tenant ? $tenant : null;
+        }
+
+        return self::$tenantiPerUrl[$tenantId];
     }
 
     public function subjectLabel(): string
@@ -92,6 +194,7 @@ class AuditLog extends Activity
             $subject instanceof ServiceReportMaterial,
             $subject instanceof ServiceReportProduct => $subject->serviceReport?->tenant_id,
             $subject instanceof MaterialOrderItem => $subject->order?->tenant_id,
+            $subject instanceof QuoteProduct => self::stringaONull($subject->quote?->getAttribute('tenant_id')),
             default => $subject->tenant_id ?? null,
         };
     }

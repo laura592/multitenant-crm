@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Mail\CustomerGestionaleReviewMail;
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\HasClientLink;
+use App\Models\Concerns\LogsAuditTrail;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,7 +16,7 @@ use Illuminate\Support\Facades\Mail;
 
 class Quote extends Model
 {
-    use BelongsToTenant, HasClientLink, HasUuids, SoftDeletes;
+    use BelongsToTenant, HasClientLink, HasUuids, LogsAuditTrail, SoftDeletes;
 
     protected $casts = [
         'date' => 'date',

@@ -5,12 +5,13 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\AuditLogResource\Pages;
 use App\Models\AuditLog;
 use App\Models\User;
+use App\Support\Audit\Modifiche;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Form;
-use Filament\Infolists\Components\KeyValueEntry;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Components\ViewEntry;
 use Filament\Infolists\Infolist;
 use Filament\Resources\Resource;
 use Filament\Tables;
@@ -84,20 +85,25 @@ class AuditLogResource extends Resource
                         ->color(fn (?string $state) => static::eventColors()[$state] ?? 'gray'),
                     TextEntry::make('subject_label')->label('Modello')
                         ->state(fn (AuditLog $record) => $record->subjectLabel()),
-                    TextEntry::make('subject_id')->label('ID record')->placeholder('—'),
+                    TextEntry::make('soggetto')->label('Record')
+                        ->state(fn (AuditLog $record) => Modifiche::soggetto($record))
+                        ->url(fn (AuditLog $record) => $record->urlRecord())
+                        ->color(fn (AuditLog $record) => $record->urlRecord() ? 'primary' : null)
+                        ->openUrlInNewTab(),
                     TextEntry::make('causer.name')->label('Utente')->placeholder('Sistema'),
                     TextEntry::make('tenant.name')->label('Tenant')->placeholder('Catalogo condiviso'),
                 ]),
-            InfolistSection::make('Valori precedenti')
+            InfolistSection::make('Cosa è cambiato')
+                ->description(fn (AuditLog $record) => match ($record->event) {
+                    'created' => 'I valori con cui il record è stato creato (i campi lasciati vuoti non sono elencati).',
+                    'deleted' => 'I valori che il record aveva quando è stato eliminato.',
+                    default => 'Solo i campi che sono cambiati davvero.',
+                })
                 ->schema([
-                    KeyValueEntry::make('attribute_changes.old')->label('Prima'),
-                ])
-                ->visible(fn (AuditLog $record) => filled($record->attribute_changes?->get('old'))),
-            InfolistSection::make('Valori nuovi')
-                ->schema([
-                    KeyValueEntry::make('attribute_changes.attributes')->label('Dopo'),
-                ])
-                ->visible(fn (AuditLog $record) => filled($record->attribute_changes?->get('attributes'))),
+                    ViewEntry::make('modifiche')
+                        ->hiddenLabel()
+                        ->view('filament.infolists.modifiche-audit'),
+                ]),
         ]);
     }
 
@@ -105,6 +111,9 @@ class AuditLogResource extends Resource
     {
         return $table
             ->defaultSort('created_at', 'desc')
+            // Il soggetto e' un morphTo: senza questo ogni riga fa la sua
+            // query per sapere di quale cliente/rapportino si parla.
+            ->modifyQueryUsing(fn (Builder $query) => $query->with(['subject', 'causer', 'tenant']))
             ->columns([
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Quando')
@@ -119,6 +128,13 @@ class AuditLogResource extends Resource
                     ->badge()
                     ->color(fn (?string $state) => static::eventColors()[$state] ?? 'gray')
                     ->formatStateUsing(fn (?string $state) => static::eventLabels()[$state] ?? $state ?? '—'),
+                Tables\Columns\TextColumn::make('soggetto')->wrap()
+                    ->label('Record')
+                    ->state(fn (AuditLog $record) => Modifiche::soggetto($record))
+                    ->url(fn (AuditLog $record) => $record->urlRecord())
+                    ->color(fn (AuditLog $record) => $record->urlRecord() ? 'primary' : null)
+                    ->description(fn (AuditLog $record) => Modifiche::riassunto($record) ?: null)
+                    ->openUrlInNewTab(),
                 Tables\Columns\TextColumn::make('causer.name')->wrap()
                     ->label('Utente')
                     ->placeholder('Sistema')
@@ -127,10 +143,6 @@ class AuditLogResource extends Resource
                     ->label('Tenant')
                     ->placeholder('Catalogo condiviso')
                     ->toggleable(),
-                Tables\Columns\TextColumn::make('description')->visibleFrom('md')
-                    ->label('Descrizione')
-                    ->limit(60)
-                    ->toggleable(),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('subject_type')
@@ -138,6 +150,34 @@ class AuditLogResource extends Resource
                     ->options(fn () => collect(AuditLog::subjectLabels())
                         ->mapWithKeys(fn (string $label, string $class) => [$class => $label])
                         ->all()),
+                Tables\Filters\SelectFilter::make('event')
+                    ->label('Evento')
+                    ->options(fn () => static::eventLabels()),
+                Tables\Filters\SelectFilter::make('campo')
+                    ->label('Campo toccato')
+                    // Le domande che arrivano davvero sono "chi ha messo
+                    // questo pagante?" o "chi ha cambiato la matricola?": si
+                    // risponde cercando la colonna dentro il diff JSON.
+                    ->options([
+                        'billing_customer_id' => 'Chi paga',
+                        'customer_id' => 'Cliente',
+                        'current_customer_id' => 'Cliente attuale (macchina)',
+                        'machine_unit_id' => 'Macchina',
+                        'serial_number' => 'Matricola',
+                        'intervention_type' => 'Tipo di intervento',
+                        'intervention_date' => 'Data intervento',
+                        'status' => 'Stato',
+                        'technician_id' => 'Tecnico',
+                        'price' => 'Prezzo',
+                        'quantity' => 'Quantità',
+                    ])
+                    ->query(fn (Builder $query, array $data): Builder => $query->when(
+                        $data['value'] ?? null,
+                        fn (Builder $q, string $campo) => $q->whereRaw(
+                            "JSON_CONTAINS_PATH(attribute_changes, 'one', ?, ?)",
+                            ['$.attributes.'.$campo, '$.old.'.$campo],
+                        )
+                    )),
                 Tables\Filters\SelectFilter::make('causer_id')
                     ->label('Utente')
                     // Niente ->relationship(): "causer" e' un morphTo (puo' non
