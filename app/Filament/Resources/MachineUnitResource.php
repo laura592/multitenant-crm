@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources;
 
-use App\Filament\RelationManagers\CronologiaRelationManager;
 use App\Filament\Resources\MachineUnitResource\Pages;
 use App\Filament\Resources\MachineUnitResource\RelationManagers\PlacementsRelationManager;
 use App\Models\Customer;
@@ -489,7 +488,6 @@ class MachineUnitResource extends Resource
     {
         return [
             PlacementsRelationManager::class,
-            CronologiaRelationManager::class,
         ];
     }
 

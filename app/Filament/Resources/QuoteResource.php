@@ -7,7 +7,6 @@ use App\Filament\Forms\CustomerFiscalFields;
 use App\Filament\Forms\ItalianAddressFields;
 use App\Filament\Forms\MoneyInput;
 use App\Filament\Forms\OffertaCaffeFields;
-use App\Filament\RelationManagers\CronologiaRelationManager;
 use App\Filament\Resources\QuoteResource\Pages;
 use App\Filament\Resources\QuoteResource\RelationManagers\QuoteProductsRelationManager;
 use App\Mail\QuoteMail;
@@ -1000,7 +999,6 @@ class QuoteResource extends Resource
     {
         return [
             QuoteProductsRelationManager::class,
-            CronologiaRelationManager::class,
         ];
     }
 

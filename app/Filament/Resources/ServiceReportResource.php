@@ -5,7 +5,6 @@ namespace App\Filament\Resources;
 use App\Filament\Forms\Components\SignaturePad;
 use App\Filament\Forms\CustomerContactFields;
 use App\Filament\Forms\CustomerFiscalFields;
-use App\Filament\RelationManagers\CronologiaRelationManager;
 use App\Filament\Resources\ServiceReportResource\Pages;
 use App\Jobs\SendServiceReportToGestionaleJob;
 use App\Mail\ServiceReportMail;
@@ -2167,13 +2166,6 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
             '<p>in allegato il rapportino relativo all\'intervento del '.e($interventionDate).'.</p>',
             '<p><strong>Lavoro svolto:</strong> '.nl2br(e($record->work_performed)).'</p>',
         ]);
-    }
-
-    public static function getRelations(): array
-    {
-        return [
-            CronologiaRelationManager::class,
-        ];
     }
 
     public static function getPages(): array

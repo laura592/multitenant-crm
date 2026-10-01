@@ -697,7 +697,7 @@ class TourRegistry
             'audit-logs' => [
                 [
                     'title' => 'Log modifiche',
-                    'text' => 'Cronologia di sola lettura delle modifiche fatte nel sistema: chi ha cambiato cosa e quando. Utile per capire "chi ha toccato questo record" — non modificabile da qui. Usa i filtri in alto alla tabella (Modello, Utente, Intervallo date) per restringere la ricerca a un periodo o una persona specifica.',
+                    'text' => 'Chi ha cambiato cosa, e cosa e\' cambiato davvero: ogni voce apre il confronto fra il valore di prima e quello di dopo, con i nomi al posto dei codici. La colonna Record porta alla scheda. Di sola lettura: da qui non si modifica niente. I filtri in alto restringono per Modello, Evento, Utente, periodo — e per Campo toccato, che e\' il modo piu\' rapido di rispondere a "chi ha messo questo pagante?".',
                 ],
             ],
 
