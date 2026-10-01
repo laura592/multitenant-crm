@@ -364,12 +364,22 @@ class RiepilogoOre extends Page implements HasForms
                 ->color('gray')
                 ->icon('heroicon-o-document-arrow-down')
                 ->action(fn () => static::apriPdfInNuovaScheda(
-                    fn () => Pdf::loadView('pdf.dettaglio-ore', [
-                        'rows' => $this->getDailyDetailRows(),
-                        'month' => $this->month,
-                        'year' => $this->year,
-                        'tenant' => Filament::getTenant(),
-                    ]),
+                    function () {
+                        // Il riepilogo in calce usa gli stessi numeri
+                        // dell'export "riepilogo": sono quelli che vanno in
+                        // busta paga, e averli sullo stesso foglio evita di
+                        // aprire due PDF per confrontarli.
+                        $riepilogo = $this->getRows();
+
+                        return Pdf::loadView('pdf.dettaglio-ore', [
+                            'rows' => $this->getDailyDetailRows(),
+                            'riepilogo' => $riepilogo,
+                            'totali' => $this->getTotals($riepilogo),
+                            'month' => $this->month,
+                            'year' => $this->year,
+                            'tenant' => Filament::getTenant(),
+                        ]);
+                    },
                     "dettaglio-ore-{$this->year}-{$this->month}.pdf",
                     $this,
                 )),
