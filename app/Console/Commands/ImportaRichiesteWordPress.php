@@ -95,7 +95,7 @@ class ImportaRichiesteWordPress extends Command
                 continue;
             }
 
-            $nome = $r['ragione_sociale'] ?: trim(($r['nome'] ?? '').' '.($r['cognome'] ?? ''));
+            $nome = $this->ripulisci($r['ragione_sociale'] ?: trim(($r['nome'] ?? '').' '.($r['cognome'] ?? '')));
             $stato = $data->lt($limite) ? 'chiusa' : 'nuova';
 
             $cliente ? $conti['clienti_trovati']++ : $conti['clienti_nuovi']++;
@@ -123,7 +123,7 @@ class ImportaRichiesteWordPress extends Command
                     'status' => $stato,
                     'source' => 'sito',
                     'external_id' => $externalId,
-                    'raw_payload' => $r,
+                    'raw_payload' => array_map(fn ($v) => $this->ripulisci($v), $r),
                     'request_details' => $this->dettagli($r),
                 ]);
 
@@ -224,6 +224,18 @@ class ImportaRichiesteWordPress extends Command
         return "RI-{$anno}-".str_pad((string) $this->progressivi[$anno], 4, '0', STR_PAD_LEFT);
     }
 
+    /**
+     * WordPress salvava il testo gia' scappato in HTML: nel dump si trova
+     * "Hotel &#047; B&B" e "l&#039;hotel". Finiva tale e quale nel CRM, dove
+     * nessuno interpreta le entita' e si leggeva proprio cosi' (30/09/2026,
+     * 27 richieste su 118 — il primo import decodificava solo il messaggio e
+     * si era dimenticato tutto il resto).
+     */
+    private function ripulisci(mixed $v): mixed
+    {
+        return is_string($v) ? html_entity_decode($v, ENT_QUOTES | ENT_HTML5, 'UTF-8') : $v;
+    }
+
     private function dettagli(array $r): string
     {
         $righe = ['Richiesta arrivata dal modulo del vecchio sito ('.($r['modulo'] === 'richiedi_informazioni' ? 'Richiedi informazioni' : 'Modulo di contatto').').'];
@@ -240,13 +252,13 @@ class ImportaRichiesteWordPress extends Command
 
         foreach ($campi as $campo => $etichetta) {
             if (filled($r[$campo] ?? null)) {
-                $righe[] = "{$etichetta}: {$r[$campo]}";
+                $righe[] = "{$etichetta}: ".$this->ripulisci($r[$campo]);
             }
         }
 
         if (filled($r['messaggio'] ?? null)) {
             $righe[] = '';
-            $righe[] = 'Messaggio: '.$r['messaggio'];
+            $righe[] = 'Messaggio: '.$this->ripulisci($r['messaggio']);
         }
 
         return implode("\n", $righe);
