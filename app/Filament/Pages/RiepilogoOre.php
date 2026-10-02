@@ -190,7 +190,7 @@ class RiepilogoOre extends Page implements HasForms
         $ordinarieByWeek = [];
 
         foreach ($dailyHours as $day => $totalDay) {
-            $giornata = GiornataLavorativa::ripartisci((float) $totalDay, $dailyContract, $trasferte->has($day));
+            $giornata = GiornataLavorativa::ripartisci((float) $totalDay, $dailyContract, $trasferte->has($day), $day);
 
             $ordinarie += $giornata->ordinarie;
             $straordinarioGiornaliero += $giornata->straordinario;
@@ -300,7 +300,7 @@ class RiepilogoOre extends Page implements HasForms
                     continue;
                 }
 
-                $giornata = GiornataLavorativa::ripartisci($worked, $dailyContract, $inTrasferta);
+                $giornata = GiornataLavorativa::ripartisci($worked, $dailyContract, $inTrasferta, $day);
 
                 $rows->push([
                     'user' => $user->name,

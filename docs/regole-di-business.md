@@ -626,10 +626,15 @@ Chi va in trasferta e sfora il contratto prende l'indennità *e* lo
 straordinario, dalla prima ora. Basta un turno in trasferta per tutta la
 giornata; due turni in trasferta fanno un giorno.
 
-Fino al 01/10/2026 valeva il contrario: la prima ora oltre il contratto la
-pagava già l'indennità e lo straordinario partiva dall'ora dopo. Quanto se ne
-mangia è un numero in `config/presenze.php`, e il conto **non è storicizzato**:
-ristampare un riepilogo di settembre lo ricalcola con la regola di oggi.
+**La regola nuova vale dai cartellini del 01/10/2026.** Fino al 30/09/2026
+valeva il contrario: la prima ora oltre il contratto la pagava già l'indennità
+e lo straordinario partiva dall'ora dopo. I mesi chiusi restano come sono stati
+pagati — settembre 2026 era già in busta paga.
+
+La data di stacco serve perché il conto **non è storicizzato**: si rifà ogni
+volta dai cartellini, quindi senza di essa ristampare settembre lo avrebbe
+ricalcolato con la regola di oggi, 10 ore di straordinario invece di 5.
+Entrambi i valori e la data stanno in `config/presenze.php`.
 
 Sotto il contratto, le ore mancanti restano mancanti.
 

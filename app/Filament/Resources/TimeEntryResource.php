@@ -42,7 +42,19 @@ class TimeEntryResource extends Resource
         $ore = (float) config('presenze.trasferta_ore_incluse', 0);
 
         if ($ore <= 0) {
-            return 'La trasferta non tocca lo straordinario: le ore oltre il contratto restano straordinario.';
+            // La data di stacco si cita solo se c'e' una regola precedente
+            // diversa: altrimenti e' rumore su ogni timbratura.
+            $dal = config('presenze.trasferta_regola_nuova_dal');
+            $prima = (float) config('presenze.trasferta_ore_incluse_prima', 0);
+
+            $nota = '';
+            if (filled($dal) && $prima > 0) {
+                $nota = ' Per le giornate fino al '
+                    .\Illuminate\Support\Carbon::parse($dal)->subDay()->format('d/m/Y')
+                    .' vale la regola vecchia, con la prima ora pagata dalla trasferta.';
+            }
+
+            return 'La trasferta non tocca lo straordinario: le ore oltre il contratto restano straordinario.'.$nota;
         }
 
         if ($ore == 1) {
