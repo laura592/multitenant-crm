@@ -621,11 +621,15 @@ vorrebbe dire perdere proprio chi va richiamato.
 
 ### Le trasferte
 
-Regola dell'ufficio (21/09/2026): **nel giorno di trasferta la prima ora oltre
-il contratto la paga già l'indennità**, che il dipendente la faccia o no. Lo
-straordinario parte dall'ora dopo. Quell'ora compresa non è né ordinaria né
-straordinaria. Basta un turno in trasferta per tutta la giornata; due turni in
-trasferta fanno un giorno.
+Regola dell'ufficio (02/10/2026): **la trasferta non tocca lo straordinario**.
+Chi va in trasferta e sfora il contratto prende l'indennità *e* lo
+straordinario, dalla prima ora. Basta un turno in trasferta per tutta la
+giornata; due turni in trasferta fanno un giorno.
+
+Fino al 01/10/2026 valeva il contrario: la prima ora oltre il contratto la
+pagava già l'indennità e lo straordinario partiva dall'ora dopo. Quanto se ne
+mangia è un numero in `config/presenze.php`, e il conto **non è storicizzato**:
+ristampare un riepilogo di settembre lo ricalcola con la regola di oggi.
 
 Sotto il contratto, le ore mancanti restano mancanti.
 

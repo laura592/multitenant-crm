@@ -36,18 +36,22 @@ class TimeEntryResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Presenze';
 
-    /** Il testo segue il valore in config, al singolare o al plurale. */
+    /** La frase segue il valore in config: niente compreso, un'ora, o piu'. */
     protected static function oreIncluseTesto(): string
     {
-        $ore = (float) config('presenze.trasferta_ore_incluse', 1);
+        $ore = (float) config('presenze.trasferta_ore_incluse', 0);
+
+        if ($ore <= 0) {
+            return 'La trasferta non tocca lo straordinario: le ore oltre il contratto restano straordinario.';
+        }
 
         if ($ore == 1) {
-            return 'la prima ora oltre il contratto e\' compresa';
+            return 'La prima ora oltre il contratto la paga già la trasferta: lo straordinario parte da lì.';
         }
 
         $numero = rtrim(rtrim(number_format($ore, 2, ',', ''), '0'), ',');
 
-        return "le prime {$numero} ore oltre il contratto sono comprese";
+        return "Le prime {$numero} ore oltre il contratto le paga già la trasferta: lo straordinario parte da lì.";
     }
 
     public static function form(Form $form): Form
@@ -103,16 +107,17 @@ class TimeEntryResource extends Resource
                         ->default('manuale')
                         ->required(),
                 ]),
-            // Nel giorno di trasferta la prima ora oltre il contratto la paga
-            // gia' l'indennita', e lo straordinario parte dall'ora dopo
-            // (App\Support\Presenze\GiornataLavorativa). Basta segnarla su
-            // uno dei turni della giornata.
+            // La trasferta segna la giornata e l'indennita' ma non tocca lo
+            // straordinario (Laura, 02/10/2026). Quanto se ne mangia lo decide
+            // config presenze.trasferta_ore_incluse, oggi zero, letto da
+            // App\Support\Presenze\GiornataLavorativa. Basta segnarla su uno
+            // dei turni della giornata.
             Forms\Components\Section::make('Trasferta')
                 ->columns(2)
                 ->schema([
                     Forms\Components\Toggle::make('trasferta')
                         ->label('Giornata in trasferta')
-                        ->helperText(fn () => ucfirst(static::oreIncluseTesto()).' nella trasferta: lo straordinario parte da li\'. Basta segnarla su un turno della giornata.')
+                        ->helperText(fn () => static::oreIncluseTesto().' Basta segnarla su un turno della giornata.')
                         ->live()
                         ->afterStateUpdated(function (Forms\Set $set, ?bool $state) {
                             if (! $state) {

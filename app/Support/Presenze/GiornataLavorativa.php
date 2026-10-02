@@ -12,10 +12,15 @@ namespace App\Support\Presenze;
  * posto solo avrebbe dato due numeri diversi per lo stesso giorno.
  *
  * Nel giorno di trasferta le ore comprese nell'indennita'
- * (config presenze.trasferta_ore_incluse, oggi 1) non sono ne' ordinarie ne'
+ * (config presenze.trasferta_ore_incluse) non sono ne' ordinarie ne'
  * straordinario: sono "coperte". Tenerle fuori dalle ordinarie conta, perche'
  * lo straordinario settimanale si calcola sulle ordinarie della settimana, e
  * altrimenti l'ora pagata dalla trasferta rientrerebbe da li'.
+ *
+ * Dal 02/10/2026 quel valore e' zero — la trasferta non toglie piu' niente —
+ * quindi oggi le "coperte" sono sempre zero e un giorno di trasferta si
+ * ripartisce come un giorno qualunque. Il ramo resta perche' la regola e' gia'
+ * cambiata una volta e puo' tornare a cambiare dalla config.
  */
 final class GiornataLavorativa
 {
@@ -36,7 +41,7 @@ final class GiornataLavorativa
         $ordinarie = min($lavorate, $contratto);
         $oltre = $lavorate - $ordinarie;
 
-        $incluse = $trasferta ? (float) config('presenze.trasferta_ore_incluse', 1) : 0.0;
+        $incluse = $trasferta ? (float) config('presenze.trasferta_ore_incluse', 0) : 0.0;
         $coperte = min($oltre, $incluse);
 
         return new self(
