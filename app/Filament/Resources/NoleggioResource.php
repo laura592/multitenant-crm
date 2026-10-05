@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Models\Customer;
+use App\Support\DisplayName;
 use App\Models\MachineUnit;
 use App\Models\Noleggio;
 use Filament\Forms;
@@ -40,10 +41,16 @@ class NoleggioResource extends Resource
             Forms\Components\Section::make('Chi e cosa')
                 ->columns(2)
                 ->schema([
+                    // L'etichetta passa da DisplayName come nelle altre schede:
+                    // due clienti privati su 2.315 non hanno ragione sociale, e
+                    // con company_name nuda Filament riceve un'etichetta nulla
+                    // e la pagina va in errore 500.
                     Forms\Components\Select::make('customer_id')
                         ->label('Cliente')
-                        ->relationship('customer', 'company_name')
-                        ->searchable()->preload()->required(),
+                        ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
+                        ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::customerOption($record))
+                        ->searchable(['search_name', 'company_name', 'first_name', 'last_name'])
+                        ->preload()->required(),
                     Forms\Components\TextInput::make('descrizione')
                         ->label('Oggetto del noleggio')
                         ->helperText('Come comparira\' sul contratto, es. "Franke A600 FM Plus con unita\' di raffreddamento".')
@@ -52,12 +59,18 @@ class NoleggioResource extends Resource
                         ->label('Macchina (se gia\' individuata)')
                         ->options(fn (Get $get) => $get('customer_id')
                             ? MachineUnit::query()->where('current_customer_id', $get('customer_id'))
-                                ->whereNull('deleted_at')->pluck('serial_number', 'id')->all()
+                                ->whereNull('deleted_at')
+                                ->get()
+                                ->mapWithKeys(fn (MachineUnit $m) => [
+                                    // Stesso motivo del cliente: mai un'etichetta nulla.
+                                    $m->id => trim(($m->serial_number ?: 'senza matricola').' — '.($m->model_name ?: '')),
+                                ])->all()
                             : [])
                         ->searchable(),
                     Forms\Components\Select::make('quote_id')
                         ->label('Preventivo di riferimento')
                         ->relationship('quote', 'number')
+                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->number ?: '—')
                         ->searchable(),
                 ]),
 
