@@ -92,7 +92,28 @@ class SignaturePad extends Field
             $extension = $imageInfo[2] === IMAGETYPE_PNG ? 'png' : 'jpg';
             $path = "{$this->signatureDirectory}/".Str::uuid().".{$extension}";
 
-            Storage::disk($this->signatureDisk)->put($path, $decoded);
+            // Il risultato della scrittura va guardato: put() non lancia
+            // eccezioni, torna false e basta (i dischi Laravel hanno
+            // 'throw' => false). Prima lo si ignorava e si restituiva il path
+            // lo stesso, quindi un rapportino poteva risultare firmato con il
+            // percorso di un file mai scritto: nessun errore a schermo, niente
+            // nei log, e il disegno del cliente perso per sempre. E' successo
+            // dal 02/10 al 05/10/2026 su 39 rapportini, perche' la cartella
+            // privata non era scrivibile da www-data dopo il trasloco sul VPS.
+            //
+            // Meglio fermarsi rumorosamente: il tecnico ha ancora il cliente
+            // davanti e puo' far rifirmare, mentre una firma fantasma la si
+            // scopre mesi dopo, quando serve.
+            if (Storage::disk($this->signatureDisk)->put($path, $decoded) === false) {
+                report(new \RuntimeException(
+                    'Firma non salvata: scrittura fallita su disco "'.$this->signatureDisk.'" in "'.$path.'".'
+                ));
+
+                throw new \RuntimeException(
+                    'Non sono riuscito a salvare la firma. Riprova: se il problema si ripete, '
+                    .'avvisa chi segue il gestionale senza chiudere il rapportino.'
+                );
+            }
 
             return $path;
         });
