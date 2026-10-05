@@ -65,6 +65,16 @@ return [
             'password' => env('MAIL_PASSWORD'),
             'timeout' => null,
             'local_domain' => env('MAIL_EHLO_DOMAIN', parse_url((string) env('APP_URL', 'http://localhost'), PHP_URL_HOST)),
+
+            /*
+             | L'IP da cui partire. Serve per l'inoltro SMTP via connettore
+             | Microsoft 365: il connettore autentica la connessione sull'IP
+             | pubblico, e accetta solo IPv4. Il server pero' per impostazione
+             | predefinita esce in IPv6, quindi senza questo il connettore non
+             | riconosce la connessione e Microsoft rifiuta l'inoltro verso
+             | destinatari esterni. Vuoto in locale, valorizzato in produzione.
+             */
+            'source_ip' => env('MAIL_SOURCE_IP'),
         ],
 
         'ses' => [
