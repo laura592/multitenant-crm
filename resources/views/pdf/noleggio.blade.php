@@ -60,6 +60,9 @@
         @if ((float) $noleggio->quota_detergenti > 0)
             <tr><td>Detergenti e materiali di consumo</td><td class="v">&euro; {{ number_format((float) $noleggio->quota_detergenti, 2, ',', '.') }}</td></tr>
         @endif
+        @if ((float) $noleggio->quota_caffe > 0)
+            <tr><td>Fornitura di caffè</td><td class="v">&euro; {{ number_format((float) $noleggio->quota_caffe, 2, ',', '.') }}</td></tr>
+        @endif
         <tr class="totale"><td>Canone mensile, IVA esclusa</td><td class="v">&euro; {{ number_format((float) $noleggio->canone, 2, ',', '.') }}</td></tr>
     </table>
     <p style="margin-top:6px;color:#6b7280;">
@@ -73,7 +76,14 @@
         @if ((float) $noleggio->quota_detergenti > 0)
             <li>Il canone comprende i detergenti e i materiali di consumo necessari all'uso ordinario.</li>
         @endif
-        <li><strong>Il caffè non è compreso</strong> ed è fatturato a consumo.</li>
+        {{-- La riga cambia senso a seconda che il caffe' sia nel canone o no:
+             scriverla fissa significherebbe, in un caso o nell'altro, dire al
+             cliente il contrario di quello che pagherà. --}}
+        @if ((float) $noleggio->quota_caffe > 0)
+            <li><strong>La fornitura di caffè è compresa</strong> nel canone, nei quantitativi concordati.</li>
+        @else
+            <li><strong>Il caffè non è compreso</strong> ed è fatturato a consumo.</li>
+        @endif
         <li>L'installazione e l'allacciamento sono a nostro carico; le predisposizioni — punto acqua, scarico e alimentazione elettrica — restano a carico del Cliente e vanno realizzate prima dell'intervento.</li>
         <li>Sono esclusi i danni da uso improprio, le manomissioni e gli interventi effettuati da personale non autorizzato.</li>
         <li><strong>Durata minima {{ $noleggio->mesi }} mesi.</strong> In caso di recesso anticipato restano dovuti i canoni residui, salvo diverso accordo scritto.</li>

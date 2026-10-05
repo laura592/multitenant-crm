@@ -29,8 +29,10 @@ namespace App\Support\Noleggio;
  *   consumabili d'uso. Se non si mettono qui, il canone sembra coprire tutto
  *   e ogni mese se ne va un pezzo di margine in detersivo.
  *
- * Il caffe' resta fuori: fatturato a consumo. Dentro il canone, chi consuma
- * piu' del previsto erode il margine e chi consuma meno si sente truffato.
+ * - CAFFE': dentro il canone dal 05/10/2026, su scelta commerciale. Il
+ *   rischio resta quello noto — chi consuma piu' del previsto erode il
+ *   margine, chi consuma meno si sente truffato — e si governa rivedendo
+ *   l'importo, non togliendolo dal conto.
  */
 final class CanoneOperativo
 {
@@ -41,6 +43,7 @@ final class CanoneOperativo
         public readonly float $quotaMacchina,
         public readonly float $quotaServizio,
         public readonly float $quotaDetergenti,
+        public readonly float $quotaCaffe,
         public readonly float $canone,
         public readonly int $mesi,
         public readonly float $costo,
@@ -58,6 +61,8 @@ final class CanoneOperativo
         float $detergentiMese = 0.0,
         ?float $fullServiceAnnuo = null,
         float $ricaricoDetergenti = 0.0,
+        float $caffeMese = 0.0,
+        float $ricaricoCaffe = 0.0,
     ): self {
         $mesi = max(1, $mesi);
         $costoMacchina = max(0.0, $costoMacchina);
@@ -73,7 +78,13 @@ final class CanoneOperativo
         // le due si decidono in momenti diversi.
         $quotaDetergenti = max(0.0, $detergentiMese) * (1 + max(0.0, $ricaricoDetergenti));
 
-        $canone = round($quotaMacchina + $quotaServizio + $quotaDetergenti, 2);
+        // Il caffe' era fuori per scelta — a consumo, perche' il consumo
+        // varia — ma sta nel canone su decisione commerciale: un numero solo
+        // al mese invece di due fatture da conciliare. Resta la leva del
+        // ricarico, separata da quella dei detergenti.
+        $quotaCaffe = max(0.0, $caffeMese) * (1 + max(0.0, $ricaricoCaffe));
+
+        $canone = round($quotaMacchina + $quotaServizio + $quotaDetergenti + $quotaCaffe, 2);
 
         // Pareggio sulla sola quota macchina: servizio e detergenti pagano
         // costi che Alex sostiene mese per mese, non il capitale anticipato.
@@ -86,6 +97,7 @@ final class CanoneOperativo
             quotaMacchina: round($quotaMacchina, 2),
             quotaServizio: round($quotaServizio, 2),
             quotaDetergenti: round($quotaDetergenti, 2),
+            quotaCaffe: round($quotaCaffe, 2),
             canone: $canone,
             mesi: $mesi,
             costo: round($costoMacchina, 2),

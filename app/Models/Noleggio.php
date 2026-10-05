@@ -32,15 +32,16 @@ class Noleggio extends Model
 
     protected $fillable = [
         'tenant_id', 'customer_id', 'machine_unit_id', 'quote_id', 'descrizione',
-        'listino', 'costo', 'mesi', 'margine', 'detergenti_mese', 'ricarico_detergenti',
+        'listino', 'costo', 'mesi', 'margine', 'detergenti_mese', 'ricarico_detergenti', 'caffe_mese', 'ricarico_caffe',
         'valore_residuo', 'full_service_percentuale',
-        'quota_macchina', 'quota_servizio', 'quota_detergenti', 'canone', 'mese_pareggio',
+        'quota_macchina', 'quota_servizio', 'quota_detergenti', 'quota_caffe', 'canone', 'mese_pareggio',
         'data_inizio', 'stato', 'note',
     ];
 
     protected $casts = [
         'listino' => 'decimal:2', 'costo' => 'decimal:2', 'mesi' => 'integer',
         'margine' => 'decimal:2', 'detergenti_mese' => 'decimal:2', 'ricarico_detergenti' => 'decimal:2',
+        'caffe_mese' => 'decimal:2', 'ricarico_caffe' => 'decimal:2', 'quota_caffe' => 'decimal:2',
         'valore_residuo' => 'decimal:2', 'full_service_percentuale' => 'decimal:2',
         'quota_macchina' => 'decimal:2', 'quota_servizio' => 'decimal:2',
         'quota_detergenti' => 'decimal:2', 'canone' => 'decimal:2',
@@ -55,6 +56,7 @@ class Noleggio extends Model
             $noleggio->quota_macchina = $r->quotaMacchina;
             $noleggio->quota_servizio = $r->quotaServizio;
             $noleggio->quota_detergenti = $r->quotaDetergenti;
+            $noleggio->quota_caffe = $r->quotaCaffe;
             $noleggio->canone = $r->canone;
             $noleggio->mese_pareggio = $r->mesePareggio;
         });
@@ -71,6 +73,8 @@ class Noleggio extends Model
             detergentiMese: (float) $this->detergenti_mese,
             fullServiceAnnuo: (float) $this->full_service_percentuale / 100,
             ricaricoDetergenti: (float) $this->ricarico_detergenti / 100,
+            caffeMese: (float) $this->caffe_mese,
+            ricaricoCaffe: (float) $this->ricarico_caffe / 100,
         );
     }
 

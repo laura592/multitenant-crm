@@ -101,6 +101,14 @@ class NoleggioResource extends Resource
                         ->label('Ricarico sui detergenti (%)')
                         ->helperText('Zero se l\'importo sopra e\' gia\' un prezzo di vendita.')
                         ->numeric()->default(0)->live(onBlur: true),
+                    Forms\Components\TextInput::make('caffe_mese')
+                        ->label('Caffè al mese (€)')
+                        ->helperText('Consumo stimato. Dentro il canone il cliente ha un numero solo, ma se consuma più del previsto la differenza è vostra.')
+                        ->numeric()->default(0)->live(onBlur: true),
+                    Forms\Components\TextInput::make('ricarico_caffe')
+                        ->label('Ricarico sul caffè (%)')
+                        ->helperText('Zero se l\'importo sopra è già un prezzo di vendita.')
+                        ->numeric()->default(0)->live(onBlur: true),
                     Forms\Components\TextInput::make('valore_residuo')
                         ->label('Valore residuo a fine contratto (€)')
                         ->helperText('Se la macchina torna a voi e vale ancora qualcosa, il canone scende.')
@@ -143,6 +151,8 @@ class NoleggioResource extends Resource
             'margine' => (float) $get('margine'),
             'detergenti_mese' => (float) $get('detergenti_mese'),
             'ricarico_detergenti' => (float) $get('ricarico_detergenti'),
+            'caffe_mese' => (float) $get('caffe_mese'),
+            'ricarico_caffe' => (float) $get('ricarico_caffe'),
             'valore_residuo' => (float) $get('valore_residuo'),
             'full_service_percentuale' => (float) ($get('full_service_percentuale') ?: 10),
         ]);
@@ -154,6 +164,7 @@ class NoleggioResource extends Resource
             ['Quota macchina', $eur($r->quotaMacchina)],
             ['Full-Service', $eur($r->quotaServizio)],
             ['Detergenti', $eur($r->quotaDetergenti)],
+            ['Caffè', $eur($r->quotaCaffe)],
         ];
         $corpo = '';
         foreach ($righe as [$k, $v]) {
