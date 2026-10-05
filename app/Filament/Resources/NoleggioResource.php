@@ -12,6 +12,8 @@ use Filament\Resources\Resource;
 use Filament\Support\RawJs;
 use Filament\Tables;
 use Filament\Tables\Table;
+use App\Support\OutsideLivewireRender;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\HtmlString;
 
 class NoleggioResource extends Resource
@@ -179,8 +181,35 @@ class NoleggioResource extends Resource
             ->filters([
                 Tables\Filters\SelectFilter::make('stato')->label('Stato')->options(Noleggio::statiLabels()),
             ])
-            ->actions([Tables\Actions\EditAction::make()])
+            ->actions([
+                Tables\Actions\EditAction::make(),
+                static::azioneContratto(Tables\Actions\Action::make('contratto')),
+            ])
             ->defaultSort('created_at', 'desc');
+    }
+
+    /**
+     * Il contratto in PDF. La stessa azione serve la tabella e la scheda, cosi'
+     * il documento e' uno solo: due generatori divergono al primo cambio di
+     * condizioni, e si scopre dal cliente che ne ha ricevuto una versione
+     * vecchia.
+     */
+    public static function azioneContratto($azione)
+    {
+        return $azione
+            ->label('Contratto PDF')
+            ->icon('heroicon-o-document-arrow-down')
+            ->color('gray')
+            ->action(function (Noleggio $record) {
+                $pdf = OutsideLivewireRender::run(fn () => Pdf::loadView('pdf.noleggio', [
+                    'noleggio' => $record->load(['customer', 'machineUnit']),
+                    'tenant' => $record->tenant,
+                ]));
+
+                $nome = 'noleggio-'.str($record->customer?->company_name ?: 'cliente')->slug().'.pdf';
+
+                return response()->streamDownload(fn () => print($pdf->output()), $nome);
+            });
     }
 
     public static function getPages(): array
