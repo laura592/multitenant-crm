@@ -69,6 +69,15 @@
 <x-mail.client-response-cta :url="$clientUrl" :tenant="$tenant" :multiple="$quotes->count() > 1" />
 @endif
 
+{{-- Chiusura prestampata: sta qui e non nel testo modificabile, cosi' viene
+     DOPO il riepilogo e gli allegati invece che in mezzo alla mail. I recapiti
+     non si ripetono: li stampa gia' il piede qui sotto. --}}
+<div style="margin-top:18px;color:#334155;">
+	<div>Restiamo a disposizione per qualsiasi chiarimento.</div>
+	<div style="margin-top:10px;">Cordiali saluti,</div>
+	<div style="font-weight:700;">{{ $tenant?->legal_name ?: ($tenant?->name ?: config('app.name')) }}</div>
+</div>
+
 <x-slot:footer>
 <x-mail.footer-tenant :tenant="$tenant" />
 </x-slot:footer>

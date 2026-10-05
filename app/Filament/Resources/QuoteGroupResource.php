@@ -89,8 +89,15 @@ class QuoteGroupResource extends Resource
                         ->options(static::statusLabels())
                         ->default('bozza')
                         ->required(),
-                    Forms\Components\Textarea::make('notes')
+                    // Editor e non Textarea: queste note si scrivono come
+                    // quelle dei preventivi, e senza grassetto un testo di
+                    // qualche riga diventa illeggibile. Stessa barra ridotta
+                    // del preventivo, per non avere due comportamenti diversi
+                    // nello stesso flusso.
+                    Forms\Components\RichEditor::make('notes')
                         ->label('Note')
+                        ->toolbarButtons(['bold'])
+                        ->helperText('Nota interna: non viene stampata nel PDF ne\' inviata al cliente. Il testo per il cliente va nelle note dei singoli preventivi o nel corpo della mail.')
                         ->columnSpanFull(),
                 ]),
         ]);
@@ -203,34 +210,17 @@ class QuoteGroupResource extends Resource
     protected static function defaultGroupEmailBody(QuoteGroup $record): string
     {
         $customerName = DisplayName::titleCase($record->customer?->company_name) ?: (DisplayName::titleCase($record->customer?->full_name) ?? 'Cliente');
-        $tenant = $record->tenant ?: $record->customer?->tenant;
-        $signatureLines = static::commercialSignatureLines($tenant);
-
+        // Chiusura e firma NON stanno qui: le stampa il modello dopo il
+        // riepilogo e gli allegati (resources/views/mail/quote-group.blade.php).
+        // Prima erano in coda al testo modificabile, quindi la mail salutava a
+        // meta' e poi proseguiva con una tabella; e i recapiti comparivano due
+        // volte, perche' il piede del modello (x-mail.footer-tenant) li stampa
+        // gia' con indirizzo, dati fiscali e IBAN.
         return implode('', [
             '<p>Gentile '.e($customerName).',</p>',
             '<p>siamo lieti di inviarle la nostra offerta con le soluzioni proposte.</p>',
             '<p>Di seguito trova il riepilogo delle soluzioni incluse; in allegato i preventivi in formato PDF.</p>',
-            '<p>Restiamo a disposizione per qualsiasi chiarimento.</p>',
-            '<p>'.implode('<br>', array_map(fn (string $line) => e($line), $signatureLines)).'</p>',
         ]);
-    }
-
-    protected static function commercialSignatureLines(?\App\Models\Tenant $tenant): array
-    {
-        // firma sempre l'azienda, mai il nome dell'utente collegato
-        $contact = $tenant?->legal_name ?: ($tenant?->name ?: config('app.name'));
-
-        $contacts = array_values(array_filter([
-            $tenant?->phone ? 'Tel. '.$tenant->phone : null,
-            $tenant?->email,
-        ]));
-
-        return array_values(array_filter([
-            'Cordiali saluti,',
-            $contact,
-            $tenant?->legal_name && $tenant->legal_name !== $contact ? $tenant->legal_name : null,
-            ! empty($contacts) ? implode(' - ', $contacts) : null,
-        ]));
     }
 
     protected static function buildAutomaticSectionsPreviewHtml(QuoteGroup $record, ?string $subject, bool $conOffertaCaffe = false): string
@@ -275,6 +265,11 @@ class QuoteGroupResource extends Resource
             .'<tbody>'.$rows.'</tbody>'
             .'</table>'
             .'<div style="margin-top:10px;"><strong>Allegati:</strong> '.e($attachments).'</div>'
+            .'<div style="margin-top:10px;padding-top:8px;border-top:1px solid #e2e8f0;color:#475569;">'
+            .'Restiamo a disposizione per qualsiasi chiarimento.<br>Cordiali saluti,<br>'
+            .e($record->tenant?->legal_name ?: ($record->tenant?->name ?: config('app.name')))
+            .'<br><span style="font-size:11px;color:#64748b;">(chiusura e recapiti sono prestampati: non si modificano da qui)</span>'
+            .'</div>'
             .'</div>';
     }
 
