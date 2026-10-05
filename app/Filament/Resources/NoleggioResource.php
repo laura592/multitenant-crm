@@ -109,6 +109,17 @@ class NoleggioResource extends Resource
                         ->label('Ricarico sul caffè (%)')
                         ->helperText('Zero se l\'importo sopra è già un prezzo di vendita.')
                         ->numeric()->default(0)->live(onBlur: true),
+                    // Il quantitativo non entra nel calcolo: entra nel
+                    // contratto. L'importo dice quanto costa, questo dice
+                    // quanta ne spetta — senza, "compreso" non ha confine.
+                    Forms\Components\TextInput::make('caffe_kg_mese')
+                        ->label('Caffè compreso (kg/mese)')
+                        ->helperText('Finisce nel contratto. Oltre questa quantità si fattura a consumo.')
+                        ->numeric(),
+                    Forms\Components\TextInput::make('detergenti_inclusi')
+                        ->label('Detergenti compresi')
+                        ->helperText('Es. "25 pastiglie e 1 flacone detergente latte al mese". Finisce nel contratto.')
+                        ->maxLength(255),
                     Forms\Components\TextInput::make('valore_residuo')
                         ->label('Valore residuo a fine contratto (€)')
                         ->helperText('Se la macchina torna a voi e vale ancora qualcosa, il canone scende.')

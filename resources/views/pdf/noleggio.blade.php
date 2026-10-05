@@ -69,21 +69,34 @@
         Impegno complessivo su {{ $noleggio->mesi }} mesi: &euro; {{ number_format((float) $noleggio->canone * $noleggio->mesi, 2, ',', '.') }} + IVA.
     </p>
 
+    @php
+        // Composte qui e non inline: Blade non compila una direttiva attaccata
+        // a una parola ("consumo@if"), e i @if finivano stampati nel PDF.
+        $kg = (float) $noleggio->caffe_kg_mese;
+        $kgTesto = rtrim(rtrim(number_format($kg, 2, ',', '.'), '0'), ',');
+
+        $frasiDetergenti = filled($noleggio->detergenti_inclusi)
+            ? 'Il canone comprende i detergenti e i materiali di consumo nella misura di <strong>'.e($noleggio->detergenti_inclusi).'</strong>; i quantitativi eccedenti sono fatturati a consumo.'
+            : 'Il canone comprende i detergenti e i materiali di consumo necessari all\'uso ordinario.';
+
+        $fraseCaffe = (float) $noleggio->quota_caffe <= 0
+            ? '<strong>Il caff&egrave; non &egrave; compreso</strong> ed &egrave; fatturato a consumo.'
+            : ($kg > 0
+                ? '<strong>La fornitura di caff&egrave; &egrave; compresa</strong> nel canone fino a <strong>'.$kgTesto.' kg al mese</strong>; i quantitativi eccedenti sono fatturati a consumo.'
+                : '<strong>La fornitura di caff&egrave; &egrave; compresa</strong> nel canone, nei quantitativi concordati.');
+    @endphp
+
     <h2 class="sezione">Condizioni</h2>
     <ul class="condizioni">
         <li><strong>L'attrezzatura resta di proprietà di {{ $tenant?->legal_name ?: $tenant?->name }}</strong> per tutta la durata del contratto e al termine va restituita, salvo diverso accordo scritto.</li>
         <li>Il canone comprende le manutenzioni programmate, i ricambi, la manodopera e le trasferte previste dal programma full-service.</li>
         @if ((float) $noleggio->quota_detergenti > 0)
-            <li>Il canone comprende i detergenti e i materiali di consumo necessari all'uso ordinario.</li>
+            <li>{!! $frasiDetergenti !!}</li>
         @endif
         {{-- La riga cambia senso a seconda che il caffe' sia nel canone o no:
              scriverla fissa significherebbe, in un caso o nell'altro, dire al
              cliente il contrario di quello che pagherà. --}}
-        @if ((float) $noleggio->quota_caffe > 0)
-            <li><strong>La fornitura di caffè è compresa</strong> nel canone, nei quantitativi concordati.</li>
-        @else
-            <li><strong>Il caffè non è compreso</strong> ed è fatturato a consumo.</li>
-        @endif
+        <li>{!! $fraseCaffe !!}</li>
         <li>L'installazione e l'allacciamento sono a nostro carico; le predisposizioni — punto acqua, scarico e alimentazione elettrica — restano a carico del Cliente e vanno realizzate prima dell'intervento.</li>
         <li>Sono esclusi i danni da uso improprio, le manomissioni e gli interventi effettuati da personale non autorizzato.</li>
         <li><strong>Durata minima {{ $noleggio->mesi }} mesi.</strong> In caso di recesso anticipato restano dovuti i canoni residui, salvo diverso accordo scritto.</li>
