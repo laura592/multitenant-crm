@@ -642,7 +642,67 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                                 // form: '../' e' la riga del repeater,
                                 // '../../' il modulo.
                                 LavaggioFields::syncVieDaImpianti($set, $get, '../../');
-                            }),
+                            })
+                            // Senza questa, un cliente senza piani lasciava
+                            // una tendina vuota: ed e' il caso in cui si
+                            // perdevano le vie, perche' il riquadro si poteva
+                            // solo saltare. Una sanificazione e' il lavaggio
+                            // di un impianto, quindi l'impianto esiste e va
+                            // censito (Laura, 05/10/2026): qui si crea senza
+                            // uscire dal rapportino.
+                            ->hintAction(
+                                Forms\Components\Actions\Action::make('nuovo_impianto')
+                                    ->label('Impianto non in elenco')
+                                    ->icon('heroicon-m-plus')
+                                    ->visible(fn (Get $get) => filled($get('../../customer_id')))
+                                    ->modalHeading('Aggiungi un impianto al cliente')
+                                    ->modalSubmitActionLabel('Aggiungi')
+                                    ->form([
+                                        Forms\Components\Select::make('beverage_type')
+                                            ->label('Tipo impianto')
+                                            ->options(MaintenanceScheduleResource::beverageLabels())
+                                            ->required()
+                                            ->live()
+                                            ->afterStateUpdated(fn (?string $state, Forms\Set $set) => $set(
+                                                'frequency_days',
+                                                MaintenanceSchedule::STANDARD_FREQUENCY_DAYS[$state] ?? null,
+                                            )),
+                                        Forms\Components\TextInput::make('lines_count')
+                                            ->label('Numero vie')
+                                            ->numeric()
+                                            ->minValue(1)
+                                            ->helperText('Rubinetti collegati a questo impianto, es. 8 vie vino.')
+                                            // L'acqua si sanifica a corpo: le
+                                            // vie non vogliono dire niente.
+                                            ->required(fn (Get $get) => $get('beverage_type') !== MaintenanceSchedule::BEVERAGE_ACQUA)
+                                            ->visible(fn (Get $get) => $get('beverage_type') !== MaintenanceSchedule::BEVERAGE_ACQUA),
+                                        Forms\Components\TextInput::make('frequency_days')
+                                            ->label('Cadenza (giorni)')
+                                            ->numeric()
+                                            ->minValue(1)
+                                            ->helperText('Si puo' . chr(39) . ' lasciare vuoto: il vino e altri impianti vanno a chiamata.'),
+                                    ])
+                                    ->action(function (array $data, Forms\Set $set, Get $get) {
+                                        $impianto = MaintenanceSchedule::create([
+                                            'customer_id' => $get('../../customer_id'),
+                                            'type' => MaintenanceSchedule::TYPE_LAVAGGIO,
+                                            'status' => MaintenanceSchedule::STATUS_ATTIVO,
+                                            'beverage_type' => $data['beverage_type'],
+                                            'lines_count' => $data['lines_count'] ?? null,
+                                            'frequency_days' => $data['frequency_days'] ?? null,
+                                        ]);
+
+                                        // La prossima scadenza non si scrive
+                                        // qui: la calcola il salvataggio del
+                                        // rapportino (ServiceReport::
+                                        // syncMaintenanceSchedule()) dalla
+                                        // data dell'intervento.
+                                        $set('maintenance_schedule_id', $impianto->id);
+                                        $set('lines_washed', $impianto->lines_count);
+
+                                        LavaggioFields::syncVieDaImpianti($set, $get, '../../');
+                                    })
+                            ),
                         Forms\Components\TextInput::make('lines_washed')
                             ->label('Vie lavate')
                             ->numeric()
@@ -690,10 +750,18 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                     // di quelli registrati non si sono piu' potuti ricostruire.
                     // Con zero piani resta libero: non ci sarebbe niente da
                     // scegliere e il salvataggio si bloccherebbe senza uscita.
-                    ->minItems(fn (Get $get) => self::impiantiDaLavare($get) >= 1 ? 1 : 0)
+                    // Su un rapportino NUOVO la riga e' sempre obbligatoria:
+                    // con zero piani non e' piu' una via di fuga, perche'
+                    // l'azione "Impianto non in elenco" qui sopra permette di
+                    // crearlo sul posto. In modifica si tiene la regola
+                    // vecchia, altrimenti aprire una sanificazione del 2024
+                    // per correggere una virgola obbligherebbe a inventare un
+                    // piano per un impianto che oggi magari non c'e' piu'.
+                    ->minItems(fn (?ServiceReport $record, Get $get) => $record === null || self::impiantiDaLavare($get) >= 1 ? 1 : 0)
                     ->helperText(fn (Get $get) => match (true) {
                         self::piuImpiantiDaLavare($get) => 'Questo cliente ha più impianti: scegli quali hai lavato e quante vie per ciascuno, o il lavaggio risulterà fatto su tutti.',
                         self::impiantiDaLavare($get) === 1 => 'Indica quante vie hai lavato: è il dato su cui si fattura.',
+                        filled($get('customer_id') ?? $get('../../customer_id')) => 'Questo cliente non ha impianti registrati: aggiungilo con «Impianto non in elenco», poi indica le vie lavate.',
                         default => null,
                     })
                     // Le vie si scrivono qui, in cima al rapportino: da
@@ -706,7 +774,7 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                     // Una riga gia' aperta al primo colpo d'occhio: con
                     // defaultItems(0) il riquadro sembrava facoltativo, e si
                     // passava oltre. Solo se un piano c'e' da scegliere.
-                    ->defaultItems(fn (Get $get) => self::impiantiDaLavare($get) >= 1 ? 1 : 0)
+                    ->defaultItems(fn (?ServiceReport $record, Get $get) => $record === null || self::impiantiDaLavare($get) >= 1 ? 1 : 0)
                     ->columnSpanFull(),
                 // Il collegamento Eureka manca spesso solo per il rapportino
                 // (vedi ServiceReport::gestionaleValidationErrors()), ma finora
