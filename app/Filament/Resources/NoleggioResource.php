@@ -147,11 +147,14 @@ class NoleggioResource extends Resource
                     Forms\Components\Repeater::make('forniture')
                         ->relationship()
                         ->label('')
-                        ->columns(7)
+                        // Sei colonne in due righe leggibili invece di sette
+                        // schiacciate su una: con i campi larghi 1/7 la
+                        // tendina del listino si perdeva fra gli altri.
+                        ->columns(6)
                         ->schema([
                             Forms\Components\Select::make('gruppo')
                                 ->label('Gruppo')->options(NoleggioFornitura::gruppiLabels())
-                                ->default(NoleggioFornitura::GRUPPO_DETERGENTI)->required()->columnSpan(1),
+                                ->default(NoleggioFornitura::GRUPPO_DETERGENTI)->required()->columnSpan(3),
                             // Caffè, deca e polveri hanno gia' un listino:
                             // sceglierli da li' evita di ribattere nome e
                             // prezzo, e soprattutto evita che il contratto
@@ -179,9 +182,9 @@ class NoleggioResource extends Resource
                                         ? NoleggioFornitura::GRUPPO_POLVERI
                                         : NoleggioFornitura::GRUPPO_CAFFE);
                                 })
-                                ->columnSpan(2),
+                                ->columnSpan(3),
                             Forms\Components\TextInput::make('voce')
-                                ->label('Voce')->required()->maxLength(255)->columnSpan(2),
+                                ->label('Voce')->required()->maxLength(255)->columnSpan(3),
                             Forms\Components\TextInput::make('quantita')
                                 ->label('Q.tà/mese')->numeric()->required()->live(onBlur: true)->columnSpan(1),
                             Forms\Components\TextInput::make('unita')
@@ -191,13 +194,12 @@ class NoleggioResource extends Resource
                             Forms\Components\TextInput::make('ricarico')
                                 ->label('Ricarico %')->numeric()->default(0)->live(onBlur: true)->columnSpan(1),
                             Forms\Components\TextInput::make('note')
-                                ->label('Nota (come si è calcolata la quantità)')->maxLength(255)->columnSpan(5),
+                                ->label('Nota (come si è calcolata la quantità)')->maxLength(255)->columnSpan(6),
                         ])
                         ->itemLabel(fn (array $state): ?string => filled($state['voce'] ?? null)
                             ? $state['voce'].' — '.rtrim(rtrim(number_format((float) ($state['quantita'] ?? 0), 3, ',', '.'), '0'), ',').' '.($state['unita'] ?? '')
                             : null)
                         ->addActionLabel('Aggiungi una voce')
-                        ->collapsible()
                         ->defaultItems(0)
                         ->columnSpanFull(),
                 ]),
