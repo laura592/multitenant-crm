@@ -8,7 +8,7 @@
            testo con grazie, titoli neri in grassetto senza grazie con una
            riga sopra, nessun colore e nessun riquadro. Il PDF non deve
            sembrare una pagina web: deve sembrare un contratto. */
-        body { font-family: DejaVu Serif, serif; font-size: 10.5px; color: #000; line-height: 1.5; }
+        body { font-family: "Times New Roman", Times, serif; font-size: 11.5px; color: #000; line-height: 1.5; }
 
         /* Intestazione dei contratti: vedi components/pdf-letterhead-contratto */
         .letterhead-contratto { width: 100%; margin-bottom: 18px; }
@@ -19,10 +19,10 @@
         .letterhead-contratto .dati { text-align: right; font-size: 8.5px; line-height: 1.45; }
         .letterhead-contratto .dati .nome { font-weight: bold; font-size: 10px; }
 
-        h1.titolo { font-family: DejaVu Sans, sans-serif; font-size: 18px; margin: 20px 0 4px; }
-        h2.sottotitolo { font-family: DejaVu Sans, sans-serif; font-size: 13px; margin: 0 0 16px; line-height: 1.35; }
+        h1.titolo { font-family: Arial, Helvetica, sans-serif; font-size: 18px; margin: 20px 0 4px; }
+        h2.sottotitolo { font-family: Arial, Helvetica, sans-serif; font-size: 13px; margin: 0 0 16px; line-height: 1.35; }
         h3.art {
-            font-family: DejaVu Sans, sans-serif; font-size: 12.5px;
+            font-family: Arial, Helvetica, sans-serif; font-size: 13px;
             margin: 16px 0 6px; padding-top: 6px; border-top: 1px solid #000;
         }
         p { margin: 0 0 7px; text-align: justify; }
@@ -85,8 +85,11 @@
 
     <h3 class="art">Art. 3 – Canone</h3>
     <p>Il canone è stabilito in <strong>{{ $eur($noleggio->canone) }} al mese, IVA esclusa</strong>.</p>
+    {{-- Niente totale su tutta la durata: il canone mensile e' il numero che
+         il cliente deve valutare, la somma dei cinque anni spaventa e non
+         aggiunge nulla a cio' che il contratto stabilisce. --}}
     <p>Il canone è comprensivo di quanto previsto dall'art. 4 e si intende dovuto per l'intera durata del
-        contratto. Impegno complessivo su {{ $mesi }} mesi: {{ $eur((float) $noleggio->canone * $mesi) }} + IVA.</p>
+        contratto.</p>
 
     <h3 class="art">Art. 4 – Cosa è compreso nel canone</h3>
     <ul>
@@ -130,8 +133,10 @@
         scritto fra le parti.</p>
 
     <h3 class="art">Art. 9 – Legge applicabile e foro competente</h3>
-    <p>Il presente contratto è regolato dalla legge italiana. Per ogni controversia è competente il foro del luogo
-        in cui ha sede il Fornitore.</p>
+    {{-- Foro indicato per nome e non "quello della sede del Fornitore": una
+         clausola che si legge senza dover sapere dove ha sede chi la scrive. --}}
+    <p>Il presente contratto è regolato dalla legge italiana. Per ogni controversia che dovesse insorgere in
+        relazione al presente contratto è competente in via esclusiva il <strong>Foro di Venezia</strong>.</p>
 
     @if (filled($noleggio->note))
         <h3 class="art">Note</h3>
@@ -146,7 +151,6 @@
         </tr>
     </table>
 
-    <div class="piede">{{ $azienda }} &mdash; Documento generato il {{ now()->format('d/m/Y \a\l\l\e H:i') }}</div>
-    @include('pdf.partials.page-numbers')
+
 </body>
 </html>

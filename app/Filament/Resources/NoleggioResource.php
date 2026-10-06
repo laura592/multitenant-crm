@@ -7,6 +7,7 @@ use App\Support\DisplayName;
 use App\Models\MachineUnit;
 use App\Models\Noleggio;
 use App\Models\NoleggioFornitura;
+use App\Models\Material;
 use App\Models\ProdottoCaffe;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -181,6 +182,29 @@ class NoleggioResource extends Resource
                                     $set('gruppo', $p->gruppo === 'liofilizzati'
                                         ? NoleggioFornitura::GRUPPO_POLVERI
                                         : NoleggioFornitura::GRUPPO_CAFFE);
+                                })
+                                ->columnSpan(3),
+                            // I detergenti e i filtri stanno fra i materiali,
+                            // non nel listino caffe'. Stessa etichetta usata
+                            // nei rapportini, cosi' si cercano allo stesso
+                            // modo in tutto il gestionale.
+                            Forms\Components\Select::make('materiale')
+                                ->label('Dal magazzino materiali')
+                                ->dehydrated(false)
+                                ->options(fn () => Material::query()->where('list_price', '>', 0)
+                                    ->orderBy('code')->limit(300)->get()
+                                    ->mapWithKeys(fn (Material $m) => [
+                                        $m->id => ($m->display_label ?: $m->code).' — € '.number_format((float) $m->list_price, 2, ',', '.'),
+                                    ])->all())
+                                ->searchable()
+                                ->live()
+                                ->afterStateUpdated(function (Forms\Set $set, $state) {
+                                    if (! $state || ! ($m = Material::find($state))) {
+                                        return;
+                                    }
+                                    $set('voce', $m->display_label ?: $m->code);
+                                    $set('prezzo_unitario', (float) $m->list_price);
+                                    $set('gruppo', NoleggioFornitura::GRUPPO_DETERGENTI);
                                 })
                                 ->columnSpan(3),
                             Forms\Components\TextInput::make('voce')
