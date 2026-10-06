@@ -26,8 +26,9 @@ class NoleggioFornitura extends Model
     public const GRUPPO_DETERGENTI = 'detergenti';
 
     protected $fillable = [
-        'noleggio_id', 'voce', 'gruppo', 'quantita', 'unita',
-        'prezzo_unitario', 'ricarico', 'costo_mensile', 'note', 'ordine',
+        'noleggio_id', 'voce', 'prodotto_caffe_id', 'material_id', 'gruppo',
+        'quantita', 'unita', 'prezzo_unitario', 'ricarico', 'costo_mensile',
+        'note', 'ordine',
     ];
 
     protected $casts = [
@@ -37,6 +38,20 @@ class NoleggioFornitura extends Model
         'costo_mensile' => 'decimal:2',
         'ordine' => 'integer',
     ];
+
+    /**
+     * Da dove arriva la voce. Nulle quando e' scritta a mano: i detergenti
+     * che si usano davvero non stanno in nessun listino.
+     */
+    public function prodottoCaffe(): BelongsTo
+    {
+        return $this->belongsTo(ProdottoCaffe::class);
+    }
+
+    public function materiale(): BelongsTo
+    {
+        return $this->belongsTo(Material::class, 'material_id');
+    }
 
     protected static function booted(): void
     {

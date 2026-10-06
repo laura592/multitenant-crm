@@ -162,9 +162,12 @@ class NoleggioResource extends Resource
                             // prometta un prodotto a un prezzo che il listino
                             // non pratica piu'. I detergenti restano a mano:
                             // non sono in nessun listino.
-                            Forms\Components\Select::make('prodotto_caffe')
+                            Forms\Components\Select::make('prodotto_caffe_id')
                                 ->label('Dal listino caffè')
-                                ->dehydrated(false)
+                                // Si salva: finche' era solo un aiuto alla
+                                // compilazione, riaprendo la scheda la tendina
+                                // tornava vuota e sembrava che la scelta non
+                                // fosse mai stata fatta (Laura, 06/10/2026).
                                 ->options(fn () => ProdottoCaffe::query()->where('attivo', true)
                                     ->orderBy('ordinamento')->get()
                                     ->mapWithKeys(fn (ProdottoCaffe $p) => [
@@ -172,6 +175,18 @@ class NoleggioResource extends Resource
                                     ])->all())
                                 ->searchable()
                                 ->live()
+                                // Le righe inserite prima che il riferimento
+                                // esistesse non ce l'hanno: lo si ritrova dal
+                                // nome, cosi' la tendina mostra subito la voce
+                                // giusta invece di sembrare mai compilata. Si
+                                // fissa sul serio al primo salvataggio.
+                                ->afterStateHydrated(function (Forms\Components\Select $component, Get $get, $state) {
+                                    if (filled($state) || blank($voce = $get('voce'))) {
+                                        return;
+                                    }
+
+                                    $component->state(ProdottoCaffe::where('nome', $voce)->value('id'));
+                                })
                                 ->afterStateUpdated(function (Forms\Set $set, $state) {
                                     if (! $state || ! ($p = ProdottoCaffe::find($state))) {
                                         return;
@@ -182,15 +197,16 @@ class NoleggioResource extends Resource
                                     $set('gruppo', $p->gruppo === 'liofilizzati'
                                         ? NoleggioFornitura::GRUPPO_POLVERI
                                         : NoleggioFornitura::GRUPPO_CAFFE);
+                                    // Una riga viene da una fonte sola.
+                                    $set('material_id', null);
                                 })
                                 ->columnSpan(3),
                             // I detergenti e i filtri stanno fra i materiali,
                             // non nel listino caffe'. Stessa etichetta usata
                             // nei rapportini, cosi' si cercano allo stesso
                             // modo in tutto il gestionale.
-                            Forms\Components\Select::make('materiale')
+                            Forms\Components\Select::make('material_id')
                                 ->label('Dal magazzino materiali')
-                                ->dehydrated(false)
                                 ->options(fn () => Material::query()->where('list_price', '>', 0)
                                     ->orderBy('code')->limit(300)->get()
                                     ->mapWithKeys(fn (Material $m) => [
@@ -205,6 +221,7 @@ class NoleggioResource extends Resource
                                     $set('voce', $m->display_label ?: $m->code);
                                     $set('prezzo_unitario', (float) $m->list_price);
                                     $set('gruppo', NoleggioFornitura::GRUPPO_DETERGENTI);
+                                    $set('prodotto_caffe_id', null);
                                 })
                                 ->columnSpan(3),
                             Forms\Components\TextInput::make('voce')
