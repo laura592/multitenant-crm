@@ -86,17 +86,38 @@
                 : '<strong>La fornitura di caff&egrave; &egrave; compresa</strong> nel canone, nei quantitativi concordati.');
     @endphp
 
+    @php $forniture = $noleggio->forniture; @endphp
+    @if ($forniture->isNotEmpty())
+        <h2 class="sezione">Cosa comprende il canone</h2>
+        <div class="info-box">
+            <p style="margin:0 0 6px;">Oltre alla disponibilità dell'attrezzatura e all'assistenza full-service, il canone comprende ogni mese:</p>
+            @foreach ($forniture->groupBy('gruppo') as $gruppo => $righe)
+                <p style="margin:6px 0 2px;"><strong>{{ \App\Models\NoleggioFornitura::gruppiLabels()[$gruppo] ?? ucfirst($gruppo) }}</strong></p>
+                <ul style="margin:0 0 4px 16px;padding:0;">
+                    @foreach ($righe as $r)
+                        <li>{{ rtrim(rtrim(number_format((float) $r->quantita, 3, ',', '.'), '0'), ',') }} {{ $r->unita }} &mdash; {{ $r->voce }}@if(filled($r->note)) <span style="color:#6b7280;">({{ $r->note }})</span>@endif</li>
+                    @endforeach
+                </ul>
+            @endforeach
+            <p style="margin:6px 0 0;color:#6b7280;">I quantitativi eccedenti quelli indicati sono fatturati a consumo.</p>
+        </div>
+    @endif
+
     <h2 class="sezione">Condizioni</h2>
     <ul class="condizioni">
         <li><strong>L'attrezzatura resta di proprietà di {{ $tenant?->legal_name ?: $tenant?->name }}</strong> per tutta la durata del contratto e al termine va restituita, salvo diverso accordo scritto.</li>
         <li>Il canone comprende le manutenzioni programmate, i ricambi, la manodopera e le trasferte previste dal programma full-service.</li>
         @if ((float) $noleggio->quota_detergenti > 0)
-            <li>{!! $frasiDetergenti !!}</li>
+            @if ($forniture->where('gruppo', \App\Models\NoleggioFornitura::GRUPPO_DETERGENTI)->isEmpty())
+                <li>{!! $frasiDetergenti !!}</li>
+            @endif
         @endif
         {{-- La riga cambia senso a seconda che il caffe' sia nel canone o no:
              scriverla fissa significherebbe, in un caso o nell'altro, dire al
              cliente il contrario di quello che pagherà. --}}
-        <li>{!! $fraseCaffe !!}</li>
+        @if ($forniture->where('gruppo', \App\Models\NoleggioFornitura::GRUPPO_CAFFE)->isEmpty())
+            <li>{!! $fraseCaffe !!}</li>
+        @endif
         <li>L'installazione e l'allacciamento sono a nostro carico; le predisposizioni — punto acqua, scarico e alimentazione elettrica — restano a carico del Cliente e vanno realizzate prima dell'intervento.</li>
         <li>Sono esclusi i danni da uso improprio, le manomissioni e gli interventi effettuati da personale non autorizzato.</li>
         <li><strong>Durata minima {{ $noleggio->mesi }} mesi.</strong> In caso di recesso anticipato restano dovuti i canoni residui, salvo diverso accordo scritto.</li>

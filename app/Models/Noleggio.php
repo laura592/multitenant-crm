@@ -8,6 +8,7 @@ use App\Support\Noleggio\CanoneOperativo;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -62,19 +63,43 @@ class Noleggio extends Model
         });
     }
 
+    public function forniture(): HasMany
+    {
+        return $this->hasMany(NoleggioFornitura::class)->orderBy('ordine')->orderBy('voce');
+    }
+
+    /**
+     * Le forniture a righe vincono sugli importi complessivi: se ce ne sono,
+     * detergenti e caffe' si leggono da li'. I due campi piatti restano per i
+     * noleggi scritti prima che le righe esistessero.
+     */
+    public function totaleForniture(string $gruppo): ?float
+    {
+        $righe = $this->relationLoaded('forniture') ? $this->forniture : $this->forniture()->get();
+        $delGruppo = $righe->where('gruppo', $gruppo);
+
+        return $delGruppo->isEmpty() ? null : (float) $delGruppo->sum('costo_mensile');
+    }
+
     public function ricalcola(): CanoneOperativo
     {
+        $detergenti = $this->totaleForniture(NoleggioFornitura::GRUPPO_DETERGENTI);
+        $caffe = $this->totaleForniture(NoleggioFornitura::GRUPPO_CAFFE);
+        $polveri = $this->totaleForniture(NoleggioFornitura::GRUPPO_POLVERI) ?? 0.0;
+
         return CanoneOperativo::calcola(
             costoMacchina: (float) $this->costo,
             listinoMacchina: (float) $this->listino,
             mesi: (int) $this->mesi,
             valoreResiduo: (float) $this->valore_residuo,
             margine: (float) $this->margine / 100,
-            detergentiMese: (float) $this->detergenti_mese,
+            detergentiMese: $detergenti ?? (float) $this->detergenti_mese,
             fullServiceAnnuo: (float) $this->full_service_percentuale / 100,
-            ricaricoDetergenti: (float) $this->ricarico_detergenti / 100,
-            caffeMese: (float) $this->caffe_mese,
-            ricaricoCaffe: (float) $this->ricarico_caffe / 100,
+            // Il ricarico e' gia' dentro ogni riga: applicarlo di nuovo lo
+            // conterebbe due volte.
+            ricaricoDetergenti: $detergenti !== null ? 0.0 : (float) $this->ricarico_detergenti / 100,
+            caffeMese: ($caffe ?? (float) $this->caffe_mese) + $polveri,
+            ricaricoCaffe: $caffe !== null ? 0.0 : (float) $this->ricarico_caffe / 100,
         );
     }
 

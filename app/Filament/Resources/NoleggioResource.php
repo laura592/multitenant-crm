@@ -6,6 +6,7 @@ use App\Models\Customer;
 use App\Support\DisplayName;
 use App\Models\MachineUnit;
 use App\Models\Noleggio;
+use App\Models\NoleggioFornitura;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
@@ -127,6 +128,39 @@ class NoleggioResource extends Resource
                     Forms\Components\TextInput::make('full_service_percentuale')
                         ->label('Full-Service (% annuo del listino)')
                         ->numeric()->default(10)->live(onBlur: true),
+                ]),
+
+            Forms\Components\Section::make('Cosa comprende il canone')
+                ->description('Una riga per voce: è quello che il contratto promette al cliente, e il canone la somma. Se ci sono righe, gli importi complessivi di detergenti e caffè qui sopra vengono ignorati.')
+                ->schema([
+                    Forms\Components\Repeater::make('forniture')
+                        ->relationship()
+                        ->label('')
+                        ->columns(6)
+                        ->schema([
+                            Forms\Components\Select::make('gruppo')
+                                ->label('Gruppo')->options(NoleggioFornitura::gruppiLabels())
+                                ->default(NoleggioFornitura::GRUPPO_DETERGENTI)->required()->columnSpan(1),
+                            Forms\Components\TextInput::make('voce')
+                                ->label('Voce')->required()->maxLength(255)->columnSpan(2),
+                            Forms\Components\TextInput::make('quantita')
+                                ->label('Q.tà/mese')->numeric()->required()->live(onBlur: true)->columnSpan(1),
+                            Forms\Components\TextInput::make('unita')
+                                ->label('Unità')->default('pz')->maxLength(16)->columnSpan(1),
+                            Forms\Components\TextInput::make('prezzo_unitario')
+                                ->label('€ unitario')->numeric()->required()->live(onBlur: true)->columnSpan(1),
+                            Forms\Components\TextInput::make('ricarico')
+                                ->label('Ricarico %')->numeric()->default(0)->live(onBlur: true)->columnSpan(1),
+                            Forms\Components\TextInput::make('note')
+                                ->label('Nota (come si è calcolata la quantità)')->maxLength(255)->columnSpan(5),
+                        ])
+                        ->itemLabel(fn (array $state): ?string => filled($state['voce'] ?? null)
+                            ? $state['voce'].' — '.rtrim(rtrim(number_format((float) ($state['quantita'] ?? 0), 3, ',', '.'), '0'), ',').' '.($state['unita'] ?? '')
+                            : null)
+                        ->addActionLabel('Aggiungi una voce')
+                        ->collapsible()
+                        ->defaultItems(0)
+                        ->columnSpanFull(),
                 ]),
 
             Forms\Components\Section::make('Il canone')
