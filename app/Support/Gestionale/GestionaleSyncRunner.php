@@ -669,6 +669,14 @@ class GestionaleSyncRunner
 
         foreach ($macchine as $macchina) {
             $dal = $macchina->placements->max('placed_at');
+            // L'ultimo intervento su questa macchina presso qualcun ALTRO:
+            // se e' successivo al ritiro, la macchina e' li' e non in casa.
+            $altrove = $interventi->get($macchina->id, collect())
+                ->where('customer_id', '!=', $macchina->current_customer_id)
+                ->filter(fn ($r) => filled($r->customer_id))
+                ->sortByDesc('intervention_date')
+                ->first();
+
             $proposta = RientriMagazzino::proposta(
                 $macchina,
                 collect($ritiriPerMacchina[$macchina->id] ?? []),
@@ -677,6 +685,10 @@ class GestionaleSyncRunner
                 $interventi->get($macchina->id, collect())
                     ->where('customer_id', $macchina->current_customer_id)
                     ->max('intervention_date'),
+                $altrove ? (object) [
+                    'customer_id' => $altrove->customer_id,
+                    'data' => Carbon::parse($altrove->intervention_date),
+                ] : null,
             );
 
             if (! $proposta) {
@@ -690,7 +702,9 @@ class GestionaleSyncRunner
             $nuova = $macchina->spostamento_suggerito_motivo !== $proposta['motivo'];
 
             $macchina->update([
-                'spostamento_suggerito_customer_id' => null,
+                // Di norma null (= rientro in magazzino), ma se la macchina
+                // e' stata vista altrove si propone lo spostamento li'.
+                'spostamento_suggerito_customer_id' => $proposta['customer_id'] ?? null,
                 'spostamento_suggerito_il' => $proposta['data'],
                 'spostamento_suggerito_motivo' => $proposta['motivo'],
                 'spostamento_suggerito_pagante_code' => null,

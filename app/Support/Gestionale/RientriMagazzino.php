@@ -38,9 +38,10 @@ final class RientriMagazzino
      * @param  ?Carbon  $dal  da quando la macchina e' dov'e' ora
      * @param  ?Carbon  $ultimaConsegna  l'ultima bolla di consegna nota su Eureka
      * @param  ?Carbon  $ultimoIntervento  l'ultima volta che un tecnico e' andato su questa macchina, li'
-     * @return ?array{data: Carbon, motivo: string}
+     * @param  ?object{customer_id: string, data: Carbon, cliente: ?string}  $vistaAltrove  l'ultimo intervento su questa macchina presso un ALTRO cliente
+     * @return ?array{data: Carbon, motivo: string, customer_id?: string}
      */
-    public static function proposta(MachineUnit $macchina, Collection $ritiri, ?Carbon $dal, ?Carbon $ultimaConsegna = null, ?Carbon $ultimoIntervento = null): ?array
+    public static function proposta(MachineUnit $macchina, Collection $ritiri, ?Carbon $dal, ?Carbon $ultimaConsegna = null, ?Carbon $ultimoIntervento = null, ?object $vistaAltrove = null): ?array
     {
         if (! $macchina->current_customer_id) {
             return null;
@@ -64,6 +65,26 @@ final class RientriMagazzino
         // il ritiro di un pezzo e non della macchina).
         if ($ultimoIntervento && $ultimoIntervento->copy()->startOfDay()->gt($ultimo->data->copy()->startOfDay())) {
             return null;
+        }
+
+        // Dopo il ritiro la macchina e' stata vista presso un ALTRO cliente:
+        // non e' in magazzino, e' li'. Prima si guardava solo se il tecnico
+        // era tornato dallo stesso cliente, quindi una macchina riconsegnata
+        // altrove restava proposta per il rientro -- sei casi su centotrenta
+        // al 06/10/2026, fra cui una ritirata il 10/08 e vista il giorno dopo
+        // da un altro cliente. Si propone lo spostamento, che e' la cosa
+        // vera, invece di un rientro che non e' mai avvenuto.
+        if ($vistaAltrove && $vistaAltrove->data->copy()->startOfDay()->gt($ultimo->data->copy()->startOfDay())) {
+            if ($macchina->spostamento_scartato === MachineUnit::chiaveSpostamento($vistaAltrove->customer_id, $vistaAltrove->data)) {
+                return null;
+            }
+
+            return [
+                'data' => $vistaAltrove->data->copy()->startOfDay(),
+                'customer_id' => $vistaAltrove->customer_id,
+                'motivo' => "ritirata il {$ultimo->data->format('d/m/Y')} (rapportino {$ultimo->numero}),"
+                    ." ma vista li' il {$vistaAltrove->data->format('d/m/Y')}",
+            ];
         }
 
         if ($macchina->spostamento_scartato === MachineUnit::chiaveSpostamento(null, $ultimo->data)) {
