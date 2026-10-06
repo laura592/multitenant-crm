@@ -138,10 +138,10 @@
     <p>Il presente contratto è regolato dalla legge italiana. Per ogni controversia che dovesse insorgere in
         relazione al presente contratto è competente in via esclusiva il <strong>Foro di Venezia</strong>.</p>
 
-    @if (filled($noleggio->note))
-        <h3 class="art">Note</h3>
-        <div class="dati">{!! nl2br(e($noleggio->note)) !!}</div>
-    @endif
+    {{-- Le note del noleggio NON si stampano: sono appunti interni — costo
+         d'acquisto, sconto fornitore ipotizzato, "bozza di studio" — e sul
+         contratto del cliente non ci devono finire. Si leggono nella scheda
+         del CRM. --}}
 
     <table class="firme" style="width:100%;">
         <tr>
