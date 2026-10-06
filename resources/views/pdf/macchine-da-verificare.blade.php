@@ -44,7 +44,7 @@
         Sono le macchine che un rapportino dà per <strong>ritirate</strong> e che nel gestionale risultano ancora
         presso il cliente. Per ognuna serve sapere dov'è davvero: in magazzino, ancora dal cliente, oppure
         consegnata a qualcun altro — in quest'ultimo caso scrivere a chi. Le risposte si riportano poi nel
-        gestionale, in&nbsp;<em>Revisione sincronizzazione</em>.
+        gestionale, in&nbsp;<em>Impostazioni &rsaquo; Sync Eureka</em>.
     </div>
 
     @foreach ($gruppi as $titolo => $righe)

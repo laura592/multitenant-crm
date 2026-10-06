@@ -32,6 +32,20 @@ final class RientriMagazzino
     }
 
     /**
+     * Lo stesso criterio di eRitiro(), ma scritto in SQL per chi i rapportini
+     * li cerca sul database invece che riga per riga.
+     *
+     * Sta qui e non ricopiato nelle query: due elenchi di codici divergono al
+     * primo articolo nuovo, e il giorno che succede nessuno se ne accorge --
+     * semplicemente una macchina smette di comparire fra i ritiri.
+     */
+    public static function filtroCodici($query, string $colonna = 'm.code')
+    {
+        return $query->where(fn ($q) => $q->where($colonna, 'like', 'DISIN%')
+            ->orWhere($colonna, 'like', '%RITIR%'));
+    }
+
+    /**
      * Il rientro da proporre, o null.
      *
      * @param  Collection<int, object{data: Carbon, numero: string, customer_id: string}>  $ritiri  i ritiri nei rapportini di questa macchina

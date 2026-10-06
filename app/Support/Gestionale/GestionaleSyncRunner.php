@@ -632,7 +632,7 @@ class GestionaleSyncRunner
             ->whereNull('r.deleted_at')
             ->where('r.tenant_id', $this->tenant->id)
             ->whereNotNull('r.machine_unit_id')
-            ->where(fn ($q) => $q->where('m.code', 'like', 'DISIN%')->orWhere('m.code', 'like', '%RITIR%'))
+            ->tap(fn ($q) => RientriMagazzino::filtroCodici($q))
             ->get(['r.machine_unit_id', 'r.customer_id', 'r.number', 'r.intervention_date'])
             ->map(fn ($r) => (object) [
                 'machine_unit_id' => $r->machine_unit_id,
