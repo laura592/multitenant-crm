@@ -43,7 +43,10 @@ class ViewNoleggio extends ViewRecord
                     TextEntry::make('mesi')->label('Durata')->suffix(' mesi'),
                     TextEntry::make('customer.company_name')->label('Cliente'),
                     TextEntry::make('stato')->label('Stato')->badge()
-                        ->formatStateUsing(fn (string $s) => \App\Models\Noleggio::statiLabels()[$s] ?? $s),
+                        // Il parametro si deve chiamare $state: Filament
+                        // risolve le closure per NOME, non per posizione, e
+                        // con un nome inventato la pagina va in errore.
+                        ->formatStateUsing(fn (string $state) => \App\Models\Noleggio::statiLabels()[$state] ?? $state),
                 ]),
 
             Section::make('Com\'è composto il canone')
