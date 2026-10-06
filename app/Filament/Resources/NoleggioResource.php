@@ -207,19 +207,40 @@ class NoleggioResource extends Resource
                             // modo in tutto il gestionale.
                             Forms\Components\Select::make('material_id')
                                 ->label('Dal magazzino materiali')
-                                ->options(fn () => Material::query()->where('list_price', '>', 0)
-                                    ->orderBy('code')->limit(300)->get()
-                                    ->mapWithKeys(fn (Material $m) => [
-                                        $m->id => ($m->display_label ?: $m->code).' — € '.number_format((float) $m->list_price, 2, ',', '.'),
-                                    ])->all())
+                                // Ricerca sul server, non fra opzioni gia'
+                                // caricate: i materiali sono 3.600 e un menu
+                                // non li tiene. Prima se ne caricavano i primi
+                                // 300 per codice e si cercava solo fra quelli,
+                                // quindi quasi tutto il magazzino era
+                                // irraggiungibile (Laura, 06/10/2026).
                                 ->searchable()
+                                ->getSearchResultsUsing(fn (string $search) => Material::query()
+                                    ->where(fn ($q) => $q->where('code', 'like', "%{$search}%")
+                                        ->orWhere('type', 'like', "%{$search}%")
+                                        ->orWhere('variant', 'like', "%{$search}%"))
+                                    ->orderBy('code')->limit(50)->get()
+                                    ->mapWithKeys(fn (Material $m) => [$m->id => static::etichettaMateriale($m)])
+                                    ->all())
+                                // Serve a mostrare la voce gia' scelta quando
+                                // si riapre la scheda: senza, la ricerca lato
+                                // server lascerebbe la tendina vuota.
+                                ->getOptionLabelUsing(fn ($value) => ($m = Material::find($value))
+                                    ? static::etichettaMateriale($m)
+                                    : null)
                                 ->live()
                                 ->afterStateUpdated(function (Forms\Set $set, $state) {
                                     if (! $state || ! ($m = Material::find($state))) {
                                         return;
                                     }
                                     $set('voce', $m->display_label ?: $m->code);
-                                    $set('prezzo_unitario', (float) $m->list_price);
+                                    // Due terzi del magazzino non ha un prezzo
+                                    // di listino: azzerare quello scritto a
+                                    // mano farebbe sparire il costo dal canone
+                                    // senza dirlo. Si sovrascrive solo quando
+                                    // un prezzo c'e' davvero.
+                                    if ((float) $m->list_price > 0) {
+                                        $set('prezzo_unitario', (float) $m->list_price);
+                                    }
                                     $set('gruppo', NoleggioFornitura::GRUPPO_DETERGENTI);
                                     $set('prodotto_caffe_id', null);
                                 })
@@ -353,6 +374,20 @@ class NoleggioResource extends Resource
                 static::azioneContratto(Tables\Actions\Action::make('contratto')),
             ])
             ->defaultSort('created_at', 'desc');
+    }
+
+    /**
+     * Codice in testa perche' e' quello che si cerca ("23-020"), e il prezzo
+     * solo se c'e': scrivere "€ 0,00" su un articolo senza listino sembra un
+     * articolo gratis invece che un prezzo da mettere.
+     */
+    public static function etichettaMateriale(Material $m): string
+    {
+        $prezzo = (float) $m->list_price > 0
+            ? ' — € '.number_format((float) $m->list_price, 2, ',', '.')
+            : ' — prezzo da indicare';
+
+        return $m->code.' — '.($m->display_label ?: $m->code).$prezzo;
     }
 
     /**
