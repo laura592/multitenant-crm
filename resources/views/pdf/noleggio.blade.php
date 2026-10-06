@@ -48,14 +48,33 @@
         // Nel contratto vanno le QUANTITA', non i prezzi: il cliente deve
         // sapere cosa gli spetta, non come e' composto il nostro margine. Il
         // dettaglio economico resta nel CRM.
-        // "13,742 500 g di Cioccolato" non si legge. Quando l'unita' e' una
-        // confezione (contiene una cifra: "500 g", "250 g") ci vuole il "per";
-        // quando e' una misura o un pezzo, no.
+        // Le quantita' si scrivono ANNUE e intere. Il calcolo interno e'
+        // mensile e produce numeri come "4,33 pz" o "0,77 × 250 g": su un
+        // contratto non vogliono dire niente, nessuno consegna un terzo di
+        // spruzzino. Moltiplicate per dodici tornano a essere unita' vere —
+        // 52 spruzzini, 18 flaconi — e il Cliente legge un impegno che si
+        // puo' davvero onorare (Laura, 06/10/2026).
+        //
+        // Quando l'unita' e' una confezione con una pezzatura ("500 g",
+        // "250 g") ci vuole il "per"; quando e' una misura o un pezzo, no.
         $quantita = function ($r) {
-            $q = rtrim(rtrim(number_format((float) $r->quantita, 2, ',', '.'), '0'), ',');
-            $confezione = (bool) preg_match('/\d/', (string) $r->unita);
+            $annua = (float) $r->quantita * 12;
 
-            return $r->voce.' '.$q.($confezione ? ' × ' : ' ').$r->unita;
+            // Mai zero: una fornitura prevista ma minima si arrotonda per
+            // eccesso all'unita', altrimenti il contratto la nega.
+            $n = $annua > 0 ? max(1, (int) round($annua)) : 0;
+
+            $unita = trim((string) $r->unita);
+            $confezione = (bool) preg_match('/\d/', $unita);
+
+            // "900 × 1 kg" si scrive "900 kg": il moltiplicatore serve solo
+            // dove la confezione ha una pezzatura propria.
+            if (preg_match('/^1\s+(.+)$/u', $unita, $m)) {
+                $unita = $m[1];
+                $confezione = false;
+            }
+
+            return $r->voce.' '.number_format($n, 0, ',', '.').($confezione ? ' × ' : ' ').$unita;
         };
     @endphp
 
@@ -98,8 +117,8 @@
         <li>L'<strong>assistenza tecnica full-service</strong>: manutenzioni programmate, interventi su chiamata,
             fornitura e sostituzione dei ricambi, manodopera e trasferte del personale tecnico, supporto telefonico.</li>
         @foreach ($perGruppo as $gruppo => $righe)
-            <li>La fornitura mensile di <strong>{{ mb_strtolower(\App\Models\NoleggioFornitura::gruppiLabels()[$gruppo] ?? $gruppo) }}</strong>,
-                nei quantitativi di @foreach ($righe as $r){{ $quantita($r) }}@if(! $loop->last); @endif@endforeach.</li>
+            <li>La fornitura di <strong>{{ mb_strtolower(\App\Models\NoleggioFornitura::gruppiLabels()[$gruppo] ?? $gruppo) }}</strong>,
+                nei quantitativi annui di @foreach ($righe as $r){{ $quantita($r) }}@if(! $loop->last); @endif@endforeach.</li>
         @endforeach
         @if ($forniture->isEmpty())
             <li>Le forniture di consumo nei quantitativi concordati fra le parti.</li>
