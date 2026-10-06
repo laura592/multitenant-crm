@@ -33,14 +33,14 @@ class Noleggio extends Model
 
     protected $fillable = [
         'tenant_id', 'customer_id', 'machine_unit_id', 'quote_id', 'descrizione',
-        'listino', 'costo', 'mesi', 'margine', 'detergenti_mese', 'ricarico_detergenti', 'caffe_mese', 'ricarico_caffe', 'caffe_kg_mese', 'detergenti_inclusi',
+        'listino', 'sconto_acquisto', 'costo', 'mesi', 'margine', 'detergenti_mese', 'ricarico_detergenti', 'caffe_mese', 'ricarico_caffe', 'caffe_kg_mese', 'detergenti_inclusi',
         'valore_residuo', 'full_service_percentuale',
         'quota_macchina', 'quota_servizio', 'quota_detergenti', 'quota_caffe', 'canone', 'mese_pareggio',
         'data_inizio', 'stato', 'note',
     ];
 
     protected $casts = [
-        'listino' => 'decimal:2', 'costo' => 'decimal:2', 'mesi' => 'integer',
+        'listino' => 'decimal:2', 'sconto_acquisto' => 'decimal:2', 'costo' => 'decimal:2', 'mesi' => 'integer',
         'margine' => 'decimal:2', 'detergenti_mese' => 'decimal:2', 'ricarico_detergenti' => 'decimal:2',
         'caffe_mese' => 'decimal:2', 'caffe_kg_mese' => 'decimal:2', 'ricarico_caffe' => 'decimal:2', 'quota_caffe' => 'decimal:2',
         'valore_residuo' => 'decimal:2', 'full_service_percentuale' => 'decimal:2',
@@ -52,6 +52,12 @@ class Noleggio extends Model
     protected static function booted(): void
     {
         static::saving(function (self $noleggio) {
+            // Lo sconto, se c'e', comanda sul costo: sono due modi di dire la
+            // stessa cosa e il secondo si disallinea al primo aggiornamento.
+            if ($noleggio->sconto_acquisto !== null && (float) $noleggio->listino > 0) {
+                $noleggio->costo = round((float) $noleggio->listino * (1 - (float) $noleggio->sconto_acquisto / 100), 2);
+            }
+
             $r = $noleggio->ricalcola();
 
             $noleggio->quota_macchina = $r->quotaMacchina;

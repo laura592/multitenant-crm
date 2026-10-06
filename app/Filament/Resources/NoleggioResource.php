@@ -7,6 +7,7 @@ use App\Support\DisplayName;
 use App\Models\MachineUnit;
 use App\Models\Noleggio;
 use App\Models\NoleggioFornitura;
+use App\Models\ProdottoCaffe;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
@@ -83,6 +84,16 @@ class NoleggioResource extends Resource
                         ->label('Listino (€)')
                         ->helperText('Base del Full-Service, che costa il 10% annuo del listino.')
                         ->numeric()->required()->live(onBlur: true),
+                    Forms\Components\TextInput::make('sconto_acquisto')
+                        ->label('Sconto fornitore (%)')
+                        ->helperText('Compilandolo, il costo si calcola da sé.')
+                        ->numeric()->live(onBlur: true)
+                        ->afterStateUpdated(function (Forms\Set $set, Get $get, $state) {
+                            if ($state === null || $state === '' || ! (float) $get('listino')) {
+                                return;
+                            }
+                            $set('costo', round((float) $get('listino') * (1 - (float) $state / 100), 2));
+                        }),
                     Forms\Components\TextInput::make('costo')
                         ->label('Costo d\'acquisto (€)')
                         ->helperText('Quanto costa a voi. Il canone recupera questo, non il listino.')
@@ -136,11 +147,39 @@ class NoleggioResource extends Resource
                     Forms\Components\Repeater::make('forniture')
                         ->relationship()
                         ->label('')
-                        ->columns(6)
+                        ->columns(7)
                         ->schema([
                             Forms\Components\Select::make('gruppo')
                                 ->label('Gruppo')->options(NoleggioFornitura::gruppiLabels())
                                 ->default(NoleggioFornitura::GRUPPO_DETERGENTI)->required()->columnSpan(1),
+                            // Caffè, deca e polveri hanno gia' un listino:
+                            // sceglierli da li' evita di ribattere nome e
+                            // prezzo, e soprattutto evita che il contratto
+                            // prometta un prodotto a un prezzo che il listino
+                            // non pratica piu'. I detergenti restano a mano:
+                            // non sono in nessun listino.
+                            Forms\Components\Select::make('prodotto_caffe')
+                                ->label('Dal listino caffè')
+                                ->dehydrated(false)
+                                ->options(fn () => ProdottoCaffe::query()->where('attivo', true)
+                                    ->orderBy('ordinamento')->get()
+                                    ->mapWithKeys(fn (ProdottoCaffe $p) => [
+                                        $p->id => $p->nome.' — '.$p->formato.' — € '.number_format((float) $p->prezzo, 2, ',', '.'),
+                                    ])->all())
+                                ->searchable()
+                                ->live()
+                                ->afterStateUpdated(function (Forms\Set $set, $state) {
+                                    if (! $state || ! ($p = ProdottoCaffe::find($state))) {
+                                        return;
+                                    }
+                                    $set('voce', $p->nome);
+                                    $set('unita', $p->formato);
+                                    $set('prezzo_unitario', (float) $p->prezzo);
+                                    $set('gruppo', $p->gruppo === 'liofilizzati'
+                                        ? NoleggioFornitura::GRUPPO_POLVERI
+                                        : NoleggioFornitura::GRUPPO_CAFFE);
+                                })
+                                ->columnSpan(2),
                             Forms\Components\TextInput::make('voce')
                                 ->label('Voce')->required()->maxLength(255)->columnSpan(2),
                             Forms\Components\TextInput::make('quantita')
@@ -205,12 +244,27 @@ class NoleggioResource extends Resource
         $eur = fn ($v) => '€ '.number_format((float) $v, 2, ',', '.');
         $meta = (int) max(1, round($r->mesi / 2));
 
+        // I totali per gruppo si leggono dalle righe del ripetitore, cosi' si
+        // muovono mentre si digita invece che al salvataggio.
+        $perGruppo = collect($get('forniture') ?? [])
+            ->groupBy(fn ($f) => $f['gruppo'] ?? 'consumabili')
+            ->map(fn ($g) => $g->sum(fn ($f) => (float) ($f['quantita'] ?? 0)
+                * (float) ($f['prezzo_unitario'] ?? 0)
+                * (1 + (float) ($f['ricarico'] ?? 0) / 100)));
+
         $righe = [
             ['Quota macchina', $eur($r->quotaMacchina)],
             ['Full-Service', $eur($r->quotaServizio)],
-            ['Detergenti', $eur($r->quotaDetergenti)],
-            ['Caffè', $eur($r->quotaCaffe)],
         ];
+        foreach (NoleggioFornitura::gruppiLabels() as $chiave => $etichetta) {
+            if (($perGruppo[$chiave] ?? 0) > 0) {
+                $righe[] = [$etichetta, $eur($perGruppo[$chiave])];
+            }
+        }
+        if ($perGruppo->isEmpty()) {
+            $righe[] = ['Detergenti', $eur($r->quotaDetergenti)];
+            $righe[] = ['Caffè', $eur($r->quotaCaffe)];
+        }
         $corpo = '';
         foreach ($righe as [$k, $v]) {
             $corpo .= '<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>'.$k.'</span><span>'.$v.'</span></div>';
@@ -251,6 +305,7 @@ class NoleggioResource extends Resource
                 Tables\Filters\SelectFilter::make('stato')->label('Stato')->options(Noleggio::statiLabels()),
             ])
             ->actions([
+                Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),
                 static::azioneContratto(Tables\Actions\Action::make('contratto')),
             ])
@@ -285,6 +340,7 @@ class NoleggioResource extends Resource
     {
         return [
             'index' => NoleggioResource\Pages\ListNoleggi::route('/'),
+            'view' => NoleggioResource\Pages\ViewNoleggio::route('/{record}'),
             'create' => NoleggioResource\Pages\CreateNoleggio::route('/create'),
             'edit' => NoleggioResource\Pages\EditNoleggio::route('/{record}/edit'),
         ];

@@ -2,141 +2,138 @@
 <html lang="it">
 <head>
     <meta charset="utf-8">
-    <title>Noleggio operativo — {{ $noleggio->customer?->company_name }}</title>
+    <title>Contratto di noleggio operativo — {{ $noleggio->customer?->company_name }}</title>
     <style>
-        body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1f2937; line-height: 1.5; }
+        body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1f2937; line-height: 1.55; }
         @include('pdf.partials.letterhead-styles')
         @include('pdf.partials.document-styles')
 
-        h2.sezione { margin: 16px 0 4px; font-size: 11px; color: #020F30; text-transform: uppercase; letter-spacing: .04em; }
-        /* Il canone e' il numero che si cerca: deve staccarsi dal resto. */
-        table.canone { width: 100%; border-collapse: collapse; margin-top: 4px; }
-        table.canone td { padding: 4px 6px; }
-        table.canone td.v { text-align: right; white-space: nowrap; }
-        table.canone tr.totale td { border-top: 1.5px solid #020F30; font-weight: bold; font-size: 13px; background: #f0f4fa; }
-        .condizioni li { margin-bottom: 4px; }
-        /* Firme: devono stare insieme, non spezzarsi a fine pagina. */
-        .firme { page-break-inside: avoid; margin-top: 26px; }
-        .firme td { padding-top: 26px; font-size: 9px; color: #6b7280; }
-        .riga-firma { border-top: 1px solid #9ca3af; padding-top: 3px; width: 45%; }
+        h1.titolo { font-size: 15px; color: #020F30; margin: 18px 0 2px; }
+        p.sottotitolo { margin: 0 0 14px; color: #4b5563; }
+        h2.art { font-size: 11px; color: #020F30; margin: 14px 0 3px; }
+        ul.voci { margin: 2px 0 2px 16px; padding: 0; }
+        ul.voci li { margin-bottom: 2px; }
+        /* Il canone e' il numero che si cerca: va trovato senza leggere. */
+        .canone-box { border: 1.5px solid #020F30; background: #f0f4fa; padding: 8px 12px; margin: 6px 0 2px; }
+        .canone-box .cifra { font-size: 17px; font-weight: bold; color: #020F30; }
+        .firme { page-break-inside: avoid; margin-top: 24px; }
+        .riga-firma { border-top: 1px solid #9ca3af; padding-top: 3px; width: 46%; font-size: 9px; color: #6b7280; }
     </style>
 </head>
 <body>
     <x-pdf-letterhead :tenant="$tenant" />
 
-    <table class="doc-meta">
-        <tr>
-            <td><span class="label">Contratto di noleggio operativo</span><br>
-                <span class="value">{{ $noleggio->data_inizio?->format('d/m/Y') ?: now()->format('d/m/Y') }}</span></td>
-            <td><span class="label">Durata</span><br><span class="value">{{ $noleggio->mesi }} mesi</span></td>
-        </tr>
-    </table>
-
-    <h2 class="sezione">Cliente</h2>
-    <div class="info-box">
-        <strong>{{ $noleggio->customer?->company_name }}</strong><br>
-        {{-- La provincia manca su parecchie anagrafiche: senza il controllo
-             restavano le parentesi vuote, "Abano Terme ()". --}}
-        {{ $noleggio->customer?->street }}@if($noleggio->customer?->postal_code), {{ $noleggio->customer?->postal_code }} {{ $noleggio->customer?->city }}@if(filled($noleggio->customer?->province)) ({{ $noleggio->customer->province }})@endif
-        @endif
-        @if($noleggio->customer?->vat_number)<br>P. IVA {{ $noleggio->customer->vat_number }}@endif
-    </div>
-
-    <h2 class="sezione">Oggetto del noleggio</h2>
-    <div class="info-box">
-        {{ $noleggio->descrizione }}
-        @if($noleggio->machineUnit)<br><span style="color:#6b7280;">Matricola {{ $noleggio->machineUnit->serial_number }}</span>@endif
-    </div>
-
-    <h2 class="sezione">Canone</h2>
-    {{--
-        Le tre voci si mostrano al cliente perche' il canone sia leggibile:
-        "cosa sto pagando" e' la prima domanda. Non si espongono invece costo
-        d'acquisto, margine e mese di pareggio: sono conti interni.
-    --}}
-    <table class="canone">
-        <tr><td>Disponibilità dell'attrezzatura</td><td class="v">&euro; {{ number_format((float) $noleggio->quota_macchina, 2, ',', '.') }}</td></tr>
-        <tr><td>Assistenza full-service (manutenzioni programmate, ricambi, manodopera e trasferte)</td><td class="v">&euro; {{ number_format((float) $noleggio->quota_servizio, 2, ',', '.') }}</td></tr>
-        @if ((float) $noleggio->quota_detergenti > 0)
-            <tr><td>Detergenti e materiali di consumo</td><td class="v">&euro; {{ number_format((float) $noleggio->quota_detergenti, 2, ',', '.') }}</td></tr>
-        @endif
-        @if ((float) $noleggio->quota_caffe > 0)
-            <tr><td>Fornitura di caffè</td><td class="v">&euro; {{ number_format((float) $noleggio->quota_caffe, 2, ',', '.') }}</td></tr>
-        @endif
-        <tr class="totale"><td>Canone mensile, IVA esclusa</td><td class="v">&euro; {{ number_format((float) $noleggio->canone, 2, ',', '.') }}</td></tr>
-    </table>
-    <p style="margin-top:6px;color:#6b7280;">
-        Impegno complessivo su {{ $noleggio->mesi }} mesi: &euro; {{ number_format((float) $noleggio->canone * $noleggio->mesi, 2, ',', '.') }} + IVA.
-    </p>
-
     @php
-        // Composte qui e non inline: Blade non compila una direttiva attaccata
-        // a una parola ("consumo@if"), e i @if finivano stampati nel PDF.
-        $kg = (float) $noleggio->caffe_kg_mese;
-        $kgTesto = rtrim(rtrim(number_format($kg, 2, ',', '.'), '0'), ',');
+        $azienda = $tenant?->legal_name ?: ($tenant?->name ?: config('app.name'));
+        $forniture = $noleggio->forniture;
+        $perGruppo = $forniture->groupBy('gruppo');
+        $mesi = (int) $noleggio->mesi;
+        $eur = fn ($v) => '€ '.number_format((float) $v, 2, ',', '.');
+        // Nel contratto vanno le QUANTITA', non i prezzi: il cliente deve
+        // sapere cosa gli spetta, non come e' composto il nostro margine. Il
+        // dettaglio economico resta nel CRM.
+        // "13,742 500 g di Cioccolato" non si legge. Quando l'unita' e' una
+        // confezione (contiene una cifra: "500 g", "250 g") ci vuole il "per";
+        // quando e' una misura o un pezzo, no.
+        $quantita = function ($r) {
+            $q = rtrim(rtrim(number_format((float) $r->quantita, 2, ',', '.'), '0'), ',');
+            $confezione = (bool) preg_match('/\d/', (string) $r->unita);
 
-        $frasiDetergenti = filled($noleggio->detergenti_inclusi)
-            ? 'Il canone comprende i detergenti e i materiali di consumo nella misura di <strong>'.e($noleggio->detergenti_inclusi).'</strong>; i quantitativi eccedenti sono fatturati a consumo.'
-            : 'Il canone comprende i detergenti e i materiali di consumo necessari all\'uso ordinario.';
-
-        $fraseCaffe = (float) $noleggio->quota_caffe <= 0
-            ? '<strong>Il caff&egrave; non &egrave; compreso</strong> ed &egrave; fatturato a consumo.'
-            : ($kg > 0
-                ? '<strong>La fornitura di caff&egrave; &egrave; compresa</strong> nel canone fino a <strong>'.$kgTesto.' kg al mese</strong>; i quantitativi eccedenti sono fatturati a consumo.'
-                : '<strong>La fornitura di caff&egrave; &egrave; compresa</strong> nel canone, nei quantitativi concordati.');
+            return $r->voce.' '.$q.($confezione ? ' × ' : ' ').$r->unita;
+        };
     @endphp
 
-    @php $forniture = $noleggio->forniture; @endphp
-    @if ($forniture->isNotEmpty())
-        <h2 class="sezione">Cosa comprende il canone</h2>
-        <div class="info-box">
-            <p style="margin:0 0 6px;">Oltre alla disponibilità dell'attrezzatura e all'assistenza full-service, il canone comprende ogni mese:</p>
-            @foreach ($forniture->groupBy('gruppo') as $gruppo => $righe)
-                <p style="margin:6px 0 2px;"><strong>{{ \App\Models\NoleggioFornitura::gruppiLabels()[$gruppo] ?? ucfirst($gruppo) }}</strong></p>
-                <ul style="margin:0 0 4px 16px;padding:0;">
-                    @foreach ($righe as $r)
-                        <li>{{ rtrim(rtrim(number_format((float) $r->quantita, 3, ',', '.'), '0'), ',') }} {{ $r->unita }} &mdash; {{ $r->voce }}@if(filled($r->note)) <span style="color:#6b7280;">({{ $r->note }})</span>@endif</li>
-                    @endforeach
-                </ul>
-            @endforeach
-            <p style="margin:6px 0 0;color:#6b7280;">I quantitativi eccedenti quelli indicati sono fatturati a consumo.</p>
-        </div>
-    @endif
+    <h1 class="titolo">CONTRATTO DI NOLEGGIO OPERATIVO</h1>
+    <p class="sottotitolo">Fornitura in uso di attrezzatura professionale per la somministrazione di caffè,
+        con assistenza tecnica e forniture comprese nel canone.</p>
 
-    <h2 class="sezione">Condizioni</h2>
-    <ul class="condizioni">
-        <li><strong>L'attrezzatura resta di proprietà di {{ $tenant?->legal_name ?: $tenant?->name }}</strong> per tutta la durata del contratto e al termine va restituita, salvo diverso accordo scritto.</li>
-        <li>Il canone comprende le manutenzioni programmate, i ricambi, la manodopera e le trasferte previste dal programma full-service.</li>
-        @if ((float) $noleggio->quota_detergenti > 0)
-            @if ($forniture->where('gruppo', \App\Models\NoleggioFornitura::GRUPPO_DETERGENTI)->isEmpty())
-                <li>{!! $frasiDetergenti !!}</li>
-            @endif
+    <div class="info-box">
+        <strong>Tra</strong><br>
+        {{ $azienda }}@if($tenant?->pdfAddressLine()), {{ $tenant->pdfAddressLine() }}@endif — di seguito «il Fornitore»<br><br>
+        <strong>e</strong><br>
+        {{ $noleggio->customer?->company_name ?: trim($noleggio->customer?->first_name.' '.$noleggio->customer?->last_name) }}@if($noleggio->customer?->street), {{ $noleggio->customer->street }}@endif@if($noleggio->customer?->postal_code), {{ $noleggio->customer->postal_code }} {{ $noleggio->customer->city }}@if(filled($noleggio->customer?->province)) ({{ $noleggio->customer->province }})@endif
+        @endif@if($noleggio->customer?->vat_number)<br>P. IVA {{ $noleggio->customer->vat_number }}@endif — di seguito «il Cliente»
+    </div>
+
+    <h2 class="art">Art. 1 – Oggetto</h2>
+    <p>Il Fornitore concede al Cliente, in noleggio operativo, l'attrezzatura di seguito indicata, unitamente
+        all'assistenza tecnica e alle forniture di consumo previste dall'art. 4.</p>
+    <div class="info-box">
+        <strong>{{ $noleggio->descrizione }}</strong>
+        @if($noleggio->machineUnit)<br>Matricola {{ $noleggio->machineUnit->serial_number }}@endif
+    </div>
+
+    <h2 class="art">Art. 2 – Durata e decorrenza</h2>
+    <p>Il contratto ha durata di <strong>{{ $mesi }} mesi</strong>
+        @if($noleggio->data_inizio) con decorrenza dal {{ $noleggio->data_inizio->format('d/m/Y') }}@endif.
+        Alla scadenza si intende concluso, salvo rinnovo concordato per iscritto fra le parti.</p>
+
+    <h2 class="art">Art. 3 – Canone</h2>
+    <div class="canone-box">
+        <span class="cifra">{{ $eur($noleggio->canone) }}</span> al mese, IVA esclusa
+    </div>
+    <p>Il canone è comprensivo di quanto previsto dall'art. 4 e si intende dovuto per l'intera durata del
+        contratto. Impegno complessivo su {{ $mesi }} mesi: {{ $eur((float) $noleggio->canone * $mesi) }} + IVA.</p>
+
+    <h2 class="art">Art. 4 – Cosa è compreso nel canone</h2>
+    <ul class="voci">
+        <li>La <strong>disponibilità dell'attrezzatura</strong> indicata all'art. 1 per tutta la durata del contratto.</li>
+        <li>La <strong>consegna, l'installazione e l'allacciamento</strong> dell'attrezzatura.</li>
+        <li>L'<strong>assistenza tecnica full-service</strong>: manutenzioni programmate, interventi su chiamata,
+            fornitura e sostituzione dei ricambi, manodopera e trasferte del personale tecnico, supporto telefonico.</li>
+        @foreach ($perGruppo as $gruppo => $righe)
+            <li>La fornitura mensile di <strong>{{ mb_strtolower(\App\Models\NoleggioFornitura::gruppiLabels()[$gruppo] ?? $gruppo) }}</strong>,
+                nei quantitativi di @foreach ($righe as $r){{ $quantita($r) }}@if(! $loop->last); @endif@endforeach.</li>
+        @endforeach
+        @if ($forniture->isEmpty())
+            <li>Le forniture di consumo nei quantitativi concordati fra le parti.</li>
         @endif
-        {{-- La riga cambia senso a seconda che il caffe' sia nel canone o no:
-             scriverla fissa significherebbe, in un caso o nell'altro, dire al
-             cliente il contrario di quello che pagherà. --}}
-        @if ($forniture->where('gruppo', \App\Models\NoleggioFornitura::GRUPPO_CAFFE)->isEmpty())
-            <li>{!! $fraseCaffe !!}</li>
-        @endif
-        <li>L'installazione e l'allacciamento sono a nostro carico; le predisposizioni — punto acqua, scarico e alimentazione elettrica — restano a carico del Cliente e vanno realizzate prima dell'intervento.</li>
-        <li>Sono esclusi i danni da uso improprio, le manomissioni e gli interventi effettuati da personale non autorizzato.</li>
-        <li><strong>Durata minima {{ $noleggio->mesi }} mesi.</strong> In caso di recesso anticipato restano dovuti i canoni residui, salvo diverso accordo scritto.</li>
     </ul>
 
+    <h2 class="art">Art. 5 – Cosa non è compreso</h2>
+    <ul class="voci">
+        <li>Le <strong>predisposizioni</strong> necessarie all'installazione — punto acqua, scarico e alimentazione
+            elettrica — che restano a carico del Cliente e devono essere realizzate prima dell'intervento.</li>
+        <li>I <strong>quantitativi di fornitura eccedenti</strong> quelli indicati all'art. 4, che sono fatturati a consumo.</li>
+        <li>Il <strong>latte</strong> e gli altri ingredienti non espressamente elencati all'art. 4.</li>
+        <li>Le riparazioni rese necessarie da <strong>uso improprio, negligenza, manomissioni</strong> o interventi
+            eseguiti da personale non autorizzato dal Fornitore.</li>
+        <li>I <strong>consumi di energia elettrica e acqua</strong> e gli oneri di legge.</li>
+    </ul>
+
+    <h2 class="art">Art. 6 – Proprietà e restituzione</h2>
+    <p>L'attrezzatura resta di <strong>esclusiva proprietà del Fornitore</strong> per tutta la durata del contratto.
+        Il Cliente non può cederla, darla in uso a terzi, spostarla in altra sede né sottoporla a modifiche senza
+        autorizzazione scritta. Alla scadenza l'attrezzatura va restituita nello stato in cui è stata consegnata,
+        salvo il normale deperimento d'uso.</p>
+
+    <h2 class="art">Art. 7 – Obblighi del Cliente</h2>
+    <p>Il Cliente si impegna a utilizzare l'attrezzatura secondo le istruzioni ricevute, a eseguire le operazioni
+        quotidiane di pulizia previste dal costruttore, a segnalare tempestivamente malfunzionamenti e a consentire
+        l'accesso al personale tecnico per gli interventi previsti.</p>
+
+    <h2 class="art">Art. 8 – Recesso anticipato</h2>
+    <p>In caso di recesso del Cliente prima della scadenza restano dovuti i canoni residui, salvo diverso accordo
+        scritto fra le parti.</p>
+
+    <h2 class="art">Art. 9 – Legge applicabile e foro competente</h2>
+    <p>Il presente contratto è regolato dalla legge italiana. Per ogni controversia è competente il foro del luogo
+        in cui ha sede il Fornitore.</p>
+
     @if (filled($noleggio->note))
-        <h2 class="sezione">Note</h2>
+        <h2 class="art">Note</h2>
         <div class="info-box">{!! nl2br(e($noleggio->note)) !!}</div>
     @endif
 
     <table class="firme" style="width:100%;">
         <tr>
-            <td><div class="riga-firma">{{ $tenant?->legal_name ?: $tenant?->name }}</div></td>
-            <td style="width:10%;"></td>
-            <td><div class="riga-firma">Il Cliente, per accettazione</div></td>
+            <td style="padding-top:22px;"><div class="riga-firma">Il Fornitore — {{ $azienda }}</div></td>
+            <td style="width:8%;"></td>
+            <td style="padding-top:22px;"><div class="riga-firma">Il Cliente, per accettazione</div></td>
         </tr>
     </table>
 
-    <div class="footer-note">{{ $tenant?->legal_name ?: $tenant?->name }} &mdash; Documento generato il {{ now()->format('d/m/Y \a\l\l\e H:i') }}</div>
+    <div class="footer-note">{{ $azienda }} &mdash; Documento generato il {{ now()->format('d/m/Y \a\l\l\e H:i') }}</div>
     @include('pdf.partials.page-numbers')
 </body>
 </html>
