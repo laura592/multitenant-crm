@@ -14,14 +14,17 @@
              serve a decidere macchina per macchina dove sta davvero. --}}
         .blocco { background: #f0f4fa; border-left: 3px solid #020F30; padding: 5px 8px; font-size: 10px; font-weight: bold; color: #020F30; margin: 14px 0 5px; }
         .blocco .quante { float: right; font-weight: normal; color: #4b5563; }
-        table.items td { font-size: 9px; padding-top: 6px; padding-bottom: 6px; }
+        {{-- Righe compatte: con 6px di aria sopra e sotto venivano otto
+             macchine a pagina e dieci fogli da stampare. --}}
+        table.items td { font-size: 9px; padding-top: 2.5px; padding-bottom: 2.5px; }
+        table.items th { padding-top: 3px; padding-bottom: 3px; }
         .col-matricola { width: 19%; }
         .col-presso { width: 24%; }
         .col-ritiro { width: 13%; }
         .col-ultimo { width: 24%; }
         .col-risposta { width: 20%; }
         .muted { color: #6b7280; font-size: 8.5px; }
-        .casella { border-bottom: 1px solid #9ca3af; display: block; height: 11px; }
+        .casella { border-bottom: 1px solid #9ca3af; display: block; height: 9px; }
         .nota { background: #f9fafb; border: 1px solid #e5e7eb; padding: 7px 9px; margin-top: 8px; color: #374151; font-size: 9px; }
         .vuoto { padding: 14px; background: #f9fafb; border: 1px solid #e5e7eb; text-align: center; color: #6b7280; }
     </style>
@@ -41,7 +44,7 @@
         Sono le macchine che un rapportino dà per <strong>ritirate</strong> e che nel gestionale risultano ancora
         presso il cliente. Per ognuna serve sapere dov'è davvero: in magazzino, ancora dal cliente, oppure
         consegnata a qualcun altro — in quest'ultimo caso scrivere a chi. Le risposte si riportano poi nel
-        gestionale, in <em>Revisione sincronizzazione</em>.
+        gestionale, in&nbsp;<em>Revisione sincronizzazione</em>.
     </div>
 
     @foreach ($gruppi as $titolo => $righe)
