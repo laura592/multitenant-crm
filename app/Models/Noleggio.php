@@ -37,6 +37,7 @@ class Noleggio extends Model
         'valore_residuo', 'full_service_percentuale',
         'quota_macchina', 'quota_servizio', 'quota_detergenti', 'quota_caffe', 'canone', 'mese_pareggio',
         'data_inizio', 'stato', 'note',
+        'periodicita_fatturazione', 'modalita_pagamento', 'termini_pagamento',
     ];
 
     protected $casts = [
@@ -130,12 +131,51 @@ class Noleggio extends Model
         return $this->belongsTo(Quote::class);
     }
 
+    /** Lo storico degli invii al cliente. */
+    public function emails(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(NoleggioEmail::class)->latest();
+    }
+
     public static function statiLabels(): array
     {
         return [
             self::STATO_BOZZA => 'Bozza',
             self::STATO_ATTIVO => 'Attivo',
             self::STATO_CHIUSO => 'Chiuso',
+        ];
+    }
+
+    /**
+     * Condizioni di pagamento. Le etichette sono gia' scritte come vanno
+     * lette nel contratto: una sola dicitura, uguale nel gestionale e sul
+     * documento firmato, cosi' non si discute su cosa si era pattuito.
+     */
+    public static function periodicitaLabels(): array
+    {
+        return [
+            'mensile' => 'mensile anticipata',
+            'bimestrale' => 'bimestrale anticipata',
+            'trimestrale' => 'trimestrale anticipata',
+        ];
+    }
+
+    public static function modalitaPagamentoLabels(): array
+    {
+        return [
+            'bonifico' => 'bonifico bancario',
+            'sdd' => 'addebito diretto SEPA (SDD)',
+            'riba' => 'ricevuta bancaria (RiBa)',
+        ];
+    }
+
+    public static function terminiPagamentoLabels(): array
+    {
+        return [
+            'vista' => 'rimessa diretta a vista fattura',
+            '30_df' => '30 giorni data fattura',
+            '30_fm' => '30 giorni fine mese',
+            '60_fm' => '60 giorni fine mese',
         ];
     }
 }

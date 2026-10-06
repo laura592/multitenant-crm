@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources;
 
+use App\Mail\NoleggioMail;
 use App\Models\Customer;
 use App\Support\DisplayName;
 use App\Models\MachineUnit;
@@ -18,6 +19,9 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use App\Support\OutsideLivewireRender;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Filament\Notifications\Notification;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\HtmlString;
 
 class NoleggioResource extends Resource
@@ -277,6 +281,20 @@ class NoleggioResource extends Resource
                 ->columns(3)
                 ->schema([
                     Forms\Components\DatePicker::make('data_inizio')->label('Decorrenza'),
+                    // Finiscono nel contratto parola per parola: un noleggio
+                    // senza condizioni di pagamento non si firma, e su
+                    // sessanta canoni la differenza fra "30 giorni data
+                    // fattura" e "60 giorni fine mese" sono due mesi sempre
+                    // scoperti (Laura, 06/10/2026).
+                    Forms\Components\Select::make('periodicita_fatturazione')
+                        ->label('Fatturazione')->options(Noleggio::periodicitaLabels())
+                        ->default('mensile')->required(),
+                    Forms\Components\Select::make('modalita_pagamento')
+                        ->label('Modalità di pagamento')->options(Noleggio::modalitaPagamentoLabels())
+                        ->default('bonifico')->required(),
+                    Forms\Components\Select::make('termini_pagamento')
+                        ->label('Termini di pagamento')->options(Noleggio::terminiPagamentoLabels())
+                        ->default('30_df')->required(),
                     Forms\Components\Select::make('stato')
                         ->label('Stato')->options(Noleggio::statiLabels())
                         ->default(Noleggio::STATO_BOZZA)->required(),
@@ -372,6 +390,7 @@ class NoleggioResource extends Resource
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),
                 static::azioneContratto(Tables\Actions\Action::make('contratto')),
+                static::azioneInvio(Tables\Actions\Action::make('invia')),
             ])
             ->defaultSort('created_at', 'desc');
     }
@@ -403,15 +422,130 @@ class NoleggioResource extends Resource
             ->icon('heroicon-o-document-arrow-down')
             ->color('gray')
             ->action(function (Noleggio $record) {
-                $pdf = OutsideLivewireRender::run(fn () => Pdf::loadView('pdf.noleggio', [
-                    'noleggio' => $record->load(['customer', 'machineUnit']),
-                    'tenant' => $record->tenant,
-                ]));
-
-                $nome = 'noleggio-'.str($record->customer?->company_name ?: 'cliente')->slug().'.pdf';
+                $pdf = static::buildPdf($record);
+                $nome = static::nomeFile($record);
 
                 return response()->streamDownload(fn () => print($pdf->output()), $nome);
             });
+    }
+
+    /**
+     * Un generatore solo per lo scarico e per l'allegato della mail: se si
+     * sdoppiano, il cliente riceve per posta una versione diversa da quella
+     * che si vede premendo "Contratto PDF".
+     */
+    public static function buildPdf(Noleggio $record)
+    {
+        return OutsideLivewireRender::run(fn () => Pdf::loadView('pdf.noleggio', [
+            'noleggio' => $record->load(['customer', 'machineUnit', 'forniture']),
+            'tenant' => $record->tenant,
+        ]));
+    }
+
+    public static function nomeFile(Noleggio $record): string
+    {
+        return 'noleggio-'.str($record->customer?->company_name ?: 'cliente')->slug().'.pdf';
+    }
+
+    /**
+     * L'invio al cliente, con le stesse regole delle offerte: si scrive al
+     * cliente e non a chi paga, la chiusura e i recapiti sono prestampati
+     * nella mail e non si toccano da qui, e di ogni invio resta traccia.
+     */
+    public static function azioneInvio($azione)
+    {
+        return $azione
+            ->label('Invia al cliente')
+            ->icon('heroicon-o-paper-airplane')
+            ->modalHeading('Invia il contratto di noleggio')
+            ->modalSubmitActionLabel('Invia')
+            ->form(static::inviaFormSchema())
+            ->action(fn (Noleggio $record, array $data) => static::invia($record, $data));
+    }
+
+    /** @return array<Forms\Components\Component> */
+    public static function inviaFormSchema(): array
+    {
+        return [
+            Forms\Components\TextInput::make('recipient_email')
+                ->label('Email destinatario')
+                ->email()->required()
+                ->default(fn (Noleggio $record) => $record->customer?->primaryEmail()),
+            Forms\Components\TextInput::make('cc_email')
+                ->label('CC (opzionale)')
+                ->email(),
+            Forms\Components\TextInput::make('subject')
+                ->label('Oggetto')
+                ->required()
+                ->default(fn (Noleggio $record) => static::oggettoEmail($record)),
+            Forms\Components\RichEditor::make('custom_message')
+                ->label('Testo email (modificabile)')
+                ->toolbarButtons(['bold', 'italic', 'bulletList', 'orderedList', 'link', 'undo', 'redo'])
+                ->default(fn (Noleggio $record) => static::testoEmail($record))
+                ->helperText('La chiusura e i recapiti sono prestampati e non si modificano da qui.'),
+        ];
+    }
+
+    public static function oggettoEmail(Noleggio $record): string
+    {
+        return 'Contratto di noleggio operativo — '
+            .(DisplayName::titleCase($record->customer?->company_name) ?: 'proposta');
+    }
+
+    public static function testoEmail(Noleggio $record): string
+    {
+        $nome = DisplayName::titleCase($record->customer?->company_name)
+            ?: (DisplayName::titleCase($record->customer?->full_name) ?: 'Cliente');
+
+        return implode('', [
+            '<p>Gentile '.e($nome).',</p>',
+            '<p>in allegato il contratto di noleggio operativo con il dettaglio di quanto è compreso nel canone.</p>',
+            '<p>Se le condizioni sono di suo gradimento, può restituircelo firmato per accettazione.</p>',
+        ]);
+    }
+
+    public static function invia(Noleggio $record, array $data): void
+    {
+        $cc = array_values(array_unique(array_filter([
+            $data['cc_email'] ?? null,
+            ...($record->tenant?->notificationRecipients('quote') ?? []),
+        ])));
+
+        try {
+            Mail::to($data['recipient_email'])
+                ->cc($cc)
+                ->send(new NoleggioMail(
+                    $record,
+                    static::buildPdf($record)->output(),
+                    static::nomeFile($record),
+                    $data['custom_message'] ?? null,
+                    $data['subject'] ?? static::oggettoEmail($record),
+                ));
+
+            static::registraInvio($record, $data);
+
+            Notification::make()->title('Contratto inviato')->success()->send();
+        } catch (\Throwable $e) {
+            report($e);
+            // Si annota anche il fallimento: un contratto che non e' partito
+            // e' il peggiore da scoprire per caso, settimane dopo.
+            static::registraInvio($record, $data, errore: $e->getMessage());
+
+            Notification::make()->title('Invio fallito')->body($e->getMessage())->danger()->send();
+        }
+    }
+
+    public static function registraInvio(Noleggio $record, array $data, ?string $errore = null): void
+    {
+        $record->emails()->create([
+            'user_id' => Auth::id(),
+            'recipient_email' => $data['recipient_email'],
+            'cc_email' => $data['cc_email'] ?? null,
+            'subject' => $data['subject'] ?? static::oggettoEmail($record),
+            'message' => $data['custom_message'] ?? null,
+            'status' => $errore === null ? 'sent' : 'failed',
+            'error_message' => $errore,
+        ]);
     }
 
     public static function getPages(): array

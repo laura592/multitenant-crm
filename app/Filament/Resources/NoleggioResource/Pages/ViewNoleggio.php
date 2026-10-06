@@ -26,6 +26,7 @@ class ViewNoleggio extends ViewRecord
     {
         return [
             NoleggioResource::azioneContratto(Actions\Action::make('contratto')),
+            NoleggioResource::azioneInvio(Actions\Action::make('invia')),
             Actions\EditAction::make(),
         ];
     }

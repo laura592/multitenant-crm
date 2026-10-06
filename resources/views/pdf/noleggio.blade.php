@@ -45,6 +45,12 @@
         $perGruppo = $forniture->groupBy('gruppo');
         $mesi = (int) $noleggio->mesi;
         $eur = fn ($v) => '€ '.number_format((float) $v, 2, ',', '.');
+        // Le condizioni di pagamento si leggono dalle stesse etichette del
+        // gestionale: una dicitura sola, cosi' non si discute su cosa si era
+        // pattuito.
+        $periodicita = \App\Models\Noleggio::periodicitaLabels()[$noleggio->periodicita_fatturazione] ?? 'mensile anticipata';
+        $modalita = \App\Models\Noleggio::modalitaPagamentoLabels()[$noleggio->modalita_pagamento] ?? 'bonifico bancario';
+        $termini = \App\Models\Noleggio::terminiPagamentoLabels()[$noleggio->termini_pagamento] ?? '30 giorni data fattura';
         // Nel contratto vanno le QUANTITA', non i prezzi: il cliente deve
         // sapere cosa gli spetta, non come e' composto il nostro margine. Il
         // dettaglio economico resta nel CRM.
@@ -94,7 +100,7 @@
 
     <h3 class="art">Art. 1 – Oggetto</h3>
     <p>Il Fornitore concede al Cliente, in noleggio operativo, l'attrezzatura di seguito indicata, unitamente
-        all'assistenza tecnica e alle forniture di consumo previste dall'art. 4.</p>
+        all'assistenza tecnica e alle forniture di consumo previste dall'art. 5.</p>
     <div class="dati"><strong>{{ $noleggio->descrizione }}</strong>@if($noleggio->machineUnit)<br>Matricola {{ $noleggio->machineUnit->serial_number }}@endif</div>
 
     <h3 class="art">Art. 2 – Durata e decorrenza</h3>
@@ -107,10 +113,21 @@
     {{-- Niente totale su tutta la durata: il canone mensile e' il numero che
          il cliente deve valutare, la somma dei cinque anni spaventa e non
          aggiunge nulla a cio' che il contratto stabilisce. --}}
-    <p>Il canone è comprensivo di quanto previsto dall'art. 4 e si intende dovuto per l'intera durata del
+    <p>Il canone è comprensivo di quanto previsto dall'art. 5 e si intende dovuto per l'intera durata del
         contratto.</p>
 
-    <h3 class="art">Art. 4 – Cosa è compreso nel canone</h3>
+    <h3 class="art">Art. 4 – Fatturazione e pagamento</h3>
+    <p>Il canone è fatturato con periodicità <strong>{{ $periodicita }}</strong> e pagato a mezzo
+        <strong>{{ $modalita }}</strong> a <strong>{{ $termini }}</strong>, sulle coordinate indicate in fattura.
+        Il canone decorre dalla data indicata all'art. 2.</p>
+    {{-- Gli interessi di mora valgono per legge anche senza scriverli: messi
+         nero su bianco servono a non doverli spiegare la prima volta che si
+         sollecita. --}}
+    <p>In caso di ritardato pagamento decorrono gli interessi di mora nella misura prevista dal
+        D.Lgs. 231/2002, fatto salvo il diritto del Fornitore di sospendere le forniture di consumo di cui
+        all'art. 5 fino al saldo.</p>
+
+    <h3 class="art">Art. 5 – Cosa è compreso nel canone</h3>
     <ul>
         <li>La <strong>disponibilità dell'attrezzatura</strong> indicata all'art. 1 per tutta la durata del contratto.</li>
         <li>La <strong>consegna, l'installazione e l'allacciamento</strong> dell'attrezzatura.</li>
@@ -125,33 +142,33 @@
         @endif
     </ul>
 
-    <h3 class="art">Art. 5 – Cosa non è compreso</h3>
+    <h3 class="art">Art. 6 – Cosa non è compreso</h3>
     <ul>
         <li>Le <strong>predisposizioni</strong> necessarie all'installazione — punto acqua, scarico e alimentazione
             elettrica — che restano a carico del Cliente e devono essere realizzate prima dell'intervento.</li>
-        <li>I <strong>quantitativi di fornitura eccedenti</strong> quelli indicati all'art. 4, che sono fatturati a consumo.</li>
-        <li>Il <strong>latte</strong> e gli altri ingredienti non espressamente elencati all'art. 4.</li>
+        <li>I <strong>quantitativi di fornitura eccedenti</strong> quelli indicati all'art. 5, che sono fatturati a consumo.</li>
+        <li>Il <strong>latte</strong> e gli altri ingredienti non espressamente elencati all'art. 5.</li>
         <li>Le riparazioni rese necessarie da <strong>uso improprio, negligenza, manomissioni</strong> o interventi
             eseguiti da personale non autorizzato dal Fornitore.</li>
         <li>I <strong>consumi di energia elettrica e acqua</strong> e gli oneri di legge.</li>
     </ul>
 
-    <h3 class="art">Art. 6 – Proprietà e restituzione</h3>
+    <h3 class="art">Art. 7 – Proprietà e restituzione</h3>
     <p>L'attrezzatura resta di <strong>esclusiva proprietà del Fornitore</strong> per tutta la durata del contratto.
         Il Cliente non può cederla, darla in uso a terzi, spostarla in altra sede né sottoporla a modifiche senza
         autorizzazione scritta. Alla scadenza l'attrezzatura va restituita nello stato in cui è stata consegnata,
         salvo il normale deperimento d'uso.</p>
 
-    <h3 class="art">Art. 7 – Obblighi del Cliente</h3>
+    <h3 class="art">Art. 8 – Obblighi del Cliente</h3>
     <p>Il Cliente si impegna a utilizzare l'attrezzatura secondo le istruzioni ricevute, a eseguire le operazioni
         quotidiane di pulizia previste dal costruttore, a segnalare tempestivamente malfunzionamenti e a consentire
         l'accesso al personale tecnico per gli interventi previsti.</p>
 
-    <h3 class="art">Art. 8 – Recesso anticipato</h3>
+    <h3 class="art">Art. 9 – Recesso anticipato</h3>
     <p>In caso di recesso del Cliente prima della scadenza restano dovuti i canoni residui, salvo diverso accordo
         scritto fra le parti.</p>
 
-    <h3 class="art">Art. 9 – Legge applicabile e foro competente</h3>
+    <h3 class="art">Art. 10 – Legge applicabile e foro competente</h3>
     {{-- Foro indicato per nome e non "quello della sede del Fornitore": una
          clausola che si legge senza dover sapere dove ha sede chi la scrive. --}}
     <p>Il presente contratto è regolato dalla legge italiana. Per ogni controversia che dovesse insorgere in
