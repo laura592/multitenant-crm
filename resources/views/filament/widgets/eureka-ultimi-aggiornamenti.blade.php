@@ -1,5 +1,18 @@
 <x-filament-widgets::widget>
-    <x-filament::section heading="Ultimi aggiornamenti da Eureka" description="Quando è girato ogni lavoro con Eureka, com'è finito e cosa ha trovato.">
+    <x-filament::section heading="Ultimi aggiornamenti da Eureka" description="Quando è girato ogni lavoro con Eureka, com'è finito e cosa ha trovato." collapsible :collapsed="$tuttoBene && ! $inCorso">
+        {{-- Il verdetto sta sopra l'elenco, e quando e' tutto a posto
+             l'elenco si apre solo se lo si chiede: in cima a questa pagina
+             serve sapere se c'e' qualcosa da fare, non sei righe di storia. --}}
+        <div style="display:flex;align-items:center;gap:.5rem;padding:2px 0 10px;" class="text-sm">
+            <span style="width:.6rem;height:.6rem;border-radius:999px;flex:none;"
+                  class="{{ $tuttoBene ? 'bg-success-500' : 'bg-danger-500' }}"></span>
+            <span class="font-medium {{ $tuttoBene ? 'text-gray-700 dark:text-gray-200' : 'text-danger-600 dark:text-danger-400' }}">
+                {{ $verdetto }}
+            </span>
+            @if ($inCorso)
+                <span class="text-xs text-info-600 dark:text-info-400">— una sincronizzazione è in corso</span>
+            @endif
+        </div>
         {{-- Tabella semplice con larghezze inline: le classi Tailwind nuove
              non sono nel CSS compilato di Filament. --}}
         <div style="overflow-x: auto;">

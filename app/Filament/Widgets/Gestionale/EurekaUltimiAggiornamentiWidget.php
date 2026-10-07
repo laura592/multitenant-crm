@@ -23,6 +23,24 @@ class EurekaUltimiAggiornamentiWidget extends Widget
 
     protected function getViewData(): array
     {
-        return ['lavori' => DiarioEsecuzioni::stato()];
+        $lavori = DiarioEsecuzioni::stato();
+
+        // Un verdetto prima dell'elenco: la domanda che si fa aprendo questa
+        // pagina e' "c'e' qualcosa che non va?", e rispondeva solo leggendo
+        // riga per riga sei lavori (Laura, 07/10/2026).
+        $per = fn (string $stato) => count(array_filter($lavori, fn ($l) => $l['stato'] === $stato));
+
+        $guai = array_filter([
+            $per('errore') ? $per('errore').' '.($per('errore') === 1 ? 'lavoro fallito' : 'lavori falliti') : null,
+            $per('fermo') ? $per('fermo').' che non '.($per('fermo') === 1 ? 'gira' : 'girano').' da troppo' : null,
+            $per('mai') ? $per('mai').' mai '.($per('mai') === 1 ? 'partito' : 'partiti') : null,
+        ]);
+
+        return [
+            'lavori' => $lavori,
+            'inCorso' => $per('in_corso') > 0,
+            'verdetto' => $guai ? implode(' · ', $guai) : 'Tutti i lavori con Eureka sono in regola.',
+            'tuttoBene' => $guai === [],
+        ];
     }
 }
