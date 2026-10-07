@@ -26,6 +26,7 @@ class Tenant extends Model implements HasName
         'notify_information_request_emails',
         'notify_leave_request_emails',
         'notify_quote_emails',
+        'notify_noleggio_emails',
         'notify_quote_group_emails',
         'notify_deadline_emails',
         'notify_lavaggio_emails',
@@ -57,6 +58,7 @@ class Tenant extends Model implements HasName
         'notify_information_request_emails' => 'array',
         'notify_leave_request_emails' => 'array',
         'notify_quote_emails' => 'array',
+        'notify_noleggio_emails' => 'array',
         'notify_quote_group_emails' => 'array',
         'notify_deadline_emails' => 'array',
         'notify_lavaggio_emails' => 'array',
@@ -229,6 +231,10 @@ class Tenant extends Model implements HasName
             'information_request' => $this->normalizedRecipients($this->notify_information_request_emails, $legacy),
             'leave_request' => $this->normalizedRecipients($this->notify_leave_request_emails, $legacy),
             'quote' => $this->normalizedRecipients($this->notify_quote_emails, $legacy),
+            // Niente riserva sui destinatari globali: un contratto di
+            // noleggio lo seguono due persone, e mandarlo a tutto lo staff
+            // perche' la lista e' vuota sarebbe peggio che non mandarlo.
+            'noleggio' => $this->normalizedRecipients($this->notify_noleggio_emails),
             'quote_group' => $this->normalizedRecipients($this->notify_quote_group_emails, $legacy),
             'deadline' => $this->normalizedRecipients($this->notify_deadline_emails, $legacy),
             // Nessun fallback ai destinatari globali: il digest dei lavaggi e'

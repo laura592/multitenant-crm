@@ -605,7 +605,9 @@ class NoleggioResource extends Resource
     {
         $cc = array_values(array_unique(array_filter([
             $data['cc_email'] ?? null,
-            ...($record->tenant?->notificationRecipients('quote') ?? []),
+            // Lista sua, non quella dei preventivi: vedi Impostazioni >
+            // Notifiche, voce "Noleggi".
+            ...($record->tenant?->notificationRecipients('noleggio') ?? []),
         ])));
 
         try {

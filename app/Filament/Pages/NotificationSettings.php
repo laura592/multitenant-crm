@@ -84,6 +84,13 @@ class NotificationSettings extends Page implements HasForms
                     ->splitKeys([',', 'Tab'])
                     ->color('primary')
                     ->helperText('In copia all invio dei preventivi ai clienti.'),
+                TagsInput::make('notify_noleggio_emails')
+                    ->label('Noleggi')
+                    ->placeholder('indirizzo@esempio.it')
+                    ->nestedRecursiveRules(['email'])
+                    ->splitKeys([',', 'Tab'])
+                    ->color('primary')
+                    ->helperText('In copia all\'invio del contratto di noleggio al cliente. Senza nessun indirizzo non parte copia a nessuno.'),
                 TagsInput::make('notify_quote_response_emails')
                     ->label('Risposte dei clienti ai preventivi')
                     ->placeholder('indirizzo@esempio.it')
