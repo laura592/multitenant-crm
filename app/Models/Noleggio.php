@@ -36,7 +36,7 @@ class Noleggio extends Model
         'listino', 'sconto_acquisto', 'costo', 'mesi', 'base_consumo', 'margine',
         'ammortamento_base', 'ammortamento_mesi', 'detergenti_mese', 'ricarico_detergenti', 'caffe_mese', 'ricarico_caffe', 'caffe_kg_mese', 'detergenti_inclusi',
         'valore_residuo', 'full_service_percentuale',
-        'quota_macchina', 'quota_servizio', 'quota_detergenti', 'quota_caffe', 'canone', 'mese_pareggio',
+        'quota_macchina', 'quota_servizio', 'quota_detergenti', 'quota_caffe', 'quota_consumabili', 'canone', 'mese_pareggio',
         'data_inizio', 'stato', 'note',
         'periodicita_fatturazione', 'modalita_pagamento', 'termini_pagamento',
     ];
@@ -47,7 +47,7 @@ class Noleggio extends Model
         'caffe_mese' => 'decimal:2', 'caffe_kg_mese' => 'decimal:2', 'ricarico_caffe' => 'decimal:2', 'quota_caffe' => 'decimal:2',
         'valore_residuo' => 'decimal:2', 'full_service_percentuale' => 'decimal:2',
         'quota_macchina' => 'decimal:2', 'quota_servizio' => 'decimal:2',
-        'quota_detergenti' => 'decimal:2', 'canone' => 'decimal:2',
+        'quota_detergenti' => 'decimal:2', 'quota_consumabili' => 'decimal:2', 'canone' => 'decimal:2',
         'mese_pareggio' => 'integer', 'data_inizio' => 'date',
     ];
 
@@ -66,6 +66,7 @@ class Noleggio extends Model
             $noleggio->quota_servizio = $r->quotaServizio;
             $noleggio->quota_detergenti = $r->quotaDetergenti;
             $noleggio->quota_caffe = $r->quotaCaffe;
+            $noleggio->quota_consumabili = $r->quotaConsumabili;
             $noleggio->canone = $r->canone;
             $noleggio->mese_pareggio = $r->mesePareggio;
         });
@@ -94,6 +95,9 @@ class Noleggio extends Model
         $detergenti = $this->totaleForniture(NoleggioFornitura::GRUPPO_DETERGENTI);
         $caffe = $this->totaleForniture(NoleggioFornitura::GRUPPO_CAFFE);
         $polveri = $this->totaleForniture(NoleggioFornitura::GRUPPO_POLVERI) ?? 0.0;
+        // Bicchieri, palette, zucchero: hanno una voce loro nel canone, se no
+        // il contratto li promette e il canone non li copre.
+        $consumabili = $this->totaleForniture(NoleggioFornitura::GRUPPO_CONSUMABILI) ?? 0.0;
 
         return CanoneOperativo::calcola(
             costoMacchina: (float) $this->costo,
@@ -112,6 +116,7 @@ class Noleggio extends Model
                 ? (float) $this->listino
                 : (float) $this->costo,
             mesiAmmortamento: $this->ammortamento_mesi ? (int) $this->ammortamento_mesi : null,
+            consumabiliMese: $consumabili,
         );
     }
 

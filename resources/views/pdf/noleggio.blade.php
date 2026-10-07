@@ -164,6 +164,13 @@
             elettrica — che restano a carico del Cliente e devono essere realizzate prima dell'intervento.</li>
         <li>I <strong>quantitativi di fornitura eccedenti</strong> quelli indicati all'art. 5, che sono fatturati a consumo.</li>
         <li>Il <strong>latte</strong> e gli altri ingredienti non espressamente elencati all'art. 5.</li>
+        {{-- Detto per nome: "ingredienti" non copre un bicchiere, e dare per
+             scontato che i consumabili siano compresi e' esattamente il
+             genere di equivoco che si scopre alla prima consegna. --}}
+        @if (! $perGruppo->has(\App\Models\NoleggioFornitura::GRUPPO_CONSUMABILI))
+            <li>I <strong>consumabili</strong> — bicchieri, palette, zucchero e simili — che restano a carico
+                del Cliente.</li>
+        @endif
         <li>Le riparazioni rese necessarie da <strong>uso improprio, negligenza, manomissioni</strong> o interventi
             eseguiti da personale non autorizzato dal Fornitore.</li>
         <li>I <strong>consumi di energia elettrica e acqua</strong> e gli oneri di legge.</li>

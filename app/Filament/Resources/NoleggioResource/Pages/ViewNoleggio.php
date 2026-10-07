@@ -61,6 +61,7 @@ class ViewNoleggio extends ViewRecord
                         ->helperText(fn ($record) => $eur($record->listino).' × '
                             .rtrim(rtrim((string) $record->full_service_percentuale, '0'), '.').'% ÷ 12'),
                     TextEntry::make('quota_detergenti')->label('Detergenti')->money('EUR'),
+                    TextEntry::make('quota_consumabili')->label('Consumabili')->money('EUR'),
                     TextEntry::make('quota_caffe')->label('Caffè e polveri')->money('EUR'),
                     TextEntry::make('incasso')->label('Totale sul contratto')
                         ->state(fn ($record) => $eur((float) $record->canone * $record->mesi)),

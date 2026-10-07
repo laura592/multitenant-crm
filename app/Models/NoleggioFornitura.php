@@ -25,6 +25,10 @@ class NoleggioFornitura extends Model
 
     public const GRUPPO_DETERGENTI = 'detergenti';
 
+    /** Bicchieri, palette, zucchero: non sono ingredienti ne' detergenti, e
+     *  se non si elencano il contratto non dice se sono compresi o no. */
+    public const GRUPPO_CONSUMABILI = 'consumabili';
+
     protected $fillable = [
         'noleggio_id', 'voce', 'prodotto_caffe_id', 'material_id', 'gruppo',
         'quantita', 'unita', 'prezzo_unitario', 'ricarico', 'costo_mensile',
@@ -80,6 +84,7 @@ class NoleggioFornitura extends Model
             self::GRUPPO_CAFFE => 'Caffè',
             self::GRUPPO_POLVERI => 'Polveri e solubili',
             self::GRUPPO_DETERGENTI => 'Detergenti e igiene',
+            self::GRUPPO_CONSUMABILI => 'Consumabili',
         ];
     }
 }

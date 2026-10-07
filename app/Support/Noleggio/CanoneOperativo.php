@@ -44,6 +44,7 @@ final class CanoneOperativo
         public readonly float $quotaServizio,
         public readonly float $quotaDetergenti,
         public readonly float $quotaCaffe,
+        public readonly float $quotaConsumabili,
         public readonly float $canone,
         public readonly int $mesi,
         public readonly float $costo,
@@ -63,6 +64,9 @@ final class CanoneOperativo
         float $ricaricoDetergenti = 0.0,
         float $caffeMese = 0.0,
         float $ricaricoCaffe = 0.0,
+        /** Bicchieri, palette, zucchero: gia' al prezzo di vendita, come le
+         *  righe da cui arrivano. */
+        float $consumabiliMese = 0.0,
         /** Quanto si vuole recuperare della macchina: di norma il costo, ma
          *  si puo' ammortizzare il listino. Null = il costo. */
         ?float $valoreDaAmmortizzare = null,
@@ -97,7 +101,8 @@ final class CanoneOperativo
         // ricarico, separata da quella dei detergenti.
         $quotaCaffe = max(0.0, $caffeMese) * (1 + max(0.0, $ricaricoCaffe));
 
-        $canone = round($quotaMacchina + $quotaServizio + $quotaDetergenti + $quotaCaffe, 2);
+        $quotaConsumabili = max(0.0, $consumabiliMese);
+        $canone = round($quotaMacchina + $quotaServizio + $quotaDetergenti + $quotaCaffe + $quotaConsumabili, 2);
 
         // Pareggio sulla sola quota macchina: servizio e detergenti pagano
         // costi che Alex sostiene mese per mese, non il capitale anticipato.
@@ -111,6 +116,7 @@ final class CanoneOperativo
             quotaServizio: round($quotaServizio, 2),
             quotaDetergenti: round($quotaDetergenti, 2),
             quotaCaffe: round($quotaCaffe, 2),
+            quotaConsumabili: round($quotaConsumabili, 2),
             canone: $canone,
             mesi: $mesi,
             costo: round($costoMacchina, 2),

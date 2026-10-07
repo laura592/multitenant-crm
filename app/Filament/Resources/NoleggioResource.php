@@ -192,6 +192,13 @@ class NoleggioResource extends Resource
                 ->collapsible()
                 ->schema([static::ripetitoreForniture(NoleggioFornitura::GRUPPO_DETERGENTI)]),
 
+            // Se restano vuoti il contratto li esclude per nome, cosi' nessuno
+            // dà per scontato che i bicchieri siano compresi.
+            Forms\Components\Section::make('Consumabili')
+                ->description('Bicchieri, palette, zucchero. Lasciando vuoto, il contratto li dichiara esclusi.')
+                ->collapsible()
+                ->schema([static::ripetitoreForniture(NoleggioFornitura::GRUPPO_CONSUMABILI)]),
+
             Forms\Components\Section::make('Il canone')
                 ->schema([
                     Forms\Components\Placeholder::make('anteprima')
@@ -284,7 +291,9 @@ class NoleggioResource extends Resource
      */
     protected static function sceltaProdotto(string $gruppo): Forms\Components\Select
     {
-        if ($gruppo === NoleggioFornitura::GRUPPO_DETERGENTI) {
+        // Detergenti e consumabili si pescano dal magazzino: nel listino
+        // caffe' non ci sono ne' le pastiglie ne' i bicchieri.
+        if (in_array($gruppo, [NoleggioFornitura::GRUPPO_DETERGENTI, NoleggioFornitura::GRUPPO_CONSUMABILI], true)) {
             return Forms\Components\Select::make('material_id')
                 ->label('Dal magazzino materiali')
                 // Ricerca sul server: i materiali sono 3.600 e un menu non li
