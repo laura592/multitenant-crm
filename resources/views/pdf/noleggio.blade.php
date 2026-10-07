@@ -86,7 +86,9 @@
         };
     @endphp
 
-    <h1 class="titolo">CONTRATTO DI NOLEGGIO OPERATIVO</h1>
+    {{-- Il numero sul documento: e' cosi' che il contratto si richiama in
+         una mail o al telefono, e lo stesso numero si cerca nel gestionale. --}}
+    <h1 class="titolo">CONTRATTO DI NOLEGGIO OPERATIVO@if (filled($noleggio->number)) <span style="font-size:14px;">N. {{ $noleggio->number }}</span>@endif</h1>
     <h2 class="sottotitolo">Fornitura in uso di attrezzatura professionale per la somministrazione di caffè,
         con assistenza tecnica e forniture di consumo comprese nel canone</h2>
 

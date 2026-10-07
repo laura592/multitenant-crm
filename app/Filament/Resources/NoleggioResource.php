@@ -464,6 +464,8 @@ class NoleggioResource extends Resource
     {
         return $table
             ->columns([
+                Tables\Columns\TextColumn::make('number')->label('Numero')
+                    ->weight('medium')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('descrizione')->label('Oggetto')->limit(34)->searchable(),
                 Tables\Columns\TextColumn::make('canone')->label('Canone')->money('EUR')->sortable(),
@@ -540,7 +542,10 @@ class NoleggioResource extends Resource
 
     public static function nomeFile(Noleggio $record): string
     {
-        return 'noleggio-'.str($record->customer?->company_name ?: 'cliente')->slug().'.pdf';
+        // Dal numero, come "preventivo-PRV-2026-0079.pdf": il nome del
+        // cliente faceva file lunghissimi e indistinguibili fra due proposte
+        // allo stesso cliente.
+        return 'noleggio-'.($record->number ?: str($record->customer?->company_name ?: 'cliente')->slug()).'.pdf';
     }
 
     /**
@@ -585,8 +590,9 @@ class NoleggioResource extends Resource
 
     public static function oggettoEmail(Noleggio $record): string
     {
-        return 'Contratto di noleggio operativo — '
-            .(DisplayName::titleCase($record->customer?->company_name) ?: 'proposta');
+        return 'Contratto di noleggio operativo'
+            .($record->number ? ' '.$record->number : '')
+            .' — '.(DisplayName::titleCase($record->customer?->company_name) ?: 'proposta');
     }
 
     public static function testoEmail(Noleggio $record): string

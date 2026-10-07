@@ -47,12 +47,15 @@ class ViewNoleggio extends ViewRecord
                     'class' => 'fi-quick-overview rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50 shadow-sm',
                 ])
                 ->schema([
+                    TextEntry::make('number')->label('Numero')->weight('bold')
+                        ->placeholder('—')
+                        ->columnSpan(['default' => 1, 'lg' => 2]),
                     TextEntry::make('canone')->label('Canone mensile')->money('EUR')
                         ->size(TextEntry\TextEntrySize::Large)->weight('bold')
                         ->columnSpan(['default' => 1, 'lg' => 3]),
                     TextEntry::make('customer.company_name')->label('Cliente')
                         ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state))
-                        ->columnSpan(['default' => 1, 'lg' => 4]),
+                        ->columnSpan(['default' => 1, 'lg' => 3]),
                     TextEntry::make('mesi')->label('Durata')->suffix(' mesi')
                         ->columnSpan(['default' => 1, 'lg' => 2]),
                     TextEntry::make('data_inizio')->label('Decorrenza')->date('d/m/Y')

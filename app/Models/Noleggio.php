@@ -32,7 +32,7 @@ class Noleggio extends Model
     public const STATO_CHIUSO = 'chiuso';
 
     protected $fillable = [
-        'tenant_id', 'customer_id', 'machine_unit_id', 'quote_id', 'descrizione',
+        'tenant_id', 'customer_id', 'machine_unit_id', 'quote_id', 'number', 'descrizione',
         'listino', 'sconto_acquisto', 'costo', 'mesi', 'base_consumo', 'margine',
         'ammortamento_base', 'ammortamento_mesi', 'detergenti_mese', 'ricarico_detergenti', 'caffe_mese', 'ricarico_caffe', 'caffe_kg_mese', 'detergenti_inclusi',
         'valore_residuo', 'full_service_percentuale',
@@ -51,8 +51,39 @@ class Noleggio extends Model
         'mese_pareggio' => 'integer', 'data_inizio' => 'date',
     ];
 
+    /**
+     * Numerazione per tenant e per anno, come preventivi e richieste
+     * (docs/architecture.md §10.5): un partner non deve vedere buchi dovuti
+     * ai noleggi di altri.
+     */
+    public static function nextNumberForTenant(?string $tenantId): string
+    {
+        $anno = date('Y');
+        $prefisso = "NOL-{$anno}-";
+
+        $ultimo = static::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->whereYear('created_at', $anno)
+            ->where('number', 'like', "{$prefisso}%")
+            ->orderByRaw('CAST(SUBSTRING(number, -4) AS UNSIGNED) DESC')
+            ->first();
+
+        $prossimo = 1;
+        if ($ultimo && preg_match('/-(\d+)$/', $ultimo->number, $m)) {
+            $prossimo = (int) $m[1] + 1;
+        }
+
+        return $prefisso.str_pad((string) $prossimo, 4, '0', STR_PAD_LEFT);
+    }
+
     protected static function booted(): void
     {
+        static::creating(function (self $noleggio) {
+            if (! $noleggio->number) {
+                $noleggio->number = static::nextNumberForTenant($noleggio->tenant_id);
+            }
+        });
+
         static::saving(function (self $noleggio) {
             // Lo sconto, se c'e', comanda sul costo: sono due modi di dire la
             // stessa cosa e il secondo si disallinea al primo aggiornamento.

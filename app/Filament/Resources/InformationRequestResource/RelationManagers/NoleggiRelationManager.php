@@ -33,6 +33,8 @@ class NoleggiRelationManager extends RelationManager
             ->emptyStateHeading('Nessun noleggio nato da questa richiesta')
             ->emptyStateDescription('Compaiono qui i noleggi creati a partire da un preventivo di questa richiesta.')
             ->columns([
+                Tables\Columns\TextColumn::make('number')->label('Numero')
+                    ->weight('medium')->searchable(),
                 Tables\Columns\TextColumn::make('descrizione')
                     ->label('Attrezzatura')
                     ->limit(40)

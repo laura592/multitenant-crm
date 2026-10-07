@@ -42,6 +42,8 @@ class NoleggiRelationManager extends RelationManager
                     ->url(fn () => NoleggioResource::getUrl('create', tenant: $this->getOwnerRecord()->tenant)),
             ])
             ->columns([
+                Tables\Columns\TextColumn::make('number')->label('Numero')
+                    ->weight('medium')->searchable(),
                 Tables\Columns\TextColumn::make('descrizione')
                     ->label('Attrezzatura')
                     ->wrap(false)
