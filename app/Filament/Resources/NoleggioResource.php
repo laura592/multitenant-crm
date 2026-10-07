@@ -474,6 +474,14 @@ class NoleggioResource extends Resource
                     ->formatStateUsing(fn (?int $state) => $state ? $state.'°' : '—')
                     ->color(fn (?int $state, Noleggio $record) => $state && $state > $record->mesi ? 'danger' : null),
                 Tables\Columns\TextColumn::make('data_inizio')->label('Decorrenza')->date('d/m/Y')->placeholder('—'),
+                // La domanda che ci si fa scorrendo l'elenco e' "gliel'ho
+                // mandato?": la risposta stava dentro la scheda, una per una.
+                Tables\Columns\TextColumn::make('inviato')
+                    ->label('Inviato')
+                    ->state(fn (Noleggio $record) => $record->emails->first()?->created_at?->format('d/m/Y'))
+                    ->description(fn (Noleggio $record) => $record->emails->first()?->recipient_email)
+                    ->color(fn (Noleggio $record) => $record->emails->first() ? 'success' : 'gray')
+                    ->placeholder('mai'),
                 Tables\Columns\TextColumn::make('stato')->label('Stato')->badge()
                     ->formatStateUsing(fn (string $state) => Noleggio::statiLabels()[$state] ?? $state)
                     ->color(fn (string $state) => match ($state) {
@@ -651,6 +659,12 @@ class NoleggioResource extends Resource
             'status' => $errore === null ? 'sent' : 'failed',
             'error_message' => $errore,
         ]);
+    }
+
+    /** Gli invii servono alla colonna "Inviato": caricati insieme, non uno per riga. */
+    public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
+    {
+        return parent::getEloquentQuery()->with('emails');
     }
 
     public static function getPages(): array
