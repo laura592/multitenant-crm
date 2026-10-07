@@ -286,6 +286,12 @@ class Customer extends Model
         return $this->hasMany(Quote::class);
     }
 
+    /** Le proposte di noleggio operativo fatte a questo cliente. */
+    public function noleggi(): HasMany
+    {
+        return $this->hasMany(Noleggio::class);
+    }
+
     public function installedMachineUnits(): HasMany
     {
         return $this->hasMany(MachineUnit::class, 'current_customer_id');
