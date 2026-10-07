@@ -126,17 +126,15 @@ class NoleggioResource extends Resource
                         ->label('Ricarico sul caffè (%)')
                         ->helperText('Zero se l\'importo sopra è già un prezzo di vendita.')
                         ->numeric()->default(0)->live(onBlur: true),
-                    // Il quantitativo non entra nel calcolo: entra nel
-                    // contratto. L'importo dice quanto costa, questo dice
-                    // quanta ne spetta — senza, "compreso" non ha confine.
-                    Forms\Components\TextInput::make('caffe_kg_mese')
-                        ->label('Caffè compreso (kg/mese)')
-                        ->helperText('Finisce nel contratto. Oltre questa quantità si fattura a consumo.')
-                        ->numeric(),
-                    Forms\Components\TextInput::make('detergenti_inclusi')
-                        ->label('Detergenti compresi')
-                        ->helperText('Es. "25 pastiglie e 1 flacone detergente latte al mese". Finisce nel contratto.')
-                        ->maxLength(255),
+                    // "Caffè compreso (kg/mese)" e "Detergenti compresi"
+                    // stavano qui: due caselle di testo libero per dire cosa
+                    // spettava al cliente. Le ha sostituite la sezione "Cosa
+                    // comprende il canone", che le stesse quantita' le tiene
+                    // voce per voce e le stampa nel contratto. Lasciarle
+                    // sarebbe peggio che inutile: si compilano credendo che
+                    // finiscano nel documento, e invece non le legge piu'
+                    // nessuno (Laura, 07/10/2026). Le colonne restano, con
+                    // quanto c'era scritto.
                     Forms\Components\TextInput::make('valore_residuo')
                         ->label('Valore residuo a fine contratto (€)')
                         ->helperText('Se la macchina torna a voi e vale ancora qualcosa, il canone scende.')
