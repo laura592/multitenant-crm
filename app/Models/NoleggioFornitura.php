@@ -31,13 +31,14 @@ class NoleggioFornitura extends Model
 
     protected $fillable = [
         'noleggio_id', 'voce', 'prodotto_caffe_id', 'material_id', 'gruppo',
-        'quantita', 'unita', 'prezzo_unitario', 'ricarico', 'costo_mensile',
+        'quantita', 'unita', 'prezzo_unitario', 'prezzo_acquisto', 'ricarico', 'costo_mensile',
         'note', 'ordine',
     ];
 
     protected $casts = [
         'quantita' => 'decimal:3',
         'prezzo_unitario' => 'decimal:4',
+        'prezzo_acquisto' => 'decimal:4',
         'ricarico' => 'decimal:2',
         'costo_mensile' => 'decimal:2',
         'ordine' => 'integer',

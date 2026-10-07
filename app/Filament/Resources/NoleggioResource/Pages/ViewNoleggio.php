@@ -130,65 +130,66 @@ class ViewNoleggio extends ViewRecord
             // La domanda che si fa chi prepara un noleggio e che il prospetto
             // non rispondeva: alla fine, quanto ci resta?
             Section::make('Quanto ci resta')
-                ->description('Il full-service non entra nel conto: copre manutenzioni, ricambi e trasferte, non è guadagno.')
+                ->description('I prezzi delle righe sono di vendita: il margine si calcola solo dove è indicato anche il prezzo d\'acquisto. Il full-service non entra nel conto: copre manutenzioni, ricambi e trasferte, non è guadagno.')
                 ->schema([
                     TextEntry::make('margine_contratto')
                         ->label('')
                         ->state(function ($record) use ($eur): HtmlString {
                             $mesi = max(1, (int) $record->mesi);
 
-                            // Il costo vero delle forniture e' senza ricarico:
-                            // quello che si paga al fornitore.
-                            $costoForniture = $record->forniture->sum(
-                                fn ($f) => round((float) $f->quantita / 12 * (float) $f->prezzo_unitario, 2)
-                            );
-                            $ricavoForniture = $record->forniture->sum('costo_mensile');
-
-                            $margineForniture = ($ricavoForniture - $costoForniture) * $mesi;
                             $incassoMacchina = (float) $record->quota_macchina * $mesi;
                             $margineMacchina = $incassoMacchina - (float) $record->costo;
 
-                            $righe = [
-                                ['Sulla macchina', $margineMacchina,
-                                    $eur($incassoMacchina).' incassati − '.$eur($record->costo).' di costo'],
-                                ['Sulle forniture', $margineForniture,
-                                    $ricavoForniture > 0
-                                        ? $eur($ricavoForniture).'/mese venduti − '.$eur($costoForniture).'/mese di costo'
-                                        : 'nessuna fornitura indicata'],
-                            ];
+                            // I prezzi delle righe sono di VENDITA: il costo
+                            // e' un campo a parte, e se manca non si inventa
+                            // un margine -- si dice che non si sa.
+                            $senzaCosto = $record->forniture->filter(fn ($f) => blank($f->prezzo_acquisto));
+                            $ricavoForniture = $record->forniture->sum('costo_mensile');
+                            $costoForniture = $record->forniture->sum(
+                                fn ($f) => round((float) $f->quantita / 12 * (float) ($f->prezzo_acquisto ?? 0), 2)
+                            );
 
-                            $out = '<div style="max-width:34rem;">';
-                            foreach ($righe as [$etichetta, $importo, $come]) {
-                                $colore = $importo < 0 ? 'color:#b91c1c;' : '';
+                            $out = '<div style="max-width:34rem;">'
+                                .'<div style="display:flex;justify-content:space-between;gap:1rem;padding:3px 0;">'
+                                .'<span>Sulla macchina<span style="opacity:.6;font-size:.85em;"> — '
+                                .e($eur($incassoMacchina).' incassati − '.$eur($record->costo).' di costo').'</span></span>'
+                                .'<span style="white-space:nowrap;'.($margineMacchina < 0 ? 'color:#b91c1c;' : '').'">'
+                                .$eur($margineMacchina).'</span></div>';
+
+                            if ($record->forniture->isEmpty()) {
+                                $margineForniture = 0.0;
+                                $out .= '<div style="display:flex;justify-content:space-between;gap:1rem;padding:3px 0;opacity:.7;">'
+                                    .'<span>Sulle forniture</span><span>nessuna fornitura indicata</span></div>';
+                            } elseif ($senzaCosto->isNotEmpty()) {
+                                $margineForniture = null;
                                 $out .= '<div style="display:flex;justify-content:space-between;gap:1rem;padding:3px 0;">'
-                                    .'<span>'.e($etichetta).'<span style="opacity:.6;font-size:.85em;"> — '.e($come).'</span></span>'
-                                    .'<span style="white-space:nowrap;'.$colore.'">'.$eur($importo).'</span></div>';
+                                    .'<span>Sulle forniture<span style="opacity:.6;font-size:.85em;"> — '
+                                    .e($eur($ricavoForniture).'/mese venduti').'</span></span>'
+                                    .'<span style="white-space:nowrap;opacity:.7;">non calcolabile</span></div>';
+                            } else {
+                                $margineForniture = ($ricavoForniture - $costoForniture) * $mesi;
+                                $out .= '<div style="display:flex;justify-content:space-between;gap:1rem;padding:3px 0;">'
+                                    .'<span>Sulle forniture<span style="opacity:.6;font-size:.85em;"> — '
+                                    .e($eur($ricavoForniture).'/mese venduti − '.$eur($costoForniture).'/mese di costo').'</span></span>'
+                                    .'<span style="white-space:nowrap;'.($margineForniture < 0 ? 'color:#b91c1c;' : '').'">'
+                                    .$eur($margineForniture).'</span></div>';
                             }
 
-                            $totale = $margineMacchina + $margineForniture;
+                            $totale = $margineMacchina + ($margineForniture ?? 0);
                             $out .= '<div style="display:flex;justify-content:space-between;gap:1rem;border-top:2px solid currentColor;margin-top:6px;padding-top:6px;font-weight:700;'
                                 .($totale < 0 ? 'color:#b91c1c;' : '').'">'
-                                .'<span>Margine su '.$mesi.' mesi</span><span>'.$eur($totale).'</span></div>';
+                                .'<span>Margine su '.$mesi.' mesi'.($margineForniture === null ? ' (solo macchina)' : '').'</span>'
+                                .'<span>'.$eur($totale).'</span></div>';
 
-                            if ($ricavoForniture > 0 && abs($ricavoForniture - $costoForniture) < 0.01) {
-                                $out .= '<div style="margin-top:8px;padding:7px 9px;border-radius:8px;background:rgba(185,28,28,.08);color:#b91c1c;font-size:.9em;">'
-                                    .'Le forniture sono vendute al prezzo di costo: il ricarico è a zero su tutte le righe.</div>';
+                            if ($senzaCosto->isNotEmpty()) {
+                                $out .= '<div style="margin-top:8px;padding:7px 9px;border-radius:8px;background:rgba(180,83,9,.08);color:#b45309;font-size:.9em;">'
+                                    .'I prezzi delle forniture sono di vendita. Per sapere quanto si guadagna serve il '
+                                    .'<strong>prezzo d\'acquisto</strong>, che manca su '.$senzaCosto->count().' '
+                                    .($senzaCosto->count() === 1 ? 'riga' : 'righe').' su '.$record->forniture->count().'.</div>';
                             }
 
                             return new HtmlString($out.'</div>');
                         }),
-                ]),
-
-            Section::make('Il rischio')
-                ->description('Il capitale è nostro: finché non si è in pari, una disdetta costa.')
-                ->columns(4)
-                ->schema([
-                    TextEntry::make('mese_pareggio')->label('In pari dal')
-                        ->state(fn ($record) => $record->mese_pareggio ? $record->mese_pareggio.'° mese' : '—')
-                        ->color(fn ($record) => $record->mese_pareggio && $record->mese_pareggio > $record->mesi ? 'danger' : 'success'),
-                    ...collect([12, 24, 36])->map(fn (int $m) => TextEntry::make('scoperto'.$m)
-                        ->label('Scoperto al '.$m.'° mese')
-                        ->state(fn ($record) => $m <= $record->mesi ? $eur($record->scopertoAl($m)) : '—'))->all(),
                 ]),
 
             Section::make('Cosa comprende il canone')

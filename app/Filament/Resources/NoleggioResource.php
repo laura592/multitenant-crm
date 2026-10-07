@@ -283,10 +283,21 @@ class NoleggioResource extends Resource
                     ->columnSpan(1),
                 Forms\Components\TextInput::make('unita')
                     ->label('Unità')->default('pz')->maxLength(16)->columnSpan(1),
+                // Di VENDITA: e' il prezzo che fa il canone. Il costo sta
+                // nella casella accanto, se lo si sa.
                 Forms\Components\TextInput::make('prezzo_unitario')
-                    ->label('€ unitario')->numeric()->required()->live(onBlur: true)->columnSpan(1),
+                    ->label('€ vendita')->numeric()->required()->live(onBlur: true)->columnSpan(1),
+                // Facoltativo, e serve solo a noi: senza, la scheda non puo'
+                // dire quanto si guadagna e lo dichiara invece di inventare
+                // un margine zero (Laura, 07/10/2026).
+                Forms\Components\TextInput::make('prezzo_acquisto')
+                    ->label('€ acquisto')->numeric()->live(onBlur: true)
+                    ->helperText('Quanto lo paghiamo. Facoltativo: serve a calcolare il margine.')
+                    ->columnSpan(1),
                 Forms\Components\TextInput::make('ricarico')
-                    ->label('Ricarico %')->numeric()->default(0)->live(onBlur: true)->columnSpan(1),
+                    ->label('Ricarico %')
+                    ->helperText('Lasciare a zero se il prezzo di vendita è già quello giusto.')
+                    ->numeric()->default(0)->live(onBlur: true)->columnSpan(1),
                 Forms\Components\TextInput::make('note')
                     ->label('Nota (come si è calcolata la quantità)')->maxLength(255)->columnSpan(6),
             ])
