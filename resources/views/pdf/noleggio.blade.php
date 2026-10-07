@@ -115,6 +115,16 @@
          aggiunge nulla a cio' che il contratto stabilisce. --}}
     <p>Il canone è comprensivo di quanto previsto dall'art. 5 e si intende dovuto per l'intera durata del
         contratto.</p>
+    {{-- Il presupposto del canone sta qui, nell'articolo del canone, e non
+         in fondo alle quantita': e' il punto in cui il cliente valuta la
+         cifra, ed e' cio' che permette di rivederla se il servizio cambia
+         davvero, invece di discuterne a memoria (Laura, 07/10/2026). --}}
+    @if (filled($noleggio->base_consumo))
+        <p>Il canone è determinato su un <strong>utilizzo stimato di {{ $noleggio->base_consumo }}</strong>.
+            In corso di contratto il canone e i quantitativi di cui all'art. 5 possono essere
+            <strong>adeguati sulla base dei consumi effettivamente rilevati</strong>, con accordo scritto
+            fra le parti.</p>
+    @endif
 
     <h3 class="art">Art. 4 – Fatturazione e pagamento</h3>
     <p>Il canone è fatturato con periodicità <strong>{{ $periodicita }}</strong> e pagato a mezzo
@@ -142,14 +152,8 @@
         @endif
     </ul>
 
-    {{-- Il presupposto dei quantitativi, scritto nero su bianco: e' cio' che
-         permette di rivedere il canone se l'utilizzo cambia davvero, invece
-         di discuterne a memoria. --}}
     @if (filled($noleggio->base_consumo))
-        <p>I quantitativi sopra indicati sono determinati su un utilizzo stimato di
-            <strong>{{ $noleggio->base_consumo }}</strong>. Le parti possono rivedere i quantitativi e il
-            canone sulla base dei <strong>consumi effettivamente rilevati nel mese</strong>, con accordo
-            scritto.</p>
+        <p>I quantitativi sopra indicati sono determinati sull'utilizzo stimato indicato all'art. 3.</p>
     @endif
 
     <h3 class="art">Art. 6 – Cosa non è compreso</h3>
