@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Concerns\ApreStampeInNuovaScheda;
+use App\Filament\Forms\Components\AllegatiEmail;
 use App\Filament\Forms\OffertaCaffeFields;
 use App\Filament\Resources\OffertaCaffeResource\Pages;
 use App\Filament\Resources\OffertaCaffeResource\RelationManagers\InviiRelationManager;
@@ -142,6 +143,7 @@ class OffertaCaffeResource extends Resource
                 ->label('CC (opzionale)')
                 ->email()
                 ->helperText('I destinatari fissi dei preventivi (Impostazioni > Notifiche) ricevono comunque una copia.'),
+            AllegatiEmail::make(fn (?OffertaCaffe $record) => $record ? [OffertaCaffePdf::nomeFile($record)] : []),
             Forms\Components\RichEditor::make('custom_message')
                 ->label('Testo email (modificabile)')
                 ->toolbarButtons(['bold', 'italic', 'bulletList', 'orderedList', 'link', 'undo', 'redo'])

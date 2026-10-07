@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Forms\Components\AllegatiEmail;
 use App\Mail\NoleggioMail;
 use App\Models\Customer;
 use App\Support\DisplayName;
@@ -573,6 +574,7 @@ class NoleggioResource extends Resource
                 ->label('Oggetto')
                 ->required()
                 ->default(fn (Noleggio $record) => static::oggettoEmail($record)),
+            AllegatiEmail::make(fn (?Noleggio $record) => $record ? [static::nomeFile($record)] : []),
             Forms\Components\RichEditor::make('custom_message')
                 ->label('Testo email (modificabile)')
                 ->toolbarButtons(['bold', 'italic', 'bulletList', 'orderedList', 'link', 'undo', 'redo'])

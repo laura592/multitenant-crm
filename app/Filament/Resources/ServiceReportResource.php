@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Forms\Components\AllegatiEmail;
 use App\Filament\Forms\Components\SignaturePad;
 use App\Filament\Forms\CustomerContactFields;
 use App\Filament\Forms\CustomerFiscalFields;
@@ -2096,6 +2097,13 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                 ->icon('heroicon-o-envelope')
                 ->description('Cosa c\'e\' scritto nella mail')
                 ->schema([
+                    // Quale copia parte si sceglie al primo passo e qui non
+                    // si vedeva piu': si premeva Invia fidandosi di ricordare
+                    // cosa si era spuntato due schermate prima.
+                    AllegatiEmail::make(fn (Forms\Get $get) => [
+                        'rapportino-'.$record->number.'.pdf'
+                        .(($c = $get('copia')) && isset($copie[$c]) ? ' — copia '.mb_strtolower($copie[$c]) : ''),
+                    ]),
                     Forms\Components\RichEditor::make('custom_message')
                         ->label('Testo email (modificabile)')
                         ->toolbarButtons(['bold', 'italic', 'bulletList', 'orderedList', 'link', 'undo', 'redo'])

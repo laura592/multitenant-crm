@@ -6,6 +6,7 @@ use App\Filament\Forms\CustomerContactFields;
 use App\Filament\Forms\CustomerFiscalFields;
 use App\Filament\Forms\ItalianAddressFields;
 use App\Filament\Forms\MoneyInput;
+use App\Filament\Forms\Components\AllegatiEmail;
 use App\Filament\Forms\OffertaCaffeFields;
 use App\Filament\Resources\QuoteResource\Pages;
 use App\Filament\Resources\QuoteResource\RelationManagers\QuoteProductsRelationManager;
@@ -862,6 +863,22 @@ class QuoteResource extends Resource
                 ->label('CC (opzionale)')
                 ->email()
                 ->helperText('I destinatari fissi impostati in Impostazioni > Notifiche ricevono comunque una copia.'),
+            AllegatiEmail::make(function (?Quote $record, Forms\Get $get) {
+                $nomi = $record ? ['preventivo-'.$record->number.'.pdf'] : [];
+
+                // L'offerta caffe' si allega con una spunta nello stesso
+                // modulo: va elencata solo se e' davvero selezionata.
+                $offerta = OffertaCaffeFields::daAllegare([
+                    'allega_offerta_caffe' => $get('allega_offerta_caffe'),
+                    'offerta_caffe_id' => $get('offerta_caffe_id'),
+                ]);
+
+                if ($offerta) {
+                    $nomi[] = OffertaCaffePdf::nomeFile($offerta);
+                }
+
+                return $nomi;
+            }),
             Forms\Components\RichEditor::make('custom_message')
                 ->label('Testo email (modificabile)')
                 ->toolbarButtons(['bold', 'italic', 'bulletList', 'orderedList', 'link', 'undo', 'redo'])
