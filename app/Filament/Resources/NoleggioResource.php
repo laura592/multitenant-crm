@@ -44,7 +44,12 @@ class NoleggioResource extends Resource
 
     public static function form(Form $form): Form
     {
-        return $form->schema([
+        // Due colonne: a sinistra si lavora, a destra il canone che si muove
+        // mentre si scrive. Prima l'anteprima stava in fondo e per vedere
+        // l'effetto di un ricarico bisognava scorrere tutta la pagina
+        // (Laura, 07/10/2026).
+        return $form->columns(3)->schema([
+            Forms\Components\Group::make()->columnSpan(['default' => 3, 'lg' => 2])->schema([
             Forms\Components\Section::make('Chi e cosa')
                 ->columns(2)
                 ->schema([
@@ -205,13 +210,6 @@ class NoleggioResource extends Resource
                 ->collapsible()
                 ->schema([static::ripetitoreForniture(NoleggioFornitura::GRUPPO_CONSUMABILI)]),
 
-            Forms\Components\Section::make('Il canone')
-                ->schema([
-                    Forms\Components\Placeholder::make('anteprima')
-                        ->label('')
-                        ->content(fn (Get $get): HtmlString => new HtmlString(static::anteprima($get))),
-                ]),
-
             Forms\Components\Section::make('Contratto')
                 ->columns(3)
                 ->schema([
@@ -235,6 +233,16 @@ class NoleggioResource extends Resource
                         ->default(Noleggio::STATO_BOZZA)->required(),
                     Forms\Components\Textarea::make('note')->label('Note')->rows(3)->columnSpanFull(),
                 ]),
+            ]),
+
+            Forms\Components\Group::make()->columnSpan(['default' => 3, 'lg' => 1])->schema([
+                Forms\Components\Section::make('Il canone')
+                    ->schema([
+                        Forms\Components\Placeholder::make('anteprima')
+                            ->label('')
+                            ->content(fn (Get $get): HtmlString => new HtmlString(static::anteprima($get))),
+                    ]),
+            ]),
         ]);
     }
 

@@ -4,6 +4,7 @@ namespace App\Filament\Resources\NoleggioResource\Pages;
 
 use App\Filament\Resources\NoleggioResource;
 use App\Models\NoleggioFornitura;
+use App\Support\DisplayName;
 use Filament\Actions;
 use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\TextEntry;
@@ -36,18 +37,47 @@ class ViewNoleggio extends ViewRecord
         $eur = fn ($v) => '€ '.number_format((float) $v, 2, ',', '.');
 
         return $infolist->schema([
-            Section::make()
-                ->columns(4)
+            // La stessa striscia dei rapportini e dei preventivi: quello che
+            // serve sapere senza scorrere. Cio' che sta qui non si ripete
+            // sotto.
+            Section::make('Panoramica rapida')
+                ->columns(12)
+                ->columnSpanFull()
+                ->extraAttributes([
+                    'class' => 'fi-quick-overview rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50 shadow-sm',
+                ])
                 ->schema([
                     TextEntry::make('canone')->label('Canone mensile')->money('EUR')
-                        ->size(TextEntry\TextEntrySize::Large)->weight('bold'),
-                    TextEntry::make('mesi')->label('Durata')->suffix(' mesi'),
-                    TextEntry::make('customer.company_name')->label('Cliente'),
+                        ->size(TextEntry\TextEntrySize::Large)->weight('bold')
+                        ->columnSpan(['default' => 1, 'lg' => 3]),
+                    TextEntry::make('customer.company_name')->label('Cliente')
+                        ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state))
+                        ->columnSpan(['default' => 1, 'lg' => 4]),
+                    TextEntry::make('mesi')->label('Durata')->suffix(' mesi')
+                        ->columnSpan(['default' => 1, 'lg' => 2]),
+                    TextEntry::make('data_inizio')->label('Decorrenza')->date('d/m/Y')
+                        ->placeholder('da fissare')
+                        ->columnSpan(['default' => 1, 'lg' => 2]),
                     TextEntry::make('stato')->label('Stato')->badge()
                         // Il parametro si deve chiamare $state: Filament
                         // risolve le closure per NOME, non per posizione, e
                         // con un nome inventato la pagina va in errore.
-                        ->formatStateUsing(fn (string $state) => \App\Models\Noleggio::statiLabels()[$state] ?? $state),
+                        ->formatStateUsing(fn (string $state) => \App\Models\Noleggio::statiLabels()[$state] ?? $state)
+                        ->columnSpan(['default' => 1, 'lg' => 1]),
+                    TextEntry::make('attrezzatura')->label('Attrezzatura')
+                        ->state(fn ($record) => $record->descrizione
+                            ?: ($record->machineUnit?->model_name ?: '—'))
+                        ->columnSpan(['default' => 1, 'lg' => 7]),
+                    // Le condizioni di pagamento erano solo nel contratto: per
+                    // sapere a quanti giorni si incassa bisognava stampare il
+                    // PDF.
+                    TextEntry::make('pagamento')->label('Fatturazione e pagamento')
+                        ->state(fn ($record) => implode(', ', array_filter([
+                            \App\Models\Noleggio::periodicitaLabels()[$record->periodicita_fatturazione] ?? null,
+                            \App\Models\Noleggio::modalitaPagamentoLabels()[$record->modalita_pagamento] ?? null,
+                            \App\Models\Noleggio::terminiPagamentoLabels()[$record->termini_pagamento] ?? null,
+                        ])) ?: '—')
+                        ->columnSpan(['default' => 1, 'lg' => 5]),
                 ]),
 
             Section::make('Com\'è composto il canone')
@@ -71,9 +101,12 @@ class ViewNoleggio extends ViewRecord
                     TextEntry::make('quota_servizio')->label('Full-service')->money('EUR')
                         ->helperText(fn ($record) => $eur($record->listino).' × '
                             .rtrim(rtrim((string) $record->full_service_percentuale, '0'), '.').'% ÷ 12'),
-                    TextEntry::make('quota_detergenti')->label('Detergenti')->money('EUR'),
-                    TextEntry::make('quota_consumabili')->label('Consumabili')->money('EUR'),
-                    TextEntry::make('quota_caffe')->label('Caffè e polveri')->money('EUR'),
+                    TextEntry::make('quota_detergenti')->label('Detergenti')->money('EUR')
+                        ->visible(fn ($record) => (float) $record->quota_detergenti > 0),
+                    TextEntry::make('quota_consumabili')->label('Consumabili')->money('EUR')
+                        ->visible(fn ($record) => (float) $record->quota_consumabili > 0),
+                    TextEntry::make('quota_caffe')->label('Caffè e polveri')->money('EUR')
+                        ->visible(fn ($record) => (float) $record->quota_caffe > 0),
                     TextEntry::make('incasso')->label('Totale sul contratto')
                         ->state(fn ($record) => $eur((float) $record->canone * $record->mesi)),
                 ]),
