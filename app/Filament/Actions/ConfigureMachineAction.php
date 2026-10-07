@@ -449,6 +449,17 @@ class ConfigureMachineAction
         foreach ($slots as $slot) {
             $label = $slotName === null ? $slot->label : '';
 
+            // I sistemi di pagamento sono quarantasette su una A600: un elenco
+            // unico non si legge. Si sceglie prima l'alloggiamento e poi il
+            // lettore, come li presenta il listino. Gli alloggiamenti offerti
+            // escono da cio' che la macchina ammette davvero, quindi sulla
+            // A300 l'AC200 non compare proprio (Laura, 07/10/2026).
+            if ($slot->slot_name === 'payment') {
+                $schema = array_merge($schema, static::passoPagamento($slot, $label));
+
+                continue;
+            }
+
             if ($slot->isSingleChoice()) {
                 $options = $slot->items->mapWithKeys(
                     fn ($item) => [$item->component_product_id => static::formatOptionLabel($item->component)]
@@ -527,6 +538,73 @@ class ConfigureMachineAction
      * "Nome prodotto — 1.234,56 €", cosi' il prezzo e' visibile mentre si
      * sceglie, non solo nel riepilogo finale.
      */
+    /**
+     * Il passo dei sistemi di pagamento: alloggiamento, poi lettore.
+     *
+     * @return array<int, Forms\Components\Component>
+     */
+    protected static function passoPagamento(ProductOptionSlot $slot, string $label): array
+    {
+        $perAlloggiamento = $slot->items->groupBy(fn ($i) => static::alloggiamento($i->component?->name));
+
+        $alloggiamenti = $perAlloggiamento->keys()->filter()->mapWithKeys(fn (string $k) => [
+            $k => static::ETICHETTE_ALLOGGIAMENTO[$k].' — '.$perAlloggiamento[$k]->count().' lettori',
+        ]);
+
+        $campoLettore = "slot_{$slot->id}";
+
+        return [
+            Forms\Components\Radio::make('payment_housing')
+                ->label($label ?: 'Alloggiamento')
+                ->options($alloggiamenti->all())
+                ->live()
+                // Cambiando alloggiamento il lettore scelto prima non c'entra
+                // piu' nulla: se restasse selezionato verrebbe salvato pur
+                // essendo sparito dalla vista.
+                ->afterStateUpdated(fn (Forms\Set $set) => $set($campoLettore, null)),
+
+            Forms\Components\Radio::make($campoLettore)
+                ->label('Lettore')
+                ->options(fn (Forms\Get $get) => $slot->items
+                    ->filter(fn ($i) => static::alloggiamento($i->component?->name) === $get('payment_housing'))
+                    ->mapWithKeys(fn ($i) => [
+                        $i->component_product_id => static::etichettaLettore($i->component),
+                    ])->all())
+                ->visible(fn (Forms\Get $get) => filled($get('payment_housing')))
+                ->required(false),
+        ];
+    }
+
+    /** @var array<string, string> */
+    protected const ETICHETTE_ALLOGGIAMENTO = [
+        'AC200' => 'AC200 — standard, accetta gettoniera e cambiamonete',
+        'AC125' => 'AC125 — compatto, solo lettori',
+        'SU03' => 'SU03 CL — dentro l\'unità di raffreddamento',
+    ];
+
+    /** Da quale alloggiamento viene un componente, leggendolo dal nome. */
+    protected static function alloggiamento(?string $nome): ?string
+    {
+        foreach (['AC200', 'AC125', 'SU03'] as $tipo) {
+            if ($nome && str_contains($nome, $tipo)) {
+                return $tipo;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Scelto l'alloggiamento, ripeterlo su ogni riga e' rumore: resta il
+     * lettore, che e' la cosa che si sceglie.
+     */
+    protected static function etichettaLettore(Product $product): string
+    {
+        $etichetta = static::formatOptionLabel($product);
+
+        return preg_replace('/^Alloggiamento conteggio (AC200|AC125|SU03 CL) (per lettore )?/u', '', $etichetta) ?: $etichetta;
+    }
+
     protected static function formatOptionLabel(Product $product): string
     {
         $price = $product->getCurrentPrice()?->price;
