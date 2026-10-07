@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ContrattoAssistenzaController;
+use App\Http\Controllers\ContrattoNoleggioController;
 use App\Http\Controllers\FatturaEurekaController;
 use App\Http\Controllers\FirmaRapportinoController;
 use App\Http\Controllers\CustomerSchedaAnagraficaController;
@@ -63,6 +64,7 @@ Route::middleware(['auth', SetPermissionsTeamId::class])->group(function () {
         ->whereIn('file', ['firma', 'pdf'])
         ->name('quote-responses.file');
     Route::get('quotes/{quote}/contratti/{quoteProduct}', ContrattoAssistenzaController::class)->name('quotes.contratto');
+    Route::get('noleggi/{noleggio}/contratto', ContrattoNoleggioController::class)->name('noleggi.contratto');
     Route::get('customers/{customer}/scheda-anagrafica', CustomerSchedaAnagraficaController::class)
         ->name('customers.scheda-anagrafica');
 

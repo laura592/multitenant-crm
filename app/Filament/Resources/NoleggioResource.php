@@ -515,14 +515,13 @@ class NoleggioResource extends Resource
     {
         return $azione
             ->label('Contratto PDF')
-            ->icon('heroicon-o-document-arrow-down')
+            // Si apre in una scheda nuova invece di scaricarsi: controllando
+            // una virgola alla volta, dopo dieci prove i Download sono pieni
+            // di contratti uguali e non si sa piu' qual e' l'ultimo
+            // (Laura, 07/10/2026). Da li' si stampa o si salva se serve.
+            ->icon('heroicon-o-document-magnifying-glass')
             ->color('gray')
-            ->action(function (Noleggio $record) {
-                $pdf = static::buildPdf($record);
-                $nome = static::nomeFile($record);
-
-                return response()->streamDownload(fn () => print($pdf->output()), $nome);
-            });
+            ->url(fn (Noleggio $record) => route('noleggi.contratto', $record), shouldOpenInNewTab: true);
     }
 
     /**
