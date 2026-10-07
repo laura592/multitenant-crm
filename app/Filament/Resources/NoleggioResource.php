@@ -463,25 +463,28 @@ class NoleggioResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            // Come i preventivi: si ordina per numero e non per created_at.
+            // Il numero cresce in ordine di creazione ed e' univoco per riga,
+            // quindi l'ordinamento e' stabile; created_at su righe create
+            // nello stesso minuto non lo e'.
+            ->defaultSort('number', 'desc')
             ->columns([
                 Tables\Columns\TextColumn::make('number')->label('Numero')
                     ->weight('medium')->searchable()->sortable(),
-                Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')->searchable()->sortable(),
-                Tables\Columns\TextColumn::make('descrizione')->label('Oggetto')->limit(34)->searchable(),
-                Tables\Columns\TextColumn::make('canone')->label('Canone')->money('EUR')->sortable(),
-                Tables\Columns\TextColumn::make('mesi')->label('Mesi')->sortable(),
-                Tables\Columns\TextColumn::make('mese_pareggio')->label('In pari dal')
-                    ->formatStateUsing(fn (?int $state) => $state ? $state.'°' : '—')
-                    ->color(fn (?int $state, Noleggio $record) => $state && $state > $record->mesi ? 'danger' : null),
-                Tables\Columns\TextColumn::make('data_inizio')->label('Decorrenza')->date('d/m/Y')->placeholder('—'),
-                // La domanda che ci si fa scorrendo l'elenco e' "gliel'ho
-                // mandato?": la risposta stava dentro la scheda, una per una.
-                Tables\Columns\TextColumn::make('inviato')
-                    ->label('Inviato')
-                    ->state(fn (Noleggio $record) => $record->emails->first()?->created_at?->format('d/m/Y'))
-                    ->description(fn (Noleggio $record) => $record->emails->first()?->recipient_email)
-                    ->color(fn (Noleggio $record) => $record->emails->first() ? 'success' : 'gray')
-                    ->placeholder('mai'),
+                Tables\Columns\TextColumn::make('customer.company_name')->wrap()->label('Cliente')
+                    ->searchable()->sortable()
+                    ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
+                // Come nei preventivi e nelle richieste: la zona e' il primo
+                // filtro mentale quando si scorre un elenco di clienti.
+                Tables\Columns\TextColumn::make('customer.province')->visibleFrom('md')
+                    ->label('Prov.')
+                    ->badge()
+                    ->color('gray')
+                    ->searchable()
+                    ->sortable()
+                    ->placeholder('—'),
+                Tables\Columns\TextColumn::make('data_inizio')->visibleFrom('md')
+                    ->label('Decorrenza')->date('d/m/Y')->sortable()->placeholder('—'),
                 Tables\Columns\TextColumn::make('stato')->label('Stato')->badge()
                     ->formatStateUsing(fn (string $state) => Noleggio::statiLabels()[$state] ?? $state)
                     ->color(fn (string $state) => match ($state) {
@@ -489,17 +492,49 @@ class NoleggioResource extends Resource
                         Noleggio::STATO_CHIUSO => 'gray',
                         default => 'warning',
                     }),
+                Tables\Columns\TextColumn::make('canone')->label('Canone')->money('EUR')->sortable()
+                    ->description(fn (Noleggio $record) => $record->mesi.' mesi'),
+                // La domanda che ci si fa scorrendo l'elenco e' "gliel'ho
+                // mandato?": la risposta stava dentro la scheda, una per una.
+                Tables\Columns\TextColumn::make('inviato')->visibleFrom('md')
+                    ->label('Inviato')
+                    ->state(fn (Noleggio $record) => $record->emails->first()?->created_at?->format('d/m/Y'))
+                    ->description(fn (Noleggio $record) => $record->emails->first()?->recipient_email)
+                    ->color(fn (Noleggio $record) => $record->emails->first() ? 'success' : 'gray')
+                    ->placeholder('mai'),
+                // Numeri nostri, come "Visto" sui preventivi: utili ma non da
+                // tenere sempre a schermo.
+                Tables\Columns\TextColumn::make('descrizione')->label('Oggetto')->limit(34)
+                    ->searchable()->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('mese_pareggio')->label('In pari dal')
+                    ->formatStateUsing(fn (?int $state) => $state ? $state.'°' : '—')
+                    ->color(fn (?int $state, Noleggio $record) => $state && $state > $record->mesi ? 'danger' : null)
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('stato')->label('Stato')->options(Noleggio::statiLabels()),
+                Tables\Filters\SelectFilter::make('customer_id')
+                    ->label('Cliente')
+                    ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
+                    ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::customerOption($record))
+                    ->searchable()
+                    ->preload(),
+                Tables\Filters\Filter::make('data_inizio')
+                    ->label('Periodo')
+                    ->form([
+                        Forms\Components\DatePicker::make('from')->label('Dal'),
+                        Forms\Components\DatePicker::make('until')->label('Al'),
+                    ])
+                    ->query(fn ($query, array $data) => $query
+                        ->when($data['from'] ?? null, fn ($q, $d) => $q->whereDate('data_inizio', '>=', $d))
+                        ->when($data['until'] ?? null, fn ($q, $d) => $q->whereDate('data_inizio', '<=', $d))),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),
                 static::azioneContratto(Tables\Actions\Action::make('contratto')),
                 static::azioneInvio(Tables\Actions\Action::make('invia')),
-            ])
-            ->defaultSort('created_at', 'desc');
+            ]);
     }
 
     /**
