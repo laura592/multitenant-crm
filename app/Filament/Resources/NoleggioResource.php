@@ -113,7 +113,13 @@ class NoleggioResource extends Resource
                     Forms\Components\Select::make('ammortamento_base')
                         ->label('Ammortamento calcolato su')
                         ->options(['costo' => 'Costo d\'acquisto', 'listino' => 'Prezzo di listino'])
-                        ->default('costo')->required()->live(),
+                        // Di norma il listino: e' il valore che si concede in
+                        // uso. Lo sconto strappato al fornitore e' margine di
+                        // Alex, non uno sconto da girare al cliente.
+                        ->default('listino')->required()->live()
+                        ->helperText(fn (Get $get) => $get('ammortamento_base') === 'costo'
+                            ? 'Sul costo si rientra della spesa e basta: nessun margine sulla macchina.'
+                            : null),
                     Forms\Components\TextInput::make('ammortamento_mesi')
                         ->label('Da recuperare in (mesi)')
                         ->placeholder('come la durata del contratto')
