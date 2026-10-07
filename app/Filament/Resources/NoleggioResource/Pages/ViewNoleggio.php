@@ -54,9 +54,20 @@ class ViewNoleggio extends ViewRecord
                 ->description('Numeri interni: nel contratto il cliente vede solo il totale.')
                 ->columns(5)
                 ->schema([
+                    // La didascalia deve dire il calcolo VERO: diceva sempre
+                    // "costo diviso durata del contratto" anche quando si
+                    // ammortizzava il listino in tre anni, quindi spiegava un
+                    // numero diverso da quello stampato sopra (Laura,
+                    // 07/10/2026).
                     TextEntry::make('quota_macchina')->label('Macchina')->money('EUR')
-                        ->helperText(fn ($record) => $eur($record->costo).' ÷ '.$record->mesi.' mesi'
-                            .((float) $record->margine > 0 ? ' + '.rtrim(rtrim((string) $record->margine, '0'), '.').'%' : '')),
+                        ->helperText(function ($record) use ($eur) {
+                            $base = $record->ammortamento_base === 'listino' ? $record->listino : $record->costo;
+                            $mesi = $record->ammortamento_mesi ?: $record->mesi;
+
+                            return $eur($base).' ('.($record->ammortamento_base === 'listino' ? 'listino' : 'costo').')'
+                                .' ÷ '.$mesi.' mesi'
+                                .((float) $record->margine > 0 ? ' + '.rtrim(rtrim((string) $record->margine, '0'), '.').'%' : '');
+                        }),
                     TextEntry::make('quota_servizio')->label('Full-service')->money('EUR')
                         ->helperText(fn ($record) => $eur($record->listino).' × '
                             .rtrim(rtrim((string) $record->full_service_percentuale, '0'), '.').'% ÷ 12'),
