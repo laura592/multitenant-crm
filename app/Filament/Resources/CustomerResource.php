@@ -11,6 +11,7 @@ use App\Filament\Resources\CustomerResource\RelationManagers\DocumentiRelationMa
 use App\Filament\Resources\CustomerResource\RelationManagers\LavaggiRelationManager;
 use App\Filament\Resources\CustomerResource\RelationManagers\MacchinariRelationManager;
 use App\Filament\Resources\CustomerResource\RelationManagers\NoleggiRelationManager;
+use App\Filament\Resources\CustomerResource\RelationManagers\RichiesteRelationManager;
 use App\Filament\Resources\CustomerResource\RelationManagers\QuotesRelationManager;
 use App\Filament\Resources\CustomerResource\RelationManagers\ServiceReportsRelationManager;
 use App\Models\Customer;
@@ -468,6 +469,7 @@ class CustomerResource extends Resource
         return [
             DocumentiRelationManager::class,
             MacchinariRelationManager::class,
+            RichiesteRelationManager::class,
             QuotesRelationManager::class,
             NoleggiRelationManager::class,
             LavaggiRelationManager::class,
