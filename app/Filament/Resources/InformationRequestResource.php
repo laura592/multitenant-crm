@@ -461,6 +461,7 @@ class InformationRequestResource extends Resource
     {
         return [
             RelationManagers\QuotesRelationManager::class,
+            RelationManagers\NoleggiRelationManager::class,
         ];
     }
 

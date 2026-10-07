@@ -171,6 +171,12 @@ class Quote extends Model
         return $this->belongsTo(Customer::class);
     }
 
+    /** I noleggi operativi nati da questo preventivo. */
+    public function noleggi(): HasMany
+    {
+        return $this->hasMany(Noleggio::class);
+    }
+
     /**
      * Chi paga QUESTO preventivo.
      *

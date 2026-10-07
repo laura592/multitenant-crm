@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class InformationRequest extends Model
 {
@@ -95,6 +96,19 @@ class InformationRequest extends Model
     public function quotes(): HasMany
     {
         return $this->hasMany(Quote::class)->latest('created_at');
+    }
+
+    /**
+     * I noleggi nati dai preventivi di questa richiesta.
+     *
+     * Il legame passa per il preventivo: un noleggio non si attacca
+     * direttamente alla richiesta, nasce da una proposta che a sua volta
+     * nasce da li'. Cosi' la catena resta una sola e non c'e' un secondo
+     * collegamento da tenere allineato.
+     */
+    public function noleggi(): HasManyThrough
+    {
+        return $this->hasManyThrough(Noleggio::class, Quote::class)->latest('noleggi.created_at');
     }
 
     /**
