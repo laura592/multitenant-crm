@@ -90,14 +90,23 @@ class Noleggio extends Model
         return $delGruppo->isEmpty() ? null : (float) $delGruppo->sum('costo_mensile');
     }
 
-    public function ricalcola(): CanoneOperativo
+    /**
+     * @param  ?array<string, float>  $totaliGruppo  i totali gia' calcolati, per gruppo.
+     *                                               Serve all'anteprima del form, che ha le righe
+     *                                               sotto le dita ma non ancora sul database: senza,
+     *                                               il totale si calcolava come se le forniture non
+     *                                               ci fossero e divergeva dal contratto.
+     */
+    public function ricalcola(?array $totaliGruppo = null): CanoneOperativo
     {
-        $detergenti = $this->totaleForniture(NoleggioFornitura::GRUPPO_DETERGENTI);
-        $caffe = $this->totaleForniture(NoleggioFornitura::GRUPPO_CAFFE);
-        $polveri = $this->totaleForniture(NoleggioFornitura::GRUPPO_POLVERI) ?? 0.0;
+        $daGruppo = fn (string $g) => $totaliGruppo[$g] ?? $this->totaleForniture($g);
+
+        $detergenti = $daGruppo(NoleggioFornitura::GRUPPO_DETERGENTI);
+        $caffe = $daGruppo(NoleggioFornitura::GRUPPO_CAFFE);
+        $polveri = $daGruppo(NoleggioFornitura::GRUPPO_POLVERI) ?? 0.0;
         // Bicchieri, palette, zucchero: hanno una voce loro nel canone, se no
         // il contratto li promette e il canone non li copre.
-        $consumabili = $this->totaleForniture(NoleggioFornitura::GRUPPO_CONSUMABILI) ?? 0.0;
+        $consumabili = $daGruppo(NoleggioFornitura::GRUPPO_CONSUMABILI) ?? 0.0;
 
         return CanoneOperativo::calcola(
             costoMacchina: (float) $this->costo,

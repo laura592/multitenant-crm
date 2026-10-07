@@ -375,33 +375,46 @@ class NoleggioResource extends Resource
             'ammortamento_base' => $get('ammortamento_base') ?: 'costo',
             'ammortamento_mesi' => $get('ammortamento_mesi') ?: null,
         ]);
-        $r = $n->ricalcola();
         $eur = fn ($v) => '€ '.number_format((float) $v, 2, ',', '.');
-        $meta = (int) max(1, round($r->mesi / 2));
 
         // I totali per gruppo si leggono dalle righe del ripetitore, cosi' si
         // muovono mentre si digita invece che al salvataggio.
         $perGruppo = collect(array_keys(NoleggioFornitura::gruppiLabels()))
-            ->mapWithKeys(fn (string $gruppo) => [
-                // Diviso dodici: le quantita' sono annue e qui si mostra il
-                // mese. Senza, i detergenti uscivano 1.191,69 al posto di
-                // 99,31 -- il totale di un anno spacciato per mensile.
-                $gruppo => collect($get('forniture_'.$gruppo) ?? [])
-                    ->sum(fn ($f) => (float) ($f['quantita'] ?? 0) / 12
+            ->mapWithKeys(function (string $gruppo) use ($get) {
+                $righe = collect($get('forniture_'.$gruppo) ?? []);
+
+                // Null, non zero, quando il gruppo non ha righe: cosi' il
+                // calcolo ricade sugli importi complessivi di detergenti e
+                // caffe', che e' come erano prezzati i noleggi prima del
+                // prospetto a voci.
+                return [$gruppo => $righe->isEmpty() ? null : $righe
+                    // Diviso dodici: le quantita' sono annue e qui si mostra
+                    // il mese. Senza, i detergenti uscivano 1.191,69 al posto
+                    // di 99,31 — il totale di un anno spacciato per mensile.
+                    // Arrotondata riga per riga come fa NoleggioFornitura al
+                    // salvataggio: sommando i valori pieni l'anteprima
+                    // divergerebbe dal contratto di qualche centesimo.
+                    ->sum(fn ($f) => round((float) ($f['quantita'] ?? 0) / 12
                         * (float) ($f['prezzo_unitario'] ?? 0)
-                        * (1 + (float) ($f['ricarico'] ?? 0) / 100)),
-            ]);
+                        * (1 + (float) ($f['ricarico'] ?? 0) / 100), 2))];
+            });
+
+        // Il totale si calcola con le righe che si stanno scrivendo: prima
+        // usava un noleggio senza forniture e il canone dell'anteprima
+        // divergeva da quello del contratto (Laura, 07/10/2026).
+        $r = $n->ricalcola($perGruppo->filter(fn ($v) => $v !== null)->all());
+        $meta = (int) max(1, round($r->mesi / 2));
 
         $righe = [
             ['Quota macchina', $eur($r->quotaMacchina)],
             ['Full-Service', $eur($r->quotaServizio)],
         ];
         foreach (NoleggioFornitura::gruppiLabels() as $chiave => $etichetta) {
-            if (($perGruppo[$chiave] ?? 0) > 0) {
+            if (($perGruppo[$chiave] ?? null) > 0) {
                 $righe[] = [$etichetta, $eur($perGruppo[$chiave])];
             }
         }
-        if ($perGruppo->isEmpty()) {
+        if ($perGruppo->filter(fn ($v) => $v !== null)->isEmpty()) {
             $righe[] = ['Detergenti', $eur($r->quotaDetergenti)];
             $righe[] = ['Caffè', $eur($r->quotaCaffe)];
         }
