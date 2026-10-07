@@ -63,4 +63,16 @@ return [
         'sola_lettura' => (bool) env('EUREKA_SOLA_LETTURA', false),
     ],
 
+    'brevo' => [
+        // Senza chiave brevo:sincronizza-consensi non fa nulla (e lo dice):
+        // in locale e nei test non si deve scrivere sull'account vero.
+        // La chiave e' legata agli IP autorizzati su Brevo: la VPS c'e'.
+        'key' => env('BREVO_API_KEY'),
+        'base_url' => env('BREVO_BASE_URL', 'https://api.brevo.com/v3'),
+        // Lista in cui finisce chiunque abbia dato il consenso marketing nel
+        // CRM; in piu' il contatto entra nella lista della sua regione, se
+        // su Brevo esiste.
+        'lista_consensi' => env('BREVO_LISTA_CONSENSI', 'Consenso marketing (CRM)'),
+    ],
+
 ];

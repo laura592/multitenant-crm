@@ -142,6 +142,16 @@
         @endif
     </ul>
 
+    {{-- Il presupposto dei quantitativi, scritto nero su bianco: e' cio' che
+         permette di rivedere il canone se l'utilizzo cambia davvero, invece
+         di discuterne a memoria. --}}
+    @if (filled($noleggio->base_consumo))
+        <p>I quantitativi sopra indicati sono determinati su un utilizzo stimato di
+            <strong>{{ $noleggio->base_consumo }}</strong>. Le parti possono rivedere i quantitativi e il
+            canone sulla base dei <strong>consumi effettivamente rilevati nel mese</strong>, con accordo
+            scritto.</p>
+    @endif
+
     <h3 class="art">Art. 6 – Cosa non è compreso</h3>
     <ul>
         <li>Le <strong>predisposizioni</strong> necessarie all'installazione — punto acqua, scarico e alimentazione

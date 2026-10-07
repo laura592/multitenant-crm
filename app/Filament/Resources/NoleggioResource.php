@@ -147,6 +147,16 @@ class NoleggioResource extends Resource
             Forms\Components\Section::make('Cosa comprende il canone')
                 ->description('Una riga per voce: è quello che il contratto promette al cliente, e il canone la somma. Se ci sono righe, gli importi complessivi di detergenti e caffè qui sopra vengono ignorati.')
                 ->schema([
+                    // Da dove vengono le quantita'. Senza, fra due anni
+                    // nessuno sa piu' perche' erano 900 kg di caffe' e non
+                    // 600, e se il cliente raddoppia il servizio non c'e'
+                    // niente a cui appellarsi per rivedere il canone.
+                    Forms\Components\TextInput::make('base_consumo')
+                        ->label('Consumi calcolati su')
+                        ->placeholder('Es. 250 colazioni al giorno')
+                        ->helperText('Finisce nel contratto, sotto le quantità: è il presupposto su cui si regge il canone.')
+                        ->maxLength(255)
+                        ->columnSpanFull(),
                     Forms\Components\Repeater::make('forniture')
                         ->relationship()
                         ->label('')

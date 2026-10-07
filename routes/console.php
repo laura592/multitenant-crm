@@ -136,3 +136,14 @@ Schedule::command('eureka:allinea-fatture-rapportini', ['--tenant' => 'alex'])
     ->dailyAt('06:45')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/eureka-import.log'));
+
+// Chi ha dato il consenso marketing nel CRM (oggi: il modulo del sito, vedi
+// LeadIntakeController) entra su Brevo con data e origine del consenso, e chi
+// lo revoca finisce in blacklist. Ogni ora, ma manda solo i contatti cambiati
+// dall'ultimo giro (Customer.brevo_sync_hash): di solito una manciata. Senza
+// BREVO_API_KEY nel .env non fa nulla. Gira solo dalla VPS, che e' tra gli IP
+// autorizzati sull'account Brevo.
+Schedule::command('brevo:sincronizza-consensi', ['--tenant' => 'alex'])
+    ->hourlyAt(20)
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/brevo-sync.log'));

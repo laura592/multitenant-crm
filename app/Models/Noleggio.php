@@ -33,7 +33,7 @@ class Noleggio extends Model
 
     protected $fillable = [
         'tenant_id', 'customer_id', 'machine_unit_id', 'quote_id', 'descrizione',
-        'listino', 'sconto_acquisto', 'costo', 'mesi', 'margine', 'detergenti_mese', 'ricarico_detergenti', 'caffe_mese', 'ricarico_caffe', 'caffe_kg_mese', 'detergenti_inclusi',
+        'listino', 'sconto_acquisto', 'costo', 'mesi', 'base_consumo', 'margine', 'detergenti_mese', 'ricarico_detergenti', 'caffe_mese', 'ricarico_caffe', 'caffe_kg_mese', 'detergenti_inclusi',
         'valore_residuo', 'full_service_percentuale',
         'quota_macchina', 'quota_servizio', 'quota_detergenti', 'quota_caffe', 'canone', 'mese_pareggio',
         'data_inizio', 'stato', 'note',

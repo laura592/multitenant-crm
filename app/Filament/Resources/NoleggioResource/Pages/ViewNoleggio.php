@@ -80,6 +80,12 @@ class ViewNoleggio extends ViewRecord
 
             Section::make('Cosa comprende il canone')
                 ->schema([
+                    // Il presupposto da cui nascono le quantita': si legge
+                    // prima dell'elenco, perche' e' quello che lo spiega.
+                    TextEntry::make('base_consumo')
+                        ->label('Consumi calcolati su')
+                        ->placeholder('non indicato')
+                        ->columnSpanFull(),
                     TextEntry::make('forniture_dettaglio')
                         ->label('')
                         ->state(function ($record): HtmlString {
