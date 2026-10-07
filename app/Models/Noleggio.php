@@ -33,7 +33,8 @@ class Noleggio extends Model
 
     protected $fillable = [
         'tenant_id', 'customer_id', 'machine_unit_id', 'quote_id', 'descrizione',
-        'listino', 'sconto_acquisto', 'costo', 'mesi', 'base_consumo', 'margine', 'detergenti_mese', 'ricarico_detergenti', 'caffe_mese', 'ricarico_caffe', 'caffe_kg_mese', 'detergenti_inclusi',
+        'listino', 'sconto_acquisto', 'costo', 'mesi', 'base_consumo', 'margine',
+        'ammortamento_base', 'ammortamento_mesi', 'detergenti_mese', 'ricarico_detergenti', 'caffe_mese', 'ricarico_caffe', 'caffe_kg_mese', 'detergenti_inclusi',
         'valore_residuo', 'full_service_percentuale',
         'quota_macchina', 'quota_servizio', 'quota_detergenti', 'quota_caffe', 'canone', 'mese_pareggio',
         'data_inizio', 'stato', 'note',
@@ -107,6 +108,10 @@ class Noleggio extends Model
             ricaricoDetergenti: $detergenti !== null ? 0.0 : (float) $this->ricarico_detergenti / 100,
             caffeMese: ($caffe ?? (float) $this->caffe_mese) + $polveri,
             ricaricoCaffe: $caffe !== null ? 0.0 : (float) $this->ricarico_caffe / 100,
+            valoreDaAmmortizzare: $this->ammortamento_base === 'listino'
+                ? (float) $this->listino
+                : (float) $this->costo,
+            mesiAmmortamento: $this->ammortamento_mesi ? (int) $this->ammortamento_mesi : null,
         );
     }
 

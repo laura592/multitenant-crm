@@ -106,6 +106,19 @@ class NoleggioResource extends Resource
                     Forms\Components\TextInput::make('mesi')
                         ->label('Durata (mesi)')
                         ->numeric()->minValue(1)->default(60)->required()->live(onBlur: true),
+                    // Il contratto puo' durare cinque anni e la macchina
+                    // rientrare in tre: da li' in poi quella quota resta nel
+                    // canone ed e' margine. E si puo' ammortizzare il listino
+                    // invece del costo (Laura, 07/10/2026).
+                    Forms\Components\Select::make('ammortamento_base')
+                        ->label('Ammortamento calcolato su')
+                        ->options(['costo' => 'Costo d\'acquisto', 'listino' => 'Prezzo di listino'])
+                        ->default('costo')->required()->live(),
+                    Forms\Components\TextInput::make('ammortamento_mesi')
+                        ->label('Da recuperare in (mesi)')
+                        ->placeholder('come la durata del contratto')
+                        ->helperText('Es. 36 per rientrare in tre anni su un contratto di cinque.')
+                        ->numeric()->minValue(1)->live(onBlur: true),
                     Forms\Components\TextInput::make('margine')
                         ->label('Maggiorazione sulla macchina (%)')
                         ->helperText('Copre insieme margine e costo del denaro immobilizzato.')
@@ -145,147 +158,39 @@ class NoleggioResource extends Resource
                 ]),
 
             Forms\Components\Section::make('Cosa comprende il canone')
-                ->description('Una riga per voce, nelle quantità ANNUE che il contratto promette al cliente: il costo mensile lo calcola il programma. Se ci sono righe, gli importi complessivi di detergenti e caffè qui sopra vengono ignorati.')
+                ->description('Le quantità si scrivono ANNUE, come il contratto le promette al cliente: il costo mensile lo calcola il programma. Se ci sono righe, gli importi complessivi di detergenti e caffè qui sopra vengono ignorati.')
                 ->schema([
                     // Da dove vengono le quantita'. Senza, fra due anni
-                    // nessuno sa piu' perche' erano 900 kg di caffe' e non
+                    // nessuno sa piu' perche' erano 890 kg di caffe' e non
                     // 600, e se il cliente raddoppia il servizio non c'e'
                     // niente a cui appellarsi per rivedere il canone.
                     Forms\Components\TextInput::make('base_consumo')
                         ->label('Consumi calcolati su')
                         ->placeholder('Es. 250 colazioni al giorno')
-                        ->helperText('Finisce nel contratto, sotto le quantità: è il presupposto su cui si regge il canone.')
+                        ->helperText('Finisce nel contratto, nell\'articolo del canone: è il presupposto su cui si regge.')
                         ->maxLength(255)
                         ->columnSpanFull(),
-                    Forms\Components\Repeater::make('forniture')
-                        ->relationship()
-                        ->label('')
-                        // Sei colonne in due righe leggibili invece di sette
-                        // schiacciate su una: con i campi larghi 1/7 la
-                        // tendina del listino si perdeva fra gli altri.
-                        ->columns(6)
-                        ->schema([
-                            Forms\Components\Select::make('gruppo')
-                                ->label('Gruppo')->options(NoleggioFornitura::gruppiLabels())
-                                ->default(NoleggioFornitura::GRUPPO_DETERGENTI)->required()->columnSpan(3),
-                            // Caffè, deca e polveri hanno gia' un listino:
-                            // sceglierli da li' evita di ribattere nome e
-                            // prezzo, e soprattutto evita che il contratto
-                            // prometta un prodotto a un prezzo che il listino
-                            // non pratica piu'. I detergenti restano a mano:
-                            // non sono in nessun listino.
-                            Forms\Components\Select::make('prodotto_caffe_id')
-                                ->label('Dal listino caffè')
-                                // Si salva: finche' era solo un aiuto alla
-                                // compilazione, riaprendo la scheda la tendina
-                                // tornava vuota e sembrava che la scelta non
-                                // fosse mai stata fatta (Laura, 06/10/2026).
-                                ->options(fn () => ProdottoCaffe::query()->where('attivo', true)
-                                    ->orderBy('ordinamento')->get()
-                                    ->mapWithKeys(fn (ProdottoCaffe $p) => [
-                                        $p->id => $p->nome.' — '.$p->formato.' — € '.number_format((float) $p->prezzo, 2, ',', '.'),
-                                    ])->all())
-                                ->searchable()
-                                ->live()
-                                // Le righe inserite prima che il riferimento
-                                // esistesse non ce l'hanno: lo si ritrova dal
-                                // nome, cosi' la tendina mostra subito la voce
-                                // giusta invece di sembrare mai compilata. Si
-                                // fissa sul serio al primo salvataggio.
-                                ->afterStateHydrated(function (Forms\Components\Select $component, Get $get, $state) {
-                                    if (filled($state) || blank($voce = $get('voce'))) {
-                                        return;
-                                    }
-
-                                    $component->state(ProdottoCaffe::where('nome', $voce)->value('id'));
-                                })
-                                ->afterStateUpdated(function (Forms\Set $set, $state) {
-                                    if (! $state || ! ($p = ProdottoCaffe::find($state))) {
-                                        return;
-                                    }
-                                    $set('voce', $p->nome);
-                                    $set('unita', $p->formato);
-                                    $set('prezzo_unitario', (float) $p->prezzo);
-                                    $set('gruppo', $p->gruppo === 'liofilizzati'
-                                        ? NoleggioFornitura::GRUPPO_POLVERI
-                                        : NoleggioFornitura::GRUPPO_CAFFE);
-                                    // Una riga viene da una fonte sola.
-                                    $set('material_id', null);
-                                })
-                                ->columnSpan(3),
-                            // I detergenti e i filtri stanno fra i materiali,
-                            // non nel listino caffe'. Stessa etichetta usata
-                            // nei rapportini, cosi' si cercano allo stesso
-                            // modo in tutto il gestionale.
-                            Forms\Components\Select::make('material_id')
-                                ->label('Dal magazzino materiali')
-                                // Ricerca sul server, non fra opzioni gia'
-                                // caricate: i materiali sono 3.600 e un menu
-                                // non li tiene. Prima se ne caricavano i primi
-                                // 300 per codice e si cercava solo fra quelli,
-                                // quindi quasi tutto il magazzino era
-                                // irraggiungibile (Laura, 06/10/2026).
-                                ->searchable()
-                                ->getSearchResultsUsing(fn (string $search) => Material::query()
-                                    ->where(fn ($q) => $q->where('code', 'like', "%{$search}%")
-                                        ->orWhere('type', 'like', "%{$search}%")
-                                        ->orWhere('variant', 'like', "%{$search}%"))
-                                    ->orderBy('code')->limit(50)->get()
-                                    ->mapWithKeys(fn (Material $m) => [$m->id => static::etichettaMateriale($m)])
-                                    ->all())
-                                // Serve a mostrare la voce gia' scelta quando
-                                // si riapre la scheda: senza, la ricerca lato
-                                // server lascerebbe la tendina vuota.
-                                ->getOptionLabelUsing(fn ($value) => ($m = Material::find($value))
-                                    ? static::etichettaMateriale($m)
-                                    : null)
-                                ->live()
-                                ->afterStateUpdated(function (Forms\Set $set, $state) {
-                                    if (! $state || ! ($m = Material::find($state))) {
-                                        return;
-                                    }
-                                    $set('voce', $m->display_label ?: $m->code);
-                                    // Due terzi del magazzino non ha un prezzo
-                                    // di listino: azzerare quello scritto a
-                                    // mano farebbe sparire il costo dal canone
-                                    // senza dirlo. Si sovrascrive solo quando
-                                    // un prezzo c'e' davvero.
-                                    if ((float) $m->list_price > 0) {
-                                        $set('prezzo_unitario', (float) $m->list_price);
-                                    }
-                                    $set('gruppo', NoleggioFornitura::GRUPPO_DETERGENTI);
-                                    $set('prodotto_caffe_id', null);
-                                })
-                                ->columnSpan(3),
-                            Forms\Components\TextInput::make('voce')
-                                ->label('Voce')->required()->maxLength(255)->columnSpan(3),
-                            // Si scrive quello che il contratto promette --
-                            // "890 kg di caffe' all'anno" -- e il mensile lo
-                            // calcola il programma. Prima si scriveva al mese
-                            // e chi compilava divideva per dodici a mente
-                            // (Laura, 07/10/2026).
-                            Forms\Components\TextInput::make('quantita')
-                                ->label('Q.tà/anno')->numeric()->required()->live(onBlur: true)
-                                ->helperText(fn (Get $get) => filled($get('quantita'))
-                                    ? '= '.rtrim(rtrim(number_format((float) $get('quantita') / 12, 2, ',', '.'), '0'), ',').' al mese'
-                                    : null)
-                                ->columnSpan(1),
-                            Forms\Components\TextInput::make('unita')
-                                ->label('Unità')->default('pz')->maxLength(16)->columnSpan(1),
-                            Forms\Components\TextInput::make('prezzo_unitario')
-                                ->label('€ unitario')->numeric()->required()->live(onBlur: true)->columnSpan(1),
-                            Forms\Components\TextInput::make('ricarico')
-                                ->label('Ricarico %')->numeric()->default(0)->live(onBlur: true)->columnSpan(1),
-                            Forms\Components\TextInput::make('note')
-                                ->label('Nota (come si è calcolata la quantità)')->maxLength(255)->columnSpan(6),
-                        ])
-                        ->itemLabel(fn (array $state): ?string => filled($state['voce'] ?? null)
-                            ? $state['voce'].' — '.rtrim(rtrim(number_format((float) ($state['quantita'] ?? 0), 3, ',', '.'), '0'), ',').' '.($state['unita'] ?? '').'/anno'
-                            : null)
-                        ->addActionLabel('Aggiungi una voce')
-                        ->defaultItems(0)
-                        ->columnSpanFull(),
                 ]),
+
+            // Tre elenchi invece di uno con la tendina del gruppo su ogni
+            // riga: il caffe' si legge insieme al caffe' e i detergenti
+            // insieme ai detergenti, e ogni sezione sa gia' cosa contiene
+            // (Laura, 07/10/2026). Sono la stessa relazione filtrata: ognuno
+            // vede e cancella solo le proprie righe.
+            Forms\Components\Section::make('Caffè')
+                ->description('Caffè in grani e decaffeinato, dal listino.')
+                ->collapsible()
+                ->schema([static::ripetitoreForniture(NoleggioFornitura::GRUPPO_CAFFE)]),
+
+            Forms\Components\Section::make('Polveri e solubili')
+                ->description('Cioccolato, orzo, latte in polvere: dal listino, fra i liofilizzati.')
+                ->collapsible()
+                ->schema([static::ripetitoreForniture(NoleggioFornitura::GRUPPO_POLVERI)]),
+
+            Forms\Components\Section::make('Detergenti e igiene')
+                ->description('Dal magazzino materiali, oppure scritti a mano se non sono a catalogo.')
+                ->collapsible()
+                ->schema([static::ripetitoreForniture(NoleggioFornitura::GRUPPO_DETERGENTI)]),
 
             Forms\Components\Section::make('Il canone')
                 ->schema([
@@ -325,6 +230,126 @@ class NoleggioResource extends Resource
      * pareggio e lo scoperto a meta' contratto: il canone da solo non dice
      * quanto si rischia se il cliente disdice prima.
      */
+    /**
+     * L'elenco delle forniture di un gruppo: stessa relazione, filtrata.
+     *
+     * Ogni ripetitore vede e cancella solo le righe del proprio gruppo
+     * (Filament filtra anche l'elenco dei record esistenti su cui decide le
+     * cancellazioni), e il gruppo lo impone la sezione invece di chiederlo
+     * riga per riga con una tendina.
+     */
+    public static function ripetitoreForniture(string $gruppo): Forms\Components\Repeater
+    {
+        return Forms\Components\Repeater::make('forniture_'.$gruppo)
+            // Il filtro si passa a relationship(): e' il secondo argomento,
+            // non un metodo a parte.
+            ->relationship('forniture', fn ($query) => $query->where('gruppo', $gruppo))
+            ->label('')
+            ->columns(6)
+            ->mutateRelationshipDataBeforeCreateUsing(fn (array $data) => array_merge($data, ['gruppo' => $gruppo]))
+            ->mutateRelationshipDataBeforeSaveUsing(fn (array $data) => array_merge($data, ['gruppo' => $gruppo]))
+            ->schema([
+                static::sceltaProdotto($gruppo),
+                Forms\Components\TextInput::make('voce')
+                    ->label('Voce')->required()->maxLength(255)->columnSpan(3),
+                // Si scrive quello che il contratto promette -- "890 kg di
+                // caffe' all'anno" -- e il mensile lo calcola il programma.
+                Forms\Components\TextInput::make('quantita')
+                    ->label('Q.tà/anno')->numeric()->required()->live(onBlur: true)
+                    ->helperText(fn (Get $get) => filled($get('quantita'))
+                        ? '= '.rtrim(rtrim(number_format((float) $get('quantita') / 12, 2, ',', '.'), '0'), ',').' al mese'
+                        : null)
+                    ->columnSpan(1),
+                Forms\Components\TextInput::make('unita')
+                    ->label('Unità')->default('pz')->maxLength(16)->columnSpan(1),
+                Forms\Components\TextInput::make('prezzo_unitario')
+                    ->label('€ unitario')->numeric()->required()->live(onBlur: true)->columnSpan(1),
+                Forms\Components\TextInput::make('ricarico')
+                    ->label('Ricarico %')->numeric()->default(0)->live(onBlur: true)->columnSpan(1),
+                Forms\Components\TextInput::make('note')
+                    ->label('Nota (come si è calcolata la quantità)')->maxLength(255)->columnSpan(6),
+            ])
+            ->itemLabel(fn (array $state): ?string => filled($state['voce'] ?? null)
+                ? $state['voce'].' — '.rtrim(rtrim(number_format((float) ($state['quantita'] ?? 0), 3, ',', '.'), '0'), ',').' '.($state['unita'] ?? '').'/anno'
+                : null)
+            ->addActionLabel('Aggiungi una voce')
+            ->defaultItems(0)
+            ->columnSpanFull();
+    }
+
+    /**
+     * Da dove si pesca la voce: caffe' e polveri stanno nel listino (e sono
+     * due gruppi diversi dello stesso listino), i detergenti nel magazzino.
+     * Una tendina sola per sezione, quella giusta.
+     */
+    protected static function sceltaProdotto(string $gruppo): Forms\Components\Select
+    {
+        if ($gruppo === NoleggioFornitura::GRUPPO_DETERGENTI) {
+            return Forms\Components\Select::make('material_id')
+                ->label('Dal magazzino materiali')
+                // Ricerca sul server: i materiali sono 3.600 e un menu non li
+                // tiene. Il codice sta in testa perche' e' quello che si digita.
+                ->searchable()
+                ->getSearchResultsUsing(fn (string $search) => Material::query()
+                    ->where(fn ($q) => $q->where('code', 'like', "%{$search}%")
+                        ->orWhere('type', 'like', "%{$search}%")
+                        ->orWhere('variant', 'like', "%{$search}%"))
+                    ->orderBy('code')->limit(50)->get()
+                    ->mapWithKeys(fn (Material $m) => [$m->id => static::etichettaMateriale($m)])
+                    ->all())
+                ->getOptionLabelUsing(fn ($value) => ($m = Material::find($value))
+                    ? static::etichettaMateriale($m)
+                    : null)
+                ->live()
+                ->afterStateUpdated(function (Forms\Set $set, $state) {
+                    if (! $state || ! ($m = Material::find($state))) {
+                        return;
+                    }
+                    $set('voce', $m->display_label ?: $m->code);
+                    // Due terzi del magazzino non ha un prezzo di listino:
+                    // azzerare quello scritto a mano farebbe sparire il costo
+                    // dal canone senza dirlo.
+                    if ((float) $m->list_price > 0) {
+                        $set('prezzo_unitario', (float) $m->list_price);
+                    }
+                })
+                ->columnSpan(3);
+        }
+
+        // Nel listino caffe' i liofilizzati (cioccolato, orzo, deca solubile)
+        // stanno in un gruppo a parte: ogni sezione vede solo i suoi.
+        $gruppoListino = $gruppo === NoleggioFornitura::GRUPPO_POLVERI ? 'liofilizzati' : 'caffe';
+
+        return Forms\Components\Select::make('prodotto_caffe_id')
+            ->label('Dal listino')
+            ->options(fn () => ProdottoCaffe::query()->where('attivo', true)->where('gruppo', $gruppoListino)
+                ->orderBy('ordinamento')->get()
+                ->mapWithKeys(fn (ProdottoCaffe $p) => [
+                    $p->id => $p->nome.' — '.$p->formato.' — € '.number_format((float) $p->prezzo, 2, ',', '.'),
+                ])->all())
+            ->searchable()
+            ->live()
+            // Le righe inserite prima che il riferimento esistesse non ce
+            // l'hanno: lo si ritrova dal nome, cosi' la tendina mostra subito
+            // la voce giusta invece di sembrare mai compilata.
+            ->afterStateHydrated(function (Forms\Components\Select $component, Get $get, $state) {
+                if (filled($state) || blank($voce = $get('voce'))) {
+                    return;
+                }
+
+                $component->state(ProdottoCaffe::where('nome', $voce)->value('id'));
+            })
+            ->afterStateUpdated(function (Forms\Set $set, $state) {
+                if (! $state || ! ($p = ProdottoCaffe::find($state))) {
+                    return;
+                }
+                $set('voce', $p->nome);
+                $set('unita', $p->formato);
+                $set('prezzo_unitario', (float) $p->prezzo);
+            })
+            ->columnSpan(3);
+    }
+
     protected static function anteprima(Get $get): string
     {
         $n = new Noleggio([
@@ -338,6 +363,8 @@ class NoleggioResource extends Resource
             'ricarico_caffe' => (float) $get('ricarico_caffe'),
             'valore_residuo' => (float) $get('valore_residuo'),
             'full_service_percentuale' => (float) ($get('full_service_percentuale') ?: 10),
+            'ammortamento_base' => $get('ammortamento_base') ?: 'costo',
+            'ammortamento_mesi' => $get('ammortamento_mesi') ?: null,
         ]);
         $r = $n->ricalcola();
         $eur = fn ($v) => '€ '.number_format((float) $v, 2, ',', '.');
@@ -345,11 +372,16 @@ class NoleggioResource extends Resource
 
         // I totali per gruppo si leggono dalle righe del ripetitore, cosi' si
         // muovono mentre si digita invece che al salvataggio.
-        $perGruppo = collect($get('forniture') ?? [])
-            ->groupBy(fn ($f) => $f['gruppo'] ?? 'consumabili')
-            ->map(fn ($g) => $g->sum(fn ($f) => (float) ($f['quantita'] ?? 0)
-                * (float) ($f['prezzo_unitario'] ?? 0)
-                * (1 + (float) ($f['ricarico'] ?? 0) / 100)));
+        $perGruppo = collect(array_keys(NoleggioFornitura::gruppiLabels()))
+            ->mapWithKeys(fn (string $gruppo) => [
+                // Diviso dodici: le quantita' sono annue e qui si mostra il
+                // mese. Senza, i detergenti uscivano 1.191,69 al posto di
+                // 99,31 -- il totale di un anno spacciato per mensile.
+                $gruppo => collect($get('forniture_'.$gruppo) ?? [])
+                    ->sum(fn ($f) => (float) ($f['quantita'] ?? 0) / 12
+                        * (float) ($f['prezzo_unitario'] ?? 0)
+                        * (1 + (float) ($f['ricarico'] ?? 0) / 100)),
+            ]);
 
         $righe = [
             ['Quota macchina', $eur($r->quotaMacchina)],
@@ -569,8 +601,11 @@ class NoleggioResource extends Resource
     {
         return [
             'index' => NoleggioResource\Pages\ListNoleggi::route('/'),
-            'view' => NoleggioResource\Pages\ViewNoleggio::route('/{record}'),
+            // "create" PRIMA di "view": /{record} intercetta qualunque cosa,
+            // /create compreso, e la pagina di creazione rispondeva 404
+            // cercando un noleggio chiamato "create" (07/10/2026).
             'create' => NoleggioResource\Pages\CreateNoleggio::route('/create'),
+            'view' => NoleggioResource\Pages\ViewNoleggio::route('/{record}'),
             'edit' => NoleggioResource\Pages\EditNoleggio::route('/{record}/edit'),
         ];
     }

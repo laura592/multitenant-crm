@@ -63,14 +63,27 @@ final class CanoneOperativo
         float $ricaricoDetergenti = 0.0,
         float $caffeMese = 0.0,
         float $ricaricoCaffe = 0.0,
+        /** Quanto si vuole recuperare della macchina: di norma il costo, ma
+         *  si puo' ammortizzare il listino. Null = il costo. */
+        ?float $valoreDaAmmortizzare = null,
+        /** In quanti mesi recuperarlo: null = la durata del contratto. Un
+         *  contratto di cinque anni puo' voler rientrare in tre. */
+        ?int $mesiAmmortamento = null,
     ): self {
         $mesi = max(1, $mesi);
         $costoMacchina = max(0.0, $costoMacchina);
-        // Un residuo piu' alto del costo renderebbe negativa la quota
-        // macchina, cioe' il cliente pagherebbe meno del servizio.
-        $valoreResiduo = max(0.0, min($valoreResiduo, $costoMacchina));
 
-        $quotaMacchina = ($costoMacchina - $valoreResiduo) / $mesi * (1 + $margine);
+        $base = max(0.0, $valoreDaAmmortizzare ?? $costoMacchina);
+        $mesiAmmortamento = max(1, $mesiAmmortamento ?? $mesi);
+
+        // Un residuo piu' alto di quello che si ammortizza renderebbe negativa
+        // la quota macchina, cioe' il cliente pagherebbe meno del servizio.
+        $valoreResiduo = max(0.0, min($valoreResiduo, $base));
+
+        // L'ammortamento puo' chiudersi prima del contratto: dal mese
+        // successivo la quota resta nel canone ed e' tutta margine, ed e'
+        // proprio il motivo per cui si sceglie di rientrare in tre anni.
+        $quotaMacchina = ($base - $valoreResiduo) / $mesiAmmortamento * (1 + $margine);
         $quotaServizio = $listinoMacchina * ($fullServiceAnnuo ?? self::FULL_SERVICE_ANNUO) / 12;
         // I detergenti hanno una leva propria: se i 100 euro al mese sono un
         // costo e non un prezzo, su di essi non si guadagna niente — ed e' la
