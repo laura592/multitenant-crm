@@ -19,6 +19,7 @@ use App\Jobs\SincronizzaGestionaleJob;
 use App\Jobs\SweepEurekaMaterialsCatalogJob;
 use App\Models\EsecuzioneEureka;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
+use Filament\Actions;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Forms;
@@ -67,7 +68,10 @@ class GestionaleSyncReview extends Page
 
     public function getSubheading(): ?string
     {
-        return 'Risultati dell\'ultimo controllo automatico con Eureka: differenze da rivedere e nuovi collegamenti proposti, mai scritti su Eureka ne\' assegnati da soli.';
+        // Corto di proposito: accanto ci stanno i bottoni, e un sottotitolo
+        // lungo si spezza su quattro righe. Quel che conta e' la
+        // rassicurazione, non l'elenco di cosa c'e' sotto (Laura, 07/10/2026).
+        return 'Niente viene scritto su Eureka né assegnato da solo: qui si decide.';
     }
 
     // Il default di Filament (2 colonne) stringe ogni tabella a meta' pagina:
@@ -92,6 +96,9 @@ class GestionaleSyncReview extends Page
     protected function getHeaderActions(): array
     {
         return [
+            // Uno solo in evidenza: gli altri quattro si usano di rado e
+            // affiancati rubavano al sottotitolo la larghezza per stare su
+            // una riga.
             // Lo stesso sync delle 03:00, subito (22/09/2026).
             Action::make('sincronizzaOra')
                 ->label('Sincronizza ora')
@@ -116,6 +123,7 @@ class GestionaleSyncReview extends Page
                         ->success()
                         ->send();
                 }),
+            Actions\ActionGroup::make([
             Action::make('importaRapportiniEureka')
                 ->label('Importa rapportini da Eureka')
                 ->icon('heroicon-o-arrow-down-tray')
@@ -201,6 +209,11 @@ class GestionaleSyncReview extends Page
                         ->success()
                         ->send();
                 }),
+            ])
+                ->label('Altre operazioni')
+                ->icon('heroicon-o-ellipsis-horizontal')
+                ->button()
+                ->color('gray'),
         ];
     }
 
