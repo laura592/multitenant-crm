@@ -43,6 +43,12 @@ class ConfigureMachineAction
         'grinder' => 'Macinacaffè',
         'powder' => 'Dosatori polvere',
         'steam' => 'Lancia vapore',
+        // Passo suo e non mescolati agli accessori: un lettore di monete non
+        // e' un kit di pulizia, e a catalogo ce ne sono 55 fra gettoniere,
+        // cambiamonete e alloggiamenti per i vari lettori. Mescolati
+        // renderebbero illeggibile il passo degli accessori
+        // (Laura, 07/10/2026).
+        'payment' => 'Sistemi di pagamento',
         'addon' => 'Accessori aggiuntivi',
         'color' => 'Colore/Estetica',
         'power' => 'Alimentazione',
