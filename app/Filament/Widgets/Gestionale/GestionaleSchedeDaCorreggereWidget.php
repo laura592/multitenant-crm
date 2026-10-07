@@ -87,23 +87,27 @@ class GestionaleSchedeDaCorreggereWidget extends BaseWidget
                     ->label('Rapportino')
                     ->weight('medium')
                     ->searchable()
+                    // Il numero del gestionale sotto, non in una colonna sua:
+                    // sette colonne di nomi lunghi non ci stanno, e questi due
+                    // numeri si leggono comunque insieme.
+                    ->description(fn (ServiceReport $record) => $record->gestionale_number
+                        ? 'gestionale '.$record->gestionale_number
+                        : null)
                     ->url(fn (ServiceReport $record) => ServiceReportResource::getUrl('view', ['record' => $record])),
-
-                Tables\Columns\TextColumn::make('gestionale_number')
-                    ->label('N. gestionale')
-                    ->searchable()
-                    ->placeholder('—'),
 
                 Tables\Columns\TextColumn::make('intervention_date')
                     ->label('Data')
                     ->date('d/m/Y')
                     ->sortable(),
 
+                // Le ragioni sociali mandate a capo facevano righe di tre o
+                // quattro linee: si troncano e il nome intero sta nel tooltip.
                 Tables\Columns\TextColumn::make('customer.company_name')
                     ->label('Cliente')
                     ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state))
                     ->searchable()
-                    ->wrap(),
+                    ->limit(26)
+                    ->tooltip(fn (ServiceReport $record) => DisplayName::titleCase($record->customer?->company_name)),
 
                 Tables\Columns\TextColumn::make('pagante_scheda')
                     ->label('Pagante sulla scheda')
@@ -113,14 +117,20 @@ class GestionaleSchedeDaCorreggereWidget extends BaseWidget
                     // 2911 = Acquasalsa, scritto "ILLY CAFFE' SPA"): il CRM
                     // segue il codice, qui si mostra anche cosa c'e' scritto.
                     ->description(fn (ServiceReport $record) => static::scrittoSullaScheda($record))
-                    ->wrap(),
+                    ->limit(26)
+                    ->tooltip(fn (ServiceReport $record) => DisplayName::titleCase(
+                        rescue(fn () => $record->invoiceRecipient()->company_name, null, false)
+                    )),
 
                 Tables\Columns\TextColumn::make('pagante_fattura')
                     ->label('Fattura intestata a')
                     ->state(fn (ServiceReport $record) => DisplayName::titleCase(Customer::withoutGlobalScopes()->whereKey($record->pagante_fattura_customer_id)->value('company_name')))
                     ->weight('medium')
                     ->color('danger')
-                    ->wrap(),
+                    ->limit(26)
+                    ->tooltip(fn (ServiceReport $record) => DisplayName::titleCase(
+                        Customer::withoutGlobalScopes()->whereKey($record->pagante_fattura_customer_id)->value('company_name')
+                    )),
 
                 Tables\Columns\TextColumn::make('fattura')
                     ->label('Fattura')

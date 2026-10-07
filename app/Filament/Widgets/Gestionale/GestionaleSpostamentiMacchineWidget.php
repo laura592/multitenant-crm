@@ -38,6 +38,24 @@ class GestionaleSpostamentiMacchineWidget extends BaseWidget
         return MachineUnit::query()->whereNotNull('spostamento_suggerito_motivo');
     }
 
+    /**
+     * L'ultimo rapportino della macchina, cercato una volta sola: la colonna
+     * lo usa per il testo, per la descrizione e per il colore, e senza
+     * memoria erano tre query per riga.
+     *
+     * @var array<string, ?ServiceReport>
+     */
+    private static array $ultimiInterventi = [];
+
+    private static function ultimoIntervento(MachineUnit $record): ?ServiceReport
+    {
+        return static::$ultimiInterventi[$record->id] ??= ServiceReport::query()
+            ->with('customer')
+            ->where('machine_unit_id', $record->id)
+            ->latest('intervention_date')
+            ->first();
+    }
+
     public function table(Table $table): Table
     {
         return $table
@@ -70,26 +88,29 @@ class GestionaleSpostamentiMacchineWidget extends BaseWidget
                     ->date('d/m/Y')
                     ->sortable(),
 
+                // Data sopra e cliente sotto, non "28/09/2026 — Hotel Greif"
+                // in una cella sola: la stringa unica mandava a capo e
+                // raddoppiava l'altezza di ogni riga. L'ultimo intervento si
+                // cerca una volta per riga e non due (prima lo rifaceva il
+                // colore).
                 Tables\Columns\TextColumn::make('ultimo_intervento')
                     ->label('Ultimo intervento')
-                    ->state(function (MachineUnit $record): ?string {
-                        $r = ServiceReport::query()->with('customer')
-                            ->where('machine_unit_id', $record->id)
-                            ->latest('intervention_date')->first();
-
-                        return $r ? $r->intervention_date->format('d/m/Y').' — '.DisplayName::titleCase($r->customer?->company_name) : null;
-                    })
-                    ->color(function (MachineUnit $record): string {
-                        $presso = ServiceReport::query()->where('machine_unit_id', $record->id)
-                            ->latest('intervention_date')->value('customer_id');
-
-                        return $presso === $record->spostamento_suggerito_customer_id ? 'success' : 'gray';
-                    })
+                    ->state(fn (MachineUnit $record) => static::ultimoIntervento($record)?->intervention_date?->format('d/m/Y'))
+                    ->description(fn (MachineUnit $record) => DisplayName::titleCase(
+                        static::ultimoIntervento($record)?->customer?->company_name
+                    ))
+                    ->color(fn (MachineUnit $record): string => static::ultimoIntervento($record)?->customer_id === $record->spostamento_suggerito_customer_id
+                        ? 'success'
+                        : 'gray')
                     ->placeholder('—'),
 
+                // Troncato, con il testo intero nel tooltip: e' una frase
+                // lunga ("ritirata il ... (rapportino ...), ma vista li' il
+                // ...") e mandata a capo faceva righe alte tre volte.
                 Tables\Columns\TextColumn::make('spostamento_suggerito_motivo')
                     ->label('Perché')
-                    ->wrap()
+                    ->limit(52)
+                    ->tooltip(fn (MachineUnit $record) => $record->spostamento_suggerito_motivo)
                     ->color('gray'),
             ])
             ->actions([
