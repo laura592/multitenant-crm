@@ -98,6 +98,23 @@ class QuoteResource extends Resource
                         ->formatStateUsing(fn (string $state) => static::statusLabels()[$state] ?? ucfirst($state))
                         ->color(fn (string $state) => static::statusColors()[$state] ?? 'gray')
                         ->columnSpan(['default' => 1, 'lg' => 3]),
+                    // Come si paga: si imposta in modifica ma qui non si
+                    // leggeva, e su un preventivo e' un dato che si guarda
+                    // prima del totale (Laura, 07/10/2026).
+                    TextEntry::make('payment_method')
+                        ->label('Pagamento')
+                        ->formatStateUsing(fn (?string $state) => $state
+                            ? (PaymentMethod::where('slug', $state)->value('name') ?: $state)
+                            : null)
+                        ->placeholder('non indicato')
+                        ->columnSpan(['default' => 1, 'lg' => 6]),
+                    TextEntry::make('rental_monthly_fee')
+                        ->label('Canone noleggio')
+                        ->money('EUR')
+                        ->suffix(fn (Quote $record) => $record->rental_months ? ' × '.$record->rental_months.' mesi' : null)
+                        ->visible(fn (Quote $record) => $record->payment_method === 'noleggio-operativo'
+                            && filled($record->rental_monthly_fee))
+                        ->columnSpan(['default' => 1, 'lg' => 6]),
                 ]),
             // Tab "Dati preventivo" / "Righe preventivo": stessa suddivisione e
             // stessa etichettatura della pagina di Modifica (dove "Dati
