@@ -99,10 +99,12 @@ class ViewNoleggio extends ViewRecord
                                     .e(NoleggioFornitura::gruppiLabels()[$g] ?? $g)
                                     .' — € '.number_format((float) $voci->sum('costo_mensile'), 2, ',', '.').'</div>';
                                 foreach ($voci as $v) {
+                                    // La quantita' e' annua, il costo a destra e' mensile:
+                                    // senza dirlo la riga sembra sbagliata di dodici volte.
                                     $q = rtrim(rtrim(number_format((float) $v->quantita, 3, ',', '.'), '0'), ',');
-                                    $out .= '<div style="padding-left:14px;">'.e($v->voce).' — '.$q.' '.e($v->unita)
+                                    $out .= '<div style="padding-left:14px;">'.e($v->voce).' — '.$q.' '.e($v->unita).'/anno'
                                         .' × € '.number_format((float) $v->prezzo_unitario, 4, ',', '.')
-                                        .' = <strong>€ '.number_format((float) $v->costo_mensile, 2, ',', '.').'</strong>'
+                                        .' = <strong>€ '.number_format((float) $v->costo_mensile, 2, ',', '.').'</strong>/mese'
                                         .(filled($v->note) ? '<span style="opacity:.65;"> — '.e($v->note).'</span>' : '')
                                         .'</div>';
                                 }

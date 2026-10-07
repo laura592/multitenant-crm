@@ -56,8 +56,10 @@ class NoleggioFornitura extends Model
     protected static function booted(): void
     {
         static::saving(function (self $f) {
+            // La quantita' e' ANNUA (e' quella che il contratto promette):
+            // il costo mensile la divide per dodici.
             $f->costo_mensile = round(
-                (float) $f->quantita * (float) $f->prezzo_unitario * (1 + (float) $f->ricarico / 100),
+                (float) $f->quantita / 12 * (float) $f->prezzo_unitario * (1 + (float) $f->ricarico / 100),
                 2,
             );
         });

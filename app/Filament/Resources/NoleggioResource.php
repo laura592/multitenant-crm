@@ -145,7 +145,7 @@ class NoleggioResource extends Resource
                 ]),
 
             Forms\Components\Section::make('Cosa comprende il canone')
-                ->description('Una riga per voce: è quello che il contratto promette al cliente, e il canone la somma. Se ci sono righe, gli importi complessivi di detergenti e caffè qui sopra vengono ignorati.')
+                ->description('Una riga per voce, nelle quantità ANNUE che il contratto promette al cliente: il costo mensile lo calcola il programma. Se ci sono righe, gli importi complessivi di detergenti e caffè qui sopra vengono ignorati.')
                 ->schema([
                     // Da dove vengono le quantita'. Senza, fra due anni
                     // nessuno sa piu' perche' erano 900 kg di caffe' e non
@@ -259,8 +259,17 @@ class NoleggioResource extends Resource
                                 ->columnSpan(3),
                             Forms\Components\TextInput::make('voce')
                                 ->label('Voce')->required()->maxLength(255)->columnSpan(3),
+                            // Si scrive quello che il contratto promette --
+                            // "890 kg di caffe' all'anno" -- e il mensile lo
+                            // calcola il programma. Prima si scriveva al mese
+                            // e chi compilava divideva per dodici a mente
+                            // (Laura, 07/10/2026).
                             Forms\Components\TextInput::make('quantita')
-                                ->label('Q.tà/mese')->numeric()->required()->live(onBlur: true)->columnSpan(1),
+                                ->label('Q.tà/anno')->numeric()->required()->live(onBlur: true)
+                                ->helperText(fn (Get $get) => filled($get('quantita'))
+                                    ? '= '.rtrim(rtrim(number_format((float) $get('quantita') / 12, 2, ',', '.'), '0'), ',').' al mese'
+                                    : null)
+                                ->columnSpan(1),
                             Forms\Components\TextInput::make('unita')
                                 ->label('Unità')->default('pz')->maxLength(16)->columnSpan(1),
                             Forms\Components\TextInput::make('prezzo_unitario')
@@ -271,7 +280,7 @@ class NoleggioResource extends Resource
                                 ->label('Nota (come si è calcolata la quantità)')->maxLength(255)->columnSpan(6),
                         ])
                         ->itemLabel(fn (array $state): ?string => filled($state['voce'] ?? null)
-                            ? $state['voce'].' — '.rtrim(rtrim(number_format((float) ($state['quantita'] ?? 0), 3, ',', '.'), '0'), ',').' '.($state['unita'] ?? '')
+                            ? $state['voce'].' — '.rtrim(rtrim(number_format((float) ($state['quantita'] ?? 0), 3, ',', '.'), '0'), ',').' '.($state['unita'] ?? '').'/anno'
                             : null)
                         ->addActionLabel('Aggiungi una voce')
                         ->defaultItems(0)

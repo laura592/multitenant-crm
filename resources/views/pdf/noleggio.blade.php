@@ -64,7 +64,9 @@
         // Quando l'unita' e' una confezione con una pezzatura ("500 g",
         // "250 g") ci vuole il "per"; quando e' una misura o un pezzo, no.
         $quantita = function ($r) {
-            $annua = (float) $r->quantita * 12;
+            // La quantita' salvata e' gia' annua: e' cosi' che si scrive nel
+            // prospetto, perche' e' cosi' che la si promette qui.
+            $annua = (float) $r->quantita;
 
             // Mai zero: una fornitura prevista ma minima si arrotonda per
             // eccesso all'unita', altrimenti il contratto la nega.
