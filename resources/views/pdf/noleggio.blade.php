@@ -88,7 +88,15 @@
 
     {{-- Il numero sul documento: e' cosi' che il contratto si richiama in
          una mail o al telefono, e lo stesso numero si cerca nel gestionale. --}}
-    <h1 class="titolo">CONTRATTO DI NOLEGGIO OPERATIVO@if (filled($noleggio->number)) <span style="font-size:14px;">N. {{ $noleggio->number }}</span>@endif</h1>
+    {{-- Il numero si compone nel PHP e non con un @if attaccato al titolo:
+         Blade non compila una direttiva appiccicata a una lettera
+         ("OPERATIVO@if"), compila solo l'@endif, e la vista va in errore di
+         sintassi. Ci sono gia' cascato stamattina. --}}
+    @php
+        $titolo = 'CONTRATTO DI NOLEGGIO OPERATIVO'
+            .(filled($noleggio->number) ? ' <span style="font-size:14px;">N. '.e($noleggio->number).'</span>' : '');
+    @endphp
+    <h1 class="titolo">{!! $titolo !!}</h1>
     <h2 class="sottotitolo">Fornitura in uso di attrezzatura professionale per la somministrazione di caffè,
         con assistenza tecnica e forniture di consumo comprese nel canone</h2>
 
