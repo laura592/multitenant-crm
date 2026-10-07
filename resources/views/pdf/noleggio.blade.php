@@ -123,9 +123,9 @@
          davvero, invece di discuterne a memoria (Laura, 07/10/2026). --}}
     @if (filled($noleggio->base_consumo))
         <p>Il canone è determinato su un <strong>utilizzo stimato di {{ $noleggio->base_consumo }}</strong>.
-            In corso di contratto il canone e i quantitativi di cui all'art. 5 possono essere
-            <strong>adeguati sulla base dei consumi effettivamente rilevati</strong>, con accordo scritto
-            fra le parti.</p>
+            Alla fine di ogni anno di contratto il Fornitore rileva i consumi effettivi e procede al
+            <strong>conguaglio</strong>: le quantità eccedenti quelle indicate all'art. 5 sono fatturate
+            a consumo, e il canone dell'anno successivo è adeguato ai consumi rilevati.</p>
     @endif
 
     <h3 class="art">Art. 4 – Fatturazione e pagamento</h3>
@@ -162,7 +162,8 @@
     <ul>
         <li>Le <strong>predisposizioni</strong> necessarie all'installazione — punto acqua, scarico e alimentazione
             elettrica — che restano a carico del Cliente e devono essere realizzate prima dell'intervento.</li>
-        <li>I <strong>quantitativi di fornitura eccedenti</strong> quelli indicati all'art. 5, che sono fatturati a consumo.</li>
+        <li>I <strong>quantitativi di fornitura eccedenti</strong> quelli indicati all'art. 5, che sono
+            fatturati a consumo con il conguaglio annuale di cui all'art. 3.</li>
         <li>Il <strong>latte</strong> e gli altri ingredienti non espressamente elencati all'art. 5.</li>
         {{-- Detto per nome: "ingredienti" non copre un bicchiere, e dare per
              scontato che i consumabili siano compresi e' esattamente il
