@@ -55,19 +55,19 @@
 
             <div class="mt-6 flex items-center justify-between gap-3 border-t border-gray-950/5 pt-4 dark:border-white/10">
                 @php
-                    $groups = [
-                        'notify_information_request_emails' => count($this->data['notify_information_request_emails'] ?? []),
-                        'notify_leave_request_emails' => count($this->data['notify_leave_request_emails'] ?? []),
-                        'notify_quote_emails' => count($this->data['notify_quote_emails'] ?? []),
-                        'notify_quote_group_emails' => count($this->data['notify_quote_group_emails'] ?? []),
-                    ];
+                    // Contate dal modulo, non da un elenco scritto a mano: era
+                    // fermo alle quattro liste di quando la pagina e' nata, e
+                    // intanto sono diventate il triplo.
+                    $liste = collect($this->data)
+                        ->filter(fn ($valore, $chiave) => str_starts_with($chiave, 'notify_'));
 
-                    $configuredGroups = collect($groups)->filter(fn ($groupCount) => $groupCount > 0)->count();
+                    $configuredGroups = $liste->filter(fn ($valore) => filled($valore))->count();
+                    $totaleListe = $liste->count();
                 @endphp
 
                 @if ($configuredGroups > 0)
                     <p class="text-sm text-gray-500 dark:text-gray-400">
-                        {{ $configuredGroups }} {{ $configuredGroups === 1 ? 'gruppo configurato' : 'gruppi configurati' }} su 4
+                        {{ $configuredGroups }} {{ $configuredGroups === 1 ? 'elenco compilato' : 'elenchi compilati' }} su {{ $totaleListe }}
                     </p>
                 @else
                     <p class="flex items-center gap-1.5 text-sm text-warning-600 dark:text-warning-400">
@@ -76,7 +76,14 @@
                     </p>
                 @endif
 
-                <x-filament::button type="submit" icon="heroicon-o-check" data-tour="notification-settings-save">
+                {{-- wire:target: senza, il bottone non sa quale chiamata
+                     aspettare e resta muto e ripremibile mentre salva. --}}
+                <x-filament::button
+                    type="submit"
+                    wire:target="save"
+                    icon="heroicon-o-check"
+                    data-tour="notification-settings-save"
+                >
                     Salva
                 </x-filament::button>
             </div>
