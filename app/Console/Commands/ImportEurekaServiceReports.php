@@ -792,16 +792,19 @@ class ImportEurekaServiceReports extends Command
             return false;
         }
 
-        $chiave = fn ($codice, $quantita) => mb_strtoupper(trim((string) $codice)).' x'.(float) $quantita;
+        // Si confronta l'ID ARTICOLO di Eureka, non il codice: sulle righe
+        // di dettaglio "codice" torna vuoto (il codice sta solo
+        // sull'articolo di testata), mentre id_articolo c'e' sempre.
+        $chiave = fn ($id, $quantita) => ((int) $id).' x'.(float) $quantita;
 
         $daEureka = collect($detail['dettaglio'] ?? [])
             ->map(fn ($r) => $chiave(
-                $r['articolo']['codice'] ?? $r['codice_articolo'] ?? '',
+                $r['id_articolo'] ?? ($r['articolo']['id_eureka'] ?? 0),
                 $r['quantita'] ?? 0
             ))->sort()->values()->all();
 
         $nelCrm = $report->materialsUsed()->with('material')->get()
-            ->map(fn ($m) => $chiave($m->material?->code, $m->quantity))
+            ->map(fn ($m) => $chiave($m->material?->eureka_article_id, $m->quantity))
             ->sort()->values()->all();
 
         return $daEureka !== $nelCrm;
