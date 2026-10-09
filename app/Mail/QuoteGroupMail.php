@@ -29,16 +29,16 @@ class QuoteGroupMail extends Mailable
         // L'offerta caffe' allegata allo stesso invio, se richiesta.
         public ?string $offertaCaffePdf = null,
         public ?string $offertaCaffeNomeFile = null,
+        // Vedi QuoteMail::$clientUrl.
+        public ?string $clientUrl = null,
         /**
          * Altri PDF da spedire con l'offerta, nome => contenuto: oggi il
-         * contratto di noleggio, domani quello che servira'. Un elenco
-         * invece di una coppia di parametri per ogni documento nuovo.
+         * contratto di noleggio, domani quello che servira'. In coda perche'
+         * la chiamata lo passa per ultimo.
          *
          * @var array<string, string>
          */
         public array $allegatiExtra = [],
-        // Vedi QuoteMail::$clientUrl.
-        public ?string $clientUrl = null,
     ) {}
 
     public function envelope(): Envelope
