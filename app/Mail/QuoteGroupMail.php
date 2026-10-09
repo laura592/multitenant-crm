@@ -29,6 +29,14 @@ class QuoteGroupMail extends Mailable
         // L'offerta caffe' allegata allo stesso invio, se richiesta.
         public ?string $offertaCaffePdf = null,
         public ?string $offertaCaffeNomeFile = null,
+        /**
+         * Altri PDF da spedire con l'offerta, nome => contenuto: oggi il
+         * contratto di noleggio, domani quello che servira'. Un elenco
+         * invece di una coppia di parametri per ogni documento nuovo.
+         *
+         * @var array<string, string>
+         */
+        public array $allegatiExtra = [],
         // Vedi QuoteMail::$clientUrl.
         public ?string $clientUrl = null,
     ) {}
@@ -51,6 +59,7 @@ class QuoteGroupMail extends Mailable
                 'emailBody' => $this->emailBody,
                 'subjectText' => $this->subjectText,
                 'clientUrl' => $this->clientUrl,
+                'allegatiExtra' => array_keys($this->allegatiExtra),
             ],
         );
     }
@@ -67,6 +76,10 @@ class QuoteGroupMail extends Mailable
         if ($this->offertaCaffePdf !== null) {
             $allegati[] = Attachment::fromData(fn () => $this->offertaCaffePdf, $this->offertaCaffeNomeFile ?? 'offerta-caffe.pdf')
                 ->withMime('application/pdf');
+        }
+
+        foreach ($this->allegatiExtra as $nome => $contenuto) {
+            $allegati[] = Attachment::fromData(fn () => $contenuto, $nome)->withMime('application/pdf');
         }
 
         return $allegati;

@@ -6,6 +6,8 @@ use App\Filament\Forms\OffertaCaffeFields;
 use App\Filament\Resources\QuoteGroupResource\Pages;
 use App\Filament\Resources\QuoteGroupResource\RelationManagers\QuotesRelationManager;
 use App\Mail\QuoteGroupMail;
+use App\Filament\Resources\NoleggioResource;
+use App\Models\Noleggio;
 use App\Models\Quote;
 use App\Models\QuoteGroup;
 use App\Support\DisplayName;
@@ -165,6 +167,20 @@ class QuoteGroupResource extends Resource
                 ->label('CC (opzionale)')
                 ->email()
                 ->helperText('I destinatari fissi impostati in Impostazioni > Notifiche ricevono comunque una copia.'),
+            // Il contratto di noleggio parte con l'offerta solo se lo si
+            // chiede: su un'offerta di solo acquisto non c'entra nulla
+            // (Laura, 09/10/2026).
+            Forms\Components\Select::make('noleggio_id')
+                ->label('Allega anche il contratto di noleggio')
+                ->placeholder('nessun contratto')
+                ->options(fn (QuoteGroup $record) => Noleggio::query()
+                    ->where('customer_id', $record->customer_id)
+                    ->orderByDesc('created_at')->get()
+                    ->mapWithKeys(fn (Noleggio $n) => [
+                        $n->id => $n->number.' — '.($n->descrizione ? mb_substr($n->descrizione, 0, 50) : 'noleggio')
+                            .' — € '.number_format((float) $n->canone, 2, ',', '.').'/mese',
+                    ])->all())
+                ->visible(fn (QuoteGroup $record) => Noleggio::query()->where('customer_id', $record->customer_id)->exists()),
             Forms\Components\TextInput::make('subject')
                 ->label('Oggetto email')
                 ->required()
@@ -273,6 +289,22 @@ class QuoteGroupResource extends Resource
             .'</div>';
     }
 
+    /**
+     * Il contratto di noleggio scelto nel modulo, pronto da allegare.
+     *
+     * @return array<string, string>
+     */
+    protected static function contrattoDaAllegare(array $data): array
+    {
+        $noleggio = filled($data['noleggio_id'] ?? null) ? Noleggio::find($data['noleggio_id']) : null;
+
+        if (! $noleggio) {
+            return [];
+        }
+
+        return [NoleggioResource::nomeFile($noleggio) => NoleggioResource::buildPdf($noleggio)->output()];
+    }
+
     public static function sendGroupEmail(QuoteGroup $record, array $data): void
     {
         $quotes = $record->quotes()->with(['quoteProducts.product', 'quoteProducts.options.product'])->get();
@@ -311,6 +343,7 @@ class QuoteGroupResource extends Resource
                         $offertaCaffe ? OffertaCaffePdf::perOfferta($offertaCaffe)->output() : null,
                         $offertaCaffe ? OffertaCaffePdf::nomeFile($offertaCaffe) : null,
                         ($data['client_link'] ?? true) ? $record->clientUrl() : null,
+                        static::contrattoDaAllegare($data),
                     ))->subject($data['subject'] ?? static::defaultGroupEmailSubject($record))
                 );
 
