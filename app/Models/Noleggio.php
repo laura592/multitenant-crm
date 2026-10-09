@@ -40,6 +40,7 @@ class Noleggio extends Model
         'ammortamento_base', 'ammortamento_mesi', 'detergenti_mese', 'ricarico_detergenti', 'caffe_mese', 'ricarico_caffe', 'caffe_kg_mese', 'detergenti_inclusi',
         'valore_residuo', 'full_service_percentuale',
         'quota_macchina', 'quota_servizio', 'quota_detergenti', 'quota_caffe', 'quota_consumabili', 'canone', 'mese_pareggio',
+        'prezzo_battuta', 'minimo_mensile',
         'data_inizio', 'stato', 'note', 'installazione_costo',
         'periodicita_fatturazione', 'modalita_pagamento', 'termini_pagamento',
     ];
@@ -51,6 +52,7 @@ class Noleggio extends Model
         'valore_residuo' => 'decimal:2', 'full_service_percentuale' => 'decimal:2',
         'quota_macchina' => 'decimal:2', 'quota_servizio' => 'decimal:2',
         'quota_detergenti' => 'decimal:2', 'quota_consumabili' => 'decimal:2', 'canone' => 'decimal:2',
+        'prezzo_battuta' => 'decimal:4', 'minimo_mensile' => 'decimal:2',
         'mese_pareggio' => 'integer', 'data_inizio' => 'date',
     ];
 

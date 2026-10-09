@@ -221,6 +221,18 @@ class NoleggioResource extends Resource
                 ->columns(3)
                 ->schema([
                     Forms\Components\DatePicker::make('data_inizio')->label('Decorrenza'),
+                    // Vuoto = canone fisso. Con un prezzo, il contratto
+                    // cambia articolo: si fattura sulle erogazioni lette dal
+                    // contatore, non una cifra fissa al mese.
+                    Forms\Components\TextInput::make('prezzo_battuta')
+                        ->label('Prezzo a battuta (€)')
+                        ->helperText('Vuoto = canone fisso. Con un prezzo, il contratto si paga a consumo.')
+                        ->numeric()->step('0.0001')->live(onBlur: true),
+                    Forms\Components\TextInput::make('minimo_mensile')
+                        ->label('Minimo per periodo (€)')
+                        ->helperText('Senza minimo, una stagione andata male non copre nemmeno la macchina.')
+                        ->numeric()
+                        ->visible(fn (Get $get) => filled($get('prezzo_battuta'))),
                     // Finiscono nel contratto parola per parola: un noleggio
                     // senza condizioni di pagamento non si firma, e su
                     // sessanta canoni la differenza fra "30 giorni data

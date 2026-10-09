@@ -132,8 +132,24 @@
         @if($noleggio->data_inizio) con decorrenza dal {{ $noleggio->data_inizio->format('d/m/Y') }}@endif.
         Alla scadenza si intende concluso, salvo rinnovo concordato per iscritto fra le parti.</p>
 
-    <h3 class="art">Art. 3 – Canone</h3>
-    <p>Il canone è stabilito in <strong>{{ $eur($noleggio->canone) }} al mese, IVA esclusa</strong>.</p>
+    {{-- Due forme di corrispettivo: canone fisso, oppure prezzo a
+         erogazione. La seconda serve alle attivita' stagionali, dove un
+         canone fisso nei mesi vuoti e' il punto su cui si litiga
+         (Laura, 09/10/2026). --}}
+    @if (filled($noleggio->prezzo_battuta))
+        <h3 class="art">Art. 3 – Corrispettivo a consumo</h3>
+        <p>Il corrispettivo è stabilito in <strong>{{ $eur($noleggio->prezzo_battuta) }} per ogni erogazione</strong>,
+            IVA esclusa, ed è comprensivo di quanto previsto dall'art. 5.</p>
+        <p>Le erogazioni sono rilevate dal <strong>contatore dell'attrezzatura</strong>. La fatturazione è
+            posticipata, con la periodicità indicata all'art. 4, sulle erogazioni effettive del periodo.</p>
+        @if (filled($noleggio->minimo_mensile))
+            <p>È convenuto un <strong>minimo di {{ $eur($noleggio->minimo_mensile) }} per ogni periodo di
+                fatturazione</strong>: se le erogazioni del periodo valgono meno, è dovuto il minimo.</p>
+        @endif
+    @else
+        <h3 class="art">Art. 3 – Canone</h3>
+        <p>Il canone è stabilito in <strong>{{ $eur($noleggio->canone) }} al mese, IVA esclusa</strong>.</p>
+    @endif
     {{-- Niente totale su tutta la durata: il canone mensile e' il numero che
          il cliente deve valutare, la somma dei cinque anni spaventa e non
          aggiunge nulla a cio' che il contratto stabilisce. --}}
