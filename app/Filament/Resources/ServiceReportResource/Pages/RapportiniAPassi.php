@@ -285,6 +285,10 @@ class RapportiniAPassi extends Page
             ->statePath('data')
             ->schema([
                 Forms\Components\Wizard::make(fn () => $this->passi())
+                    // Passi cliccabili: su un rapportino lungo si torna
+                    // spesso su un passo gia' compilato, e farlo uno alla
+                    // volta e' il motivo per cui si rinuncia a correggere.
+                    ->skippable()
                     ->startOnStep(fn () => $this->passoIniziale)
                     ->submitAction(new HtmlString(Blade::render(<<<'BLADE'
                         <x-filament::button type="submit" size="lg" color="success" icon="heroicon-o-check">

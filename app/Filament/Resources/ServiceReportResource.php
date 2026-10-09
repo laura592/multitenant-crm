@@ -1642,6 +1642,10 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                         // allegare decide se i prezzi escono dall'azienda, e
                         // in fondo a una colonna di campi passava come una
                         // spunta qualsiasi. Vedi sendEmailWizardSteps().
+                        // Passi cliccabili: per correggere il destinatario
+                        // dopo aver scritto il testo non si deve tornare
+                        // indietro un passo alla volta.
+                        ->skippableSteps()
                         ->steps(fn (ServiceReport $record) => static::sendEmailWizardSteps($record))
                         ->action(function (array $data, ServiceReport $record) {
                             $record->load(['customer', 'technician', 'machineProduct', 'machineMaterial', 'machineUnit.product', 'machineUnit.billingCustomer', 'partsUsed.product', 'materialsUsed.material', 'tenant']);

@@ -62,6 +62,10 @@ class ConfigureMachineAction
             ->icon('heroicon-o-cog-6-tooth')
             ->modalWidth('3xl')
             ->modalHeading('Configura macchina')
+            // Passi cliccabili: chi configura la decima macchina sa gia'
+            // dove vuole andare, e passare per tutti i passi ogni volta e'
+            // tempo perso (Laura, 07/10/2026).
+            ->skippableSteps()
             ->steps(static::buildSteps())
             ->action(function (array $data, Quote $record, $livewire) {
                 static::createQuoteProducts($record, $data);
@@ -92,6 +96,7 @@ class ConfigureMachineAction
             ->icon('heroicon-o-pencil-square')
             ->modalWidth('3xl')
             ->modalHeading('Modifica configurazione macchina')
+            ->skippableSteps()
             ->steps(static::buildSteps(conConteggio: false))
             ->visible(fn (QuoteProduct $record) => $record->isBase() && $record->product?->isMachine())
             ->fillForm(fn (QuoteProduct $record) => static::fillFormForEdit($record))
