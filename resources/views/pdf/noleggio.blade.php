@@ -68,7 +68,12 @@
         // ce l'ha sei mesi. Le quantita' si riportano alla durata vera
         // (Laura, 09/10/2026).
         $mesiFornitura = min(12, max(1, $mesi));
-        $perPeriodo = $mesiFornitura < 12;
+        // Composta qui e non con un @if in mezzo alla frase: Blade non
+        // compila una direttiva attaccata a una lettera ("contratto@else"),
+        // e finisce stampata com'e'. Ci sono gia' cascato due volte.
+        $periodoQuantita = $mesiFornitura < 12
+            ? "complessivi per i {$mesiFornitura} mesi di contratto"
+            : 'annui';
 
         $quantita = function ($r) use ($mesiFornitura) {
             // La quantita' salvata e' annua: e' cosi' che si scrive nel
@@ -178,7 +183,7 @@
             fornitura e sostituzione dei ricambi, manodopera e trasferte del personale tecnico, supporto telefonico.</li>
         @foreach ($perGruppo as $gruppo => $righe)
             <li>La fornitura di <strong>{{ mb_strtolower(\App\Models\NoleggioFornitura::gruppiLabels()[$gruppo] ?? $gruppo) }}</strong>,
-                nei quantitativi @if($perPeriodo)complessivi per i {{ $mesiFornitura }} mesi di contratto@else annui @endif
+                nei quantitativi {{ $periodoQuantita }}
                 di @foreach ($righe as $r){{ $quantita($r) }}@if(! $loop->last); @endif@endforeach.</li>
         @endforeach
         @if ($forniture->isEmpty())
