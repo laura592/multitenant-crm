@@ -41,7 +41,7 @@ class Noleggio extends Model
         'valore_residuo', 'full_service_percentuale',
         'quota_macchina', 'quota_servizio', 'quota_detergenti', 'quota_caffe', 'quota_consumabili', 'canone', 'mese_pareggio',
         'prezzo_battuta', 'minimo_mensile',
-        'data_inizio', 'stato', 'note', 'installazione_costo',
+        'data_inizio', 'stato', 'note', 'installazione_costo', 'spostamento_costo',
         'periodicita_fatturazione', 'modalita_pagamento', 'termini_pagamento',
     ];
 

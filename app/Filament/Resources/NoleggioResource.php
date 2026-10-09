@@ -182,6 +182,11 @@ class NoleggioResource extends Resource
                         ->helperText('Lasciando vuoto resta compresa nel canone. Con un importo, il contratto la sposta fra le cose escluse.')
                         ->numeric()
                         ->columnSpanFull(),
+                    Forms\Components\TextInput::make('spostamento_costo')
+                        ->label('Spostamento fra le sedi (€ per spostamento)')
+                        ->helperText('Con un importo il contratto lo autorizza e lo fattura: senza, l\'art. 7 vieta di spostare la macchina.')
+                        ->numeric()
+                        ->columnSpanFull(),
                     Forms\Components\TextInput::make('base_consumo')
                         ->label('Consumi calcolati su')
                         ->placeholder('Es. 250 colazioni al giorno')
