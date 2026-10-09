@@ -63,10 +63,17 @@
         //
         // Quando l'unita' e' una confezione con una pezzatura ("500 g",
         // "250 g") ci vuole il "per"; quando e' una misura o un pezzo, no.
-        $quantita = function ($r) {
-            // La quantita' salvata e' gia' annua: e' cosi' che si scrive nel
-            // prospetto, perche' e' cosi' che la si promette qui.
-            $annua = (float) $r->quantita;
+        // Su un contratto piu' corto dell'anno -- un noleggio di stagione --
+        // promettere "365 pastiglie all'anno" e' falso: il cliente la macchina
+        // ce l'ha sei mesi. Le quantita' si riportano alla durata vera
+        // (Laura, 09/10/2026).
+        $mesiFornitura = min(12, max(1, $mesi));
+        $perPeriodo = $mesiFornitura < 12;
+
+        $quantita = function ($r) use ($mesiFornitura) {
+            // La quantita' salvata e' annua: e' cosi' che si scrive nel
+            // prospetto. Qui si riporta alla durata del contratto.
+            $annua = (float) $r->quantita / 12 * $mesiFornitura;
 
             // Mai zero: una fornitura prevista ma minima si arrotonda per
             // eccesso all'unita', altrimenti il contratto la nega.
@@ -171,7 +178,8 @@
             fornitura e sostituzione dei ricambi, manodopera e trasferte del personale tecnico, supporto telefonico.</li>
         @foreach ($perGruppo as $gruppo => $righe)
             <li>La fornitura di <strong>{{ mb_strtolower(\App\Models\NoleggioFornitura::gruppiLabels()[$gruppo] ?? $gruppo) }}</strong>,
-                nei quantitativi annui di @foreach ($righe as $r){{ $quantita($r) }}@if(! $loop->last); @endif@endforeach.</li>
+                nei quantitativi @if($perPeriodo)complessivi per i {{ $mesiFornitura }} mesi di contratto@else annui @endif
+                di @foreach ($righe as $r){{ $quantita($r) }}@if(! $loop->last); @endif@endforeach.</li>
         @endforeach
         @if ($forniture->isEmpty())
             <li>Le forniture di consumo nei quantitativi concordati fra le parti.</li>
