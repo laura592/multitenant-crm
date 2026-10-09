@@ -224,9 +224,9 @@
                 in <strong>{{ $eur($noleggio->installazione_costo) }}</strong> una tantum, oltre IVA.</li>
         @endif
         @if (filled($noleggio->spostamento_costo))
-            <li>Lo <strong>spostamento dell'attrezzatura fra le sedi del Cliente</strong>, eseguito dal Fornitore
-                e fatturato in <strong>{{ $eur($noleggio->spostamento_costo) }} per ogni spostamento</strong>,
-                oltre IVA.</li>
+            <li>Lo <strong>spostamento dell'attrezzatura da un locale all'altro della stessa sede</strong>,
+                eseguito dal Fornitore e fatturato in
+                <strong>{{ $eur($noleggio->spostamento_costo) }} per ogni spostamento</strong>, oltre IVA.</li>
         @endif
         <li>Le <strong>predisposizioni</strong> necessarie all'installazione — punto acqua, scarico e alimentazione
             elettrica — che restano a carico del Cliente e devono essere realizzate prima dell'intervento.</li>
@@ -248,8 +248,9 @@
     <h3 class="art">Art. 7 – Proprietà e restituzione</h3>
     <p>L'attrezzatura resta di <strong>esclusiva proprietà del Fornitore</strong> per tutta la durata del contratto.
         Il Cliente non può cederla, darla in uso a terzi, spostarla in altra sede né sottoporla a modifiche senza
-        autorizzazione scritta.@if (filled($noleggio->spostamento_costo)) Fanno eccezione gli spostamenti fra le
-        sedi del Cliente, che sono eseguiti dal Fornitore e fatturati come previsto all'art. 6.@endif Alla scadenza l'attrezzatura va restituita nello stato in cui è stata consegnata,
+        autorizzazione scritta.@if (filled($noleggio->spostamento_costo)) Fanno eccezione gli
+        spostamenti all'interno della sede del Cliente, da un locale all'altro, che sono eseguiti dal
+        Fornitore e fatturati come previsto all'art. 6.@endif Alla scadenza l'attrezzatura va restituita nello stato in cui è stata consegnata,
         salvo il normale deperimento d'uso.</p>
 
     <h3 class="art">Art. 8 – Obblighi del Cliente</h3>

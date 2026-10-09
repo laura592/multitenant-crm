@@ -183,7 +183,7 @@ class NoleggioResource extends Resource
                         ->numeric()
                         ->columnSpanFull(),
                     Forms\Components\TextInput::make('spostamento_costo')
-                        ->label('Spostamento fra le sedi (€ per spostamento)')
+                        ->label('Spostamento fra i locali (€ per spostamento)')
                         ->helperText('Con un importo il contratto lo autorizza e lo fattura: senza, l\'art. 7 vieta di spostare la macchina.')
                         ->numeric()
                         ->columnSpanFull(),
