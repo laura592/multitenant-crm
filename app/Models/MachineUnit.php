@@ -75,6 +75,33 @@ class MachineUnit extends Model
 
     protected static function booted(): void
     {
+        // Corretto il bene della macchina, i rapportini devono seguirlo.
+        //
+        // Ogni rapportino conserva la propria copia dell'articolo
+        // (machine_material_id): serve a non riscrivere la storia quando una
+        // macchina viene sostituita. Ma se l'articolo era semplicemente
+        // SBAGLIATO -- una Barista A/2 registrata per anni come DC PRO 3
+        // gruppi -- quella copia perpetua l'errore su ogni scheda, e
+        // correggerla a mano uno per uno e' il genere di controllo che deve
+        // fare il programma (Laura, 09/10/2026).
+        //
+        // Si riallineano solo i rapportini che portavano il bene VECCHIO o
+        // nessuno: se uno ne indica un altro ancora, l'ha deciso qualcuno e
+        // non si tocca.
+        static::updated(function (self $macchina) {
+            if (! $macchina->wasChanged('material_id')) {
+                return;
+            }
+
+            $prima = $macchina->getOriginal('material_id');
+
+            ServiceReport::withoutGlobalScopes()
+                ->whereNull('deleted_at')
+                ->where('machine_unit_id', $macchina->id)
+                ->where(fn ($q) => $q->where('machine_material_id', $prima)->orWhereNull('machine_material_id'))
+                ->update(['machine_material_id' => $macchina->material_id]);
+        });
+
         // La FK cascadeOnDelete() del DB non scatta piu' su un soft delete
         // (e' un UPDATE, non una DELETE): replichiamo la cascata a mano sullo
         // storico posizionamenti.
