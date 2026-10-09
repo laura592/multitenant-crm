@@ -24,9 +24,14 @@ final class AllegatiEmail
     {
         return Placeholder::make('allegati_email')
             ->label('In allegato')
-            ->content(function ($record, $livewire) use ($nomi): HtmlString {
+            ->content(function (Placeholder $component) use ($nomi): HtmlString {
+                // evaluate() e non una chiamata diretta: Filament risolve i
+                // parametri delle closure per NOME ($get, $record, $set), e
+                // passandoli per posizione il secondo argomento arrivava
+                // sbagliato — l'invio del preventivo moriva con un errore di
+                // tipo (Laura, 09/10/2026).
                 $elenco = array_values(array_filter(
-                    $nomi instanceof Closure ? ($nomi($record, $livewire) ?? []) : $nomi
+                    $nomi instanceof Closure ? ($component->evaluate($nomi) ?? []) : $nomi
                 ));
 
                 if ($elenco === []) {
