@@ -27,6 +27,9 @@ class Noleggio extends Model
 
     public const STATO_BOZZA = 'bozza';
 
+    /** Mandato al cliente, in attesa che firmi. */
+    public const STATO_INVIATO = 'inviato';
+
     public const STATO_ATTIVO = 'attivo';
 
     public const STATO_CHIUSO = 'chiuso';
@@ -191,6 +194,7 @@ class Noleggio extends Model
     {
         return [
             self::STATO_BOZZA => 'Bozza',
+            self::STATO_INVIATO => 'Inviato',
             self::STATO_ATTIVO => 'Attivo',
             self::STATO_CHIUSO => 'Chiuso',
         ];

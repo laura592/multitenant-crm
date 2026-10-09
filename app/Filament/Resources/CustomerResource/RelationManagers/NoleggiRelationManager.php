@@ -61,6 +61,7 @@ class NoleggiRelationManager extends RelationManager
                     ->formatStateUsing(fn (string $state) => Noleggio::statiLabels()[$state] ?? $state)
                     ->color(fn (string $state) => match ($state) {
                         Noleggio::STATO_ATTIVO => 'success',
+                        Noleggio::STATO_INVIATO => 'info',
                         Noleggio::STATO_CHIUSO => 'gray',
                         default => 'warning',
                     }),

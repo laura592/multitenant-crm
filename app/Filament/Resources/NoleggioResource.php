@@ -489,6 +489,7 @@ class NoleggioResource extends Resource
                     ->formatStateUsing(fn (string $state) => Noleggio::statiLabels()[$state] ?? $state)
                     ->color(fn (string $state) => match ($state) {
                         Noleggio::STATO_ATTIVO => 'success',
+                        Noleggio::STATO_INVIATO => 'info',
                         Noleggio::STATO_CHIUSO => 'gray',
                         default => 'warning',
                     }),
@@ -671,6 +672,15 @@ class NoleggioResource extends Resource
                 ));
 
             static::registraInvio($record, $data);
+
+            // Come sui preventivi: partito il documento, lo stato lo dice.
+            // Restava "Bozza" anche dopo averlo mandato al cliente, e
+            // l'elenco non distingueva piu' cosa era uscito e cosa no
+            // (Laura, 09/10/2026). Solo da bozza: un contratto gia' attivo
+            // che si rimanda non torna indietro.
+            if ($record->stato === Noleggio::STATO_BOZZA) {
+                $record->update(['stato' => Noleggio::STATO_INVIATO]);
+            }
 
             Notification::make()->title('Contratto inviato')->success()->send();
         } catch (\Throwable $e) {
