@@ -176,6 +176,12 @@ class NoleggioResource extends Resource
                     // nessuno sa piu' perche' erano 890 kg di caffe' e non
                     // 600, e se il cliente raddoppia il servizio non c'e'
                     // niente a cui appellarsi per rivedere il canone.
+                    // Vuoto = compresa nel canone, come e' sempre stato.
+                    Forms\Components\TextInput::make('installazione_costo')
+                        ->label('Installazione fatturata a parte (€)')
+                        ->helperText('Lasciando vuoto resta compresa nel canone. Con un importo, il contratto la sposta fra le cose escluse.')
+                        ->numeric()
+                        ->columnSpanFull(),
                     Forms\Components\TextInput::make('base_consumo')
                         ->label('Consumi calcolati su')
                         ->placeholder('Es. 250 colazioni al giorno')

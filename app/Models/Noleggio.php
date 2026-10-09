@@ -40,7 +40,7 @@ class Noleggio extends Model
         'ammortamento_base', 'ammortamento_mesi', 'detergenti_mese', 'ricarico_detergenti', 'caffe_mese', 'ricarico_caffe', 'caffe_kg_mese', 'detergenti_inclusi',
         'valore_residuo', 'full_service_percentuale',
         'quota_macchina', 'quota_servizio', 'quota_detergenti', 'quota_caffe', 'quota_consumabili', 'canone', 'mese_pareggio',
-        'data_inizio', 'stato', 'note',
+        'data_inizio', 'stato', 'note', 'installazione_costo',
         'periodicita_fatturazione', 'modalita_pagamento', 'termini_pagamento',
     ];
 

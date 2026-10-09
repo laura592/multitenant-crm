@@ -178,7 +178,9 @@
     <h3 class="art">Art. 5 – Cosa è compreso nel canone</h3>
     <ul>
         <li>La <strong>disponibilità dell'attrezzatura</strong> indicata all'art. 1 per tutta la durata del contratto.</li>
-        <li>La <strong>consegna, l'installazione e l'allacciamento</strong> dell'attrezzatura.</li>
+        @if (blank($noleggio->installazione_costo))
+            <li>La <strong>consegna, l'installazione e l'allacciamento</strong> dell'attrezzatura.</li>
+        @endif
         <li>L'<strong>assistenza tecnica full-service</strong>: manutenzioni programmate, interventi su chiamata,
             fornitura e sostituzione dei ricambi, manodopera e trasferte del personale tecnico, supporto telefonico.</li>
         @foreach ($perGruppo as $gruppo => $righe)
@@ -197,6 +199,14 @@
 
     <h3 class="art">Art. 6 – Cosa non è compreso</h3>
     <ul>
+        {{-- Su un noleggio di stagione la macchina arriva e rientra: due
+             viaggi col tecnico non si ammortizzano in cinque mesi di canone,
+             e il contratto deve dire che si pagano a parte (Laura,
+             09/10/2026). --}}
+        @if (filled($noleggio->installazione_costo))
+            <li>La <strong>consegna, l'installazione e il ritiro</strong> dell'attrezzatura, fatturati a parte
+                in <strong>{{ $eur($noleggio->installazione_costo) }}</strong> una tantum, oltre IVA.</li>
+        @endif
         <li>Le <strong>predisposizioni</strong> necessarie all'installazione — punto acqua, scarico e alimentazione
             elettrica — che restano a carico del Cliente e devono essere realizzate prima dell'intervento.</li>
         <li>I <strong>quantitativi di fornitura eccedenti</strong> quelli indicati all'art. 5, che sono
