@@ -777,6 +777,36 @@ class ImportEurekaServiceReports extends Command
      * @param  array<string, mixed>  $detail
      * @param  array<string, Material>  $materialCache
      */
+    /**
+     * Le righe articolo della scheda Eureka dicono qualcosa di diverso da
+     * quelle gia' nel CRM?
+     *
+     * Confronto grezzo per codice articolo e quantita': non serve sapere
+     * COSA e' cambiato, basta sapere che va riallineato. Senza dettaglio
+     * (--with-detail assente) non si puo' dire nulla e si risponde di no,
+     * altrimenti ogni giro riscriverebbe tutto a vuoto.
+     */
+    private function righeCambiate(ServiceReport $report, ?array $detail): bool
+    {
+        if (! $detail || ! array_key_exists('dettaglio', $detail)) {
+            return false;
+        }
+
+        $chiave = fn ($codice, $quantita) => mb_strtoupper(trim((string) $codice)).' x'.(float) $quantita;
+
+        $daEureka = collect($detail['dettaglio'] ?? [])
+            ->map(fn ($r) => $chiave(
+                $r['articolo']['codice'] ?? $r['codice_articolo'] ?? '',
+                $r['quantita'] ?? 0
+            ))->sort()->values()->all();
+
+        $nelCrm = $report->materialsUsed()->with('material')->get()
+            ->map(fn ($m) => $chiave($m->material?->code, $m->quantity))
+            ->sort()->values()->all();
+
+        return $daEureka !== $nelCrm;
+    }
+
     private function syncDetailRows(Tenant $tenant, ServiceReport $report, array $detail, array &$materialCache): void
     {
         $report->materialsUsed()->delete();
