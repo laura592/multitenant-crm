@@ -21,6 +21,7 @@ use App\Support\DisplayName;
 use App\Support\Gestionale\FattureRapportino;
 use App\Support\Gestionale\SenzaFatturaCollegata;
 use App\Support\OutsideLivewireRender;
+use App\Support\RapportiniPerFattura;
 use App\Support\Rapportini\DividiPerMacchina;
 use App\Support\Rapportini\FirmaCliente;
 use App\Support\Rapportini\LavaggioFields;
@@ -1813,6 +1814,75 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                         }
 
                         $livewire->redirect(Pages\FirmaRapportini::urlPer($records->whereNull('customer_signature_path')));
+                    }),
+                // Un PDF per fattura, con dentro i rapportini che quella
+                // fattura ha fatturato: serve quando il cliente chiede conto
+                // di una fattura. Vedi App\Support\RapportiniPerFattura.
+                Tables\Actions\BulkAction::make('pdf_per_fattura')
+                    ->label('PDF per fattura')
+                    ->icon('heroicon-o-document-duplicate')
+                    ->color('gray')
+                    ->deselectRecordsAfterCompletion()
+                    ->action(function (\Illuminate\Support\Collection $records) {
+                        // I prezzi: chi non li puo' vedere ha il PDF senza,
+                        // come la stampa del singolo rapportino. Il permesso
+                        // si chiede su un record vero (la policy guarda il
+                        // tenant del rapportino).
+                        $primo = $records->first();
+
+                        if (! $primo) {
+                            return null;
+                        }
+
+                        $showPrices = auth()->user()?->can('viewPrices', $primo) ?? false;
+
+                        $rapportini = ServiceReport::query()
+                            ->whereKey($records->pluck('id'))
+                            ->with(RapportiniPerFattura::relazioni())
+                            ->orderBy('intervention_date')
+                            ->get();
+
+                        $gruppi = RapportiniPerFattura::raggruppa($rapportini);
+
+                        if ($gruppi === []) {
+                            return null;
+                        }
+
+                        // Una fattura sola: il PDF, senza farlo cercare
+                        // dentro uno zip. Piu' fatture: uno zip, perche'
+                        // ogni fattura e' un allegato diverso per un
+                        // cliente diverso.
+                        if (count($gruppi) === 1) {
+                            $gruppo = reset($gruppi);
+                            $pdf = RapportiniPerFattura::pdf($gruppo, $showPrices);
+
+                            return response()->streamDownload(
+                                fn () => print($pdf),
+                                RapportiniPerFattura::nomeFile($gruppo),
+                            );
+                        }
+
+                        $zip = new \ZipArchive;
+                        $percorso = tempnam(sys_get_temp_dir(), 'rapportini-fatture').'.zip';
+                        $zip->open($percorso, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
+
+                        foreach ($gruppi as $gruppo) {
+                            $zip->addFromString(
+                                RapportiniPerFattura::nomeFile($gruppo),
+                                RapportiniPerFattura::pdf($gruppo, $showPrices),
+                            );
+                        }
+
+                        $zip->close();
+
+                        Notification::make()
+                            ->title(count($gruppi).' fatture, '.$rapportini->count().' rapportini')
+                            ->body('Nello zip un PDF per fattura.')
+                            ->success()
+                            ->send();
+
+                        return response()->download($percorso, 'rapportini-per-fattura-'.now()->format('Y-m-d').'.zip')
+                            ->deleteFileAfterSend();
                     }),
                 // Fuori dal BulkActionGroup di proposito: e' l'unica azione di
                 // massa che si usa spesso (chiudere in blocco i rapportini di
