@@ -98,3 +98,64 @@ sola. Da lì si conferma o si scarta a mano nella pagina "Sync Eureka"
 (e il `Product`, se non ce n'era già uno con lo stesso `gestionale_code`);
 scartare marca `dismissed_at` invece di cancellare la riga, altrimenti la
 proposta ricomparirebbe al giro successivo.
+
+## I documenti (DDT) si leggono — ma non dal modulo documenti (12/10/2026)
+
+Smentita di quanto scritto prima qui e in `RientriMagazzino` ("dall'API i DDT
+non si leggono"). Il manuale rev. 1.2 (`~/Documents/Alex/GDP/MANUALE_API_ALEX.pdf`)
+documenta il modulo documenti `/b10/*`, e `GET /utente/permessi` conferma i
+ruoli `documenti.read`/`documenti.write`.
+
+**Il modulo `/b10/*` è però filtrato da una whitelist di tipi documento**
+(`B10_FILTRO_TIPI_DOC_CONSENTITI` lato configurazione Eureka). Oggi passano
+solo tre tipi — `GET /b10/schema/tipi`:
+
+```
+BC   DOC. TRASPORTO VENDITA     (566 documenti, dal 09/01/2023)
+FB   FATTURA SENZA RIF. DDT     (3.832)
+SL   SCHEDA LAVORO              (i rapportini)
+```
+
+Ogni altro tipo risponde `401 {"message":"Tipo documento non consentito"}`:
+provati BCC, BCV, BV, CV, DT, BO, OR, FA, NC, FD, BR, BCR, RE, OC. E i tipi
+esclusi sono proprio quelli che muovono le macchine: le consegne in comodato
+sono **BCC**, i rientri **BCF**, i resi **BCR**.
+
+**Ma il modulo `articoli` non applica quella whitelist**, e due sue rotte
+bastano a ricostruire lo storico:
+
+- `GET /articoli/cerca-in-righe?testo=<matricola>` — Eureka scrive la
+  matricola in una riga descrittiva ("Matricola 3400000282946"), quindi
+  cercarla per testo restituisce **tutti i documenti di quella singola
+  macchina**, di qualunque tipo, con `tipo_doc`, numero, data, cliente e
+  `id_doc`. Su 15 matricole estratte a caso ne trova 11; le 4 mancanti sono
+  codici inventati dal CRM (`IMP-SPINA-*`, `IMP-ACQUA-*`), non matricole vere.
+- `GET /articoli/documenti-per-articolo?id_articolo=<id>&data_da=YYYY-MM-DD`
+  — tutte le righe documento di un articolo in un periodo, **BCC e BCF
+  compresi** (per modello, non per matricola). `data_da` è obbligatoria.
+
+Il documento intero si legge con `GET /b10/($id)` solo se è BC/FB/SL. Per i
+BCC/BCF si vede che esistono (tipo, numero, data, intestatario) ma non le
+righe, quindi la matricola va presa dall'incrocio con `cerca-in-righe`.
+
+Esempio reale — matricola 3400000282946 (Franke A600FM), il cui storico nel
+CRM era ricostruito dai rapportini e quindi sbagliato:
+
+```
+28/03/2025  BCC n.30   Albergo Stellamare      consegna (qui nasce la matricola)
+15/07/2025  SIMA n.222 Marcuzzo Luca           = il "DDT 222" di art_installati
+13/03/2026  BCC n.33   Hotel Vidi Srl          consegna
+            FB n.182   Hotel Vidi Srl          INSTMAC 500 €
+01/05/2026  BCC n.245  Marcuzzo Luca           consegna
+31/07/2026  FB n.642   Marcuzzo Luca           NOLEGGIO 725,20 €
+25/09/2026  BCF n.246  ALEX SRL                rientro in casa
+09/10/2026  BCC n.248  Dersut Caffè Spa        consegna
+            FB n.879   Dersut Caffè Spa        destinazione: Hotel-Ristorante Neps
+```
+
+Da notare l'ultima riga: l'intestatario è **Dersut**, la destinazione il
+**Neps**. È il caso di `invoiceRecipient()`, e dai rapportini non si vedeva.
+
+`/show/q/art_installati` resta fermo alla consegna corrente e non vede niente
+di tutto questo: per quella matricola riporta ancora Marcuzzo con la bolla 222
+del 15/07/2025.

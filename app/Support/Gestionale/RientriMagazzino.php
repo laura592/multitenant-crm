@@ -13,8 +13,16 @@ use Illuminate\Support\Str;
  * Il ritiro su Eureka e' un DDT di ritiro, e l'elenco delle macchine
  * installate non lo riflette: una macchina che rientra continua a
  * risultare dal cliente di prima (23/09/2026: all'Hotel Bellevue ne sono
- * state ritirate otto il 21/09 e nel CRM erano ancora li'). Dall'API i DDT
- * non si leggono.
+ * state ritirate otto il 21/09 e nel CRM erano ancora li').
+ *
+ * I DDT dall'API si leggono, ma non dal modulo documenti: /b10/* ammette
+ * solo BC, FB e SL, mentre consegne e rientri delle macchine sono BCC e BCF
+ * ("Tipo documento non consentito"). Si trovano con
+ * /articoli/cerca-in-righe?testo=<matricola> e
+ * /articoli/documenti-per-articolo, che quella whitelist non la applicano —
+ * vedi docs/gestionale-eureka/macchinari.md (12/10/2026). Questa classe
+ * continua a guardare i rapportini: cambiarla significa riscriverla sui
+ * documenti, che e' un lavoro a parte.
  *
  * Il ritiro pero' lascia una traccia nel rapportino: la riga
  * "DISIN/RITIRO" (o un altro articolo che comincia per DISIN). Se e' l'ultima
