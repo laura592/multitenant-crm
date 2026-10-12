@@ -165,41 +165,50 @@
     @else
         <h3 class="art">Art. 3 – Canone</h3>
         <p>Il canone è stabilito in <strong>{{ $eur($noleggio->canone) }} al mese, IVA esclusa</strong>.</p>
-    @endif
-    {{-- Niente totale su tutta la durata: il canone mensile e' il numero che
-         il cliente deve valutare, la somma dei cinque anni spaventa e non
-         aggiunge nulla a cio' che il contratto stabilisce. --}}
-    <p>Il canone è comprensivo di quanto previsto dall'art. 5 e si intende dovuto per l'intera durata del
-        contratto.</p>
-    {{-- Il presupposto del canone sta qui, nell'articolo del canone, e non
-         in fondo alle quantita': e' il punto in cui il cliente valuta la
-         cifra, ed e' cio' che permette di rivederla se il servizio cambia
-         davvero, invece di discuterne a memoria (Laura, 07/10/2026). --}}
-    @if (filled($noleggio->base_consumo))
-        <p>Il canone è determinato su un <strong>utilizzo stimato di {{ $noleggio->base_consumo }}</strong>.
-            Alla fine di ogni anno di contratto il Fornitore rileva i consumi effettivi e procede al
-            <strong>conguaglio</strong>: le quantità eccedenti quelle indicate all'art. 5 sono fatturate
-            a consumo, e il canone dell'anno successivo è adeguato ai consumi rilevati.</p>
+        {{-- Niente totale su tutta la durata: il canone mensile e' il numero
+             che il cliente deve valutare, la somma dei cinque anni spaventa e
+             non aggiunge nulla a cio' che il contratto stabilisce. --}}
+        <p>Il canone è comprensivo di quanto previsto dall'art. 5 e si intende dovuto per l'intera durata del
+            contratto.</p>
+        {{-- Il presupposto del canone sta qui, nell'articolo del canone, e non
+             in fondo alle quantita': e' il punto in cui il cliente valuta la
+             cifra, ed e' cio' che permette di rivederla se il servizio cambia
+             davvero, invece di discuterne a memoria (Laura, 07/10/2026). --}}
+        @if (filled($noleggio->base_consumo))
+            <p>Il canone è determinato su un <strong>utilizzo stimato di {{ $noleggio->base_consumo }}</strong>.
+                Alla fine di ogni anno di contratto il Fornitore rileva i consumi effettivi e procede al
+                <strong>conguaglio</strong>: le quantità eccedenti quelle indicate all'art. 5 sono fatturate
+                a consumo, e il canone dell'anno successivo è adeguato ai consumi rilevati.</p>
+        @endif
     @endif
 
-    {{-- Due rischi diversi, due clausole. L'ISTAT copre l'inflazione
-         generale, che e' quella dei costi di struttura; il caffe' verde si
-         muove su un mercato suo e un anno di FOI al 2% non basta se la
-         materia prima fa +30%. Simmetrica in aumento e in diminuzione: una
-         clausola che prevede solo aumenti si contesta piu' facilmente
-         (Laura, 07/10/2026). --}}
-    <p>A partire dal secondo anno, a ogni anniversario della decorrenza il canone è
-        <strong>adeguato alla variazione dell'indice ISTAT</strong> dei prezzi al consumo per le famiglie di
-        operai e impiegati (FOI, al netto dei tabacchi) rilevata nei dodici mesi precedenti.</p>
-    <p>Indipendentemente dall'indice di cui sopra, la parte di canone relativa alle forniture di consumo
-        indicate all'art. 5 è adeguata alle <strong>variazioni dei prezzi di listino</strong> dei prodotti
-        compresi, <strong>in aumento e in diminuzione</strong>, comunicate con almeno trenta giorni di
-        preavviso.</p>
+    {{-- Queste tre clausole parlavano di canone anche nei contratti a
+         battuta, dove un canone non esiste: su un contratto stagionale
+         "nessun altro costo o canone" e' esattamente il punto dell'accordo,
+         e trovarsi scritto il contrario lo fa rimandare indietro (Stalon,
+         12/10/2026). L'adeguamento ISTAT e il conguaglio annuale valgono
+         inoltre solo dove c'e' un anno da adeguare: sotto i dodici mesi il
+         contratto scade prima del primo anniversario. --}}
+    @if ($mesi >= 12)
+        {{-- Due rischi diversi, due clausole. L'ISTAT copre l'inflazione
+             generale, che e' quella dei costi di struttura; il caffe' verde si
+             muove su un mercato suo e un anno di FOI al 2% non basta se la
+             materia prima fa +30%. Simmetrica in aumento e in diminuzione: una
+             clausola che prevede solo aumenti si contesta piu' facilmente
+             (Laura, 07/10/2026). --}}
+        <p>A partire dal secondo anno, a ogni anniversario della decorrenza il corrispettivo è
+            <strong>adeguato alla variazione dell'indice ISTAT</strong> dei prezzi al consumo per le famiglie di
+            operai e impiegati (FOI, al netto dei tabacchi) rilevata nei dodici mesi precedenti.</p>
+        <p>Indipendentemente dall'indice di cui sopra, la parte di corrispettivo relativa alle forniture di consumo
+            indicate all'art. 5 è adeguata alle <strong>variazioni dei prezzi di listino</strong> dei prodotti
+            compresi, <strong>in aumento e in diminuzione</strong>, comunicate con almeno trenta giorni di
+            preavviso.</p>
+    @endif
 
     <h3 class="art">Art. 4 – Fatturazione e pagamento</h3>
-    <p>Il canone è fatturato con periodicità <strong>{{ $periodicita }}</strong> e pagato a mezzo
-        <strong>{{ $modalita }}</strong> a <strong>{{ $termini }}</strong>, sulle coordinate indicate in fattura.
-        Il canone decorre dalla data indicata all'art. 2.</p>
+    <p>Il corrispettivo è fatturato con periodicità <strong>{{ $periodicita }}</strong> e pagato a mezzo
+        <strong>{{ $modalita }}</strong> a <strong>{{ $termini }}</strong>, sulle coordinate indicate in fattura,
+        e decorre dalla data indicata all'art. 2.</p>
     {{-- Gli interessi di mora valgono per legge anche senza scriverli: messi
          nero su bianco servono a non doverli spiegare la prima volta che si
          sollecita. --}}
@@ -225,7 +234,10 @@
         @endif
     </ul>
 
-    @if (filled($noleggio->base_consumo))
+    {{-- Il rimando all'art. 3 vale solo dove l'art. 3 l'utilizzo stimato lo
+         scrive, cioe' nel contratto a canone: in quello a battuta si paga
+         sulle erogazioni vere e il rimando resterebbe appeso. --}}
+    @if (filled($noleggio->base_consumo) && blank($noleggio->prezzo_battuta))
         <p>I quantitativi sopra indicati sono determinati sull'utilizzo stimato indicato all'art. 3.</p>
     @endif
 
