@@ -13,17 +13,44 @@
 	$eur = fn ($v) => '€ '.number_format((float) $v, 2, ',', '.');
 
 	// Le stesse diciture del contratto: la mail non deve dire una cosa
-	// diversa da quella che il cliente firma.
+	// diversa da quella che il cliente firma. Il 12/10/2026 l'ha detta: il
+	// contratto di Stalon e' a 0,50 per erogazione e la mail annunciava
+	// "canone mensile 359,88 + IVA con pagamento anticipato", e il cliente ha
+	// scritto chiedendo quale delle due valesse.
+	$aBattuta = filled($noleggio->prezzo_battuta);
+
+	$periodicita = \App\Models\Noleggio::periodicitaLabels()[$noleggio->periodicita_fatturazione] ?? null;
+
+	// A erogazione non si fattura in anticipo: si fattura quello che il
+	// contatore ha contato (art. 3 del contratto).
+	if ($aBattuta && $periodicita) {
+		$periodicita = trim(str_replace('anticipata', 'posticipata', $periodicita));
+	}
+
 	$condizioni = implode(', ', array_filter([
-		\App\Models\Noleggio::periodicitaLabels()[$noleggio->periodicita_fatturazione] ?? null,
+		$periodicita,
 		\App\Models\Noleggio::modalitaPagamentoLabels()[$noleggio->modalita_pagamento] ?? null,
 		\App\Models\Noleggio::terminiPagamentoLabels()[$noleggio->termini_pagamento] ?? null,
 	]));
 
+	$durata = $noleggio->data_fine
+		? 'dal '.$noleggio->data_inizio?->format('d/m/Y').' al '.$noleggio->data_fine->format('d/m/Y')
+		: ((int) $noleggio->mesi).' mesi'.($noleggio->data_inizio ? ' dal '.$noleggio->data_inizio->format('d/m/Y') : '');
+
 	$righe = array_filter([
-		'Canone' => $eur($noleggio->canone).' al mese + IVA',
-		'Durata' => ((int) $noleggio->mesi).' mesi',
-		'Decorrenza' => $noleggio->data_inizio?->format('d/m/Y'),
+		$aBattuta ? 'Corrispettivo' : 'Canone' => $aBattuta
+			? $eur($noleggio->prezzo_battuta).' per ogni erogazione + IVA'
+			: $eur($noleggio->canone).' al mese + IVA',
+		'Minimo per periodo' => $aBattuta && filled($noleggio->minimo_mensile)
+			? $eur($noleggio->minimo_mensile).' + IVA'
+			: null,
+		'Durata' => $durata,
+		'Montaggio' => $noleggio->consegna_dal && $noleggio->consegna_al
+			? 'tra il '.$noleggio->consegna_dal->format('d/m/Y').' e il '.$noleggio->consegna_al->format('d/m/Y')
+			: null,
+		'Installazione e ritiro' => filled($noleggio->installazione_costo)
+			? $eur($noleggio->installazione_costo).' una tantum + IVA'
+			: null,
 		'Pagamento' => $condizioni ?: null,
 	]);
 @endphp
@@ -52,7 +79,8 @@
 </table>
 
 <div style="margin-top:12px;color:#475569;font-size:13px;">
-	<strong>Allegato:</strong> il contratto completo, con il dettaglio di cosa è compreso nel canone.
+	<strong>Allegato:</strong> il contratto completo, con il dettaglio di cosa è compreso nel
+	{{ $aBattuta ? 'corrispettivo' : 'canone' }}.
 </div>
 
 {{-- Chiusura prestampata, come nelle offerte: sta qui e non nel testo
