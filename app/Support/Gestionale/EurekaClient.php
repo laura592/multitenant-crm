@@ -306,10 +306,14 @@ class EurekaClient
      * best-effort delle chiamate singole: una chiamata fallita nel gruppo
      * risulta vuota, non blocca le altre ne' lancia un'eccezione.
      *
+     * Concorrenza 10 e non 15 (12/10/2026): GDP ha indicato il tetto reale
+     * del servizio — 64 richieste contemporanee, oltre le quali risponde 500
+     * — e consiglia di restare entro 8-10 chiamate parallele.
+     *
      * @param  array<int|string, array<string, mixed>>  $paramsByKey  parametri di query per ciascuna chiamata, indicizzati da una chiave a scelta (es. id cliente)
      * @return array<int|string, array> stessa chiave => risposta decodificata (vuoto se fallita o non riuscita)
      */
-    public function pooledGet(string $path, array $paramsByKey, int $concurrency = 15): array
+    public function pooledGet(string $path, array $paramsByKey, int $concurrency = 10): array
     {
         $url = rtrim($this->baseUrl, '/').$path;
 
@@ -334,7 +338,7 @@ class EurekaClient
      * @param  array<int|string, string>  $pathsByKey  path relativo gia' completo (incluso il parametro embedded) per ciascuna chiamata
      * @return array<int|string, array> stessa chiave => risposta decodificata (vuoto se fallita o non riuscita)
      */
-    public function pooledGetByPath(array $pathsByKey, int $concurrency = 15): array
+    public function pooledGetByPath(array $pathsByKey, int $concurrency = 10): array
     {
         $base = rtrim($this->baseUrl, '/');
 

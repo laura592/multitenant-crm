@@ -36,6 +36,21 @@ final class DocumentiMacchina
     private const LIMITE_RIGHE = 500;
 
     /**
+     * I tipi documento che /b10/{id} accetta oggi. Gli altri rispondono
+     * "Tipo documento non consentito" e NON si devono chiamare: fino
+     * all'aggiornamento del servizio REST (GDP, 12/10/2026) ogni rifiuto
+     * lascia occupata una connessione al database, e cento rifiuti hanno
+     * esaurito il pool da 100 bloccando il gestionale per un'ora e mezza.
+     *
+     * GDP abiliterà BCC, BCF e BCR in sola lettura dopo l'aggiornamento e ci
+     * avviserà: da allora le matricole si leggono dalle righe del DDT e
+     * questa lista si allarga. Col nuovo servizio il rifiuto diventa anche
+     * 403 invece di 401 — qui non cambia niente, perché una risposta non
+     * riuscita vale "non leggibile" qualunque sia il codice.
+     */
+    public const TIPI_LEGGIBILI = ['BC', 'FB', 'SL'];
+
+    /**
      * Movimenti per matricola (chiave normalizzata da MachineUnit::chiaveMatricola).
      *
      * @param  Collection<int, string>  $matricole
@@ -138,8 +153,13 @@ final class DocumentiMacchina
      *
      * Prima riga del blocco indirizzo, che e' la ragione sociale.
      */
-    public static function destinazione(EurekaClient $client, int $idDoc): ?string
+    public static function destinazione(EurekaClient $client, int $idDoc, string $tipoDoc): ?string
     {
+        // Un tipo non consentito non si chiede nemmeno: vedi TIPI_LEGGIBILI.
+        if (! in_array(strtoupper(trim($tipoDoc)), self::TIPI_LEGGIBILI, true)) {
+            return null;
+        }
+
         $documento = $client->documentoB10($idDoc);
 
         if ($documento === null) {

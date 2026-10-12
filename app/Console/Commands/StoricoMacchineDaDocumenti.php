@@ -248,7 +248,11 @@ class StoricoMacchineDaDocumenti extends Command
             return $movimenti;
         }
 
-        $destinazione = DocumentiMacchina::destinazione($client, (int) $movimenti[$ultimo]['id_doc']);
+        $destinazione = DocumentiMacchina::destinazione(
+            $client,
+            (int) $movimenti[$ultimo]['id_doc'],
+            (string) $movimenti[$ultimo]['tipo'],
+        );
         $altro = $destinazione !== null ? $perNome->get(self::normalizza($destinazione)) : null;
 
         if ($altro && $altro->id !== $movimenti[$ultimo]['cliente']) {
