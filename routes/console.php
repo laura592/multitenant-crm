@@ -55,9 +55,16 @@ Schedule::command('eureka:apply-machine-billing-payer', ['--tenant' => 'alex'])-
 // ("Errore ricerca rapportini per periodo: HTTP 500") finiva nell'output del
 // processo, che nessuno raccoglieva. Il file cresce di poche righe a notte
 // (intestazione + una riga per rapportino creato/aggiornato).
+//
+// Trenta giorni e non sette (12/10/2026): una scheda creata su Eureka piu'
+// di una settimana dopo la sua data restava fuori per sempre. E' il caso
+// della scheda n. 713 del 02/09/2026, trovata confrontando i 1.873 documenti
+// del 2025-2026 con i rapportini del CRM — l'unica, ma nessuno l'avrebbe mai
+// vista. La finestra piu' larga costa qualche centinaio di chiamate in piu'
+// a notte, meno del refresh prezzi materiali che gira alle 05:00.
 Schedule::command('eureka:import-service-reports', [
     '--tenant' => 'alex',
-    '--from' => now()->subDays(7)->toDateString(),
+    '--from' => now()->subDays(30)->toDateString(),
     '--with-detail',
 ])->dailyAt('04:00')->appendOutputTo(storage_path('logs/eureka-import.log'));
 
