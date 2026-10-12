@@ -160,6 +160,16 @@ class DisallineamentiEureka extends Command
                 continue;
             }
 
+            // Un documento PIU' VECCHIO della consegna non contraddice
+            // niente: e' il passato della macchina. Sulla matricola 1187426
+            // l'elenco dava Hotel Miramare Paulin da maggio 2025 e l'ultimo
+            // documento la Pasticceria Al Ponte di marzo 2023 — due anni
+            // prima, quindi la bolla ha ragione e di disallineamento non ce
+            // n'e'.
+            if ($riga['data'] && $ultimo['data']->lte($riga['data'])) {
+                continue;
+            }
+
             $spostate[] = [
                 $riga['matricola'],
                 DisplayName::titleCase($nomi[$riga['cliente']] ?? '?').($riga['bolla'] ? ' (bolla '.$riga['bolla'].')' : ''),
