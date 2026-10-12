@@ -665,6 +665,46 @@ class EurekaClient
     }
 
     /**
+     * Se Eureka e' in grado di rispondere a una query, adesso: NULL se si',
+     * il messaggio dell'errore se no.
+     *
+     * Serve prima di ogni lettura di massa. Il 12/10/2026 il pool di
+     * connessioni del gestionale si e' esaurito ("[FireDAC][Stan]-708.
+     * Cannot acquire item (connection) from pool. Maximal number [100] of
+     * simultaneous items (connections) reached") e da li' in avanti ogni
+     * chiamata rispondeva 500: senza questo controllo un comando che legge
+     * ottocento matricole le prova tutte e tre volte, aggiungendo carico a
+     * un servizio gia' in ginocchio.
+     *
+     * /health/ non basta: risponde "ok" anche mentre il database e' fuori
+     * uso, perche' non lo interroga.
+     */
+    public function nonDisponibile(): ?string
+    {
+        $url = rtrim($this->baseUrl, '/').'/show/q/art_installati?q=999999999';
+
+        try {
+            $response = Http::withBasicAuth($this->username, $this->password)->timeout(20)->get($url);
+
+            $this->recordCall($url, $response->status());
+
+            if ($response->successful()) {
+                return null;
+            }
+
+            $messaggio = (string) ($response->json('message') ?? 'HTTP '.$response->status());
+
+            return str_contains($messaggio, '-708')
+                ? 'il gestionale ha esaurito le connessioni al database (errore -708): nessuna query passa finche\' non si libera.'
+                : $messaggio;
+        } catch (\Throwable $e) {
+            $this->recordCall($url, null);
+
+            return $e->getMessage();
+        }
+    }
+
+    /**
      * Un documento di magazzino/vendita per intero (GET /b10/{id}): testata,
      * intestatario, destinazione, righe.
      *

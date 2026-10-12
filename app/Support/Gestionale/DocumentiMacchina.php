@@ -39,11 +39,17 @@ final class DocumentiMacchina
      * Movimenti per matricola (chiave normalizzata da MachineUnit::chiaveMatricola).
      *
      * @param  Collection<int, string>  $matricole
-     * @return array{movimenti: array<string, array<int, array{data: Carbon, tipo: string, numero: int, id_doc: int, codice_cliente: int, ragione_sociale: string}>>, falliti: array<int, string>}
+     * @return array{movimenti: array<string, array<int, array{data: Carbon, tipo: string, numero: int, id_doc: int, codice_cliente: int, ragione_sociale: string}>>, falliti: array<int, string>, guasto: ?string}
      */
-    public static function perMatricole(Tenant $tenant, Collection $matricole, int $concorrenza = 10): array
+    public static function perMatricole(Tenant $tenant, Collection $matricole, int $concorrenza = 4): array
     {
         $client = new EurekaClient($tenant);
+
+        // Prima di 716 chiamate si chiede a Eureka se e' in grado di
+        // rispondere: se non lo e', insistere non la fa tornare su.
+        if ($guasto = $client->nonDisponibile()) {
+            return ['movimenti' => [], 'falliti' => [], 'guasto' => $guasto];
+        }
 
         $cercabili = $matricole
             ->map(fn (string $m) => trim($m))
@@ -57,6 +63,16 @@ final class DocumentiMacchina
 
         $risposte = $client->pooledGet('/articoli/cerca-in-righe', $parametri, $concorrenza);
         $falliti = $client->chiaviPooledFallite();
+
+        // Fallite tutte: non e' il solito 500 a raffica, e' il servizio che
+        // non risponde piu'. Si smette subito invece di riprovarle due volte.
+        if (count($falliti) === count($parametri) && $parametri !== []) {
+            return [
+                'movimenti' => [],
+                'falliti' => $falliti,
+                'guasto' => $client->nonDisponibile() ?? 'Eureka non ha risposto a nessuna delle '.count($parametri).' chiamate.',
+            ];
+        }
 
         // Eureka ha i suoi 500 a raffica (vedi eureka-api-intermittent-500s):
         // le chiamate cadute si richiedono, le altre no.
@@ -111,7 +127,7 @@ final class DocumentiMacchina
             $movimenti[$chiave] = $righe;
         }
 
-        return ['movimenti' => $movimenti, 'falliti' => $falliti];
+        return ['movimenti' => $movimenti, 'falliti' => $falliti, 'guasto' => null];
     }
 
     /**

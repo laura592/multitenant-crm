@@ -76,6 +76,13 @@ class StoricoMacchineDaDocumenti extends Command
 
         $esito = DocumentiMacchina::perMatricole($tenant, $macchine->pluck('serial_number'));
 
+        if (($esito['guasto'] ?? null) !== null) {
+            $this->error('Eureka non risponde: '.$esito['guasto']);
+            $this->line('Niente e\' stato letto ne\' scritto. Riprova piu\' tardi.');
+
+            return self::FAILURE;
+        }
+
         if ($esito['falliti'] !== []) {
             $this->warn('Eureka non ha risposto per '.count($esito['falliti']).' matricole: '
                 .implode(', ', array_slice($esito['falliti'], 0, 8)).' — quelle restano fuori dal confronto.');
