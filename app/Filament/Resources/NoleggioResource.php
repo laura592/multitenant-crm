@@ -226,6 +226,20 @@ class NoleggioResource extends Resource
                 ->columns(3)
                 ->schema([
                     Forms\Components\DatePicker::make('data_inizio')->label('Decorrenza'),
+                    // Le tre date della stagione. Con una fine il contratto
+                    // scrive "dal X al Y" invece di "N mesi dal X": su un
+                    // hotel che chiude il 14 marzo i mesi tondi scadono
+                    // sempre nel posto sbagliato (Stalon, 12/10/2026).
+                    Forms\Components\DatePicker::make('data_fine')
+                        ->label('Scadenza')
+                        ->helperText('Vuota = la durata la fanno i mesi.')
+                        ->afterOrEqual('data_inizio'),
+                    Forms\Components\DatePicker::make('consegna_dal')
+                        ->label('Montaggio dal')
+                        ->helperText('La finestra concordata per installare, prima dell\'apertura.'),
+                    Forms\Components\DatePicker::make('consegna_al')
+                        ->label('Montaggio entro il')
+                        ->afterOrEqual('consegna_dal'),
                     // Vuoto = canone fisso. Con un prezzo, il contratto
                     // cambia articolo: si fattura sulle erogazioni lette dal
                     // contatore, non una cifra fissa al mese.

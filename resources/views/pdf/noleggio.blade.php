@@ -128,9 +128,25 @@
     <div class="dati"><strong>{{ $noleggio->descrizione }}</strong>@if($noleggio->machineUnit)<br>Matricola {{ $noleggio->machineUnit->serial_number }}@endif</div>
 
     <h3 class="art">Art. 2 – Durata e decorrenza</h3>
-    <p>Il contratto ha durata di <strong>{{ $mesi }} mesi</strong>
-        @if($noleggio->data_inizio) con decorrenza dal {{ $noleggio->data_inizio->format('d/m/Y') }}@endif.
-        Alla scadenza si intende concluso, salvo rinnovo concordato per iscritto fra le parti.</p>
+    {{-- Con una data di fine il contratto la scrive, e la durata in mesi
+         resta solo un conto interno: "4 mesi dal 01/12/2026" scadrebbe il
+         31/03, due settimane dopo la chiusura dell'hotel (Stalon,
+         12/10/2026). --}}
+    @if($noleggio->data_fine)
+        <p>Il contratto decorre dal <strong>{{ $noleggio->data_inizio?->format('d/m/Y') }}</strong>
+            e scade il <strong>{{ $noleggio->data_fine->format('d/m/Y') }}</strong>, periodo di apertura
+            dell'attività. Alla scadenza si intende concluso, salvo rinnovo concordato per iscritto
+            fra le parti.</p>
+    @else
+        <p>Il contratto ha durata di <strong>{{ $mesi }} mesi</strong>
+            @if($noleggio->data_inizio) con decorrenza dal {{ $noleggio->data_inizio->format('d/m/Y') }}@endif.
+            Alla scadenza si intende concluso, salvo rinnovo concordato per iscritto fra le parti.</p>
+    @endif
+    @if($noleggio->consegna_dal && $noleggio->consegna_al)
+        <p>L'installazione dell'attrezzatura è concordata <strong>tra il
+            {{ $noleggio->consegna_dal->format('d/m/Y') }} e il {{ $noleggio->consegna_al->format('d/m/Y') }}</strong>,
+            e lo smontaggio alla chiusura dell'attività.</p>
+    @endif
 
     {{-- Due forme di corrispettivo: canone fisso, oppure prezzo a
          erogazione. La seconda serve alle attivita' stagionali, dove un
