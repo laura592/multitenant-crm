@@ -681,9 +681,16 @@ class NoleggioResource extends Resource
         $nome = DisplayName::titleCase($record->customer?->company_name)
             ?: (DisplayName::titleCase($record->customer?->full_name) ?: 'Cliente');
 
+        // Su un contratto a erogazione il canone non esiste, e scriverlo
+        // qui era meta' dell'equivoco di Stalon: contratto a 0,50 a battuta,
+        // mail che parlava di canone (12/10/2026).
+        $compreso = filled($record->prezzo_battuta)
+            ? 'nel corrispettivo a erogazione'
+            : 'nel canone';
+
         return implode('', [
             '<p>Gentile '.e($nome).',</p>',
-            '<p>in allegato il contratto di noleggio operativo con il dettaglio di quanto è compreso nel canone.</p>',
+            '<p>in allegato il contratto di noleggio operativo con il dettaglio di quanto è compreso '.$compreso.'.</p>',
             '<p>Se le condizioni sono di suo gradimento, può restituircelo firmato per accettazione.</p>',
         ]);
     }
