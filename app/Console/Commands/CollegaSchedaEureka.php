@@ -87,27 +87,43 @@ class CollegaSchedaEureka extends Command
                 return self::FAILURE;
             }
 
-            $candidati = collect($schede)
+            $trovate = collect($schede)
                 ->filter(fn ($s) => is_array($s))
                 ->map(fn (array $s) => [
                     'id' => (int) ($s['id_eureka'] ?? $s['id'] ?? 0),
                     'numero' => (int) ($s['numero_doc_t23'] ?? $s['numero'] ?? 0),
                     'data' => $this->data($s['data_documento'] ?? $s['data'] ?? null),
                 ])
-                ->filter(fn (array $s) => $s['id'] > 0 && ! isset($gia[$s['id']]))
+                ->filter(fn (array $s) => $s['id'] > 0)
                 ->values();
+
+            // Una scheda che un altro rapportino tiene gia' non e' "niente
+            // trovato": e' la gemella, e quei due rapportini sono lo stesso
+            // intervento scritto due volte. Dirlo cambia la risposta — il
+            // caso di RT-2026-0775, dove "nessuna scheda trovata" nascondeva
+            // che SL-728/2026 era di RT-2026-0821.
+            $occupate = $trovate->filter(fn (array $s) => isset($gia[$s['id']]));
+            $candidati = $trovate->reject(fn (array $s) => isset($gia[$s['id']]))->values();
 
             if ($candidati->count() !== 1) {
                 $righe[] = [
                     $rapportino->number,
                     $data->format('d/m/Y'),
                     $matricola,
-                    $candidati->isEmpty()
-                        ? 'nessuna scheda trovata'
-                        : $candidati->count().' candidate: '.$candidati
+                    match (true) {
+                        $occupate->isNotEmpty() => 'doppione: la scheda e\' di '.$occupate
+                            ->map(fn (array $s) => $gia[$s['id']])
+                            ->implode(', '),
+                        $candidati->isEmpty() => 'nessuna scheda trovata',
+                        default => $candidati->count().' candidate: '.$candidati
                             ->map(fn (array $s) => 'n.'.$s['numero'].' del '.$s['data']?->format('d/m/Y'))
                             ->implode(', '),
+                    },
                 ];
+
+                if ($occupate->isNotEmpty() && ! $this->option('dry-run')) {
+                    $this->proponiDoppione($rapportino, (string) $gia[$occupate->first()['id']]);
+                }
 
                 continue;
             }
@@ -142,6 +158,31 @@ class CollegaSchedaEureka extends Command
             : $collegati.' rapportini collegati alla loro scheda Eureka.');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Segna il doppione invece di unirlo: unire cancella un rapportino, e
+     * quella e' una decisione di una persona. La proposta compare nella
+     * schermata di confronto, dove si conferma con "Sono lo stesso
+     * intervento" (vedi ServiceReport::confermaDuplicato).
+     */
+    private function proponiDoppione(ServiceReport $rapportino, string $numeroGemella): void
+    {
+        $gemella = ServiceReport::query()->withoutGlobalScopes()
+            ->where('tenant_id', $rapportino->tenant_id)
+            ->where('number', $numeroGemella)
+            ->first();
+
+        if (! $gemella || $rapportino->duplicato_suggerito_id !== null) {
+            return;
+        }
+
+        $rapportino->forceFill([
+            'duplicato_suggerito_id' => $gemella->id,
+            'duplicato_suggerito_motivo' => 'stessa matricola e stessa scheda Eureka ('.$gemella->gestionale_number.')',
+        ])->saveQuietly();
+
+        $this->line('   proposto come doppione di '.$gemella->number.' ('.$gemella->gestionale_number.')');
     }
 
     private function data(mixed $valore): ?Carbon
