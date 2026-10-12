@@ -230,7 +230,11 @@ class Noleggio extends Model
     public static function terminiPagamentoLabels(): array
     {
         return [
-            'vista' => 'rimessa diretta a vista fattura',
+            // Solo "a vista fattura": la modalita' di pagamento la dice
+            // gia' il campo accanto, e l'art. 4 del contratto le mette in
+            // fila ("a mezzo bonifico bancario a rimessa diretta a vista
+            // fattura" diceva due volte la stessa cosa).
+            'vista' => 'vista fattura',
             '30_df' => '30 giorni data fattura',
             '30_fm' => '30 giorni fine mese',
             '60_fm' => '60 giorni fine mese',
