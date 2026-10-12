@@ -187,10 +187,13 @@ class StoricoMacchineDaDocumenti extends Command
     /**
      * Il cliente di ogni movimento: l'intestatario, oppure la destinazione
      * scritta sul documento quando chi paga non e' chi riceve (bolla
-     * intestata a Dersut, macchina all'Hotel Neps). La destinazione si legge
-     * solo sui tipi consentiti (BC, FB, SL) e solo sugli ultimi tre
-     * documenti, per non chiedere a Eureka tre chiamate per macchina su
-     * ottocento macchine.
+     * intestata a Dersut, macchina all'Hotel Neps).
+     *
+     * La destinazione costa una chiamata e si legge solo dove serve: sul
+     * documento piu' recente, e solo se il suo intestatario non e' gia' il
+     * cliente dove il CRM tiene la macchina. Su ottocento macchine leggerle
+     * tutte sarebbero duemilacinquecento chiamate in fila, e Eureka un
+     * carico cosi' l'ha gia' sentito (06/08/2026).
      *
      * Intestatario noi stessi = la macchina e' rientrata in casa.
      *
@@ -207,31 +210,29 @@ class StoricoMacchineDaDocumenti extends Command
         Collection $perNome,
         Tenant $tenant,
     ): array {
-        $ultimi = array_slice(array_keys($movimenti), -3);
-
         foreach ($movimenti as $i => $movimento) {
             $cliente = $perCodice->get((int) $movimento['codice_cliente']);
 
             $movimenti[$i]['in_casa'] = $this->siamoNoi((string) $movimento['ragione_sociale'], $tenant);
             $movimenti[$i]['cliente'] = $movimenti[$i]['in_casa'] ? null : $cliente?->id;
             $movimenti[$i]['documento'] = trim($movimento['tipo'].' n.'.$movimento['numero'].' del '.$movimento['data']->format('d/m/Y'));
+        }
 
-            if (! in_array($i, $ultimi, true) || $movimenti[$i]['in_casa']) {
-                continue;
-            }
+        $ultimo = array_key_last($movimenti);
+        $attuale = $macchina->placements->last(fn (MachineUnitPlacement $p) => $p->removed_at === null)?->customer_id;
 
-            $destinazione = DocumentiMacchina::destinazione($client, (int) $movimento['id_doc']);
+        if ($ultimo === null
+            || $movimenti[$ultimo]['in_casa']
+            || $movimenti[$ultimo]['cliente'] === $attuale) {
+            return $movimenti;
+        }
 
-            if ($destinazione === null) {
-                continue;
-            }
+        $destinazione = DocumentiMacchina::destinazione($client, (int) $movimenti[$ultimo]['id_doc']);
+        $altro = $destinazione !== null ? $perNome->get(self::normalizza($destinazione)) : null;
 
-            $altro = $perNome->get(self::normalizza($destinazione));
-
-            if ($altro && $altro->id !== $movimenti[$i]['cliente']) {
-                $movimenti[$i]['cliente'] = $altro->id;
-                $movimenti[$i]['documento'] .= ', destinazione '.DisplayName::titleCase($altro->company_name);
-            }
+        if ($altro && $altro->id !== $movimenti[$ultimo]['cliente']) {
+            $movimenti[$ultimo]['cliente'] = $altro->id;
+            $movimenti[$ultimo]['documento'] .= ', destinazione '.DisplayName::titleCase($altro->company_name);
         }
 
         return $movimenti;
