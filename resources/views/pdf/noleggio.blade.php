@@ -49,6 +49,14 @@
         // gestionale: una dicitura sola, cosi' non si discute su cosa si era
         // pattuito.
         $periodicita = \App\Models\Noleggio::periodicitaLabels()[$noleggio->periodicita_fatturazione] ?? 'mensile anticipata';
+        // Le etichette dicono "anticipata" perche' il canone si paga prima
+        // del periodo. A battuta no: si fattura quello che il contatore ha
+        // contato, quindi l'etichetta resta nuda e l'art. 3 dice che e'
+        // posticipata (Stalon, 12/10/2026 — il contratto diceva le due cose
+        // opposte a due righe di distanza).
+        if (filled($noleggio->prezzo_battuta)) {
+            $periodicita = trim(str_replace('anticipata', '', $periodicita));
+        }
         $modalita = \App\Models\Noleggio::modalitaPagamentoLabels()[$noleggio->modalita_pagamento] ?? 'bonifico bancario';
         $termini = \App\Models\Noleggio::terminiPagamentoLabels()[$noleggio->termini_pagamento] ?? '30 giorni data fattura';
         // Nel contratto vanno le QUANTITA', non i prezzi: il cliente deve
@@ -110,7 +118,8 @@
     @endphp
     <h1 class="titolo">{!! $titolo !!}</h1>
     <h2 class="sottotitolo">Fornitura in uso di attrezzatura professionale per la somministrazione di caffè,
-        con assistenza tecnica e forniture di consumo comprese nel canone</h2>
+        con assistenza tecnica e forniture di consumo comprese nel
+        {{ filled($noleggio->prezzo_battuta) ? 'corrispettivo a erogazione' : 'canone' }}</h2>
 
     <p style="margin-top:14px;"><strong>Tra</strong></p>
     <div class="dati">
@@ -216,7 +225,7 @@
         D.Lgs. 231/2002, fatto salvo il diritto del Fornitore di sospendere le forniture di consumo di cui
         all'art. 5 fino al saldo.</p>
 
-    <h3 class="art">Art. 5 – Cosa è compreso nel canone</h3>
+    <h3 class="art">Art. 5 – Cosa è compreso nel {{ filled($noleggio->prezzo_battuta) ? 'corrispettivo' : 'canone' }}</h3>
     <ul>
         <li>La <strong>disponibilità dell'attrezzatura</strong> indicata all'art. 1 per tutta la durata del contratto.</li>
         @if (blank($noleggio->installazione_costo))
