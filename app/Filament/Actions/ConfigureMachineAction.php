@@ -55,6 +55,13 @@ class ConfigureMachineAction
         'license' => 'Licenze e servizi',
     ];
 
+    /**
+     * Lo slot il cui passo e' stato tolto perche' duplicava "Sistema di
+     * conteggio": resta in KNOWN_SLOTS solo per non ricadere in "Altre
+     * opzioni".
+     */
+    protected const SLOT_CONTEGGIO_DOPPIONE = 'payment';
+
     public static function make(): Action
     {
         return Action::make('configureMachine')
@@ -97,7 +104,7 @@ class ConfigureMachineAction
             ->modalWidth('3xl')
             ->modalHeading('Modifica configurazione macchina')
             ->skippableSteps()
-            ->steps(static::buildSteps(conConteggio: false))
+            ->steps(static::buildSteps())
             ->visible(fn (QuoteProduct $record) => $record->isBase() && $record->product?->isMachine())
             ->fillForm(fn (QuoteProduct $record) => static::fillFormForEdit($record))
             ->action(function (array $data, QuoteProduct $record) {
@@ -108,7 +115,7 @@ class ConfigureMachineAction
     /**
      * @return array<int, Step>
      */
-    protected static function buildSteps(bool $conConteggio = true): array
+    protected static function buildSteps(): array
     {
         $steps = [
             Step::make('Macchina')
@@ -172,6 +179,20 @@ class ConfigureMachineAction
         ];
 
         foreach (self::KNOWN_SLOTS as $slotName => $stepLabel) {
+            // Lo slot "payment" resta elencato in KNOWN_SLOTS — serve a
+            // tenerlo fuori anche da "Altre opzioni" — ma non ha piu' un suo
+            // passo: i suoi 53 componenti sono gli stessi prodotti della
+            // famiglia "Sistemi di conteggio" (53 su 59, zero esclusive),
+            // elencati piatti e salvati come opzioni della macchina. Il
+            // passo "Sistema di conteggio" offre gli stessi articoli
+            // guidando alloggiamento -> lettore -> variante, applica il
+            // vincolo AC200/A300 e produce UN codice ordinabile da Franke.
+            // Due passi per la stessa cosa, e quello giusto e' l'altro
+            // (ufficio, 12/10/2026).
+            if ($slotName === self::SLOT_CONTEGGIO_DOPPIONE) {
+                continue;
+            }
+
             $steps[] = Step::make($stepLabel)
                 ->visible(fn (Forms\Get $get) => static::choosableSlots($get, $slotName)->isNotEmpty())
                 ->schema(fn (Forms\Get $get) => static::slotStepSchema($get, $slotName));
@@ -186,12 +207,13 @@ class ConfigureMachineAction
         // Il sistema di conteggio si vende insieme alla macchina, e qui si sa
         // gia' QUALE macchina: e' cosi' che "AC200 non possibile per A300"
         // diventa un'opzione disabilitata invece di una nota da ricordare.
-        // Fuori da "Modifica configurazione" pero': le sue righe sono di primo
-        // livello e updateQuoteProducts() cancella solo le opzioni della
-        // macchina, quindi ricomparirebbe lo step senza niente da modificare.
-        if ($conConteggio) {
-            $steps[] = ConteggioConfigurator::step();
-        }
+        //
+        // C'e' anche in "Modifica configurazione" (12/10/2026): prima no,
+        // perche' le sue righe sono di primo livello e updateQuoteProducts()
+        // cancella solo le opzioni della macchina — il passo compariva senza
+        // niente da modificare. Ora ConteggioConfigurator sa rileggere lo
+        // stato dalle righe esistenti e sostituirle.
+        $steps[] = ConteggioConfigurator::step();
 
         // Il contratto di assistenza si sceglie per macchina e vive sulla sua
         // riga: a differenza del conteggio c'e' anche in "Modifica
@@ -767,6 +789,8 @@ class ConfigureMachineAction
             ]);
         });
 
+        ConteggioConfigurator::aggiornaRighe($quote, $data, $configurationDiscount);
+
         $quote->updateTotal();
 
         Notification::make()->title('Configurazione aggiornata')->success()->send();
@@ -817,6 +841,9 @@ class ConfigureMachineAction
             'machine_product_id' => $machine->id,
             'configuration_discount' => $record->discount,
             'contratto_assistenza' => $record->contratto_assistenza ?? '',
+            // Il sistema di conteggio sta su righe sue: se ce n'e' uno solo
+            // nel preventivo, il passo si riapre con dentro quello che c'e'.
+            ...ConteggioConfigurator::statoDa($record->quote),
         ];
 
         $selectedIds = $record->options()->pluck('product_id');

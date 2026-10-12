@@ -37,7 +37,7 @@ class Noleggio extends Model
     protected $fillable = [
         'tenant_id', 'customer_id', 'machine_unit_id', 'quote_id', 'number', 'descrizione',
         'listino', 'sconto_acquisto', 'costo', 'mesi', 'base_consumo', 'margine',
-        'ammortamento_base', 'ammortamento_mesi', 'detergenti_mese', 'ricarico_detergenti', 'caffe_mese', 'ricarico_caffe', 'caffe_kg_mese', 'detergenti_inclusi',
+        'ammortamento_base', 'ammortamento_mesi', 'detergenti_mese', 'ricarico_detergenti', 'caffe_mese', 'ricarico_caffe',
         'valore_residuo', 'full_service_percentuale',
         'quota_macchina', 'quota_servizio', 'quota_detergenti', 'quota_caffe', 'quota_consumabili', 'canone', 'mese_pareggio',
         'prezzo_battuta', 'minimo_mensile',
@@ -49,7 +49,7 @@ class Noleggio extends Model
     protected $casts = [
         'listino' => 'decimal:2', 'sconto_acquisto' => 'decimal:2', 'costo' => 'decimal:2', 'mesi' => 'integer',
         'margine' => 'decimal:2', 'detergenti_mese' => 'decimal:2', 'ricarico_detergenti' => 'decimal:2',
-        'caffe_mese' => 'decimal:2', 'caffe_kg_mese' => 'decimal:2', 'ricarico_caffe' => 'decimal:2', 'quota_caffe' => 'decimal:2',
+        'caffe_mese' => 'decimal:2', 'ricarico_caffe' => 'decimal:2', 'quota_caffe' => 'decimal:2',
         'valore_residuo' => 'decimal:2', 'full_service_percentuale' => 'decimal:2',
         'quota_macchina' => 'decimal:2', 'quota_servizio' => 'decimal:2',
         'quota_detergenti' => 'decimal:2', 'quota_consumabili' => 'decimal:2', 'canone' => 'decimal:2',

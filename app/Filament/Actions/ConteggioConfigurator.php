@@ -5,6 +5,7 @@ namespace App\Filament\Actions;
 use App\Models\Product;
 use App\Models\ProductFamily;
 use App\Models\Quote;
+use App\Models\QuoteProduct;
 use Database\Seeders\FrankeAccountingHousingsSeeder;
 use Filament\Forms;
 use Filament\Forms\Components\Wizard\Step;
@@ -348,6 +349,117 @@ class ConteggioConfigurator
             'discount' => $sconto,
             'tax' => 22,
         ]);
+    }
+
+    /**
+     * Le righe di primo livello del preventivo che sono un sistema di
+     * conteggio. Servono a "Modifica configurazione": il passo c'era solo
+     * in creazione, e chi doveva correggere il lettore scelto non aveva
+     * modo di farlo dal wizard (segnalazione dell'ufficio, 12/10/2026).
+     *
+     * @return Collection<int, QuoteProduct>
+     */
+    public static function righe(Quote $quote): Collection
+    {
+        return $quote->quoteProducts()
+            ->whereNull('parent_quote_product_id')
+            ->with(['product.family', 'options.product'])
+            ->get()
+            ->filter(fn (QuoteProduct $riga) => $riga->product?->family?->name === FrankeAccountingHousingsSeeder::FAMIGLIA)
+            ->values();
+    }
+
+    /**
+     * Lo stato del passo ricostruito da quello che c'e' nel preventivo:
+     * l'alloggiamento e il lettore si rileggono dal nome del prodotto, che
+     * e' sempre "Alloggiamento conteggio AC125 per lettore Nayax [Onyx]".
+     *
+     * Vuoto se nel preventivo ci sono due sistemi di conteggio: quale dei
+     * due appartenga a quale macchina il preventivo non lo sa, e indovinare
+     * significherebbe sovrascrivere quello sbagliato.
+     *
+     * @return array<string, mixed>
+     */
+    public static function statoDa(Quote $quote): array
+    {
+        $righe = static::righe($quote);
+
+        if ($righe->count() !== 1) {
+            return [];
+        }
+
+        $riga = $righe->first();
+        $nome = (string) $riga->product?->name;
+
+        $alloggiamento = collect(array_keys(self::ALLOGGIAMENTI))
+            ->first(fn (string $sigla) => str_contains($nome, 'conteggio '.$sigla));
+
+        $opzioni = $riga->options->pluck('quantity', 'product.sku');
+
+        return [
+            'alloggiamento' => $alloggiamento,
+            'con_lettore' => str_contains(mb_strtolower($nome), 'per lettore') ? 'si' : 'no',
+            'conteggio_product_id' => $riga->product_id,
+            'interruttore_chiave' => $opzioni->has(self::SKU_INTERRUTTORE),
+            'gettoni' => (int) ($opzioni[self::SKU_GETTONI] ?? 0),
+            // La SU03 EC e' una riga di primo livello sua: se c'e' gia', il
+            // passo non deve proporre di aggiungerla una seconda volta.
+            'aggiungi_su03' => ! static::haGiaLaSu03($quote),
+        ];
+    }
+
+    /**
+     * Rifa' le righe del conteggio dopo una modifica: si cancella quella che
+     * c'era (con le sue opzioni appese) e si ricrea da zero, come fa
+     * updateQuoteProducts() con le opzioni della macchina.
+     *
+     * Non tocca la riga della SU03 EC: non e' un'opzione del conteggio ed e'
+     * della macchina, non di questo passo.
+     */
+    public static function aggiornaRighe(Quote $quote, array $data, float $sconto = 0): void
+    {
+        $righe = static::righe($quote);
+
+        if ($righe->count() > 1) {
+            Notification::make()
+                ->title('Due sistemi di conteggio nel preventivo')
+                ->body('Quale appartiene a questa macchina non si puo\' sapere: sistemali dalle righe del preventivo.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $primaCera = $righe->first();
+        $sceltoAdesso = $data['conteggio_product_id'] ?? null;
+
+        // Niente prima, niente adesso: non c'e' nulla da fare.
+        if (! $primaCera && ! $sceltoAdesso) {
+            return;
+        }
+
+        if ($primaCera) {
+            $primaCera->options()->delete();
+            $primaCera->delete();
+        }
+
+        if ($sceltoAdesso) {
+            // Senza la SU03 gia' presente il passo la ripropone: qui pero'
+            // si sta modificando, e una seconda riga sarebbe un doppione.
+            static::creaRighe($quote, $data + ['aggiungi_su03' => ($data['aggiungi_su03'] ?? false) && ! static::haGiaLaSu03($quote)], $sconto);
+
+            return;
+        }
+
+        $quote->updateTotal();
+    }
+
+    /** C'e' gia' una riga SU03 EC nel preventivo? */
+    private static function haGiaLaSu03(Quote $quote): bool
+    {
+        return $quote->quoteProducts()
+            ->whereHas('product', fn ($q) => $q->where('sku', self::SKU_SU03_EC))
+            ->exists();
     }
 
     /**
