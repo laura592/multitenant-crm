@@ -665,6 +665,23 @@ class EurekaClient
     }
 
     /**
+     * Un documento di magazzino/vendita per intero (GET /b10/{id}): testata,
+     * intestatario, destinazione, righe.
+     *
+     * Il modulo documenti e' filtrato da una whitelist lato Eureka: passano
+     * BC (bolle di vendita), FB e SL, mentre BCC/BCF/FT rispondono 401 "Tipo
+     * documento non consentito" — vedi docs/gestionale-eureka/macchinari.md.
+     * NULL copre entrambi i casi (non consentito, non risposto): chi chiama
+     * tratta il documento come non leggibile e tira avanti.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function documentoB10(int $id): ?array
+    {
+        return $this->getJson('/b10/'.$id, timeout: 30);
+    }
+
+    /**
      * Anagrafiche con almeno una partita aperta, in una chiamata
      * (/contabilita/saldi, o la variante fornitori). Sono ~87 clienti e ~56
      * fornitori: l'elenco serve a sapere PER CHI vale la pena chiedere il
