@@ -199,7 +199,15 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                         ->placeholder('Nessun ricambio utilizzato')
                         ->columns(4)
                         ->schema([
-                            TextEntry::make('material.display_label')->label('Materiale'),
+                            // Il codice e' quello che si cerca su Eureka
+                            // (LAV2MART, ULTVIAMART, OREMART...): display_label
+                            // da' solo la descrizione, e senza codice sembrava
+                            // che il rapportino non usasse gli articoli giusti.
+                            TextEntry::make('material.display_label')
+                                ->label('Materiale')
+                                ->formatStateUsing(fn (?string $state, $record): string => trim(
+                                    ($record->material?->code ? $record->material->code.' — ' : '').($state ?: '—')
+                                )),
                             TextEntry::make('quantity')->label('Quantità'),
                             TextEntry::make('unit_cost_snapshot')->label('Prezzo unit.')->money('EUR')->placeholder('—'),
                             TextEntry::make('line_total_snapshot')->label('Importo')->money('EUR')->placeholder('—'),
@@ -1509,25 +1517,36 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                     ->wrap()
                     ->sortable()
                     ->toggleable(),
-                Tables\Columns\IconColumn::make('gestionale_sync_status')->visibleFrom('md')
+                // Badge scritto e non icona: l'icona era la stessa (spunta)
+                // per "inviato" e per "importato da Eureka", distinguibili
+                // solo dal colore o dal tooltip, e in elenco non si capiva
+                // quali rapportini fossero su Eureka ne' con che numero.
+                // Qui c'e' scritto il numero della scheda quando c'e'.
+                //
+                // "Non inviato" era fuorviante per uno storico ripescato da un
+                // import (eureka_service_report_id valorizzato,
+                // gestionale_sync_status pero' mai toccato perche' quel campo
+                // segue solo gli invii CRM->Eureka): sembrava un rapportino da
+                // inviare quando in realta' e' gia' su Eureka, solo arrivato
+                // nel verso opposto.
+                Tables\Columns\TextColumn::make('gestionale_sync_status')->visibleFrom('md')
                     ->label('Eureka')
-                    // Icona invece del badge testuale per risparmiare
-                    // spazio in tabella (stesso pattern di
-                    // MachineUnitResource::table() colonna "Da Eureka").
-                    // "Non inviato" era fuorviante per uno storico ripescato
-                    // da un import (eureka_service_report_id valorizzato,
-                    // gestionale_sync_status pero' mai toccato perche' quel
-                    // campo segue solo gli invii CRM->Eureka): sembrava un
-                    // rapportino da inviare quando in realta' e' gia' su
-                    // Eureka, solo arrivato nel verso opposto.
-                    ->state(fn (ServiceReport $record) => self::gestionaleDisplayState($record))
-                    ->icon(fn (?string $state) => match ($state) {
-                        'sent', 'imported' => 'heroicon-o-check-circle',
+                    ->badge()
+                    ->state(function (ServiceReport $record): string {
+                        $stato = self::gestionaleDisplayState($record);
+
+                        return in_array($stato, ['sent', 'imported'], true) && $record->gestionale_number
+                            ? (string) $record->gestionale_number
+                            : (self::gestionaleSyncStatusLabels()[$stato] ?? self::gestionaleSyncStatusLabels()['none']);
+                    })
+                    ->icon(fn (ServiceReport $record) => match (self::gestionaleDisplayState($record)) {
+                        'sent' => 'heroicon-o-arrow-up-tray',
+                        'imported' => 'heroicon-o-arrow-down-tray',
                         'queued' => 'heroicon-o-clock',
                         'failed' => 'heroicon-o-x-circle',
                         default => 'heroicon-o-minus-circle',
                     })
-                    ->color(fn (?string $state) => self::gestionaleSyncStatusColors()[$state] ?? self::gestionaleSyncStatusColors()['none'])
+                    ->color(fn (ServiceReport $record) => self::gestionaleSyncStatusColors()[self::gestionaleDisplayState($record)] ?? self::gestionaleSyncStatusColors()['none'])
                     ->tooltip(fn (ServiceReport $record) => self::gestionaleSyncStatusLabels()[self::gestionaleDisplayState($record)] ?? self::gestionaleSyncStatusLabels()['none']),
             ])
             ->filters([
