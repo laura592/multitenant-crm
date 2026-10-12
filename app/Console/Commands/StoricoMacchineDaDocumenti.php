@@ -88,17 +88,26 @@ class StoricoMacchineDaDocumenti extends Command
             ->withoutGlobalScopes()
             ->where('tenant_id', $tenant->id)
             ->whereNull('deleted_at')
-            ->get(['id', 'company_name', 'gestionale_code']);
+            ->get(['id', 'company_name', 'gestionale_code', 'billing_customer_id']);
 
         $perCodice = $clienti->whereNotNull('gestionale_code')->keyBy(fn (Customer $c) => (int) $c->gestionale_code);
         $perNome = $clienti->keyBy(fn (Customer $c) => self::normalizza($c->company_name));
         $nomi = $clienti->pluck('company_name', 'id');
+
+        // Chi paga per chi, e il nome normalizzato di ognuno: servono a NON
+        // chiamare anomalia due cose che non lo sono — la fattura intestata
+        // al pagante (Dersut compra la macchina, il cliente la usa) e le due
+        // schede dello stesso cliente (906 "Hotel Neps" e 907
+        // "Hotel-Ristorante Neps").
+        $paganti = $clienti->pluck('billing_customer_id', 'id');
+        $nomiNormalizzati = $clienti->mapWithKeys(fn (Customer $c) => [$c->id => self::normalizza($c->company_name)]);
 
         $client = new EurekaClient($tenant);
         $daFare = [];
         $senzaDocumenti = 0;
         $alClienteSenzaDocumento = [];
         $documentoAltrove = [];
+        $doveNonSappiamo = [];
 
         foreach ($macchine as $macchina) {
             $movimenti = $esito['movimenti'][MachineUnit::chiaveMatricola($macchina->serial_number)] ?? [];
@@ -116,7 +125,15 @@ class StoricoMacchineDaDocumenti extends Command
                 continue;
             }
 
-            $this->anomalie($macchina, $periodi, $nomi, $alClienteSenzaDocumento, $documentoAltrove);
+            $this->anomalie(
+                $macchina,
+                $periodi,
+                $nomi,
+                compatibile: fn (?string $a, ?string $b): bool => $this->compatibili($a, $b, $macchina, $paganti, $nomiNormalizzati),
+                alClienteSenzaDocumento: $alClienteSenzaDocumento,
+                documentoAltrove: $documentoAltrove,
+                doveNonSappiamo: $doveNonSappiamo,
+            );
 
             $lavoro = $this->confronta($macchina, $periodi);
 
@@ -128,7 +145,7 @@ class StoricoMacchineDaDocumenti extends Command
         $this->line('');
         $this->line('Macchine senza nessun documento su Eureka: '.$senzaDocumenti.' su '.$macchine->count());
 
-        $this->mostraAnomalie($alClienteSenzaDocumento, $documentoAltrove);
+        $this->mostraAnomalie($alClienteSenzaDocumento, $documentoAltrove, $doveNonSappiamo);
 
         if ($daFare === []) {
             $this->info('Storico: i documenti non aggiungono niente a quello che c\'e\' nel CRM.');
@@ -275,21 +292,30 @@ class StoricoMacchineDaDocumenti extends Command
     }
 
     /**
-     * Le due liste che l'ufficio ha chiesto: dove la macchina sta senza che
-     * nessun documento lo dica, e dove i documenti la mandano senza che il
-     * CRM l'abbia segnata.
+     * Le liste che l'ufficio ha chiesto: "le macchine che sono nel posto
+     * sbagliato, nel senso che sono da un cliente ma manca il DDT o
+     * viceversa ho il DDT ma non sono segnate al cliente" (12/10/2026).
+     *
+     * Tre liste e non due, perche' i casi sono tre e hanno urgenze diverse:
+     * il CRM non sa dov'e' (nessun posizionamento aperto, ma un documento
+     * dice a chi e' andata), il CRM la da' da un cliente che i documenti non
+     * nominano, i documenti la danno da un altro cliente.
      *
      * @param  array<int, array<string, mixed>>  $periodi
      * @param  Collection<string, string>  $nomi
+     * @param  \Closure(?string, ?string): bool  $compatibile
      * @param  array<int, array<int, string>>  $alClienteSenzaDocumento
      * @param  array<int, array<int, string>>  $documentoAltrove
+     * @param  array<int, array<int, string>>  $doveNonSappiamo
      */
     private function anomalie(
         MachineUnit $macchina,
         array $periodi,
         Collection $nomi,
+        \Closure $compatibile,
         array &$alClienteSenzaDocumento,
         array &$documentoAltrove,
+        array &$doveNonSappiamo,
     ): void {
         $attuale = $macchina->placements->last(fn (MachineUnitPlacement $p) => $p->removed_at === null);
         $ultimo = end($periodi) ?: null;
@@ -298,10 +324,32 @@ class StoricoMacchineDaDocumenti extends Command
             return;
         }
 
-        $clientiNeiDocumenti = collect($periodi)->pluck('cliente')->filter()->unique();
+        $doveDicono = $ultimo['in_casa'] ? null : $ultimo['cliente'];
 
-        // Il CRM la da' da un cliente che nei documenti non compare mai.
-        if ($attuale?->customer_id && ! $clientiNeiDocumenti->contains($attuale->customer_id)) {
+        // Nessun posizionamento aperto: il CRM non sa dov'e'. Se un documento
+        // dice a chi e' andata, e' una macchina da collocare.
+        if (! $attuale) {
+            if ($doveDicono) {
+                $doveNonSappiamo[] = [
+                    $macchina->serial_number,
+                    DisplayName::titleCase($nomi[$doveDicono] ?? '?'),
+                    $ultimo['dal']->format('d/m/Y'),
+                    $ultimo['documento'],
+                ];
+            }
+
+            return;
+        }
+
+        // Il CRM la da' da un cliente che in nessun documento compare, ne'
+        // lui ne' chi paga per lui.
+        $nominato = collect($periodi)
+            ->pluck('cliente')
+            ->filter()
+            ->unique()
+            ->contains(fn (?string $id) => $compatibile($id, $attuale->customer_id));
+
+        if ($attuale->customer_id && ! $nominato) {
             $alClienteSenzaDocumento[] = [
                 $macchina->serial_number,
                 DisplayName::titleCase($nomi[$attuale->customer_id] ?? '?'),
@@ -310,26 +358,76 @@ class StoricoMacchineDaDocumenti extends Command
             ];
         }
 
-        // I documenti la mandano da un cliente (o in casa) e il CRM e'
-        // rimasto indietro.
-        $doveDicono = $ultimo['in_casa'] ? null : $ultimo['cliente'];
-
-        if ($doveDicono !== ($attuale?->customer_id)) {
+        // I documenti la mandano da un altro cliente e il CRM e' rimasto
+        // indietro. L'ultimo documento intestato a noi non basta a dire che
+        // e' rientrata (puo' essere una riparazione fatta in casa): si segna
+        // solo come documento intestato a noi, e decide una persona.
+        if (! $compatibile($doveDicono, $attuale->customer_id)) {
             $documentoAltrove[] = [
                 $macchina->serial_number,
-                $attuale?->customer_id ? DisplayName::titleCase($nomi[$attuale->customer_id] ?? '?') : 'magazzino',
-                $doveDicono ? DisplayName::titleCase($nomi[$doveDicono] ?? '?') : 'rientrata in casa',
+                $attuale->customer_id ? DisplayName::titleCase($nomi[$attuale->customer_id] ?? '?') : 'magazzino',
+                $ultimo['in_casa']
+                    ? 'documento intestato a noi'
+                    : DisplayName::titleCase($nomi[$doveDicono] ?? '?'),
                 $ultimo['documento'],
             ];
         }
     }
 
     /**
+     * Lo stesso posto, detto in due modi: lo stesso cliente, il pagante del
+     * cliente (o della macchina), oppure due schede dello stesso nome.
+     *
+     * @param  Collection<string, ?string>  $paganti
+     * @param  Collection<string, string>  $nomiNormalizzati
+     */
+    private function compatibili(
+        ?string $uno,
+        ?string $altro,
+        MachineUnit $macchina,
+        Collection $paganti,
+        Collection $nomiNormalizzati,
+    ): bool {
+        if ($uno === $altro) {
+            return true;
+        }
+
+        if ($uno === null || $altro === null) {
+            // Un documento intestato a noi contro un cliente: diverso.
+            // Il pagante della macchina invece vale come riscontro.
+            return false;
+        }
+
+        if ($paganti->get($uno) === $altro || $paganti->get($altro) === $uno) {
+            return true;
+        }
+
+        if ($macchina->billing_customer_id && in_array($macchina->billing_customer_id, [$uno, $altro], true)) {
+            return true;
+        }
+
+        $nomeUno = $nomiNormalizzati->get($uno);
+        $nomeAltro = $nomiNormalizzati->get($altro);
+
+        return $nomeUno !== null && $nomeUno !== '' && $nomeUno === $nomeAltro;
+    }
+
+    /**
      * @param  array<int, array<int, string>>  $alClienteSenzaDocumento
      * @param  array<int, array<int, string>>  $documentoAltrove
+     * @param  array<int, array<int, string>>  $doveNonSappiamo
      */
-    private function mostraAnomalie(array $alClienteSenzaDocumento, array $documentoAltrove): void
+    private function mostraAnomalie(array $alClienteSenzaDocumento, array $documentoAltrove, array $doveNonSappiamo): void
     {
+        $this->line('');
+        $this->line('IL CRM NON SA DOVE SONO, I DOCUMENTI SI\' ('.count($doveNonSappiamo).')');
+
+        if ($doveNonSappiamo === []) {
+            $this->line('  nessuna');
+        } else {
+            $this->table(['Matricola', 'Secondo i documenti e\' da', 'Dal', 'Documento'], $doveNonSappiamo);
+        }
+
         $this->line('');
         $this->line('DA UN CLIENTE, MA NESSUN DOCUMENTO LO DICE ('.count($alClienteSenzaDocumento).')');
 
