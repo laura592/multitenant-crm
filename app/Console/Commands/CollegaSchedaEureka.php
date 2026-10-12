@@ -88,7 +88,7 @@ class CollegaSchedaEureka extends Command
             }
 
             $candidati = collect($schede)
-                ->filter('is_array')
+                ->filter(fn ($s) => is_array($s))
                 ->map(fn (array $s) => [
                     'id' => (int) ($s['id_eureka'] ?? $s['id'] ?? 0),
                     'numero' => (int) ($s['numero_doc_t23'] ?? $s['numero'] ?? 0),
