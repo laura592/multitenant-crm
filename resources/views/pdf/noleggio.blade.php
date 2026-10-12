@@ -267,8 +267,13 @@
         @endif
         <li>Le <strong>predisposizioni</strong> necessarie all'installazione — punto acqua, scarico e alimentazione
             elettrica — che restano a carico del Cliente e devono essere realizzate prima dell'intervento.</li>
-        <li>I <strong>quantitativi di fornitura eccedenti</strong> quelli indicati all'art. 5, che sono
-            fatturati a consumo con il conguaglio annuale di cui all'art. 3.</li>
+        {{-- Solo a canone: pagando a erogazione le forniture crescono con le
+             erogazioni per costruzione, e fatturare anche l'eccedenza
+             contraddirebbe "0,50 comprensivo di tutto". --}}
+        @if (blank($noleggio->prezzo_battuta))
+            <li>I <strong>quantitativi di fornitura eccedenti</strong> quelli indicati all'art. 5, che sono
+                fatturati a consumo con il conguaglio annuale di cui all'art. 3.</li>
+        @endif
         <li>Il <strong>latte</strong> e gli altri ingredienti non espressamente elencati all'art. 5.</li>
         {{-- Detto per nome: "ingredienti" non copre un bicchiere, e dare per
              scontato che i consumabili siano compresi e' esattamente il
@@ -296,8 +301,16 @@
         l'accesso al personale tecnico per gli interventi previsti.</p>
 
     <h3 class="art">Art. 9 – Recesso anticipato</h3>
-    <p>In caso di recesso del Cliente prima della scadenza restano dovuti i canoni residui, salvo diverso accordo
-        scritto fra le parti.</p>
+    @if (filled($noleggio->prezzo_battuta))
+        {{-- A erogazione non ci sono canoni residui da pretendere: si paga
+             quello che il contatore ha contato fino al ritiro. --}}
+        <p>In caso di recesso del Cliente prima della scadenza restano dovute le erogazioni rilevate fino alla
+            restituzione dell'attrezzatura, oltre al corrispettivo di consegna e ritiro di cui all'art. 6, salvo
+            diverso accordo scritto fra le parti.</p>
+    @else
+        <p>In caso di recesso del Cliente prima della scadenza restano dovuti i canoni residui, salvo diverso accordo
+            scritto fra le parti.</p>
+    @endif
 
     <h3 class="art">Art. 10 – Legge applicabile e foro competente</h3>
     {{-- Foro indicato per nome e non "quello della sede del Fornitore": una
