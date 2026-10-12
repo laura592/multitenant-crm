@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\ServiceReport;
+use App\Models\Tenant;
 use App\Support\Gestionale\FattureRapportino;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Collection;
@@ -104,6 +105,82 @@ final class RapportiniPerFattura
             : 'senza-fattura-'.Str::slug($gruppo['cliente']);
 
         return 'rapportini-'.$pezzo.'.pdf';
+    }
+
+    /**
+     * I rapportini di una fattura, cercati per id Eureka della fattura.
+     *
+     * L'id e non il numero: i numeri ricominciano da 1 ogni anno, e "la 459"
+     * da sola non dice quale. Il filtro JSON trova anche le fatture in
+     * seconda posizione (un rapportino puo' finire su piu' documenti), poi
+     * si ricontrolla in PHP perche' JSON_CONTAINS fa match parziale.
+     *
+     * @return Collection<int, ServiceReport>
+     */
+    public static function rapportiniDellaFattura(Tenant $tenant, int $idFattura): Collection
+    {
+        return ServiceReport::query()
+            ->where('tenant_id', $tenant->id)
+            ->whereJsonContains('eureka_fatture', ['id_fattura' => $idFattura])
+            ->with(self::relazioni())
+            ->orderBy('intervention_date')
+            ->orderBy('number')
+            ->get()
+            ->filter(fn (ServiceReport $r) => collect($r->eureka_fatture ?? [])
+                ->contains(fn ($f) => (int) ($f['id_fattura'] ?? 0) === $idFattura))
+            ->values();
+    }
+
+    /**
+     * Le fatture fra cui scegliere, dalla piu' recente: etichetta, cliente e
+     * quanti rapportini ci sono dentro.
+     *
+     * Si legge dai rapportini e non dalle fatture importate: qui servono
+     * solo le fatture che hanno dei rapportini da stampare, e il numero di
+     * rapportini va nell'etichetta.
+     *
+     * @return array<int, string> id_fattura => etichetta
+     */
+    public static function opzioni(Tenant $tenant, int $mesi = 18): array
+    {
+        $righe = ServiceReport::query()
+            ->where('tenant_id', $tenant->id)
+            ->whereNotNull('eureka_fatture')
+            ->where('intervention_date', '>=', now()->subMonths($mesi)->toDateString())
+            ->with('customer:id,company_name')
+            ->orderByDesc('intervention_date')
+            ->get(['id', 'customer_id', 'intervention_date', 'eureka_fatture']);
+
+        $fatture = [];
+
+        foreach ($righe as $rapportino) {
+            foreach ((array) ($rapportino->eureka_fatture ?? []) as $f) {
+                $id = (int) ($f['id_fattura'] ?? 0);
+
+                if ($id === 0) {
+                    continue;
+                }
+
+                $fatture[$id] ??= [
+                    'etichetta' => FattureRapportino::etichetta($f),
+                    'data' => $f['data_fattura'] ?? null,
+                    'clienti' => collect(),
+                    'quanti' => 0,
+                ];
+
+                $fatture[$id]['quanti']++;
+                $fatture[$id]['clienti']->push(DisplayName::titleCase($rapportino->customer?->company_name));
+            }
+        }
+
+        uasort($fatture, fn (array $a, array $b) => ($b['data'] ?? '') <=> ($a['data'] ?? ''));
+
+        return array_map(function (array $f): string {
+            $clienti = $f['clienti']->filter()->unique();
+            $chi = $clienti->count() === 1 ? $clienti->first() : $clienti->count().' clienti';
+
+            return $f['etichetta'].' — '.$chi.' ('.$f['quanti'].' '.($f['quanti'] === 1 ? 'rapportino' : 'rapportini').')';
+        }, $fatture);
     }
 
     /**

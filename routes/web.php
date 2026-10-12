@@ -8,6 +8,7 @@ use App\Http\Controllers\CustomerSchedaAnagraficaController;
 use App\Http\Controllers\PaganteStampaController;
 use App\Http\Controllers\QuoteClientController;
 use App\Http\Controllers\QuoteController;
+use App\Http\Controllers\RapportiniFatturaController;
 use App\Http\Controllers\RiepilogoRapportiniController;
 use App\Http\Controllers\ServiceReportController;
 use App\Http\Controllers\StampaTemporaneaController;
@@ -58,6 +59,11 @@ Route::middleware(['auth', SetPermissionsTeamId::class])->group(function () {
         ->whereNumber('idFattura')
         ->name('service-reports.fattura-eureka');
     Route::get('service-reports/riepilogo', RiepilogoRapportiniController::class)->name('service-reports.riepilogo');
+    // I rapportini di una fattura, uniti in un PDF solo (l'id Eureka della
+    // fattura, non il suo numero: i numeri ricominciano ogni anno).
+    Route::get('service-reports/fattura/{idFattura}/pdf', RapportiniFatturaController::class)
+        ->whereNumber('idFattura')
+        ->name('service-reports.fattura-pdf');
     Route::get('paganti/{pagante}/macchine', PaganteStampaController::class)->name('paganti.stampa');
     Route::get('quotes/{quote}/pdf', [QuoteController::class, 'pdf'])->name('quotes.pdf');
     Route::get('quote-responses/{quoteResponse}/{file}', [QuoteController::class, 'responseFile'])

@@ -4,6 +4,7 @@ namespace App\Filament\Resources\ServiceReportResource\Pages;
 
 use App\Filament\Resources\ServiceReportResource;
 use App\Filament\Pages\ClientiVicini;
+use App\Support\RapportiniPerFattura;
 use Filament\Actions;
 use Filament\Forms;
 use Filament\Resources\Components\Tab;
@@ -58,6 +59,39 @@ class ListServiceReports extends ListRecords
                     // JSON_UNESCAPED_SLASHES: senza, l'URL finisce nel JS
                     // come "http:\/\/localhost/..." — funziona, ma e' illeggibile
                     // in console e nei log del browser.
+                    $livewire->js('window.open('.json_encode($url, JSON_UNESCAPED_SLASHES).", '_blank')");
+                })
+                ->visible(fn (): bool => auth()->user()?->can('viewAny', \App\Models\ServiceReport::class) ?? false),
+            // "Se scelgo fattura 459 posso salvare il PDF dei 3 rapportini
+            // che sono in quella fattura, uniti" (ufficio, 12/10/2026). Un
+            // PDF solo, non tre allegati da ricomporre.
+            Actions\Action::make('pdfFattura')
+                ->label('PDF di una fattura')
+                ->icon('heroicon-o-receipt-percent')
+                ->color('gray')
+                ->modalHeading('Rapportini di una fattura')
+                ->modalDescription('Un PDF solo: prima l\'elenco dei rapportini della fattura, poi ognuno per intero.')
+                ->modalSubmitActionLabel('Apri il PDF')
+                ->modalWidth('lg')
+                ->form([
+                    Forms\Components\Select::make('id_fattura')
+                        ->label('Fattura')
+                        // searchable: le fatture degli ultimi diciotto mesi
+                        // sono centinaia, si cerca per numero ("459") o per
+                        // cliente.
+                        ->options(fn (): array => RapportiniPerFattura::opzioni(\Filament\Facades\Filament::getTenant()))
+                        ->searchable()
+                        ->required()
+                        ->helperText('Solo le fatture che hanno rapportini collegati, dalla più recente.'),
+                ])
+                // Come "Stampa riepilogo": l'URL si conosce solo al submit,
+                // quindi la scheda nuova la apre il JS.
+                ->action(function (array $data, $livewire): void {
+                    $url = route('service-reports.fattura-pdf', [
+                        'idFattura' => (int) $data['id_fattura'],
+                        'tenant' => \Filament\Facades\Filament::getTenant()?->getKey(),
+                    ]);
+
                     $livewire->js('window.open('.json_encode($url, JSON_UNESCAPED_SLASHES).", '_blank')");
                 })
                 ->visible(fn (): bool => auth()->user()?->can('viewAny', \App\Models\ServiceReport::class) ?? false),
