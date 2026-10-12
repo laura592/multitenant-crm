@@ -46,9 +46,6 @@ class StoricoMacchineDaDocumenti extends Command
 
     protected $description = 'Ricostruisce lo storico dei posizionamenti dai documenti Eureka e segnala le macchine nel posto sbagliato';
 
-    /** @var array<int, string> */
-    private array $righeAnomalie = [];
-
     public function handle(): int
     {
         $tenant = Tenant::query()->where('slug', $this->option('tenant'))->firstOrFail();
