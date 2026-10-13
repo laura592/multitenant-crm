@@ -257,8 +257,47 @@ class GestionaleSyncRunner
         ])->all();
 
         $searchResults = $this->client->pooledGet('/anagrafica/cerca', $searchParams);
+        $falliti = $this->client->chiaviPooledFallite();
+
+        // Una chiamata fallita nel gruppo torna vuota (vedi
+        // EurekaClient::pooledGet), e vuota qui significava "su Eureka questo
+        // cliente non c'e'": la proposta non nasceva e nessuno sapeva perche'.
+        // E' il caso dello Stabilimento Termale Ermitage, che il 13/10/2026
+        // risultava senza collegamento proposto mentre la ricerca per nome,
+        // rifatta a mano, trovava l'unico cliente giusto (id 3419).
+        //
+        // Quindi: le cadute si riprovano, e quelle che restano giu' si
+        // saltano con una riga nel registro invece di diventare un "non
+        // trovato" silenzioso.
+        for ($tentativo = 0; $tentativo < 2 && $falliti !== []; $tentativo++) {
+            usleep(2_000_000);
+
+            $ripetute = $this->client->pooledGet('/anagrafica/cerca', array_intersect_key($searchParams, array_flip($falliti)));
+            $ancora = $this->client->chiaviPooledFallite();
+
+            foreach ($ripetute as $chiave => $valore) {
+                if (! in_array($chiave, $ancora, true)) {
+                    $searchResults[$chiave] = $valore;
+                }
+            }
+
+            $falliti = $ancora;
+        }
+
+        if ($falliti !== []) {
+            RegistroSync::movimento('ricerca anagrafica non riuscita', 'niente proposta per questi clienti', [
+                'quanti' => count($falliti),
+                'clienti' => Customer::query()->whereIn('id', array_slice($falliti, 0, 10))->pluck('company_name')->all(),
+            ]);
+        }
 
         foreach ($candidates as $customer) {
+            // Niente proposta e niente silenzio: di questo cliente non
+            // sappiamo, non e' detto che non ci sia.
+            if (in_array($customer->id, $falliti, true)) {
+                continue;
+            }
+
             $results = $searchResults[$customer->id] ?? [];
 
             // La ricerca per P.IVA e' gia' un match preciso lato Eureka; la
