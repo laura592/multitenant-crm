@@ -297,7 +297,14 @@ final class RiabbinaImportati
             ->where('tenant_id', $nostro->tenant_id)
             ->where('source', ServiceReport::SOURCE_EUREKA)
             ->where('customer_id', $nostro->customer_id)
-            ->whereDate('intervention_date', $nostro->intervention_date->toDateString())
+            // Una finestra di giorni e non il solo giorno dell'intervento:
+            // l'ufficio registra la scheda su Eureka giorni dopo, e il
+            // confronto vero lo fa ConfrontoRapportini::confidenza() su
+            // macchina e articoli (vedi CERTO_GIORNI_VICINI).
+            ->whereBetween('intervention_date', [
+                $nostro->intervention_date->copy()->subDays(ConfrontoRapportini::GIORNI_TOLLERANZA)->toDateString(),
+                $nostro->intervention_date->copy()->addDays(ConfrontoRapportini::GIORNI_TOLLERANZA)->toDateString(),
+            ])
             ->with(['machineUnit', 'materialsUsed.material'])
             ->get()
             ->filter(fn (ServiceReport $s) => ConfrontoRapportini::confidenza($nostro, $s) !== null)

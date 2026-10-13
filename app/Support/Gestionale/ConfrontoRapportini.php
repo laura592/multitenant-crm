@@ -33,6 +33,22 @@ class ConfrontoRapportini
     public const DA_VERIFICARE = 'stesso cliente e giorno, matricola assente';
 
     /**
+     * Stessa macchina e stessi ricambi, ma a qualche giorno di distanza.
+     *
+     * L'ufficio registra su Eureka giorni dopo l'intervento, e con il
+     * confronto legato allo stesso giorno la gemella non si trovava: il
+     * rapportino del tecnico restava scollegato e la copia importata viveva
+     * accanto. Il 13/10/2026 erano sei casi (Hotel Greif, Market dei Fiori,
+     * Mariver, Acqua Azzurra) piu' le sei schede del Mioni e dell'Ermitage
+     * registrate il giorno dopo, che stanotte sarebbero arrivate come
+     * rapportini nuovi.
+     */
+    public const CERTO_GIORNI_VICINI = 'stessa macchina e stessi ricambi, a pochi giorni';
+
+    /** Quanti giorni di scarto si accettano fra l'intervento e la sua scheda. */
+    public const GIORNI_TOLLERANZA = 7;
+
+    /**
      * Confidenza dell'abbinamento fra due rapportini, o null se non sono
      * confrontabili (cliente o giorno diversi).
      */
@@ -42,17 +58,26 @@ class ConfrontoRapportini
             return null;
         }
 
-        if ($nostro->intervention_date === null || ! $nostro->intervention_date->isSameDay($importato->intervention_date)) {
+        if ($nostro->intervention_date === null) {
             return null;
         }
+
+        $giorni = (int) $nostro->intervention_date->diffInDays($importato->intervention_date);
+
+        if ($giorni > self::GIORNI_TOLLERANZA) {
+            return null;
+        }
+
+        $stessoGiorno = $nostro->intervention_date->isSameDay($importato->intervention_date);
 
         $matrNostra = self::matricola($nostro);
         $matrLoro = self::matricola($importato);
 
         // Senza matricola su almeno uno dei due resta solo cliente + giorno:
-        // troppo poco per dire che sono lo stesso intervento.
+        // troppo poco per dire che sono lo stesso intervento. E a giorni
+        // diversi non resta nemmeno il giorno.
         if ($matrNostra === '' || $matrLoro === '') {
-            return self::DA_VERIFICARE;
+            return $stessoGiorno ? self::DA_VERIFICARE : null;
         }
 
         if ($matrNostra !== $matrLoro) {
@@ -62,7 +87,16 @@ class ConfrontoRapportini
             return null;
         }
 
-        return self::articoliInComune($nostro, $importato) ? self::CERTO : self::PROBABILE;
+        $articoli = self::articoliInComune($nostro, $importato);
+
+        // A giorni diversi serve il riscontro degli articoli: la sola
+        // macchina uguale entro una settimana puo' essere un secondo
+        // intervento vero, non un doppione.
+        if (! $stessoGiorno) {
+            return $articoli ? self::CERTO_GIORNI_VICINI : null;
+        }
+
+        return $articoli ? self::CERTO : self::PROBABILE;
     }
 
     /**
@@ -103,7 +137,8 @@ class ConfrontoRapportini
     public static function peso(?string $motivo): int
     {
         return match ($motivo) {
-            self::CERTO => 3,
+            self::CERTO => 4,
+            self::CERTO_GIORNI_VICINI => 3,
             self::PROBABILE => 2,
             self::DA_VERIFICARE => 1,
             default => 0,
