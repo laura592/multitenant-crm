@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\ServiceReport;
 use App\Models\Tenant;
+use App\Support\Gestionale\DocumentiMacchina;
 use App\Support\EurekaClient;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
@@ -74,6 +75,16 @@ class CollegaSchedaEureka extends Command
             $matricola = trim((string) $rapportino->machine_serial_number);
             $data = $rapportino->intervention_date;
 
+            // Le matricole inventate dal CRM non si cercano: "0000" dentro
+            // una ricerca LIKE prende qualunque numero e tirava su tredici
+            // schede di clienti diversi, proponendo doppioni inesistenti
+            // (visto il 13/10/2026 su RT-2026-0914).
+            if (! DocumentiMacchina::cercabile($matricola)) {
+                $righe[] = [$rapportino->number, $data->format('d/m/Y'), $matricola, 'matricola non cercabile su Eureka'];
+
+                continue;
+            }
+
             try {
                 $schede = $eureka->searchServiceReports([
                     'matricola' => $matricola,
@@ -111,9 +122,11 @@ class CollegaSchedaEureka extends Command
                     $data->format('d/m/Y'),
                     $matricola,
                     match (true) {
-                        $occupate->isNotEmpty() => 'doppione: la scheda e\' di '.$occupate
-                            ->map(fn (array $s) => $gia[$s['id']])
-                            ->implode(', '),
+                        // Una sola scheda occupata: e' la gemella. Piu' di
+                        // una vuol dire che la ricerca ha preso troppo, e
+                        // allora non si propone niente.
+                        $occupate->count() === 1 => 'doppione: la scheda e\' di '.$gia[$occupate->first()['id']],
+                        $occupate->count() > 1 => $occupate->count().' schede diverse la nominano: da guardare a mano',
                         $candidati->isEmpty() => 'nessuna scheda trovata',
                         default => $candidati->count().' candidate: '.$candidati
                             ->map(fn (array $s) => 'n.'.$s['numero'].' del '.$s['data']?->format('d/m/Y'))
@@ -121,7 +134,7 @@ class CollegaSchedaEureka extends Command
                     },
                 ];
 
-                if ($occupate->isNotEmpty() && ! $this->option('dry-run')) {
+                if ($occupate->count() === 1 && ! $this->option('dry-run')) {
                     $this->proponiDoppione($rapportino, (string) $gia[$occupate->first()['id']]);
                 }
 
