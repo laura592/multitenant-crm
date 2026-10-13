@@ -448,9 +448,18 @@ class MachineUnit extends Model
                 ], fn ($v) => $v !== null));
             }
 
+            // Tutte le tabelle che puntano a una macchina, non solo due:
+            // i lavaggi restavano appesi alla macchina archiviata e
+            // sparivano dalla storia di quella tenuta (13/10/2026, la casa
+            // dell'acqua del Marina 2000 ne aveva otto). Elenco verificato
+            // su information_schema: chi aggiunge una tabella con
+            // machine_unit_id la aggiunga anche qui.
             foreach ([
                 ['service_reports', 'machine_unit_id'],
                 ['maintenance_schedules', 'machine_unit_id'],
+                ['lavaggi', 'machine_unit_id'],
+                ['interventi_programmati', 'machine_unit_id'],
+                ['noleggi', 'machine_unit_id'],
             ] as [$tabella, $colonna]) {
                 if (Schema::hasColumn($tabella, $colonna)) {
                     DB::table($tabella)
