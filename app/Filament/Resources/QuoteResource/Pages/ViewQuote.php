@@ -15,11 +15,59 @@ class ViewQuote extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            // Solo "Invia" resta a colore pieno (success): e' l'azione che fa
-            // avanzare davvero il preventivo verso il cliente. Le altre sono
-            // di supporto/secondarie, quindi gray - stesso criterio gia'
-            // applicato alle azioni di riga in QuoteResource::table().
-            Actions\Action::make('convertToOffer')
+            // La richiesta da cui nasce il preventivo: in cima e in finestra,
+            // perche' serve sapere cosa aveva chiesto il cliente mentre si
+            // guarda il preventivo, non in fondo alla pagina (Laura,
+            // 14/10/2026). Il numero sta nell'etichetta: e' l'informazione
+            // che prima si leggeva nel blocco, ora sparito.
+            Actions\Action::make('richiestaInformazioni')
+                ->label(fn () => 'Richiesta '.$this->record->informationRequest?->number)
+                ->icon('heroicon-o-inbox-arrow-down')
+                ->color('gray')
+                ->visible(fn () => filled($this->record->information_request_id))
+                ->modalHeading(fn () => 'Richiesta '.$this->record->informationRequest?->number)
+                ->modalContent(fn () => view(
+                    'filament.modals.richiesta-informazioni',
+                    ['richiesta' => $this->record->informationRequest],
+                ))
+                ->modalSubmitAction(false)
+                ->modalCancelActionLabel('Chiudi'),
+            // Queste due si usano di rado: nel menu, per non allungare la
+            // fila di pulsanti ora che se n'e' aggiunto uno.
+            Actions\ActionGroup::make([
+                $this->azioneOffertaGlobale(),
+                $this->azioneDuplica(),
+            ])
+                ->label('Altro')
+                ->icon('heroicon-o-ellipsis-horizontal')
+                ->color('gray')
+                ->button(),
+            Actions\Action::make('pdf')
+                ->label('PDF')
+                ->icon('heroicon-o-document-arrow-down')
+                ->color('gray')
+                ->url(fn () => route('quotes.pdf', $this->record))
+                ->openUrlInNewTab(),
+            Actions\Action::make('send')
+                ->label('Invia')
+                ->icon('heroicon-o-paper-airplane')
+                ->color('success')
+                ->form(fn () => QuoteResource::sendEmailFormSchema())
+                ->action(fn (array $data) => QuoteResource::sendQuoteEmail($this->record, $data)),
+            Actions\EditAction::make()
+                ->color('gray'),
+        ];
+    }
+
+    /**
+     * Solo "Invia" resta a colore pieno (success): e' l'azione che fa
+     * avanzare davvero il preventivo verso il cliente. Le altre sono di
+     * supporto, quindi gray - stesso criterio delle azioni di riga in
+     * QuoteResource::table().
+     */
+    private function azioneOffertaGlobale(): Actions\Action
+    {
+        return Actions\Action::make('convertToOffer')
                 ->label('Crea offerta globale')
                 ->icon('heroicon-o-rectangle-stack')
                 ->color('gray')
@@ -43,29 +91,18 @@ class ViewQuote extends ViewRecord
                         ->send();
 
                     $this->redirect(QuoteResource::getUrl('edit', ['record' => $this->record]));
-                }),
-            Actions\Action::make('duplicateAsAlternative')
+                });
+    }
+
+    private function azioneDuplica(): Actions\Action
+    {
+        return Actions\Action::make('duplicateAsAlternative')
                 ->label('Duplica come alternativa')
                 ->icon('heroicon-o-document-duplicate')
                 ->color('gray')
                 ->requiresConfirmation()
                 ->modalHeading('Duplicare come preventivo alternativo?')
                 ->modalDescription('Crea una copia in bozza per lo stesso cliente, nella stessa offerta (cosi\' potrai inviarli insieme in un\'unica email) - le righe vengono copiate, le note no.')
-                ->action(fn () => $this->redirect(QuoteResource::getUrl('edit', ['record' => QuoteResource::duplicateAsAlternative($this->record)]))),
-            Actions\Action::make('pdf')
-                ->label('PDF')
-                ->icon('heroicon-o-document-arrow-down')
-                ->color('gray')
-                ->url(fn () => route('quotes.pdf', $this->record))
-                ->openUrlInNewTab(),
-            Actions\Action::make('send')
-                ->label('Invia')
-                ->icon('heroicon-o-paper-airplane')
-                ->color('success')
-                ->form(fn () => QuoteResource::sendEmailFormSchema())
-                ->action(fn (array $data) => QuoteResource::sendQuoteEmail($this->record, $data)),
-            Actions\EditAction::make()
-                ->color('gray'),
-        ];
+                ->action(fn () => $this->redirect(QuoteResource::getUrl('edit', ['record' => QuoteResource::duplicateAsAlternative($this->record)])));
     }
 }
