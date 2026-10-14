@@ -32,16 +32,6 @@ class ViewQuote extends ViewRecord
                 ))
                 ->modalSubmitAction(false)
                 ->modalCancelActionLabel('Chiudi'),
-            // Queste due si usano di rado: nel menu, per non allungare la
-            // fila di pulsanti ora che se n'e' aggiunto uno.
-            Actions\ActionGroup::make([
-                $this->azioneOffertaGlobale(),
-                $this->azioneDuplica(),
-            ])
-                ->label('Altro')
-                ->icon('heroicon-o-ellipsis-horizontal')
-                ->color('gray')
-                ->button(),
             Actions\Action::make('pdf')
                 ->label('PDF')
                 ->icon('heroicon-o-document-arrow-down')
@@ -56,6 +46,16 @@ class ViewQuote extends ViewRecord
                 ->action(fn (array $data) => QuoteResource::sendQuoteEmail($this->record, $data)),
             Actions\EditAction::make()
                 ->color('gray'),
+            // Ultimo della fila: dentro ci sono le due azioni che si usano di
+            // rado, e in coda non rubano l'occhio a quelle di tutti i giorni.
+            Actions\ActionGroup::make([
+                $this->azioneOffertaGlobale(),
+                $this->azioneDuplica(),
+            ])
+                ->label('Altro')
+                ->icon('heroicon-o-ellipsis-horizontal')
+                ->color('gray')
+                ->button(),
         ];
     }
 
