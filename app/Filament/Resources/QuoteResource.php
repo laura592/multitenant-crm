@@ -155,22 +155,29 @@ class QuoteResource extends Resource
                                 ])
                                 ->schema([
                                     TextEntry::make('informationRequest.number')
-                                        ->label('Richiesta')
-                                        ->color('primary')
-                                        ->url(fn (Quote $record) => $record->informationRequest
-                                            ? InformationRequestResource::getUrl('edit', ['record' => $record->informationRequest])
-                                            : null),
+                                        ->label('Richiesta'),
                                     TextEntry::make('informationRequest.created_at')->label('Arrivata il')->date('d/m/Y'),
                                     TextEntry::make('informationRequest.status')
                                         ->label('Stato richiesta')
                                         ->badge()
                                         ->formatStateUsing(fn (?string $state) => InformationRequestResource::statusLabels()[$state] ?? $state)
                                         ->color(fn (?string $state) => InformationRequestResource::statusColors()[$state] ?? 'gray'),
-                                    TextEntry::make('informationRequest.request_details')
-                                        ->label('Cosa chiedeva')
-                                        ->placeholder('—')
-                                        ->limit(300)
-                                        ->columnSpanFull(),
+                                    // Il testo della richiesta in finestra e non steso qui: erano
+                                    // quattro righe che rubavano mezzo schermo, e tagliate a 300
+                                    // caratteri non si leggeva comunque tutto (Laura, 14/10/2026).
+                                    \Filament\Infolists\Components\Actions::make([
+                                        \Filament\Infolists\Components\Actions\Action::make('vediRichiesta')
+                                            ->label('Vedi cosa chiedeva')
+                                            ->icon('heroicon-o-inbox-arrow-down')
+                                            ->color('primary')
+                                            ->modalHeading(fn (Quote $record) => 'Richiesta '.$record->informationRequest?->number)
+                                            ->modalContent(fn (Quote $record) => view(
+                                                'filament.modals.richiesta-informazioni',
+                                                ['richiesta' => $record->informationRequest],
+                                            ))
+                                            ->modalSubmitAction(false)
+                                            ->modalCancelActionLabel('Chiudi'),
+                                    ])->columnSpanFull(),
                                 ]),
                             \Filament\Infolists\Components\Grid::make(12)
                                 ->schema([
