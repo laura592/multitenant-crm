@@ -326,13 +326,19 @@ class InformationRequestResource extends Resource
                             ->map(fn ($note) => $note->logged_at->format('d/m/Y').' — '.$note->body)
                             ->implode(' | '))
                     ->placeholder('—')
-                    ->toggleable(),
+                    // Fuori di default (14/10/2026): la colonna e' larga, e in
+                    // elenco serve sapere QUANDO e' arrivata la richiesta piu'
+                    // di cosa ci si e' scritto sopra. Resta nel menu colonne.
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('handledByUser.name')->label('Gestita da')->placeholder('—')
                     ->toggleable(isToggledHiddenByDefault: true),
-                // Fuori di default anche questa: il numero RI- e' gia' cronologico
-                // e l'ordinamento della tabella resta su created_at comunque.
-                Tables\Columns\TextColumn::make('created_at')->label('Ricevuta il')->dateTime('d/m/Y H:i')->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                // In chiaro dal 14/10/2026: "la data della richiesta non la vedo
+                // mai". Il numero RI- e' cronologico, ma non dice il giorno, e
+                // su un elenco da venti pagine l'eta' del contatto e' la prima
+                // cosa che serve. Solo la data: l'ora allunga la colonna e non
+                // la guarda nessuno.
+                Tables\Columns\TextColumn::make('created_at')->label('Ricevuta il')->date('d/m/Y')->sortable()
+                    ->toggleable(),
             ])
             ->headerActions([
                 // Lista da stampare e portarsi in giro: gli appuntamenti presi
