@@ -405,7 +405,32 @@ class InformationRequestResource extends Resource
                             'appointment_at' => $record->appointment_at,
                             'appointment_notes' => $record->appointment_notes,
                         ])
-                        ->action(fn (InformationRequest $record, array $data) => $record->update($data)),
+                        // L'appuntamento e' uno solo: fissarne un altro
+                        // sostituisce il precedente. Invece di perderlo,
+                        // finisce nel diario delle note (19/10/2026).
+                        ->action(function (InformationRequest $record, array $data) {
+                            static::archiviaAppuntamento($record, $data['appointment_at'] ?? null);
+                            $record->update($data);
+                        }),
+                    // Senza questa voce l'appuntamento non si poteva togliere:
+                    // il calendario non ha una X e svuotare il campo a mano
+                    // non viene in mente a nessuno (19/10/2026).
+                    Tables\Actions\Action::make('clearAppointment')
+                        ->label('Cancella appuntamento')
+                        ->icon('heroicon-o-calendar')
+                        ->color('danger')
+                        ->visible(fn (InformationRequest $record) => filled($record->appointment_at))
+                        ->requiresConfirmation()
+                        ->modalHeading("Cancellare l'appuntamento?")
+                        ->modalDescription(fn (InformationRequest $record) => 'Era il '
+                            .$record->appointment_at->format('d/m/Y H:i')
+                            .($record->appointment_notes ? ' — '.$record->appointment_notes : '')
+                            .'. Resta scritto nel diario delle note.')
+                        ->modalSubmitActionLabel('Cancella')
+                        ->action(function (InformationRequest $record) {
+                            static::archiviaAppuntamento($record, null);
+                            $record->update(['appointment_at' => null, 'appointment_notes' => null]);
+                        }),
                     // Come sopra: loggare "mandata mail il 20/08" non deve
                     // richiedere di aprire tutto il form di modifica.
                     Tables\Actions\Action::make('addNote')
@@ -496,6 +521,35 @@ class InformationRequestResource extends Resource
      * mostrava il valore grezzo del DB (es. "in_lavorazione") invece di
      * un'etichetta leggibile, a differenza delle altre risorse a stato.
      */
+    /**
+     * Travasa nel diario l'appuntamento che sta per essere sostituito o
+     * cancellato: le note dell'appuntamento ("passa lui allo stand", "chiedere
+     * di Marcello") sono l'unica traccia di come e' andata, e sovrascrivendo
+     * il campo si perderebbero.
+     */
+    protected static function archiviaAppuntamento(InformationRequest $record, mixed $nuovo): void
+    {
+        $vecchio = $record->appointment_at;
+
+        if (! $vecchio) {
+            return;
+        }
+
+        $nuovo = filled($nuovo) ? Carbon::parse($nuovo) : null;
+
+        if ($nuovo && $nuovo->eq($vecchio)) {
+            return;
+        }
+
+        $record->notes()->create([
+            'tenant_id' => $record->tenant_id,
+            'logged_at' => $vecchio->toDateString(),
+            'body' => ($nuovo ? 'Appuntamento spostato' : 'Appuntamento annullato')
+                .': era il '.$vecchio->format('d/m/Y H:i')
+                .($record->appointment_notes ? ' — '.$record->appointment_notes : ''),
+        ]);
+    }
+
     public static function statusLabels(): array
     {
         return [
