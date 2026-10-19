@@ -221,6 +221,18 @@ class InformationRequestResource extends Resource
                     ->searchable()
                     ->sortable()
                     ->placeholder('—'),
+                // Il paese della sede, non solo la provincia: quando si
+                // decide chi andare a trovare conta se sta sulla strada del
+                // giro, e "Belluno" o "Auronzo" sono due viaggi diversi.
+                // Sta al posto dell'email, che da qui si apre comunque dal
+                // menu Contatta (richiesta dell'ufficio, 19/10/2026).
+                Tables\Columns\TextColumn::make('customer.city')->visibleFrom('md')
+                    ->label('Paese')
+                    ->wrap()
+                    ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state))
+                    ->searchable()
+                    ->sortable()
+                    ->placeholder('—'),
                 // Recapiti diretti in tabella: prima bisognava aprire il cliente per
                 // vedere email/telefono, ora sono a colpo d'occhio e copiabili.
                 // Delle due resta accesa la sola colonna telefono: una richiesta
@@ -233,10 +245,9 @@ class InformationRequestResource extends Resource
                 // Con l'elenco su piu' righe ogni valore e' copiabile per
                 // conto suo: si copia il numero che serve, non tutti insieme.
                 //
-                // L'email era nascosta di default: chi apre questa pagina sta
-                // per rispondere a una richiesta, quindi i due modi di
-                // rispondere si vedono subito (richiesta dell'ufficio,
-                // 03/09/2026).
+                // L'email torna fuori dall'elenco (19/10/2026): al suo posto
+                // c'e' il paese della sede, e per scrivere c'e' il menu
+                // Contatta. Si riaccende dal menu delle colonne.
                 Tables\Columns\TextColumn::make('customer_email')->visibleFrom('md')
                     ->label('Email')
                     ->getStateUsing(fn (InformationRequest $record) => $record->customer?->emails ?: null)
@@ -245,7 +256,7 @@ class InformationRequestResource extends Resource
                     ->copyable()
                     ->copyMessage('Email copiata')
                     ->icon('heroicon-o-envelope')
-                    ->toggleable(),
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('customer_phone')
                     ->label('Telefono')
                     ->getStateUsing(fn (InformationRequest $record) => $record->customer?->phones ?: null)
