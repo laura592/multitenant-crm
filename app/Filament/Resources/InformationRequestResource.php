@@ -21,6 +21,7 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\HtmlString;
@@ -225,8 +226,46 @@ class InformationRequestResource extends Resource
             ->modifyQueryUsing(fn ($query) => $query->with(['customer', 'notes', 'quotes.quoteGroup']))
             ->columns([
                 Tables\Columns\TextColumn::make('number')->label('Numero')->searchable()->sortable(),
-                Tables\Columns\TextColumn::make('customer.company_name')->wrap()->label('Cliente')->searchable()->sortable()
-                    ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
+                // Ragione sociale E persona: con la sola ragione sociale le
+                // schede dei privati restavano righe vuote, e dove ci sono
+                // entrambe serve sapere chi chiedere (richiesta dell'ufficio,
+                // 19/10/2026). La persona non si ripete quando la ragione
+                // sociale e' gia' il suo nome.
+                Tables\Columns\TextColumn::make('customer.company_name')->wrap()->label('Cliente')
+                    ->getStateUsing(function (InformationRequest $record) {
+                        $cliente = $record->customer;
+
+                        if (! $cliente) {
+                            return null;
+                        }
+
+                        $ditta = DisplayName::titleCase($cliente->company_name);
+                        $persona = DisplayName::titleCase(trim(($cliente->first_name ?? '').' '.($cliente->last_name ?? '')));
+
+                        if (blank($ditta)) {
+                            return $persona ?: null;
+                        }
+
+                        if (blank($persona) || str_contains(mb_strtolower($ditta), mb_strtolower($persona))) {
+                            return $ditta;
+                        }
+
+                        return $ditta.' — '.$persona;
+                    })
+                    ->searchable(query: fn (Builder $query, string $search) => $query->whereHas(
+                        'customer',
+                        fn (Builder $cliente) => $cliente
+                            ->where('company_name', 'like', "%{$search}%")
+                            ->orWhere('first_name', 'like', "%{$search}%")
+                            ->orWhere('last_name', 'like', "%{$search}%"),
+                    ))
+                    ->sortable(query: fn (Builder $query, string $direction) => $query
+                        ->orderBy(
+                            Customer::query()->selectRaw('COALESCE(NULLIF(company_name, ""), CONCAT_WS(" ", first_name, last_name))')
+                                ->whereColumn('customers.id', 'information_requests.customer_id')
+                                ->limit(1),
+                            $direction,
+                        )),
                 // Provincia in tabella: le richieste arrivano da tutto il
                 // Veneto e oltre, e capire "dov'e'" senza aprire il cliente
                 // e' il primo filtro mentale quando si decide chi richiamare.
