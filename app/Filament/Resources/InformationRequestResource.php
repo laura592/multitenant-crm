@@ -148,10 +148,26 @@ class InformationRequestResource extends Resource
             Forms\Components\Section::make('Appuntamento')
                 ->columns(2)
                 ->schema([
+                    // La X per svuotare il campo: il calendario non ce l'ha,
+                    // e senza questa l'appuntamento si poteva solo spostare,
+                    // non cancellare (19/10/2026). Quello precedente non si
+                    // perde: al salvataggio finisce nel diario delle note.
                     Forms\Components\DateTimePicker::make('appointment_at')
                         ->label('Data appuntamento')
                         ->native(false)
-                        ->displayFormat('d/m/Y H:i'),
+                        ->displayFormat('d/m/Y H:i')
+                        ->helperText('Per spostarlo cambia la data, per cancellarlo svuota il campo con la X: quello vecchio resta scritto nel diario delle note qui sotto.')
+                        ->suffixAction(
+                            Forms\Components\Actions\Action::make('svuotaAppuntamento')
+                                ->label('Svuota')
+                                ->icon('heroicon-m-x-mark')
+                                ->color('danger')
+                                ->visible(fn (Forms\Get $get) => filled($get('appointment_at')))
+                                ->action(function (Forms\Set $set) {
+                                    $set('appointment_at', null);
+                                    $set('appointment_notes', null);
+                                })
+                        ),
                     Forms\Components\Textarea::make('appointment_notes')
                         ->label('Note appuntamento')
                         ->rows(2)
@@ -527,7 +543,7 @@ class InformationRequestResource extends Resource
      * di Marcello") sono l'unica traccia di come e' andata, e sovrascrivendo
      * il campo si perderebbero.
      */
-    protected static function archiviaAppuntamento(InformationRequest $record, mixed $nuovo): void
+    public static function archiviaAppuntamento(InformationRequest $record, mixed $nuovo): void
     {
         $vecchio = $record->appointment_at;
 
