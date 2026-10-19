@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\Customer;
 use App\Models\InformationRequest;
 use App\Models\Tenant;
+use App\Support\LeadSpam;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
 /**
@@ -44,6 +46,16 @@ class LeadIntakeController extends Controller
             'consenso_privacy' => ['required', 'boolean'],
             'consenso_marketing' => ['nullable', 'boolean'],
         ]);
+
+        // Lo spam non diventa un'anagrafica: resta nel log, dove si puo'
+        // rileggere, e il sito riceve un 202 cosi' non riprova all'infinito.
+        $spam = LeadSpam::motivo($dati);
+
+        if ($spam) {
+            Log::warning('Lead ignorato come spam: '.$spam, ['payload' => $dati]);
+
+            return response()->json(['ignorato' => true, 'motivo' => $spam], 202);
+        }
 
         $tenant = Tenant::query()->firstOrFail();
 
