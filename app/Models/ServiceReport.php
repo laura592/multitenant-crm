@@ -1124,6 +1124,11 @@ class ServiceReport extends Model
             // davvero) — confermato dal fornitore (2026-08-06) che e' solo una
             // svista di nome nella loro doc, l'id da usare resta sempre 2.
             'sl_tariffa' => ['id_eureka' => 2],
+            // La data del documento: non e' nella doc del fornitore, ma
+            // l'endpoint la accetta e senza di lei Eureka data la scheda al
+            // giorno dell'invio. Su un rapportino di aprile mandato a ottobre
+            // e' una bugia che finisce in fattura (20/10/2026).
+            'data' => $this->intervention_date?->format('Y-m-d\TH:i:s'),
             'sl_sintomo' => $this->sintomoPerGestionale(),
             'sl_lavorazione' => $this->work_performed,
             'dettaglio' => $this->materialsUsed->map(fn (ServiceReportMaterial $part) => [

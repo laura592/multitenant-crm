@@ -63,7 +63,12 @@ class SendServiceReportToGestionaleJob implements ShouldQueue
 
         try {
             $client = new EurekaClient($report->tenant);
-            $result = $client->inviaSchedaLavoro($report->toGestionalePayload(), "CRM-{$report->id}");
+            // L'objectId porta il NUMERO del rapportino, non il suo id:
+            // Eureka tronca il campo a 30 caratteri, e un uuid ci entrava
+            // a meta' ("CRM-01a15904-d269-7062-89d5-2a"). Risultato: al
+            // secondo invio non riconosceva piu' il documento e ne creava
+            // un altro invece di aggiornarlo (visto il 20/10/2026).
+            $result = $client->inviaSchedaLavoro($report->toGestionalePayload(), "CRM-{$report->number}");
 
             $report->update([
                 // La risposta reale identifica il documento con "id_eureka",

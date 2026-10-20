@@ -194,6 +194,37 @@ class EurekaClient
     }
 
     /**
+     * Riscrive una scheda lavoro gia' esistente (PUT = sostituzione piena).
+     *
+     * Serve quando si deve correggere un documento gia' creato — per esempio
+     * la data, che fino al 20/10/2026 non mandavamo e che Eureka metteva al
+     * giorno dell'invio. Il POST non va bene per questo: l'objectId viene
+     * troncato a 30 caratteri dal loro database, quindi non riconosce il
+     * documento e ne crea un altro.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    public function aggiornaSchedaLavoro(int $idScheda, array $payload): array
+    {
+        $url = rtrim($this->baseUrl, '/')."/schedelavoro/{$idScheda}";
+
+        $response = Http::withBasicAuth($this->username, $this->password)
+            ->timeout(15)
+            ->put($url, $payload);
+
+        $this->recordCall($url, $response->status());
+
+        if (! $response->successful()) {
+            throw new GestionaleEurekaException(
+                "Eureka ha risposto {$response->status()}: ".($response->json('message') ?? $response->body())
+            );
+        }
+
+        return $response->json() ?? [];
+    }
+
+    /**
      * Ricerca anagrafiche cliente per ragione sociale (parziale, "contains").
      * Stesso principio di cercaArticoli(): best-effort, proposta di
      * candidati da confermare a vista, non un collegamento automatico.
