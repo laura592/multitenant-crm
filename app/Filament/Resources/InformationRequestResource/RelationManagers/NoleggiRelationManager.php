@@ -9,10 +9,12 @@ use Filament\Tables;
 use Filament\Tables\Table;
 
 /**
- * I noleggi nati dai preventivi di questa richiesta.
+ * I noleggi di questa richiesta.
  *
  * Accanto ai preventivi, perche' una richiesta puo' finire in un acquisto o
  * in un noleggio e guardando la richiesta si vuole sapere com'e' andata.
+ * Ci finiscono sia i contratti nati da un preventivo sia quelli fatti
+ * direttamente dalla richiesta (dal 20/10/2026: il caso Hotel Stalon).
  */
 class NoleggiRelationManager extends RelationManager
 {
@@ -31,7 +33,7 @@ class NoleggiRelationManager extends RelationManager
     {
         return $table
             ->emptyStateHeading('Nessun noleggio nato da questa richiesta')
-            ->emptyStateDescription('Compaiono qui i noleggi creati a partire da un preventivo di questa richiesta.')
+            ->emptyStateDescription('Compaiono qui i contratti di noleggio collegati a questa richiesta, con o senza preventivo di mezzo.')
             ->columns([
                 Tables\Columns\TextColumn::make('number')->label('Numero')
                     ->weight('medium')->searchable(),

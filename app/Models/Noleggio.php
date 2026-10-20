@@ -92,6 +92,15 @@ class Noleggio extends Model
         });
 
         static::saving(function (self $noleggio) {
+            // Da quale richiesta nasce: se arriva da un preventivo la si
+            // eredita da li', cosi' dalla scheda della richiesta il contratto
+            // si vede sempre, che sia passato o no da una proposta.
+            if ($noleggio->information_request_id === null && $noleggio->quote_id !== null) {
+                $noleggio->information_request_id = Quote::withoutGlobalScopes()
+                    ->whereKey($noleggio->quote_id)
+                    ->value('information_request_id');
+            }
+
             // Lo sconto, se c'e', comanda sul costo: sono due modi di dire la
             // stessa cosa e il secondo si disallinea al primo aggiornamento.
             if ($noleggio->sconto_acquisto !== null && (float) $noleggio->listino > 0) {

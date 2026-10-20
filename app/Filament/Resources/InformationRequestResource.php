@@ -8,7 +8,6 @@ use App\Filament\Forms\CustomerContactFields;
 use App\Filament\Forms\CustomerFiscalFields;
 use App\Filament\Forms\ItalianAddressFields;
 use App\Filament\Resources\InformationRequestResource\Pages;
-use App\Filament\Resources\NoleggioResource;
 use App\Filament\Resources\InformationRequestResource\RelationManagers;
 use App\Models\Customer;
 use App\Models\InformationRequest;
@@ -205,35 +204,6 @@ class InformationRequestResource extends Resource
                             : null)
                         ->collapsed()
                         ->collapsible(),
-                ])
-                ->visibleOn('edit'),
-            // I contratti di noleggio nati da questa richiesta: prima si
-            // vedevano solo i preventivi, e un noleggio fatto senza
-            // preventivo (Hotel Stalon) non compariva da nessuna parte
-            // (20/10/2026).
-            Forms\Components\Section::make('Noleggi')
-                ->schema([
-                    Forms\Components\Placeholder::make('noleggi_collegati')
-                        ->label('')
-                        ->content(function (?InformationRequest $record) {
-                            $noleggi = $record?->tuttiNoleggi() ?? collect();
-
-                            if ($noleggi->isEmpty()) {
-                                return '— nessun noleggio collegato';
-                            }
-
-                            return new HtmlString($noleggi->map(function ($noleggio) {
-                                $url = NoleggioResource::getUrl('edit', ['record' => $noleggio]);
-                                $righe = array_filter([
-                                    $noleggio->stato,
-                                    $noleggio->data_inizio?->format('d/m/Y').($noleggio->data_fine ? ' → '.$noleggio->data_fine->format('d/m/Y') : ''),
-                                    $noleggio->canone > 0 ? number_format((float) $noleggio->canone, 2, ',', '.').' €/mese' : null,
-                                    $noleggio->prezzo_battuta > 0 ? number_format((float) $noleggio->prezzo_battuta, 2, ',', '.').' €/erogazione' : null,
-                                ]);
-
-                                return '<a class="text-primary-600 underline" href="'.e($url).'">'.e($noleggio->number).'</a> · '.e(implode(' · ', $righe));
-                            })->implode('<br>'));
-                        }),
                 ])
                 ->visibleOn('edit'),
             Forms\Components\Section::make('Gestione')

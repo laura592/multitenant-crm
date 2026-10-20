@@ -9,7 +9,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class InformationRequest extends Model
 {
@@ -99,36 +98,17 @@ class InformationRequest extends Model
     }
 
     /**
-     * I noleggi nati dai preventivi di questa richiesta.
+     * I noleggi di questa richiesta.
      *
-     * Era l'unica strada prevista ("un noleggio nasce da una proposta"), ma
-     * non regge: il contratto dell'Hotel Stalon (NOL-2026-0002) e' stato
-     * fatto senza passare da un preventivo, e dalla richiesta non si vedeva
-     * (20/10/2026). Da li' il collegamento diretto qui sotto.
+     * Prima il legame passava solo per il preventivo ("un noleggio nasce da
+     * una proposta"), ma non regge: il contratto dell'Hotel Stalon
+     * (NOL-2026-0002) e' stato fatto senza preventivo e dalla richiesta non
+     * si vedeva (20/10/2026). Ora il noleggio porta scritta la richiesta, e
+     * quando nasce da un preventivo se la copia da solo (Noleggio::booted()).
      */
-    public function noleggiDaiPreventivi(): HasManyThrough
-    {
-        return $this->hasManyThrough(Noleggio::class, Quote::class)->latest('noleggi.created_at');
-    }
-
-    /** I noleggi agganciati a mano a questa richiesta, senza preventivo di mezzo. */
     public function noleggi(): HasMany
     {
         return $this->hasMany(Noleggio::class)->latest('created_at');
-    }
-
-    /**
-     * Tutti i noleggi della richiesta, da qualunque strada arrivino: quelli
-     * agganciati direttamente e quelli nati da un suo preventivo.
-     *
-     * @return \Illuminate\Support\Collection<int, Noleggio>
-     */
-    public function tuttiNoleggi(): \Illuminate\Support\Collection
-    {
-        return $this->noleggi->concat($this->noleggiDaiPreventivi)
-            ->unique('id')
-            ->sortByDesc('created_at')
-            ->values();
     }
 
     /**
