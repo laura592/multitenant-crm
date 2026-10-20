@@ -11,6 +11,7 @@ use App\Filament\Resources\InformationRequestResource\Pages;
 use App\Filament\Resources\InformationRequestResource\RelationManagers;
 use App\Models\Customer;
 use App\Models\InformationRequest;
+use App\Models\InformationRequestAppointment;
 use App\Support\DisplayName;
 use App\Support\OutsideLivewireRender;
 use App\Support\PhoneNumber;
@@ -23,6 +24,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\HtmlString;
 
@@ -146,33 +148,39 @@ class InformationRequestResource extends Resource
                         ->columnSpanFull()
                         ->extraAttributes(['data-tour' => 'information-requests-field-details']),
                 ]),
-            Forms\Components\Section::make('Appuntamento')
-                ->columns(2)
+            Forms\Components\Section::make('Appuntamenti')
+                ->description('Se ne possono tenere piu\' d\'uno: in elenco e in stampa compare il prossimo.')
                 ->schema([
-                    // La X per svuotare il campo: il calendario non ce l'ha,
-                    // e senza questa l'appuntamento si poteva solo spostare,
-                    // non cancellare (19/10/2026). Quello precedente non si
-                    // perde: al salvataggio finisce nel diario delle note.
-                    Forms\Components\DateTimePicker::make('appointment_at')
-                        ->label('Data appuntamento')
-                        ->native(false)
-                        ->displayFormat('d/m/Y H:i')
-                        ->helperText('Per spostarlo cambia la data, per cancellarlo svuota il campo con la X: quello vecchio resta scritto nel diario delle note qui sotto.')
-                        ->suffixAction(
-                            Forms\Components\Actions\Action::make('svuotaAppuntamento')
-                                ->label('Svuota')
-                                ->icon('heroicon-m-x-mark')
-                                ->color('danger')
-                                ->visible(fn (Forms\Get $get) => filled($get('appointment_at')))
-                                ->action(function (Forms\Set $set) {
-                                    $set('appointment_at', null);
-                                    $set('appointment_notes', null);
-                                })
-                        ),
-                    Forms\Components\Textarea::make('appointment_notes')
-                        ->label('Note appuntamento')
-                        ->rows(2)
-                        ->columnSpanFull(),
+                    Forms\Components\Repeater::make('appointments')
+                        ->relationship()
+                        ->label('')
+                        ->schema([
+                            Forms\Components\DateTimePicker::make('scheduled_at')
+                                ->label('Data e ora')
+                                ->native(false)
+                                ->displayFormat('d/m/Y H:i')
+                                ->seconds(false)
+                                ->required()
+                                ->columnSpan(1),
+                            Forms\Components\Textarea::make('notes')
+                                ->label('Note')
+                                ->rows(2)
+                                ->columnSpan(2),
+                        ])
+                        ->columns(3)
+                        ->defaultItems(0)
+                        ->addActionLabel('Aggiungi appuntamento')
+                        ->reorderable(false)
+                        ->itemLabel(fn (array $state) => filled($state['scheduled_at'] ?? null)
+                            ? Carbon::parse($state['scheduled_at'])->format('d/m/Y H:i')
+                                .(filled($state['notes'] ?? null) ? ' — '.Str::limit((string) $state['notes'], 60) : '')
+                            : 'Nuovo appuntamento')
+                        ->collapsed()
+                        ->collapsible()
+                        // Cancellare una riga cancella l'appuntamento: e' il
+                        // modo che mancava quando il campo era uno solo.
+                        ->deletable()
+                        ->cloneable(false),
                 ]),
             Forms\Components\Section::make('Note')
                 ->schema([
@@ -445,46 +453,48 @@ class InformationRequestResource extends Resource
                     // richiesta già presa in carico: un modal rapido evita di aprire
                     // tutto il form di modifica solo per questo.
                     Tables\Actions\Action::make('setAppointment')
-                        ->label('Fissa appuntamento')
+                        ->label('Aggiungi appuntamento')
                         ->icon('heroicon-o-calendar-days')
                         ->form([
-                            Forms\Components\DateTimePicker::make('appointment_at')
-                                ->label('Data appuntamento')
+                            Forms\Components\DateTimePicker::make('scheduled_at')
+                                ->label('Data e ora')
                                 ->native(false)
-                                ->displayFormat('d/m/Y H:i'),
-                            Forms\Components\Textarea::make('appointment_notes')
-                                ->label('Note appuntamento')
+                                ->displayFormat('d/m/Y H:i')
+                                ->seconds(false)
+                                ->required(),
+                            Forms\Components\Textarea::make('notes')
+                                ->label('Note')
                                 ->rows(2),
                         ])
-                        ->fillForm(fn (InformationRequest $record) => [
-                            'appointment_at' => $record->appointment_at,
-                            'appointment_notes' => $record->appointment_notes,
-                        ])
-                        // L'appuntamento e' uno solo: fissarne un altro
-                        // sostituisce il precedente. Invece di perderlo,
-                        // finisce nel diario delle note (19/10/2026).
+                        // Non sovrascrive piu' quello che c'e': se ne aggiunge
+                        // un altro, e la richiesta puo' averne due aperti
+                        // insieme (20/10/2026).
                         ->action(function (InformationRequest $record, array $data) {
-                            static::archiviaAppuntamento($record, $data['appointment_at'] ?? null);
-                            $record->update($data);
+                            $record->appointments()->create([
+                                'tenant_id' => $record->tenant_id,
+                                'scheduled_at' => $data['scheduled_at'],
+                                'notes' => $data['notes'] ?? null,
+                            ]);
                         }),
                     // Senza questa voce l'appuntamento non si poteva togliere:
                     // il calendario non ha una X e svuotare il campo a mano
                     // non viene in mente a nessuno (19/10/2026).
                     Tables\Actions\Action::make('clearAppointment')
-                        ->label('Cancella appuntamento')
+                        ->label('Cancella il prossimo appuntamento')
                         ->icon('heroicon-o-calendar')
                         ->color('danger')
-                        ->visible(fn (InformationRequest $record) => filled($record->appointment_at))
+                        ->visible(fn (InformationRequest $record) => $record->appointments()->exists())
                         ->requiresConfirmation()
-                        ->modalHeading("Cancellare l'appuntamento?")
-                        ->modalDescription(fn (InformationRequest $record) => 'Era il '
-                            .$record->appointment_at->format('d/m/Y H:i')
+                        ->modalHeading('Cancellare l\'appuntamento?')
+                        ->modalDescription(fn (InformationRequest $record) => 'Si cancella quello del '
+                            .($record->appointment_at?->format('d/m/Y H:i') ?? '')
                             .($record->appointment_notes ? ' — '.$record->appointment_notes : '')
-                            .'. Resta scritto nel diario delle note.')
+                            .'. Gli altri appuntamenti della richiesta restano.')
                         ->modalSubmitActionLabel('Cancella')
                         ->action(function (InformationRequest $record) {
-                            static::archiviaAppuntamento($record, null);
-                            $record->update(['appointment_at' => null, 'appointment_notes' => null]);
+                            $appuntamenti = $record->appointments()->get();
+                            $prossimo = $appuntamenti->first(fn ($a) => $a->scheduled_at->isFuture()) ?? $appuntamenti->last();
+                            $prossimo?->delete();
                         }),
                     // Come sopra: loggare "mandata mail il 20/08" non deve
                     // richiedere di aprire tutto il form di modifica.
@@ -535,12 +545,31 @@ class InformationRequestResource extends Resource
         $from = Carbon::parse($data['from'])->startOfDay();
         $to = Carbon::parse($data['to'])->endOfDay();
 
-        $requests = InformationRequest::query()
-            ->whereNotNull('appointment_at')
-            ->whereBetween('appointment_at', [$from, $to])
-            ->with(['customer', 'products'])
-            ->orderBy('appointment_at')
-            ->get();
+        // Si stampa l'ELENCO degli appuntamenti, non la richiesta: una
+        // richiesta con due appuntamenti nel periodo deve comparire due
+        // volte, ciascuna col suo orario e le sue note (20/10/2026).
+        $requests = InformationRequestAppointment::query()
+            ->whereBetween('scheduled_at', [$from, $to])
+            ->with(['informationRequest.customer', 'informationRequest.products'])
+            ->orderBy('scheduled_at')
+            ->get()
+            ->map(function (InformationRequestAppointment $appuntamento) {
+                $richiesta = $appuntamento->informationRequest;
+
+                if (! $richiesta) {
+                    return null;
+                }
+
+                // Copia di lavoro per la stampa: porta l'orario e le note di
+                // QUESTO appuntamento, e non viene mai salvata.
+                $perStampa = clone $richiesta;
+                $perStampa->appointment_at = $appuntamento->scheduled_at;
+                $perStampa->appointment_notes = $appuntamento->notes;
+
+                return $perStampa;
+            })
+            ->filter()
+            ->values();
 
         static::apriPdfInNuovaScheda(
             fn () => OutsideLivewireRender::run(fn () => Pdf::loadView('pdf.appuntamenti', [
@@ -576,35 +605,6 @@ class InformationRequestResource extends Resource
      * mostrava il valore grezzo del DB (es. "in_lavorazione") invece di
      * un'etichetta leggibile, a differenza delle altre risorse a stato.
      */
-    /**
-     * Travasa nel diario l'appuntamento che sta per essere sostituito o
-     * cancellato: le note dell'appuntamento ("passa lui allo stand", "chiedere
-     * di Marcello") sono l'unica traccia di come e' andata, e sovrascrivendo
-     * il campo si perderebbero.
-     */
-    public static function archiviaAppuntamento(InformationRequest $record, mixed $nuovo): void
-    {
-        $vecchio = $record->appointment_at;
-
-        if (! $vecchio) {
-            return;
-        }
-
-        $nuovo = filled($nuovo) ? Carbon::parse($nuovo) : null;
-
-        if ($nuovo && $nuovo->eq($vecchio)) {
-            return;
-        }
-
-        $record->notes()->create([
-            'tenant_id' => $record->tenant_id,
-            'logged_at' => $vecchio->toDateString(),
-            'body' => ($nuovo ? 'Appuntamento spostato' : 'Appuntamento annullato')
-                .': era il '.$vecchio->format('d/m/Y H:i')
-                .($record->appointment_notes ? ' — '.$record->appointment_notes : ''),
-        ]);
-    }
-
     public static function statusLabels(): array
     {
         return [

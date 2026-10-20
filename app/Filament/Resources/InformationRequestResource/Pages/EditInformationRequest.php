@@ -20,18 +20,12 @@ class EditInformationRequest extends EditRecord
     }
 
     /**
-     * L'appuntamento e' uno solo: cambiarlo o svuotarlo dal form cancella
-     * quello di prima, note comprese ("passa lui allo stand", "chiedere di
-     * Marcello"). Prima di salvare lo travasiamo nel diario, cosi' la
-     * storia della richiesta resta leggibile (19/10/2026).
-     *
-     * @param  array<string, mixed>  $data
-     * @return array<string, mixed>
+     * Dopo il salvataggio le colonne appointment_at/appointment_notes
+     * tornano a dire qual e' il PROSSIMO appuntamento dell'elenco: le
+     * leggono l'elenco delle richieste, i colori e la stampa.
      */
-    protected function mutateFormDataBeforeSave(array $data): array
+    protected function afterSave(): void
     {
-        InformationRequestResource::archiviaAppuntamento($this->record, $data['appointment_at'] ?? null);
-
-        return $data;
+        $this->record->refresh()->sincronizzaProssimoAppuntamento();
     }
 }

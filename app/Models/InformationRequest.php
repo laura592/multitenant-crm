@@ -153,6 +153,35 @@ class InformationRequest extends Model
         return $this->belongsTo(User::class, 'handled_by_user_id');
     }
 
+    /**
+     * Gli appuntamenti presi su questa richiesta, dal primo all'ultimo.
+     *
+     * Ce ne possono essere piu' d'uno aperti insieme; appointment_at tiene
+     * il prossimo, per l'elenco e la stampa (sincronizzaProssimoAppuntamento).
+     */
+    public function appointments(): HasMany
+    {
+        return $this->hasMany(InformationRequestAppointment::class)->orderBy('scheduled_at');
+    }
+
+    /**
+     * Riallinea le colonne appointment_at/appointment_notes all'elenco: il
+     * prossimo appuntamento futuro, o l'ultimo passato se non ce ne sono
+     * piu' davanti. Senza appuntamenti le colonne si svuotano.
+     */
+    public function sincronizzaProssimoAppuntamento(): void
+    {
+        $appuntamenti = $this->appointments()->get();
+
+        $prossimo = $appuntamenti->first(fn ($a) => $a->scheduled_at->isFuture())
+            ?? $appuntamenti->last();
+
+        $this->forceFill([
+            'appointment_at' => $prossimo?->scheduled_at,
+            'appointment_notes' => $prossimo?->notes,
+        ])->saveQuietly();
+    }
+
     public function notes(): HasMany
     {
         return $this->hasMany(InformationRequestNote::class)->orderByDesc('logged_at');
