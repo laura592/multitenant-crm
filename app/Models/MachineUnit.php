@@ -473,6 +473,10 @@ class MachineUnit extends Model
                 'model_name' => trim((string) $this->model_name) === '' ? $altra->model_name : null,
                 'gestionale_code' => $this->gestionale_code === null ? $altra->gestionale_code : null,
                 'product_id' => $this->product_id === null ? $altra->product_id : null,
+                // L'articolo veniva perso: la macchina a mano non ce l'ha e
+                // quella importata si', quindi fondendole spariva il
+                // collegamento all'articolo Eureka (20/10/2026).
+                'material_id' => $this->material_id === null ? $altra->material_id : null,
                 'current_customer_id' => $this->current_customer_id === null ? $altra->current_customer_id : null,
                 'billing_customer_id' => $this->billing_customer_id === null ? $altra->billing_customer_id : null,
             ], fn ($v) => $v !== null));
