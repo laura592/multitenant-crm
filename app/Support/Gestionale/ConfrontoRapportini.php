@@ -171,6 +171,17 @@ class ConfrontoRapportini
             return '';
         }
 
+        // Le matricole segnaposto (IMP-ACQUA-FIORICAMPEGGIO, IMP-SPINA-FIORI)
+        // non sono matricole: gli impianti alla spina e le casette dell'acqua
+        // non ne hanno una, e CRM ed Eureka se le inventano ciascuno a modo
+        // suo. Confrontarle diceva "macchine diverse" su due copie dello
+        // stesso intervento, e i gemelli restavano appesi (Market dei Fiori,
+        // 06/10/2026, schede SL-861 e SL-862). Trattate come assenti,
+        // finiscono fra i casi da verificare e li guarda una persona.
+        if (str_starts_with(mb_strtoupper($matricola), 'IMP-')) {
+            return '';
+        }
+
         // Stessa normalizzazione dell'import: "BRL 003 020..." e "BRL003020..."
         // sono la stessa macchina, non due.
         return \App\Models\MachineUnit::chiaveMatricola($matricola);
