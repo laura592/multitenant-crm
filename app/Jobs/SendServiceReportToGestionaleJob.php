@@ -35,7 +35,7 @@ class SendServiceReportToGestionaleJob implements ShouldQueue
     public function handle(): void
     {
         $report = $this->report->fresh([
-            'customer.billingCustomer', 'machineProduct', 'machineMaterial', 'machineUnit.product',
+            'customer.billingCustomer', 'machineProduct', 'machineMaterial', 'machineUnit.product', 'machineUnit.material',
             'machineUnit.billingCustomer', 'materialsUsed.material', 'tenant',
         ]);
 
