@@ -199,7 +199,7 @@ class Noleggio extends Model
 
     public function informationRequest(): BelongsTo
     {
-        return $this->belongsTo(App\Models\InformationRequest::class);
+        return $this->belongsTo(InformationRequest::class);
     }
 
     /** Lo storico degli invii al cliente. */
