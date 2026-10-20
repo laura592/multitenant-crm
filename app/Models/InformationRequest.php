@@ -101,14 +101,34 @@ class InformationRequest extends Model
     /**
      * I noleggi nati dai preventivi di questa richiesta.
      *
-     * Il legame passa per il preventivo: un noleggio non si attacca
-     * direttamente alla richiesta, nasce da una proposta che a sua volta
-     * nasce da li'. Cosi' la catena resta una sola e non c'e' un secondo
-     * collegamento da tenere allineato.
+     * Era l'unica strada prevista ("un noleggio nasce da una proposta"), ma
+     * non regge: il contratto dell'Hotel Stalon (NOL-2026-0002) e' stato
+     * fatto senza passare da un preventivo, e dalla richiesta non si vedeva
+     * (20/10/2026). Da li' il collegamento diretto qui sotto.
      */
-    public function noleggi(): HasManyThrough
+    public function noleggiDaiPreventivi(): HasManyThrough
     {
         return $this->hasManyThrough(Noleggio::class, Quote::class)->latest('noleggi.created_at');
+    }
+
+    /** I noleggi agganciati a mano a questa richiesta, senza preventivo di mezzo. */
+    public function noleggi(): HasMany
+    {
+        return $this->hasMany(Noleggio::class)->latest('created_at');
+    }
+
+    /**
+     * Tutti i noleggi della richiesta, da qualunque strada arrivino: quelli
+     * agganciati direttamente e quelli nati da un suo preventivo.
+     *
+     * @return \Illuminate\Support\Collection<int, Noleggio>
+     */
+    public function tuttiNoleggi(): \Illuminate\Support\Collection
+    {
+        return $this->noleggi->concat($this->noleggiDaiPreventivi)
+            ->unique('id')
+            ->sortByDesc('created_at')
+            ->values();
     }
 
     /**

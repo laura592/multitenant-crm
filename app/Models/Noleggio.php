@@ -35,7 +35,7 @@ class Noleggio extends Model
     public const STATO_CHIUSO = 'chiuso';
 
     protected $fillable = [
-        'tenant_id', 'customer_id', 'machine_unit_id', 'quote_id', 'number', 'descrizione',
+        'tenant_id', 'customer_id', 'machine_unit_id', 'quote_id', 'information_request_id', 'number', 'descrizione',
         'listino', 'sconto_acquisto', 'costo', 'mesi', 'base_consumo', 'margine',
         'ammortamento_base', 'ammortamento_mesi', 'detergenti_mese', 'ricarico_detergenti', 'caffe_mese', 'ricarico_caffe',
         'valore_residuo', 'full_service_percentuale',
@@ -186,6 +186,11 @@ class Noleggio extends Model
     public function quote(): BelongsTo
     {
         return $this->belongsTo(Quote::class);
+    }
+
+    public function informationRequest(): BelongsTo
+    {
+        return $this->belongsTo(App\Models\InformationRequest::class);
     }
 
     /** Lo storico degli invii al cliente. */

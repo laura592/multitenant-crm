@@ -85,6 +85,17 @@ class NoleggioResource extends Resource
                         ->relationship('quote', 'number')
                         ->getOptionLabelFromRecordUsing(fn ($record) => $record->number ?: '—')
                         ->searchable(),
+                    // Non tutti i noleggi nascono da un preventivo: quello
+                    // dell'Hotel Stalon e' stato fatto direttamente dalla
+                    // richiesta informazioni, e senza questo campo il
+                    // contratto non si vedeva da li' (20/10/2026).
+                    Forms\Components\Select::make('information_request_id')
+                        ->label('Richiesta informazioni')
+                        ->relationship('informationRequest', 'number')
+                        ->getOptionLabelFromRecordUsing(fn ($record) => trim($record->number.' — '.\App\Support\DisplayName::titleCase($record->customer?->company_name ?: $record->customer?->full_name), ' —'))
+                        ->helperText('Da compilare quando il noleggio nasce da una richiesta senza passare per un preventivo.')
+                        ->searchable()
+                        ->preload(),
                 ]),
 
             Forms\Components\Section::make('Da cosa nasce il canone')
