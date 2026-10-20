@@ -842,7 +842,14 @@ class ServiceReport extends Model
      */
     public function gestionaleArticle(): Product|Material|null
     {
-        return $this->machineProduct ?? $this->machineMaterial ?? $this->machineUnit?->product;
+        // Anche l'articolo della macchina installata: su lavastoviglie,
+        // impianti e casette dell'acqua il bene a catalogo e' un Material,
+        // non un Product, e senza questa riga il rapportino risultava "senza
+        // codice Eureka" pur avendolo sulla macchina (20/10/2026).
+        return $this->machineProduct
+            ?? $this->machineMaterial
+            ?? $this->machineUnit?->product
+            ?? $this->machineUnit?->material;
     }
 
     /**
