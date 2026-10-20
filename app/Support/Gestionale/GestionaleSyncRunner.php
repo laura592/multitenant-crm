@@ -3,6 +3,7 @@
 namespace App\Support\Gestionale;
 
 use App\Models\Customer;
+use App\Models\EsecuzioneEureka;
 use App\Models\MachineUnit;
 use App\Models\MachineUnitPlacement;
 use App\Models\Product;
@@ -883,25 +884,40 @@ class GestionaleSyncRunner
      */
     private function syncEurekaNotes(): array
     {
-        $note = $this->client->noteAnagrafiche();
+        $da = $this->daQuandoLeggereLeNote();
+        $note = $this->client->noteAnagrafiche($da);
 
-        // Una risposta vuota puo' voler dire "nessuna nota" oppure "chiamata
-        // fallita": nel dubbio non si cancella niente. Un eventuale
-        // svuotamento vero si vedra' al giro successivo, mentre azzerare
-        // 101 note per un 500 di passaggio non sarebbe recuperabile.
-        if ($note === []) {
+        // null = la chiamata e' fallita: nel dubbio non si cancella niente.
+        // Un elenco vuoto invece e' una risposta buona (in un giro
+        // incrementale vuol dire "nessun cliente toccato stanotte").
+        if ($note === null) {
+            RegistroSync::problema('sync-gestionale', 'lettura note anagrafiche non riuscita', [
+                'da' => $da ?? 'anagrafica intera',
+            ]);
+
             return [];
         }
+
+        RegistroSync::movimento('sync-gestionale', 'note anagrafiche lette', [
+            'modo' => $da ? 'incrementale' : 'completa',
+            'da' => $da,
+            'anagrafiche_tornate' => count($note),
+        ]);
 
         $cambiate = [];
 
         $customers = Customer::query()
             ->where('tenant_id', $this->tenant->id)
             ->whereNotNull('gestionale_code')
+            ->when($da !== null, fn ($query) => $query->whereIn('gestionale_code', array_keys($note)))
             ->get();
 
         foreach ($customers as $customer) {
+            // Nel giro incrementale leggiamo solo i clienti presenti nel
+            // delta, quindi la chiave c'e' sempre; nel giro completo
+            // l'assenza significa "nota cancellata su Eureka" e va seguita.
             $nuova = $note[(int) $customer->gestionale_code] ?? null;
+            $nuova = ($nuova === '' || $nuova === null) ? null : $nuova;
 
             if ($nuova === $customer->eureka_note) {
                 continue;
@@ -912,6 +928,33 @@ class GestionaleSyncRunner
         }
 
         return $cambiate;
+    }
+
+    /**
+     * Da quando chiedere le note: niente (= anagrafica intera) la domenica e
+     * al primo giro, altrimenti l'ORA DI AVVIO dell'ultimo giro riuscito.
+     *
+     * L'ora di avvio e non quella di fine, come chiede GDP: cosi' le
+     * modifiche fatte mentre il sync girava non vanno perse. Ricevere due
+     * volte lo stesso cliente non fa danno, perderlo si.
+     *
+     * Il giro completo settimanale serve per i clienti DISATTIVATI, che
+     * sparendo dall'elenco non comparirebbero mai nel delta: senza, la loro
+     * nota resterebbe nel CRM per sempre.
+     */
+    private function daQuandoLeggereLeNote(): ?string
+    {
+        if (now()->isSunday()) {
+            return null;
+        }
+
+        $ultimo = EsecuzioneEureka::query()
+            ->where('comando', 'gestionale:sync')
+            ->where('esito', EsecuzioneEureka::OK)
+            ->orderByDesc('avviata_il')
+            ->value('avviata_il');
+
+        return $ultimo ? Carbon::parse($ultimo)->toIso8601String() : null;
     }
 
     /**

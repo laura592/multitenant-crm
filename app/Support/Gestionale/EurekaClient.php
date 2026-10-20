@@ -801,12 +801,27 @@ class EurekaClient
      * note sono testo libero senza limiti di lunghezza e il fornitore le
      * omette di default dalla lista completa.
      *
-     * @return array<int, string> id_eureka => nota ripulita (solo le non vuote)
+     * @param  string|null  $modificateDa  ISO 8601: con questo torna solo chi e'
+     *                                        stato modificato da allora (sync
+     *                                        incrementale). Senza, l'anagrafica intera.
+     * @return array<int, string>|null  id_eureka => nota ripulita (stringa vuota
+     *                                  se la nota e' stata svuotata); null se la
+     *                                  chiamata e' fallita — da non confondere con
+     *                                  un elenco vuoto, che vuol dire "niente di nuovo"
      */
-    public function noteAnagrafiche(): array
+    public function noteAnagrafiche(?string $modificateDa = null): ?array
     {
         try {
-            $url = rtrim($this->baseUrl, '/').'/anagrafica/f15?note=1';
+            $url = rtrim($this->baseUrl, '/').'/anagrafica/f15?'.http_build_query(array_filter([
+                'note' => 1,
+                // Sync incrementale (mail di Diego Rigoni, GDP, 19/10/2026):
+                // senza filtro l'endpoint rilegge tutta l'anagrafica attiva
+                // con una quindicina di tabelle collegate per cliente, e la
+                // chiamata delle 03:04 ci metteva da 60 a 120 secondi,
+                // arrivando a sfondare il timeout del proxy a settembre. Con
+                // ult_mod tornano solo i clienti toccati da quel momento.
+                'ult_mod' => $modificateDa,
+            ]));
 
             $response = Http::withBasicAuth(
                 $this->username,
@@ -816,17 +831,20 @@ class EurekaClient
             $this->recordCall($url, $response->status());
 
             if (! $response->successful()) {
-                return [];
+                return null;
             }
 
             $note = [];
 
             foreach ($response->json() ?? [] as $anagrafica) {
                 $id = (int) ($anagrafica['id_eureka'] ?? 0);
-                $testo = self::ripulisciNota($anagrafica['note'] ?? null);
 
-                if ($id > 0 && $testo !== '') {
-                    $note[$id] = $testo;
+                if ($id > 0) {
+                    // Anche le note vuote entrano: in un giro incrementale
+                    // "nota svuotata su Eureka" arriva proprio come stringa
+                    // vuota, e chi legge deve poterlo distinguere da un
+                    // cliente che non e' stato toccato (assente dall'elenco).
+                    $note[$id] = self::ripulisciNota($anagrafica['note'] ?? null);
                 }
             }
 
@@ -834,7 +852,7 @@ class EurekaClient
         } catch (\Throwable) {
             $this->recordCall(rtrim($this->baseUrl, '/').'/anagrafica/f15', null);
 
-            return [];
+            return null;
         }
     }
 
