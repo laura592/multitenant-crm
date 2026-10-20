@@ -2498,15 +2498,14 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
      */
     public static function interventionTypeLabels(bool $short = false): array
     {
-        return [
-            ServiceReport::TYPE_INSTALLAZIONE => 'Installazione',
-            ServiceReport::TYPE_DISINSTALLAZIONE => 'Disinstallazione',
-            ServiceReport::TYPE_MANUTENZIONE_ORDINARIA => $short ? 'Manutenzione ord.' : 'Manutenzione ordinaria',
-            ServiceReport::TYPE_MANUTENZIONE_STRAORDINARIA => $short ? 'Manutenzione straord.' : 'Manutenzione straordinaria',
-            ServiceReport::TYPE_RIPARAZIONE => 'Riparazione',
-            ServiceReport::TYPE_GARANZIA => 'Garanzia',
-            ServiceReport::TYPE_SANIFICAZIONE => 'Sanificazione',
-        ];
+        // Le etichette lunghe stanno sul modello (ServiceReport::ETICHETTE_TIPO):
+        // le usa anche l'invio a Eureka per ricavare il sintomo.
+        return $short
+            ? array_merge(ServiceReport::ETICHETTE_TIPO, [
+                ServiceReport::TYPE_MANUTENZIONE_ORDINARIA => 'Manutenzione ord.',
+                ServiceReport::TYPE_MANUTENZIONE_STRAORDINARIA => 'Manutenzione straord.',
+            ])
+            : ServiceReport::ETICHETTE_TIPO;
     }
 
     /**

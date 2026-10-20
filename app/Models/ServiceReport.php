@@ -35,6 +35,22 @@ class ServiceReport extends Model
     public const TYPE_SANIFICAZIONE = 'sanificazione';
 
     /**
+     * Come si chiama un tipo intervento in italiano. Sta qui e non solo
+     * nella risorsa Filament perche' serve anche fuori dall'interfaccia:
+     * su un lavaggio o una chiusura stagionale un "problema" non esiste, e
+     * il sintomo che Eureka pretende si ricava da qui.
+     */
+    public const ETICHETTE_TIPO = [
+        self::TYPE_INSTALLAZIONE => 'Installazione',
+        self::TYPE_DISINSTALLAZIONE => 'Disinstallazione',
+        self::TYPE_MANUTENZIONE_ORDINARIA => 'Manutenzione ordinaria',
+        self::TYPE_MANUTENZIONE_STRAORDINARIA => 'Manutenzione straordinaria',
+        self::TYPE_RIPARAZIONE => 'Riparazione',
+        self::TYPE_GARANZIA => 'Garanzia',
+        self::TYPE_SANIFICAZIONE => 'Sanificazione',
+    ];
+
+    /**
      * Chi ha creato per primo questo rapportino — non lo stesso concetto di
      * "e' collegato a Eureka" (eureka_service_report_id si valorizza anche
      * per un rapportino nato qui e poi inviato). SOURCE_EUREKA e' impostato
@@ -1055,7 +1071,7 @@ class ServiceReport extends Model
             $errors[] = 'Il prodotto macchina di questo intervento non ha un codice Eureka collegato.';
         }
 
-        if (blank($this->problem_description)) {
+        if (blank($this->sintomoPerGestionale())) {
             $errors[] = 'Manca la descrizione del problema (sl_sintomo e\' obbligatorio per Eureka).';
         }
 
@@ -1075,6 +1091,24 @@ class ServiceReport extends Model
      *
      * @return array<string, mixed>
      */
+    /**
+     * Il sintomo per Eureka, dove e' obbligatorio.
+     *
+     * Su lavaggi, sanificazioni, installazioni e chiusure stagionali il
+     * tecnico non scrive nessun problema, perche' non c'e': l'invio si
+     * bloccava chiedendo un dato che non esiste (20/10/2026). In quel caso
+     * vale il tipo di intervento, che e' sempre compilato e dice il vero
+     * motivo della visita.
+     */
+    public function sintomoPerGestionale(): ?string
+    {
+        if (filled($this->problem_description)) {
+            return $this->problem_description;
+        }
+
+        return self::ETICHETTE_TIPO[$this->intervention_type] ?? null;
+    }
+
     public function toGestionalePayload(): array
     {
         $recipient = $this->invoiceRecipient();
@@ -1090,7 +1124,7 @@ class ServiceReport extends Model
             // davvero) — confermato dal fornitore (2026-08-06) che e' solo una
             // svista di nome nella loro doc, l'id da usare resta sempre 2.
             'sl_tariffa' => ['id_eureka' => 2],
-            'sl_sintomo' => $this->problem_description,
+            'sl_sintomo' => $this->sintomoPerGestionale(),
             'sl_lavorazione' => $this->work_performed,
             'dettaglio' => $this->materialsUsed->map(fn (ServiceReportMaterial $part) => [
                 'id_articolo' => $part->material?->gestionale_code ?? 0,
