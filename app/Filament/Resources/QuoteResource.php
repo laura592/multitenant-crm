@@ -145,18 +145,23 @@ class QuoteResource extends Resource
                                 ]),
                             \Filament\Infolists\Components\Grid::make(12)
                                 ->schema([
-                                    InfolistSection::make('Dati preventivo')
+                                    // Qui resta solo quello che non si legge
+                                    // altrove: il pagamento sta nella
+                                    // panoramica in cima e gli sconti nei
+                                    // totali qui accanto, e ripeterli
+                                    // riempiva la scheda di doppioni
+                                    // (21/10/2026).
+                                    InfolistSection::make('Note del preventivo')
                                         ->columnSpan(['default' => 1, 'lg' => 8])
-                                        ->columns(2)
                                         ->extraAttributes([
                                             'class' => 'rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950',
                                         ])
                                         ->schema([
-                                            TextEntry::make('paymentMethodRelation.name')->label('Metodo di pagamento')->placeholder('—'),
-                                            TextEntry::make('discount')->label('Sconto generale')->suffix('%'),
-                                            TextEntry::make('extra_discount')->label('Sconto extra')->suffix('%')
-                                                ->visible(fn ($record) => (float) ($record->extra_discount ?? 0) > 0),
-                                            TextEntry::make('notes')->label('Note')->placeholder('—')->html()->columnSpanFull(),
+                                            TextEntry::make('notes')
+                                                ->hiddenLabel()
+                                                ->html()
+                                                ->placeholder('Nessuna nota: quello che scrivi qui il cliente lo legge nel preventivo e nella mail.')
+                                                ->columnSpanFull(),
                                         ]),
                                     InfolistSection::make('Totali')
                                         ->columnSpan(['default' => 1, 'lg' => 4])
