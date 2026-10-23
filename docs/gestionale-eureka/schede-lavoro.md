@@ -43,6 +43,17 @@ costruiamo noi):
   (vedi [articoli-e-tariffe.md](articoli-e-tariffe.md)).
 - `sl_sintomo` (obbligatorio), `sl_lavorazione` — problema riscontrato /
   lavoro svolto.
+- `sl_id_operatore` — il tecnico. Se non lo si manda, Eureka intesta la
+  scheda al suo operatore predefinito (il **2**): verificato il 23/10/2026
+  rileggendo le schede che avevamo creato noi, tutte con operatore 2 anche
+  quando era andato Igor. I codici vivono solo nell'anagrafica operatori di
+  Eureka e non sono esposti via API: **1 = Alessandro, 5 = Igor**
+  (comunicati dall'amministrazione). Noi li teniamo su
+  `users.gestionale_operatore_id`.
+- `sl_dataora_appuntamento` — data **e ora** dell'intervento. L'ora serve
+  all'amministrazione per fatturare; mandando solo `data` la scheda restava
+  a mezzanotte. Noi la componiamo con la data dell'intervento e l'ora di
+  arrivo del rapportino (`arrival_at`), quando il tecnico l'ha registrata.
 - `dettaglio[]` — ricambi usati, ognuno con `id_articolo`, `descrizione`,
   `um`, `quantita`, opzionalmente `matricole: [...]` se il ricambio stesso è
   tracciato a matricola.
