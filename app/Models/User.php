@@ -35,6 +35,10 @@ class User extends Authenticatable implements FilamentUser, HasTenants
         'tenant_id',
         'name',
         'email',
+        // Codice operatore su Eureka: va sulle schede lavoro che inviamo
+        // (sl_id_operatore), altrimenti il gestionale le attribuisce al suo
+        // operatore predefinito e in fattura non si sa chi e' andato.
+        'gestionale_operatore_id',
         'password',
         'is_super_admin',
         'is_active',

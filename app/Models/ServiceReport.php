@@ -1139,6 +1139,28 @@ class ServiceReport extends Model
             ])->all(),
         ];
 
+        // Tecnico e orario: l'amministrazione li usa per fatturare. Senza
+        // sl_id_operatore Eureka intesta la scheda al suo operatore
+        // predefinito (il 2, visto su tutte le nostre fino al 23/10/2026),
+        // e l'ora dell'appuntamento restava a mezzanotte perche' mandavamo
+        // solo il giorno.
+        if ($this->technician?->gestionale_operatore_id) {
+            $payload['sl_id_operatore'] = (int) $this->technician->gestionale_operatore_id;
+        }
+
+        // La data resta quella dell'intervento: arrival_at serve solo per
+        // l'ora, perche' un arrivo registrato dopo mezzanotte sposterebbe
+        // l'appuntamento al giorno dopo.
+        $appuntamento = $this->intervention_date?->copy()->startOfDay();
+
+        if ($appuntamento && $this->arrival_at) {
+            $appuntamento->setTimeFrom($this->arrival_at);
+        }
+
+        if ($appuntamento) {
+            $payload['sl_dataora_appuntamento'] = $appuntamento->format('Y-m-d\TH:i:s');
+        }
+
         // sl_matricola e' opzionale, ma se presente Eureka la valida contro
         // le matricole gia' registrate per quell'articolo (422 se non
         // trovata) — vedi doc fornitore §6.1. Va quindi inviata solo per una

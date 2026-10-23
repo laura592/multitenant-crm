@@ -133,6 +133,21 @@ class UserResource extends Resource
                         ->dehydrated(fn () => (bool) auth()->user()?->is_super_admin)
                         ->columnSpanFull(),
                 ]),
+            // Il codice operatore di Eureka: lo tiene l'anagrafica del
+            // gestionale e non si ricava da nome o email, quindi va scritto
+            // a mano qui una volta per tecnico. Senza, le schede lavoro che
+            // inviamo escono con l'operatore predefinito di Eureka e
+            // l'amministrazione non sa di chi sia l'intervento.
+            Forms\Components\Section::make('Gestionale')
+                ->description('Serve solo ai tecnici che vanno dai clienti.')
+                ->schema([
+                    Forms\Components\TextInput::make('gestionale_operatore_id')
+                        ->label('Codice operatore su Eureka')
+                        ->helperText('Es. 1 = Alessandro, 5 = Igor. Vuoto: la scheda esce senza tecnico.')
+                        ->numeric()
+                        ->minValue(1)
+                        ->maxValue(9999),
+                ]),
             // Le tre colonne sotto sono NOT NULL con un default lato DB
             // (8 ore, 40 ore, 26 giorni — vedi migration
             // add_tenant_fields_to_users_table): il default DB pero' scatta

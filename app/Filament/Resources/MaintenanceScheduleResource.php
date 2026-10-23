@@ -491,7 +491,9 @@ class MaintenanceScheduleResource extends Resource
                     }),
                 Tables\Filters\Filter::make('due_soon')
                     ->label('In scadenza entro 30 giorni')
-                    ->query(fn ($query) => $query->where('next_due_date', '<=', now()->addDays(30))),
+                    // Senza inCorso() il filtro tirava su anche le chiusure
+                    // stagionali in pausa, che per definizione non scadono.
+                    ->query(fn ($query) => $query->inCorso()->where('next_due_date', '<=', now()->addDays(30))),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make()

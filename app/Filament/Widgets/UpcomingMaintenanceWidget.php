@@ -36,8 +36,14 @@ class UpcomingMaintenanceWidget extends Widget
         // Nessun limite superiore sulla data: i piani gia' scaduti
         // (next_due_date passata) devono comparire per primi, non sparire
         // dalla vista solo perche' sono oltre i "prossimi 30 giorni".
+        // inCorso() e non "status = attivo": i piani messi in pausa per la
+        // chiusura stagionale restano attivi di proposito (tengono la loro
+        // storia), ma non devono scadere ne' comparire qui. Il 23/10/2026
+        // erano 62 su 131, e la lista apriva su chiusure di aprile scadute
+        // da sette mesi (Market Marina di Venezia, Camping Marina 2000)
+        // mentre i piani veri finivano sotto.
         return MaintenanceSchedule::query()
-            ->where('status', MaintenanceSchedule::STATUS_ATTIVO)
+            ->inCorso()
             ->whereNotNull('next_due_date')
             ->with('customer')
             ->orderBy('next_due_date')
