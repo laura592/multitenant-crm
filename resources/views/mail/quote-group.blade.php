@@ -61,7 +61,7 @@
 	@foreach($quotes as $quote)
 		@if(!$loop->first), @endif<span style="white-space:nowrap;">preventivo-{{ $quote->number }}.pdf</span>
 	@endforeach
-	@foreach($allegatiExtra ?? [] as $nome)
+	@foreach($nomiAllegatiExtra ?? [] as $nome)
 		, <span style="white-space:nowrap;">{{ $nome }}</span>
 	@endforeach
 </div>

@@ -33,7 +33,7 @@ ALLEGATI
 @foreach($quotes as $quote)
 - preventivo-{{ $quote->number }}.pdf
 @endforeach
-@foreach($allegatiExtra ?? [] as $nomeAllegato)
+@foreach($nomiAllegatiExtra ?? [] as $nomeAllegato)
 - {!! $nomeAllegato !!}
 @endforeach
 @endif

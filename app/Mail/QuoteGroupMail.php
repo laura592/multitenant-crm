@@ -59,7 +59,13 @@ class QuoteGroupMail extends Mailable
                 'emailBody' => $this->emailBody,
                 'subjectText' => $this->subjectText,
                 'clientUrl' => $this->clientUrl,
-                'allegatiExtra' => array_keys($this->allegatiExtra),
+                // Non 'allegatiExtra': Laravel passa alla vista anche le
+                // proprieta' pubbliche del mailable, e lo fa DOPO i dati di
+                // with(), quindi il nome uguale veniva sovrascritto dalla
+                // mappa nome => contenuto. Il template ci iterava sopra e
+                // stampava il PDF intero dentro il corpo della mail
+                // (26/10/2026).
+                'nomiAllegatiExtra' => array_keys($this->allegatiExtra),
             ],
         );
     }
