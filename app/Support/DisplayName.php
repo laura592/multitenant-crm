@@ -12,6 +12,17 @@ class DisplayName
     private const LOWERCASE_PARTICLES = ['di', 'de', 'del', "dell'", 'della', 'dei', 'degli', 'delle', 'da', 'van', 'von', 'la', 'lo', 'il'];
 
     /**
+     * Articoli elisi attaccati alla parola dopo: in "dell'Alto Adige" sono
+     * un token solo, quindi la lista qui sopra non li intercettava e ne
+     * usciva "Dell'Alto Adige" — stampato nell'oggetto della mail, nel
+     * destinatario e nel "Gentile ..." dell'offerta (26/10/2026).
+     *
+     * Niente "d'" e "l'": "D'Angelo" e "L'Aquila" vogliono la maiuscola, e
+     * sono quasi sempre inizio di cognome o di nome proprio.
+     */
+    private const ELIDED_ARTICLES = ["dell'", "dall'", "all'", "nell'", "sull'"];
+
+    /**
      * Uniforma nomi/ragioni sociali salvati con case incoerente (tutto
      * maiuscolo o tutto minuscolo a seconda di chi/cosa li ha inseriti:
      * operatore da form vs import dal gestionale) in Title Case, senza
@@ -54,6 +65,14 @@ class DisplayName
     {
         if (! $isFirst && in_array(mb_strtolower($word), self::LOWERCASE_PARTICLES, true)) {
             return mb_strtolower($word);
+        }
+
+        if (! $isFirst) {
+            foreach (self::ELIDED_ARTICLES as $articolo) {
+                if (str_starts_with(mb_strtolower($word), $articolo) && mb_strlen($word) > mb_strlen($articolo)) {
+                    return $articolo.self::capitalizeWord(mb_substr($word, mb_strlen($articolo)), false);
+                }
+            }
         }
 
         // Spezza anche su "-" e "'" per capitalizzare dopo (es. "Gian-Carlo",
