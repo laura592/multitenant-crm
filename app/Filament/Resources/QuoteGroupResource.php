@@ -8,8 +8,12 @@ use App\Filament\Resources\QuoteGroupResource\RelationManagers\QuotesRelationMan
 use App\Mail\QuoteGroupMail;
 use App\Filament\Resources\NoleggioResource;
 use App\Models\Noleggio;
+use App\Models\Product;
 use App\Models\Quote;
 use App\Models\QuoteGroup;
+use App\Models\QuoteProduct;
+use App\Support\Assistenza\ContrattoAssistenza;
+use App\Support\Assistenza\ContrattoAssistenzaPdf;
 use App\Support\DisplayName;
 use App\Support\Pdf\OffertaCaffePdf;
 use Filament\Facades\Filament;
@@ -202,11 +206,24 @@ class QuoteGroupResource extends Resource
                         $record,
                         is_string($get('subject')) ? $get('subject') : null,
                         (bool) $get('allega_offerta_caffe'),
+                        (array) ($get('contratti_assistenza') ?? []),
                     )
                 )),
             // Link alla pagina dove il cliente accetta firmando, rifiuta, fa
             // una domanda o chiede di essere richiamato (QuoteClientController):
             // tanti preventivi restavano "Inviato" senza piu' notizie.
+            // I fac-simile dei due contratti Franke viaggiano con l'offerta
+            // cosi' il cliente puo' leggerseli prima di decidere, invece di
+            // chiederli dopo (Laura, 26/10/2026). Sono copie da leggere: il
+            // contratto vero si genera dalla riga macchina del preventivo.
+            Forms\Components\CheckboxList::make('contratti_assistenza')
+                ->label('Allega i fac-simile dei contratti di assistenza')
+                ->options(fn (QuoteGroup $record) => static::contrattiDisponibili($record))
+                ->default(fn (QuoteGroup $record) => array_keys(static::contrattiDisponibili($record)))
+                ->helperText('Copie da leggere, non da firmare: il canone e\' una percentuale del listino Franke (Full 10%, Easy 5%).')
+                ->columns(2)
+                ->live()
+                ->visible(fn (QuoteGroup $record) => static::contrattiDisponibili($record) !== []),
             Forms\Components\Toggle::make('client_link')
                 ->label('Includi il link per rispondere online (accetta e firma, rifiuta, domanda, richiamata)')
                 ->default(true),
@@ -239,7 +256,8 @@ class QuoteGroupResource extends Resource
         ]);
     }
 
-    protected static function buildAutomaticSectionsPreviewHtml(QuoteGroup $record, ?string $subject, bool $conOffertaCaffe = false): string
+    /** @param  array<int, string>  $contratti  i fac-simile spuntati nel form */
+    protected static function buildAutomaticSectionsPreviewHtml(QuoteGroup $record, ?string $subject, bool $conOffertaCaffe = false, array $contratti = []): string
     {
         $resolvedSubject = filled(trim((string) $subject))
             ? trim((string) $subject)
@@ -270,6 +288,7 @@ class QuoteGroupResource extends Resource
 
         $attachments = $quotes->map(fn ($quote): string => 'preventivo-'.$quote->number.'.pdf')
             ->when($conOffertaCaffe, fn ($nomi) => $nomi->push('offerta caffè'))
+            ->merge(collect($contratti)->map(fn ($tipo): string => 'fac-simile contratto '.ContrattoAssistenza::nome((string) $tipo)))
             ->implode(', ');
 
         return '<div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-100">'
@@ -294,15 +313,64 @@ class QuoteGroupResource extends Resource
      *
      * @return array<string, string>
      */
-    protected static function contrattoDaAllegare(array $data): array
+    /**
+     * I fac-simile dei contratti di assistenza proponibili su quest'offerta:
+     * solo se c'e' una macchina Franke (gli altri marchi non hanno contratto)
+     * e solo quelli il cui modello e' davvero caricato in Documenti.
+     *
+     * @return array<string, string>
+     */
+    protected static function contrattiDisponibili(QuoteGroup $record): array
     {
-        $noleggio = filled($data['noleggio_id'] ?? null) ? Noleggio::find($data['noleggio_id']) : null;
-
-        if (! $noleggio) {
+        if (! static::haMacchinaFranke($record)) {
             return [];
         }
 
-        return [NoleggioResource::nomeFile($noleggio) => NoleggioResource::buildPdf($noleggio)->output()];
+        $opzioni = [];
+
+        foreach (ContrattoAssistenza::TIPI as $tipo => $dati) {
+            if (ContrattoAssistenzaPdf::modello($tipo, $record->tenant_id) !== null) {
+                $opzioni[$tipo] = $dati['nome'].' ('.rtrim(rtrim(number_format($dati['percentuale'], 1, ',', ''), '0'), ',').'% del listino)';
+            }
+        }
+
+        return $opzioni;
+    }
+
+    protected static function haMacchinaFranke(QuoteGroup $record): bool
+    {
+        return $record->quotes()->with('quoteProducts.product.brand')->get()
+            ->flatMap->quoteProducts
+            ->contains(fn (QuoteProduct $riga) => $riga->product?->type === Product::TYPE_MACHINE
+                && ContrattoAssistenza::perMacchina($riga->product));
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, string>
+     */
+    protected static function contrattoDaAllegare(array $data, QuoteGroup $record): array
+    {
+        $allegati = [];
+
+        $noleggio = filled($data['noleggio_id'] ?? null) ? Noleggio::find($data['noleggio_id']) : null;
+
+        if ($noleggio) {
+            $allegati[NoleggioResource::nomeFile($noleggio)] = NoleggioResource::buildPdf($noleggio)->output();
+        }
+
+        foreach ((array) ($data['contratti_assistenza'] ?? []) as $tipo) {
+            $percorso = ContrattoAssistenzaPdf::modello((string) $tipo, $record->tenant_id);
+
+            if ($percorso === null) {
+                continue;
+            }
+
+            $nome = 'fac-simile-contratto-'.str_replace(' ', '-', mb_strtolower(ContrattoAssistenza::nome((string) $tipo))).'.pdf';
+            $allegati[$nome] = (string) file_get_contents($percorso);
+        }
+
+        return $allegati;
     }
 
     public static function sendGroupEmail(QuoteGroup $record, array $data): void
@@ -343,7 +411,7 @@ class QuoteGroupResource extends Resource
                         $offertaCaffe ? OffertaCaffePdf::perOfferta($offertaCaffe)->output() : null,
                         $offertaCaffe ? OffertaCaffePdf::nomeFile($offertaCaffe) : null,
                         ($data['client_link'] ?? true) ? $record->clientUrl() : null,
-                        static::contrattoDaAllegare($data),
+                        static::contrattoDaAllegare($data, $record),
                     ))->subject($data['subject'] ?? static::defaultGroupEmailSubject($record))
                 );
 
