@@ -11,10 +11,15 @@ use Illuminate\Support\Collection;
  *
  * Il canone e' una percentuale del listino ufficiale Franke (RRP), non del
  * prezzo scontato: lo dicono i contratti stessi (Easy art. 8, Full art. 9).
- * Cambia pero' cosa entra nel conto:
+ * La base e' la stessa per tutti e due — tutta la fornitura della macchina,
+ * optional e accessori compresi (Laura, 26/10/2026) — e cambia solo la
+ * percentuale: Full-Service 10%, Easy-Service 5%.
  *
- * - Full-Service, 10%: macchina, sistema latte ed eventuali optional.
- * - Easy-Service, 5%: macchina e sistema latte, senza gli altri optional.
+ * ATTENZIONE: i PDF dell'ufficio sono rimasti indietro. L'art. 8 dell'Easy
+ * dice ancora "macchina da caffe'; sistema latte, se presente", e il cliente
+ * riceve quel testo come fac-simile insieme all'offerta: finche' non lo
+ * aggiornano, la base scritta nel contratto e' piu' stretta di quella su cui
+ * calcoliamo.
  *
  * "Sistema latte" comprende i frigoriferi (indicazione dell'ufficio,
  * 21/09/2026) e tutto quello che porta il latte: pompe, DualMilk,
@@ -42,7 +47,7 @@ final class ContrattoAssistenza
         self::EASY => [
             'nome' => 'Easy-Service',
             'percentuale' => 5.0,
-            'conOptional' => false,
+            'conOptional' => true,
         ],
     ];
 
@@ -157,11 +162,34 @@ final class ContrattoAssistenza
      */
     public static function opzioniDellaRiga(QuoteProduct $rigaMacchina): Collection
     {
-        return $rigaMacchina->options()->with('product')->get()
-            ->map(fn (QuoteProduct $r) => [
-                'prodotto' => $r->product,
-                'prezzo' => (float) $r->price * max(1, (float) $r->quantity),
-            ]);
+        $voce = fn (QuoteProduct $r) => [
+            'prodotto' => $r->product,
+            'prezzo' => (float) $r->price * max(1, (float) $r->quantity),
+        ];
+
+        $opzioni = $rigaMacchina->options()->with('product')->get()->map($voce);
+
+        // Nel preventivo il trattamento acqua e la pompa stanno come righe a
+        // se', non appese alla macchina, e restavano fuori dal canone: ma
+        // sono fornitura di quella macchina, quindi fanno base (Laura,
+        // 26/10/2026). Fuori resta la manodopera: l'installazione si paga
+        // una volta e non e' attrezzatura, e nessuno dei due contratti la
+        // nomina fra le voci del calcolo.
+        //
+        // Solo se la macchina del preventivo e' una: con due macchine non si
+        // sa a chi attribuirle, e sommarle a entrambe le conterebbe due volte.
+        $righe = $rigaMacchina->quote?->quoteProducts()->with('product')->get();
+
+        if ($righe === null || $righe->filter(fn (QuoteProduct $r) => $r->product?->type === Product::TYPE_MACHINE)->count() !== 1) {
+            return $opzioni;
+        }
+
+        $sciolte = $righe->filter(fn (QuoteProduct $r) => $r->parent_quote_product_id === null
+            && $r->id !== $rigaMacchina->id
+            && $r->product !== null
+            && ! in_array($r->product->type, [Product::TYPE_MACHINE, Product::TYPE_SERVICE], true));
+
+        return $opzioni->concat($sciolte->map($voce))->values();
     }
 
     /**
