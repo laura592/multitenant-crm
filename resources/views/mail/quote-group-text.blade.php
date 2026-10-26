@@ -8,8 +8,10 @@
     $textBody = trim(html_entity_decode(strip_tags((string) $textBody), ENT_QUOTES | ENT_HTML5));
 @endphp
 
+{{-- Testo semplice: {{ }} qui scrive entita' HTML (l'apostrofo di
+     "dell'Alto Adige" usciva &#039;), quindi si stampa grezzo. --}}
 Offerta {{ $group->number }}
-{{ $resolvedSubject }}
+{!! $resolvedSubject !!}
 
 {!! $textBody !!}
 
@@ -31,9 +33,12 @@ ALLEGATI
 @foreach($quotes as $quote)
 - preventivo-{{ $quote->number }}.pdf
 @endforeach
+@foreach($allegatiExtra ?? [] as $nomeAllegato)
+- {!! $nomeAllegato !!}
+@endforeach
 @endif
 @if(! empty($clientUrl))
 
 Vedi e scegli la soluzione online:
-{{ $clientUrl }}
+{!! $clientUrl !!}
 @endif
