@@ -1,14 +1,13 @@
 <x-mail::message>
 @php
-	use App\Models\QuoteResponse;
 	$tenant = $document->tenant;
 	$customerName = \App\Support\DisplayName::titleCase($document->customer?->company_name) ?: \App\Support\DisplayName::titleCase($document->customer?->full_name);
 	$quote = $response->quote;
 	$isGroup = $document instanceof \App\Models\QuoteGroup;
 	$title = match ($response->type) {
-		QuoteResponse::TYPE_ACCEPTED => 'Il cliente ha accettato e firmato',
-		QuoteResponse::TYPE_REJECTED => 'Il cliente ha rifiutato',
-		QuoteResponse::TYPE_QUESTION => 'Il cliente ha una domanda',
+		\App\Models\QuoteResponse::TYPE_ACCEPTED => 'Il cliente ha accettato e firmato',
+		\App\Models\QuoteResponse::TYPE_REJECTED => 'Il cliente ha rifiutato',
+		\App\Models\QuoteResponse::TYPE_QUESTION => 'Il cliente ha una domanda',
 		default => 'Il cliente chiede di essere richiamato',
 	};
 	$crmQuote = $quote ?? ($isGroup ? $document->quotes()->withoutGlobalScope('tenant')->orderBy('number')->first() : $document);
@@ -16,11 +15,11 @@
 		'Cliente' => $customerName,
 		'Documento' => ($isGroup ? 'Offerta ' : 'Preventivo ').$document->number,
 		'Soluzione scelta' => $isGroup && $quote ? $quote->number.' – € '.number_format((float) $quote->subtotal, 2, ',', '.').' + IVA' : null,
-		'Totale' => ! $isGroup && $quote && $response->type === QuoteResponse::TYPE_ACCEPTED ? '€ '.number_format((float) $quote->subtotal, 2, ',', '.').' + IVA' : null,
+		'Totale' => ! $isGroup && $quote && $response->type === \App\Models\QuoteResponse::TYPE_ACCEPTED ? '€ '.number_format((float) $quote->subtotal, 2, ',', '.').' + IVA' : null,
 		'Firmato da' => $response->signer_name ? trim($response->signer_name.($response->signer_role ? ' ('.$response->signer_role.')' : '')) : null,
-		'Motivo' => $response->reason ? (QuoteResponse::reasonLabels()[$response->reason] ?? $response->reason) : null,
+		'Motivo' => $response->reason ? (\App\Models\QuoteResponse::reasonLabels()[$response->reason] ?? $response->reason) : null,
 		'Telefono' => $response->phone,
-		'Quando' => $response->preferred_time ? (QuoteResponse::preferredTimeLabels()[$response->preferred_time] ?? null) : null,
+		'Quando' => $response->preferred_time ? (\App\Models\QuoteResponse::preferredTimeLabels()[$response->preferred_time] ?? null) : null,
 		'Email' => $response->email,
 		'Ricevuto il' => $response->created_at?->timezone(config('app.timezone'))->format('d/m/Y H:i'),
 	]);
@@ -30,7 +29,7 @@
 	:kicker="($isGroup ? 'Offerta ' : 'Preventivo ').$document->number"
 	:title="$title"
 	:subtitle="$customerName"
-	:tone="$response->type === QuoteResponse::TYPE_REJECTED ? 'red' : 'dark'"
+	:tone="$response->type === \App\Models\QuoteResponse::TYPE_REJECTED ? 'red' : 'dark'"
 />
 
 <x-mail.box>
@@ -47,7 +46,7 @@
 @endif
 </x-mail.box>
 
-@if($response->type === QuoteResponse::TYPE_ACCEPTED)
+@if($response->type === \App\Models\QuoteResponse::TYPE_ACCEPTED)
 <p style="font-size:13px;color:#334155;">In allegato il preventivo firmato dal cliente.</p>
 @endif
 
