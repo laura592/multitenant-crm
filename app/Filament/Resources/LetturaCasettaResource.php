@@ -258,12 +258,16 @@ class LetturaCasettaResource extends Resource
                         Forms\Components\DatePicker::make('dal')->label('Dal')->native(false)->displayFormat('d/m/Y'),
                         Forms\Components\DatePicker::make('al')->label('Al')->native(false)->displayFormat('d/m/Y'),
                     ])
-                    ->query(fn (Builder $q, array $dati) => $q
-                        ->when($dati['dal'] ?? null, fn (Builder $q, string $dal) => $q->whereDate('data', '>=', $dal))
-                        ->when($dati['al'] ?? null, fn (Builder $q, string $al) => $q->whereDate('data', '<=', $al)))
-                    ->indicateUsing(function (array $dati): ?string {
-                        $dal = ($dati['dal'] ?? null) ? Carbon::parse($dati['dal'])->format('d/m/Y') : null;
-                        $al = ($dati['al'] ?? null) ? Carbon::parse($dati['al'])->format('d/m/Y') : null;
+                    // Il parametro si DEVE chiamare $data: Filament risolve le
+                    // dipendenze di queste closure per nome, e con $dati
+                    // l'elenco andava in errore 500 appena aperto
+                    // (30/10/2026, in produzione).
+                    ->query(fn (Builder $q, array $data) => $q
+                        ->when($data['dal'] ?? null, fn (Builder $q, string $dal) => $q->whereDate('data', '>=', $dal))
+                        ->when($data['al'] ?? null, fn (Builder $q, string $al) => $q->whereDate('data', '<=', $al)))
+                    ->indicateUsing(function (array $data): ?string {
+                        $dal = ($data['dal'] ?? null) ? Carbon::parse($data['dal'])->format('d/m/Y') : null;
+                        $al = ($data['al'] ?? null) ? Carbon::parse($data['al'])->format('d/m/Y') : null;
 
                         return match (true) {
                             $dal && $al => "Dal {$dal} al {$al}",
