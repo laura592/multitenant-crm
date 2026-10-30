@@ -355,6 +355,52 @@ lavaggio. Restano fuori i piani lontani, chiusi, a chiamata, di manutenzione e
 **in pausa**. Nessuna mail se non c'è niente da lavare o se non ci sono
 destinatari configurati.
 
+### Le casette dell'acqua
+
+Due casette comunali — Cessalto e Casale sul Sile — e un giro nuovo per i
+tecnici (30/10/2026). A ogni passaggio si leggono **tre contatori**: l'acqua
+erogata, l'incasso e il venduto. Si spunta che cosa è stato fatto (controllo e
+pulizia, sanificazione, ricarica CO2, cambio del filtro a carboni attivi) e si
+fotografano i tre display.
+
+La casetta è una macchina come le altre (`MachineUnit` di tipo
+`impianto_acqua`): ha matricola, Comune che la ospita e storico. Quello che ha
+in più sono due campi che compaiono solo per gli impianti acqua: **in che
+unità conta il contatore** (Casale metri cubi, Cessalto litri) e **ogni quanta
+acqua va cambiato il filtro**.
+
+**Il rendiconto non chiede i totali, chiede il periodo.** Quello che si manda
+al Comune è l'acqua erogata e l'incasso *dalla volta prima*, cioè una
+differenza. Senza una lettura precedente quella differenza **non esiste**, e il
+programma lascia la casella vuota: restituire il contatore intero vorrebbe dire
+fatturare a un Comune 1.052.210 litri d'acqua. È esattamente quello che
+facevano i fogli di calcolo da cui arrivavano questi rendiconti, dove il
+"Totale mese" di Cessalto segnava **-1.052.210**.
+
+**Le foto stanno sotto il numero che documentano.** Le tre arrivate il
+30/10/2026 erano JPEG con nome a caso, senza data negli EXIF (il passaggio da
+WhatsApp la cancella) e senza posizione: tre numeri senza indirizzo,
+attribuibili solo ricordandosi dove fosse stato il tecnico quel giorno. Per
+questo i campi foto sono tre e hanno un nome — contatore, incasso, venduto —
+invece di essere un mucchio di allegati.
+
+**Lo scarto va guardato prima di mandare il rendiconto.** Incasso e venduto
+sono due contatori della stessa macchina e in teoria dicono la stessa cosa: il
+30/10 su Casale erano 602,35 e 588,22. Se non coincidono c'è qualcosa da
+spiegare (gettoni, resi, un azzeramento), e la colonna "Scarto" lo mette in
+chiaro.
+
+**L'avviso sul filtro.** La soglia stava scritta a mano in un angolo del foglio
+di Casale ("PROX CAMBIO FILTRO 467 M3"): la sapeva chi teneva il foglio. Ora la
+casetta la porta con sé e il conto lo fa il programma, dall'ultimo cambio
+registrato. Il tecnico lo legge appena salva, quando è ancora davanti alla
+macchina. Niente avviso se non si sa quando è stato cambiato l'ultima volta:
+un avviso inventato è peggio di nessun avviso.
+
+Due letture della stessa casetta nello stesso giorno non si accettano:
+raddoppierebbero una riga del rendiconto e azzererebbero la differenza di
+periodo.
+
 ---
 
 ## 5. Preventivi, offerte, contratti

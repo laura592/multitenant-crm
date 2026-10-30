@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\MachineUnitResource\Pages;
 use App\Filament\Resources\MachineUnitResource\RelationManagers\PlacementsRelationManager;
 use App\Models\Customer;
+use App\Models\LetturaCasetta;
 use App\Models\MachineUnit;
 use App\Models\MachineUnitPlacement;
 use App\Models\Material;
@@ -118,7 +119,29 @@ class MachineUnitResource extends Resource
                     Forms\Components\Select::make('type')
                         ->label('Categoria impianto')
                         ->options(static::typeLabels())
+                        ->live()
                         ->helperText('Solo per impianti bevande: colonna spina (birra/vino/selz) o impianto acqua standalone. Lascia vuoto per le altre macchine (caffe, macinadosatori, ecc.).'),
+                    // Le due cose che servono alle letture delle casette
+                    // (LetturaCasetta): in che unita' conta il contatore --
+                    // Casale in metri cubi, Cessalto in litri -- e dopo quanta
+                    // acqua va cambiato il filtro. La soglia stava scritta a
+                    // mano in un angolo del foglio di calcolo, cioe' nella
+                    // memoria di chi teneva il foglio.
+                    Forms\Components\Select::make('unita_contatore')
+                        ->label('Il contatore conta in')
+                        ->options(LetturaCasetta::UNITA)
+                        ->default(LetturaCasetta::UNITA_M3)
+                        ->live()
+                        ->visible(fn (Forms\Get $get) => $get('type') === MachineUnit::TYPE_IMPIANTO_ACQUA)
+                        ->helperText('Come e\' scritto sul contatore della casetta.'),
+                    Forms\Components\TextInput::make('filtro_ogni')
+                        ->label('Cambio filtro ogni')
+                        ->numeric()
+                        ->step('0.01')
+                        ->minValue(0)
+                        ->suffix(fn (Forms\Get $get) => $get('unita_contatore') === LetturaCasetta::UNITA_LITRI ? 'litri' : 'm³')
+                        ->visible(fn (Forms\Get $get) => $get('type') === MachineUnit::TYPE_IMPIANTO_ACQUA)
+                        ->helperText('Autonomia del filtro a carboni attivi: da qui nasce l\'avviso al tecnico.'),
                     // La manutenzione si decide guardando la macchina: qui si
                     // dice che tipo e'. Vuoto = quello del modello a
                     // catalogo, cosi' non si compilano 774 schede per dire

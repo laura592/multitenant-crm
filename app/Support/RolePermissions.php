@@ -128,6 +128,10 @@ class RolePermissions
                 ...self::expand('maintenance::schedule', self::MANAGE_NO_DELETE),
                 ...self::expand('machine::unit', self::MANAGE_NO_DELETE),
                 ...self::expand('lavaggio', self::MANAGE_NO_DELETE),
+                // Le letture delle casette dell'acqua le fa lui, sul posto:
+                // crea e corregge (un numero battuto male sul telefono si
+                // sistema subito), cancellare no.
+                ...self::expand('lettura::casetta', self::MANAGE_NO_DELETE),
                 ...self::expand('material', self::VIEW),
                 ...self::expand('material::order', self::MANAGE_NO_DELETE),
                 ...self::expand('supplier', self::VIEW),
@@ -193,6 +197,9 @@ class RolePermissions
                 // Niente ordini materiali: quelli restano di chi compra.
                 // Prepara il giro dei tecnici: e' il suo lavoro.
                 ...self::expand('intervento::programmato', self::UFFICIO),
+                // Il rendiconto delle casette lo manda al Comune l'ufficio:
+                // deve poter correggere una lettura prima di stamparla.
+                ...self::expand('lettura::casetta', self::UFFICIO),
                 ...self::expand('machine::unit', self::UFFICIO),
                 ...self::expand('maintenance::schedule', self::UFFICIO),
                 ...self::expand('material', self::UFFICIO),
@@ -245,6 +252,7 @@ class RolePermissions
                 ...self::expand('prodotto::caffe', self::MANAGE),
                 ...self::expand('machine::unit', self::FULL_MANAGE),
                 ...self::expand('lavaggio', self::MANAGE),
+                ...self::expand('lettura::casetta', self::MANAGE),
                 // Unico ruolo (oltre allo staff master is_super_admin) che puo'
                 // creare/gestire utenti.
                 ...self::expand('user', self::MANAGE),
@@ -305,6 +313,7 @@ class RolePermissions
                 ...self::expand('prodotto::caffe', self::MANAGE_NO_DELETE),
                 ...self::expand('machine::unit', self::MANAGE_NO_DELETE),
                 ...self::expand('lavaggio', self::MANAGE_NO_DELETE),
+                ...self::expand('lettura::casetta', self::MANAGE_NO_DELETE),
                 ...self::expand('user', self::MANAGE_NO_DELETE),
                 ...self::expand('audit::log', self::VIEW),
                 'widget_TimbraWidget',

@@ -63,10 +63,14 @@ class MachineUnit extends Model
         'spostamento_suggerito_motivo',
         'spostamento_suggerito_pagante_code',
         'spostamento_scartato',
+        // Solo per le casette dell'acqua: vedi LetturaCasetta.
+        'unita_contatore',
+        'filtro_ogni',
     ];
 
     protected $casts = [
         'spostamento_suggerito_il' => 'date',
+        'filtro_ogni' => 'decimal:2',
     ];
 
     protected $attributes = [
@@ -178,6 +182,12 @@ class MachineUnit extends Model
     public function placements(): HasMany
     {
         return $this->hasMany(MachineUnitPlacement::class)->latest('placed_at');
+    }
+
+    /** Solo per le casette dell'acqua: le letture dei tre contatori. */
+    public function letture(): HasMany
+    {
+        return $this->hasMany(LetturaCasetta::class)->orderByDesc('data');
     }
 
     public function getDisplayNameAttribute(): string
