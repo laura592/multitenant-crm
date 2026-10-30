@@ -2,18 +2,19 @@
 
 namespace App\Filament\Actions;
 
-use App\Support\Assistenza\ContrattoAssistenza;
 use App\Models\Product;
 use App\Models\ProductFamily;
 use App\Models\ProductOptionSlot;
 use App\Models\Quote;
 use App\Models\QuoteProduct;
+use App\Support\Assistenza\ContrattoAssistenza;
 use Filament\Actions\Action;
 use Filament\Forms;
 use Filament\Forms\Components\Wizard\Step;
 use Filament\Notifications\Notification;
 use Filament\Tables\Actions\Action as TableAction;
 use Illuminate\Support\Collection;
+use Illuminate\Support\HtmlString;
 
 /**
  * Wizard di configurazione macchina (files/PRD.md §3.1, files/DATABASE-SCHEMA.md):
@@ -352,7 +353,7 @@ class ConfigureMachineAction
      * verrebbe creata confermando (resolveSelection), cosi' il riepilogo non
      * puo' mai mostrare qualcosa di diverso da quello che poi viene salvato.
      */
-    protected static function renderSummary(Forms\Get $get): \Illuminate\Support\HtmlString
+    protected static function renderSummary(Forms\Get $get): HtmlString
     {
         $machine = static::currentMachine($get);
 
@@ -360,7 +361,7 @@ class ConfigureMachineAction
             $soloConteggio = ConteggioConfigurator::righeRiepilogo($get);
 
             if ($soloConteggio->isEmpty()) {
-                return new \Illuminate\Support\HtmlString('<p class="text-sm text-gray-500">Nessuna macchina selezionata.</p>');
+                return new HtmlString('<p class="text-sm text-gray-500">Nessuna macchina selezionata.</p>');
             }
 
             return static::renderSummaryRows($soloConteggio, $get);
@@ -388,7 +389,7 @@ class ConfigureMachineAction
     /**
      * @param  Collection<int, array{label: string, price: float}>  $rows
      */
-    protected static function renderSummaryRows(Collection $rows, Forms\Get $get): \Illuminate\Support\HtmlString
+    protected static function renderSummaryRows(Collection $rows, Forms\Get $get): HtmlString
     {
         $subtotal = $rows->sum('price');
         $discount = min(100, max(0, (float) ($get('configuration_discount') ?? 0)));
@@ -406,7 +407,7 @@ class ConfigureMachineAction
                 ]
                 : null;
 
-        return new \Illuminate\Support\HtmlString(view('filament.partials.configure-machine-summary', [
+        return new HtmlString(view('filament.partials.configure-machine-summary', [
             'rows' => $rows,
             'subtotal' => $subtotal,
             'discount' => $discount,
@@ -734,7 +735,7 @@ class ConfigureMachineAction
             ]);
         });
 
-        ConteggioConfigurator::creaRighe($quote, $data, $configurationDiscount);
+        ConteggioConfigurator::creaRighe($quote, $data, $configurationDiscount, (string) $baseLine->getKey());
 
         $quote->updateTotal();
 
@@ -776,7 +777,11 @@ class ConfigureMachineAction
             'contratto_assistenza' => static::contrattoScelto($machine, $data),
         ]);
 
-        $record->options()->delete();
+        // Le opzioni si rifanno da zero, tranne il sistema di conteggio: se lo
+        // gestisce ConteggioConfigurator::aggiornaRighe() poco sotto, che sa
+        // cancellare anche le SUE opzioni (interruttore a chiave, gettoni).
+        // Cancellandolo qui, quelle righe restavano orfane (30/10/2026).
+        ConteggioConfigurator::cancellaOpzioniTranneIlConteggio($record);
 
         Product::whereIn('id', $selectedIds)->get()->each(function (Product $product) use ($quote, $record, $configurationDiscount) {
             $quote->quoteProducts()->create([
@@ -789,7 +794,7 @@ class ConfigureMachineAction
             ]);
         });
 
-        ConteggioConfigurator::aggiornaRighe($quote, $data, $configurationDiscount);
+        ConteggioConfigurator::aggiornaRighe($quote, $data, $configurationDiscount, $record->id);
 
         $quote->updateTotal();
 

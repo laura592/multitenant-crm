@@ -292,7 +292,7 @@ class ConteggioConfigurator
      * Aggiunge al preventivo il sistema scelto (se e' stato scelto: lo step
      * e' facoltativo) e le sue voci accessorie.
      */
-    public static function creaRighe(Quote $quote, array $data, float $sconto = 0): void
+    public static function creaRighe(Quote $quote, array $data, float $sconto = 0, ?string $rigaMacchinaId = null): void
     {
         $sistema = Product::find($data['conteggio_product_id'] ?? null);
 
@@ -302,6 +302,11 @@ class ConteggioConfigurator
 
         $riga = $quote->quoteProducts()->create([
             'product_id' => $sistema->id,
+            // Opzione della macchina quando c'e' una macchina: in offerta il
+            // sistema di pagamento si legge sotto l'apparecchio che lo porta,
+            // non come articolo staccato in fondo. Senza macchina (cliente che
+            // ce l'ha gia') resta di primo livello.
+            'parent_quote_product_id' => $rigaMacchinaId,
             'quantity' => 1,
             'price' => $sistema->getCurrentPrice()?->price ?? 0,
             // Stesso sconto configurazione della macchina: e' un'unica cosa
@@ -361,8 +366,12 @@ class ConteggioConfigurator
      */
     public static function righe(Quote $quote): Collection
     {
+        // Ovunque si trovi, non solo al primo livello: dal 30/10/2026 il
+        // conteggio e' un'opzione della macchina (Laura: "dovrebbe far parte
+        // della configurazione macchina, non essere a parte"). Cercarlo solo
+        // in cima voleva dire non vederlo piu', e "Modifica configurazione"
+        // lo cancellava insieme alle altre opzioni senza ricrearlo.
         return $quote->quoteProducts()
-            ->whereNull('parent_quote_product_id')
             ->with(['product.family', 'options.product'])
             ->get()
             ->filter(fn (QuoteProduct $riga) => $riga->product?->family?->name === FrankeAccountingHousingsSeeder::FAMIGLIA)
@@ -416,7 +425,7 @@ class ConteggioConfigurator
      * Non tocca la riga della SU03 EC: non e' un'opzione del conteggio ed e'
      * della macchina, non di questo passo.
      */
-    public static function aggiornaRighe(Quote $quote, array $data, float $sconto = 0): void
+    public static function aggiornaRighe(Quote $quote, array $data, float $sconto = 0, ?string $rigaMacchinaId = null): void
     {
         $righe = static::righe($quote);
 
@@ -446,12 +455,27 @@ class ConteggioConfigurator
         if ($sceltoAdesso) {
             // Senza la SU03 gia' presente il passo la ripropone: qui pero'
             // si sta modificando, e una seconda riga sarebbe un doppione.
-            static::creaRighe($quote, $data + ['aggiungi_su03' => ($data['aggiungi_su03'] ?? false) && ! static::haGiaLaSu03($quote)], $sconto);
+            static::creaRighe($quote, $data + ['aggiungi_su03' => ($data['aggiungi_su03'] ?? false) && ! static::haGiaLaSu03($quote)], $sconto, $rigaMacchinaId);
 
             return;
         }
 
         $quote->updateTotal();
+    }
+
+    /**
+     * Cancella le opzioni di una macchina TRANNE il sistema di conteggio.
+     *
+     * Serve a "Modifica configurazione", che rifa' le opzioni da zero: il
+     * conteggio non va cancellato li' perche' ha opzioni sue (interruttore a
+     * chiave, gettoni) che resterebbero orfane. Se lo rifa' aggiornaRighe()
+     * subito dopo, che sa cancellare anche quelle.
+     */
+    public static function cancellaOpzioniTranneIlConteggio(QuoteProduct $macchina): void
+    {
+        $macchina->options()
+            ->whereDoesntHave('product.family', fn (Builder $q) => $q->where('name', FrankeAccountingHousingsSeeder::FAMIGLIA))
+            ->delete();
     }
 
     /** C'e' gia' una riga SU03 EC nel preventivo? */
