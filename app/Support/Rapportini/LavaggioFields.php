@@ -175,6 +175,8 @@ class LavaggioFields
             'sanificazioni_count' => null,
             'manutenzione_key' => null,
             'vie_count' => null,
+            'disinstallazione_key' => null,
+            'disinstallazione_tipo' => null,
         ];
 
         if (! $record) {
@@ -194,6 +196,19 @@ class LavaggioFields
         $sanifRow = $rows->first(fn ($row) => in_array($row->material?->code, self::codiciTariffa('sanificazione'), true));
         // La manutenzione non ha un elenco di codici noti: si riconosce
         // risolvendo quello dovuto per la macchina di QUESTO rapportino.
+        // La disinstallazione: due codici distinti (con e senza ritiro) che
+        // la tendina deve ritrovare riaprendo il rapportino. Prima il
+        // ritiro, perche' e' il caso normale. Qui il codice si chiede al
+        // database invece di rileggere $rows riga per riga: la relazione
+        // materialsUsed non dichiara il tipo delle righe, e filtrarle in PHP
+        // obbligherebbe a leggere ->material su un Model generico.
+        $ritiroRow = $record->materialsUsed()
+            ->whereRelation('material', 'code', self::codiciTariffa('disinstallazione_ritiro'))
+            ->first();
+        $disinRow = $ritiroRow ?: $record->materialsUsed()
+            ->whereRelation('material', 'code', self::codiciTariffa('disinstallazione'))
+            ->first();
+
         $codiceManutenzione = TariffeIntervento::manutenzione($record->machineUnit, $record->customer);
         $manutRow = $codiceManutenzione
             ? $rows->first(fn ($row) => $row->material?->code === $codiceManutenzione)
@@ -212,6 +227,8 @@ class LavaggioFields
             'sanificazione_key' => $sanifRow ? "record-{$sanifRow->id}" : null,
             'sanificazioni_count' => $sanifRow ? (int) $sanifRow->quantity : null,
             'manutenzione_key' => $manutRow ? "record-{$manutRow->id}" : null,
+            'disinstallazione_key' => $disinRow ? 'record-'.$disinRow->getKey() : null,
+            'disinstallazione_tipo' => $disinRow ? ($ritiroRow ? 'ritiro' : 'solo') : null,
             // Vince sempre il numero digitato dal tecnico, ora che c'e' una
             // colonna che lo conserva: le righe materiali non bastano a
             // ricostruirlo, perche' 1 via e 2 vie generano entrambe il solo

@@ -20,6 +20,27 @@
  */
 return [
 
+    /**
+     * I torrefattori: le macchine sono loro, non del bar che le usa.
+     *
+     * Serve a una cosa sola, la manodopera della disinstallazione: smontare
+     * una macchina del torrefattore vuol dire staccarla, imballarla e
+     * caricarla per il rientro, ed e' un'ora; una macchina del cliente, che
+     * resta dov'e', sono trenta minuti (regola dell'ufficio, 27/10/2026).
+     *
+     * La chiave e' il codice gestionale, come in 'paganti' qui sotto.
+     * Aggiungerne uno e' una riga. Fuori dall'elenco per ora: Spigola (1629)
+     * e Danieli (561), che hanno un listino proprio ma non risulta siano
+     * torrefazioni — se lo sono, basta metterli qui.
+     */
+    'torrefattori' => [
+        1178, // Martellozzo Lorenzo & C. SAS
+        782,  // Goppion Caffe' SPA
+        942,  // Hts 1892 SPA
+        3129, // Mioni Pezzato & SPA
+        580,  // Dersut Caffe' SPA
+    ],
+
     'paganti' => [
 
         // Martellozzo Lorenzo & C. SAS — 32 clienti
@@ -108,5 +129,14 @@ return [
         // codice proprio, ma la voce sta qui come le altre cosi' che
         // aggiungerlo a un listino sia una riga sola.
         'sanificazione' => 'SANIFICAZIONE',
+        // Disinstallazione: due codici allo stesso prezzo (79,50) che
+        // dicono due cose diverse, e sbagliarli si vede solo in fattura.
+        // DISIN/RITIRO = smontata e portata via; DISIN = staccata e lasciata
+        // dal cliente. A catalogo ce ne sono altri che NON vanno usati
+        // (109000137/109000138 "DIRITTO DISINSTALLAZIONE" e DISINACQUA a
+        // 0,00, DISINMAC a 66,00 ma senza codice Eureka, quindi non
+        // inviabile): finivano in riga al posto di questi due.
+        'disinstallazione' => 'DISIN',
+        'disinstallazione_ritiro' => 'DISIN/RITIRO',
     ],
 ];

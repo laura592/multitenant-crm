@@ -85,6 +85,76 @@ class TariffeIntervento
         return $base;
     }
 
+    /** Ore di manodopera su una disinstallazione, per chi e' la macchina. */
+    public const ORE_DISINSTALLAZIONE_TORREFATTORE = 1.0;
+
+    public const ORE_DISINSTALLAZIONE = 0.5;
+
+    /**
+     * Il codice della disinstallazione: con o senza ritiro.
+     *
+     * Sono due articoli diversi allo stesso prezzo (79,50) e la differenza e'
+     * sostanziale: DISIN/RITIRO dice che la macchina e' tornata in magazzino
+     * (e da quella riga il sync propone il rientro, vedi
+     * Support\Gestionale\RientriMagazzino), DISIN che e' rimasta dal cliente
+     * staccata. Nessun pagante ha finora un codice proprio, ma la voce passa
+     * dal listino come le altre cosi' che aggiungerlo sia una riga.
+     */
+    public static function disinstallazione(?Customer $cliente, bool $conRitiro = true): ?string
+    {
+        $chiave = $conRitiro ? 'disinstallazione_ritiro' : 'disinstallazione';
+        $listino = self::listino($cliente?->billingCustomer);
+
+        return $listino[$chiave] ?? config('tariffe.standard')[$chiave] ?? null;
+    }
+
+    /**
+     * Quanta manodopera va in riga su una disinstallazione.
+     *
+     * Decide di chi e' la macchina, non quanto e' grossa: quella del
+     * torrefattore si stacca, si imballa e si carica per il rientro (un'ora);
+     * quella del cliente resta dov'e' (mezz'ora). L'elenco dei torrefattori
+     * sta in config/tariffe.php.
+     *
+     * Resta un valore di partenza: il tecnico che ci ha messo di piu' lo
+     * corregge in riga.
+     */
+    public static function oreDisinstallazione(?MachineUnit $macchina, ?Customer $cliente): float
+    {
+        return self::diUnTorrefattore($macchina, $cliente)
+            ? self::ORE_DISINSTALLAZIONE_TORREFATTORE
+            : self::ORE_DISINSTALLAZIONE;
+    }
+
+    /**
+     * Il torrefattore proprietario della macchina, se c'e'.
+     *
+     * Stessa precedenza di manutenzione(): la singola macchina puo' avere un
+     * pagante suo (una Goppion in un bar che per il resto paga da se'), e in
+     * quel caso comanda lei.
+     */
+    public static function torrefattoreProprietario(?MachineUnit $macchina, ?Customer $cliente): ?Customer
+    {
+        $pagante = $macchina?->billingCustomer;
+
+        if (! $pagante) {
+            $pagante = $cliente?->billingCustomer;
+        }
+
+        if (! $pagante instanceof Customer || ! $pagante->gestionale_code) {
+            return null;
+        }
+
+        $torrefattori = array_map('intval', config('tariffe.torrefattori', []));
+
+        return in_array((int) $pagante->gestionale_code, $torrefattori, true) ? $pagante : null;
+    }
+
+    private static function diUnTorrefattore(?MachineUnit $macchina, ?Customer $cliente): bool
+    {
+        return self::torrefattoreProprietario($macchina, $cliente) !== null;
+    }
+
     /**
      * Il listino configurato per un pagante, o null se non ne ha uno.
      *

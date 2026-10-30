@@ -143,7 +143,7 @@ class UserResource extends Resource
                 ->schema([
                     Forms\Components\TextInput::make('gestionale_operatore_id')
                         ->label('Codice operatore su Eureka')
-                        ->helperText('Es. 1 = Alessandro, 5 = Igor. Vuoto: la scheda esce senza tecnico.')
+                        ->helperText('Es. 1 = Alessandro, 6 = Igor. Vuoto: la scheda esce senza tecnico.')
                         ->numeric()
                         ->minValue(1)
                         ->maxValue(9999),

@@ -973,6 +973,9 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                 Forms\Components\Hidden::make('_manutenzione_material_key')
                     ->dehydrated(false)
                     ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['manutenzione_key']),
+                Forms\Components\Hidden::make('_disinstallazione_material_key')
+                    ->dehydrated(false)
+                    ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['disinstallazione_key']),
                 Forms\Components\Hidden::make('_sanificazione_count')
                     ->dehydrated(false)
                     ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['sanificazioni_count']),
@@ -1118,6 +1121,33 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                             ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['manutenzione_key'] !== null)
                             ->helperText(fn (Get $get) => self::descrizioneManutenzione($get))
                             ->afterStateUpdated(fn (bool $state, Forms\Set $set, Get $get) => self::syncManutenzioneMaterial($state, $set, $get)),
+                        // Disinstallazione: due codici allo stesso prezzo che
+                        // dicono cose diverse (portata via / lasciata dal
+                        // cliente), e a catalogo ce ne sono altri sei che
+                        // sembrano uguali ma fatturano 0,00 — su Rtg e'
+                        // finito in riga 109000137 "DIRITTO
+                        // DISINSTALLAZIONE" (0,00) invece di DISIN 79,50.
+                        // Qui si scelgono a parole, e la manodopera arriva
+                        // da sola con le ore giuste.
+                        Forms\Components\Select::make('_disinstallazione_tipo')
+                            ->label('Disinstallazione')
+                            ->options([
+                                'ritiro' => 'Disinstallazione e ritiro',
+                                'solo' => 'Solo disinstallazione',
+                            ])
+                            ->placeholder('Nessuna')
+                            ->live()
+                            ->dehydrated(false)
+                            ->columnSpan(2)
+                            ->default(fn (?ServiceReport $record) => LavaggioFields::resolveLavaggioShortcutDefaults($record)['disinstallazione_tipo'])
+                            // Si mostra sul tipo intervento giusto, e su un
+                            // rapportino che ha gia' la riga: la macchina
+                            // smontata dentro una riparazione si aggiunge a
+                            // mano come prima.
+                            ->visible(fn (Get $get, ?ServiceReport $record) => $get('intervention_type') === ServiceReport::TYPE_DISINSTALLAZIONE
+                                || LavaggioFields::resolveLavaggioShortcutDefaults($record)['disinstallazione_tipo'] !== null)
+                            ->helperText(fn (Get $get) => self::descrizioneDisinstallazione($get))
+                            ->afterStateUpdated(fn (?string $state, Forms\Set $set, Get $get) => self::syncDisinstallazioneMaterials($state, $set, $get)),
                     ]),
                 // Materiali (App\Models\Material), non Product: quest'ultimo e'
                 // lo stesso elenco usato per i preventivi, senza filtro —
@@ -1387,6 +1417,138 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
 
         $set('materialsUsed', $materialsUsed);
         $set('_manutenzione_material_key', $newKey);
+    }
+
+    /**
+     * Cosa finisce in riga scegliendo la disinstallazione, scritto prima.
+     *
+     * Le ore dipendono da chi e' la macchina e il tecnico non ha modo di
+     * saperlo guardando il rapportino: se le vede spiegate qui, una stima
+     * sbagliata la corregge invece di accorgersene in fattura.
+     */
+    private static function descrizioneDisinstallazione(Get $get): string
+    {
+        $tipo = $get('_disinstallazione_tipo');
+
+        if (blank($tipo)) {
+            return 'Mette in riga il codice giusto e la manodopera con le ore dovute.';
+        }
+
+        $cliente = Customer::find($get('customer_id'));
+        $codice = TariffeIntervento::disinstallazione($cliente, $tipo === 'ritiro');
+
+        if (! $codice) {
+            return 'Nessun codice configurato.';
+        }
+
+        $macchina = MachineUnit::find($get('machine_unit_id'));
+        $torrefattore = TariffeIntervento::torrefattoreProprietario($macchina, $cliente);
+        $ore = TariffeIntervento::oreDisinstallazione($macchina, $cliente);
+
+        $oreTesto = $ore >= 1.0
+            ? ($ore == 1.0 ? "1 ora di manodopera" : "{$ore} ore di manodopera")
+            : '30 minuti di manodopera';
+
+        $perche = $torrefattore
+            ? 'la macchina è di '.($torrefattore->company_name ?: $torrefattore->full_name)
+            : 'la macchina non è di un torrefattore';
+
+        return "Aggiunge {$codice} + {$oreTesto}: {$perche}.";
+    }
+
+    /**
+     * La riga della disinstallazione, con la manodopera dovuta.
+     *
+     * Stesso meccanismo per key delle altre scorciatoie (si rimuove solo
+     * cio' che ha aggiunto lei, mai una riga messa a mano), con un'aggiunta:
+     * porta con se' la manodopera, perche' le due righe vanno sempre
+     * insieme e separarle e' l'errore che si vede in fattura.
+     */
+    private static function syncDisinstallazioneMaterials(?string $tipo, Forms\Set $set, Get $get): void
+    {
+        $materialsUsed = $get('materialsUsed') ?? [];
+        $addedKey = $get('_disinstallazione_material_key');
+
+        if ($addedKey && array_key_exists($addedKey, $materialsUsed)) {
+            unset($materialsUsed[$addedKey]);
+            $set('_disinstallazione_material_key', null);
+        }
+
+        if (blank($tipo)) {
+            $set('materialsUsed', $materialsUsed);
+
+            return;
+        }
+
+        $cliente = Customer::find($get('customer_id'));
+        $codice = TariffeIntervento::disinstallazione($cliente, $tipo === 'ritiro');
+        $materialId = $codice ? Material::where('code', $codice)->value('id') : null;
+
+        if (! $materialId) {
+            $set('materialsUsed', $materialsUsed);
+
+            return;
+        }
+
+        $giaPresente = collect($materialsUsed)->contains(
+            fn (array $item) => ($item['material_id'] ?? null) === $materialId
+        );
+
+        if (! $giaPresente) {
+            $newKey = (string) Str::uuid();
+            $materialsUsed[$newKey] = ['material_id' => $materialId, 'quantity' => 1];
+            $set('_disinstallazione_material_key', $newKey);
+        }
+
+        $materialsUsed = self::conOreDisinstallazione($materialsUsed, $set, $get, $cliente);
+
+        $set('materialsUsed', $materialsUsed);
+    }
+
+    /**
+     * Le righe con la manodopera della disinstallazione dentro.
+     *
+     * Una riga manodopera che c'e' gia' si riempie solo se vuota: il numero
+     * scritto dal tecnico vale piu' di questa stima, e sovrascriverlo
+     * significherebbe cambiare una fattura alle sue spalle.
+     *
+     * @param  array<string, array<string, mixed>>  $materialsUsed
+     * @return array<string, array<string, mixed>>
+     */
+    private static function conOreDisinstallazione(array $materialsUsed, Forms\Set $set, Get $get, ?Customer $cliente): array
+    {
+        $ore = TariffeIntervento::oreDisinstallazione(MachineUnit::find($get('machine_unit_id')), $cliente);
+
+        $idsManodopera = Material::whereIn('code', LavaggioFields::codiciTariffa('manodopera'))->pluck('id')->all();
+
+        foreach ($materialsUsed as $key => $riga) {
+            if (in_array($riga['material_id'] ?? null, $idsManodopera, true)) {
+                if (blank($riga['quantity'] ?? null)) {
+                    $materialsUsed[$key]['quantity'] = $ore;
+                }
+
+                return $materialsUsed;
+            }
+        }
+
+        $codice = TariffeIntervento::per($cliente, (bool) $get('_intervento_festivo'))['manodopera']
+            ?? self::MANODOPERA_MATERIAL_CODE;
+
+        $manodoperaId = Material::where('code', $codice)->value('id');
+
+        if (! $manodoperaId) {
+            return $materialsUsed;
+        }
+
+        $newKey = (string) Str::uuid();
+        $materialsUsed[$newKey] = ['material_id' => $manodoperaId, 'quantity' => $ore];
+
+        // L'interruttore "Manodopera" deve risultare acceso: la riga c'e',
+        // e lasciarlo spento farebbe credere di poterla togliere da li'.
+        $set('_manodopera_material_key', $newKey);
+        $set('add_manodopera_material', true);
+
+        return $materialsUsed;
     }
 
     private static function syncManodoperaMaterial(bool $enabled, Forms\Set $set, Get $get): void
