@@ -12,26 +12,21 @@ reale, switch, rollback) vedi `docs/deploy-cutover.md`.
 ## 1. Comandi da lanciare sempre
 
 ```bash
-composer verify
+composer analyse
 ```
 
-Esegue `composer test` (PHPUnit, DB sqlite `:memory:`) + `composer analyse`
-(PHPStan/Larastan). È il gate minimo: se non è verde, non si rilascia (con
-l'unica eccezione dei fallimenti noti già tracciati, vedi sotto).
+PHPStan/Larastan con la baseline. E' il gate minimo: se compaiono errori nei
+file che **hai** toccato tu, non si rilascia. La baseline ha conteggi esatti
+per ogni pattern ignorato, quindi anche aggiungere una riga che ripete un
+errore gia' tracciato fa fallire l'analisi.
 
-**Stato noto (aggiornato dopo il fix di idempotenza di `import:legacy`,
-2026-07-27)**: `composer test` verde (105 test). I 4 fallimenti tracciati in
-precedenza (`RolePermissionsTest` x3, `AppointmentCalendarTest` x1) risultano
-sistemati; nel frattempo altri 4 test si erano rotti per modifiche UI
-intenzionali non ancora riportate nei test (etichetta PDF, sezione
-"Panoramica offerta" rinominata, formato data italiano) - aggiornati di
-conseguenza. `composer analyse` **non è pulito** in questo momento: una
-quota di errori preesistenti (proprietà Eloquent non tipizzate, integrazione
-Activitylog) non è stata toccata in questo lavoro perché fuori perimetro -
-se stai leggendo questa nota e il numero è sensibilmente più alto o compaiono
-errori in file che *hai* modificato tu, indaga quelli, non l'intero conteggio.
-Aggiorna questa nota quando vengono sistemati, per non lasciare un
-riferimento morto.
+**La suite di test non esiste piu'.** E' stata rimossa il 2026-09-24 con
+`432ec7b` ("via la suite di test, resta l'analisi statica"): non ci sono piu'
+`phpunit.xml` ne' la cartella `tests/`, e `composer verify`/`composer test`
+non sono piu' definiti. Se leggi questa nota e trovi ancora quei comandi
+scritti da qualche parte, e' quel posto che va corretto. Quello che prima
+copriva un test ora si verifica guidando il pannello: vedi la skill
+`.claude/skills/run-multitenant-crm`.
 
 ```bash
 git status
