@@ -119,6 +119,14 @@ class TariffeIntervento
      * Resta un valore di partenza: il tecnico che ci ha messo di piu' lo
      * corregge in riga.
      */
+    /**
+     * Quante ore vale smontare una macchina.
+     *
+     * NON la usa piu' nessuno dal 02/11/2026: la scorciatoia della
+     * disinstallazione non scrive piu' la manodopera, le ore le mette il
+     * tecnico. La regola dell'ufficio del 27/10 resta scritta qui perche'
+     * ricostruirla da capo costerebbe piu' che tenerla.
+     */
     public static function oreDisinstallazione(?MachineUnit $macchina, ?Customer $cliente): float
     {
         return self::diUnTorrefattore($macchina, $cliente)

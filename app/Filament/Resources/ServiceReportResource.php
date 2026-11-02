@@ -21,10 +21,10 @@ use App\Support\DisplayName;
 use App\Support\Gestionale\FattureRapportino;
 use App\Support\Gestionale\SenzaFatturaCollegata;
 use App\Support\OutsideLivewireRender;
-use App\Support\RapportiniPerFattura;
 use App\Support\Rapportini\DividiPerMacchina;
 use App\Support\Rapportini\FirmaCliente;
 use App\Support\Rapportini\LavaggioFields;
+use App\Support\RapportiniPerFattura;
 use App\Support\TariffeIntervento;
 use Barryvdh\DomPDF\Facade\Pdf;
 use BezhanSalleh\FilamentShield\Contracts\HasShieldPermissions;
@@ -690,7 +690,7 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                                             ->label('Cadenza (giorni)')
                                             ->numeric()
                                             ->minValue(1)
-                                            ->helperText('Si puo' . chr(39) . ' lasciare vuoto: il vino e altri impianti vanno a chiamata.'),
+                                            ->helperText('Si puo'.chr(39).' lasciare vuoto: il vino e altri impianti vanno a chiamata.'),
                                     ])
                                     ->action(function (array $data, Forms\Set $set, Get $get) {
                                         $impianto = MaintenanceSchedule::create([
@@ -854,7 +854,7 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                     ->searchable()
                     ->getSearchResultsUsing(fn (string $search) => Customer::query()
                         ->where(fn ($q) => $q->where('search_name', 'like', '%'.Customer::nomeCercabile($search).'%')
-                                ->orWhere('company_name', 'like', "%{$search}%")
+                            ->orWhere('company_name', 'like', "%{$search}%")
                             ->orWhere('first_name', 'like', "%{$search}%")
                             ->orWhere('last_name', 'like', "%{$search}%")
                             ->orWhere('city', 'like', "%{$search}%"))
@@ -1422,16 +1422,15 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
     /**
      * Cosa finisce in riga scegliendo la disinstallazione, scritto prima.
      *
-     * Le ore dipendono da chi e' la macchina e il tecnico non ha modo di
-     * saperlo guardando il rapportino: se le vede spiegate qui, una stima
-     * sbagliata la corregge invece di accorgersene in fattura.
+     * Solo il codice: la manodopera la scrive il tecnico, e il testo lo dice
+     * invece di lasciarglielo scoprire guardando le righe.
      */
     private static function descrizioneDisinstallazione(Get $get): string
     {
         $tipo = $get('_disinstallazione_tipo');
 
         if (blank($tipo)) {
-            return 'Mette in riga il codice giusto e la manodopera con le ore dovute.';
+            return 'Mette in riga il codice giusto. La manodopera resta da scrivere.';
         }
 
         $cliente = Customer::find($get('customer_id'));
@@ -1441,28 +1440,20 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
             return 'Nessun codice configurato.';
         }
 
-        $macchina = MachineUnit::find($get('machine_unit_id'));
-        $torrefattore = TariffeIntervento::torrefattoreProprietario($macchina, $cliente);
-        $ore = TariffeIntervento::oreDisinstallazione($macchina, $cliente);
-
-        $oreTesto = $ore >= 1.0
-            ? ($ore == 1.0 ? "1 ora di manodopera" : "{$ore} ore di manodopera")
-            : '30 minuti di manodopera';
-
-        $perche = $torrefattore
-            ? 'la macchina è di '.($torrefattore->company_name ?: $torrefattore->full_name)
-            : 'la macchina non è di un torrefattore';
-
-        return "Aggiunge {$codice} + {$oreTesto}: {$perche}.";
+        return "Aggiunge {$codice}. La manodopera non la tocca: le ore le scrivi tu.";
     }
 
     /**
      * La riga della disinstallazione, con la manodopera dovuta.
      *
-     * Stesso meccanismo per key delle altre scorciatoie (si rimuove solo
-     * cio' che ha aggiunto lei, mai una riga messa a mano), con un'aggiunta:
-     * porta con se' la manodopera, perche' le due righe vanno sempre
-     * insieme e separarle e' l'errore che si vede in fattura.
+     * Stesso meccanismo per key delle altre scorciatoie: si rimuove solo
+     * cio' che ha aggiunto lei, mai una riga messa a mano.
+     *
+     * La manodopera NON la mette (Laura, 02/11/2026). Fino a oggi la
+     * scorciatoia aggiungeva anche una riga di manodopera con le ore
+     * stimate -- un'ora per le macchine dei torrefattori, mezza per le
+     * altre: ma quelle ore le decide chi e' andato sul posto, e una stima
+     * che finisce in fattura da sola e' peggio di una riga mancante.
      */
     private static function syncDisinstallazioneMaterials(?string $tipo, Forms\Set $set, Get $get): void
     {
@@ -1500,55 +1491,7 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
             $set('_disinstallazione_material_key', $newKey);
         }
 
-        $materialsUsed = self::conOreDisinstallazione($materialsUsed, $set, $get, $cliente);
-
         $set('materialsUsed', $materialsUsed);
-    }
-
-    /**
-     * Le righe con la manodopera della disinstallazione dentro.
-     *
-     * Una riga manodopera che c'e' gia' si riempie solo se vuota: il numero
-     * scritto dal tecnico vale piu' di questa stima, e sovrascriverlo
-     * significherebbe cambiare una fattura alle sue spalle.
-     *
-     * @param  array<string, array<string, mixed>>  $materialsUsed
-     * @return array<string, array<string, mixed>>
-     */
-    private static function conOreDisinstallazione(array $materialsUsed, Forms\Set $set, Get $get, ?Customer $cliente): array
-    {
-        $ore = TariffeIntervento::oreDisinstallazione(MachineUnit::find($get('machine_unit_id')), $cliente);
-
-        $idsManodopera = Material::whereIn('code', LavaggioFields::codiciTariffa('manodopera'))->pluck('id')->all();
-
-        foreach ($materialsUsed as $key => $riga) {
-            if (in_array($riga['material_id'] ?? null, $idsManodopera, true)) {
-                if (blank($riga['quantity'] ?? null)) {
-                    $materialsUsed[$key]['quantity'] = $ore;
-                }
-
-                return $materialsUsed;
-            }
-        }
-
-        $codice = TariffeIntervento::per($cliente, (bool) $get('_intervento_festivo'))['manodopera']
-            ?? self::MANODOPERA_MATERIAL_CODE;
-
-        $manodoperaId = Material::where('code', $codice)->value('id');
-
-        if (! $manodoperaId) {
-            return $materialsUsed;
-        }
-
-        $newKey = (string) Str::uuid();
-        $materialsUsed[$newKey] = ['material_id' => $manodoperaId, 'quantity' => $ore];
-
-        // L'interruttore "Manodopera" deve risultare acceso: la riga c'e',
-        // e lasciarlo spento farebbe credere di poterla togliere da li'.
-        $set('_manodopera_material_key', $newKey);
-        $set('add_manodopera_material', true);
-
-        return $materialsUsed;
     }
 
     private static function syncManodoperaMaterial(bool $enabled, Forms\Set $set, Get $get): void
@@ -2019,7 +1962,7 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                             $pdf = RapportiniPerFattura::pdf($gruppo, $showPrices);
 
                             return response()->streamDownload(
-                                fn () => print($pdf),
+                                fn () => print ($pdf),
                                 RapportiniPerFattura::nomeFile($gruppo),
                             );
                         }
@@ -2355,7 +2298,7 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                     // Quale copia parte si sceglie al primo passo e qui non
                     // si vedeva piu': si premeva Invia fidandosi di ricordare
                     // cosa si era spuntato due schermate prima.
-                    AllegatiEmail::make(fn (Forms\Get $get) => [
+                    AllegatiEmail::make(fn (Get $get) => [
                         'rapportino-'.$record->number.'.pdf'
                         .(($c = $get('copia')) && isset($copie[$c]) ? ' — copia '.mb_strtolower($copie[$c]) : ''),
                     ]),

@@ -204,6 +204,20 @@ l'import per registrare una macchina (04/09/2026).
 
 ## 3. Rapportini
 
+### La disinstallazione non scrive la manodopera
+
+La scorciatoia «Disinstallazione» mette in riga **solo il codice** — `DISIN`,
+oppure `DISIN/RITIRO` se la macchina rientra in magazzino. **Le ore di
+manodopera le scrive il tecnico**, e la scorciatoia non le tocca: né le
+aggiunge né riempie una riga che c'è già (Laura, 02/11/2026).
+
+Fino al 02/11/2026 la scorciatoia aggiungeva anche una riga di manodopera con
+una stima: un'ora per le macchine dei torrefattori, mezza per le altre. Ma
+quelle ore le sa solo chi è andato sul posto, e una stima che arriva in
+fattura da sola è peggio di una riga mancante. La regola del 27/10 resta
+scritta in `TariffeIntervento::oreDisinstallazione()`, che però non la usa
+più nessuno.
+
 ### Il numero non cambia mai significato
 
 L'ufficio stampa il riepilogo e quei numeri finiscono su carta: RT-2026-0579
