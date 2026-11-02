@@ -2,6 +2,9 @@
 
 namespace App\Support\Presenze;
 
+use Carbon\CarbonInterface;
+use Illuminate\Support\Carbon;
+
 /**
  * Come si divide una giornata di lavoro fra ore ordinarie, ore coperte dalla
  * trasferta e straordinario.
@@ -16,6 +19,12 @@ namespace App\Support\Presenze;
  * straordinario: sono "coperte". Tenerle fuori dalle ordinarie conta, perche'
  * lo straordinario settimanale si calcola sulle ordinarie della settimana, e
  * altrimenti l'ora pagata dalla trasferta rientrerebbe da li'.
+ *
+ * Dal 02/11/2026 quella regola si puo' scrivere anche sul singolo dipendente
+ * (users.trasferta_ore_incluse): Igor e' in giro tutti i giorni e la sua
+ * indennita' si porta dentro un'ora. Quando c'e' il valore sulla persona
+ * vince sempre, anche sui mesi passati — e' una sua condizione, non una
+ * regola aziendale cambiata a una certa data.
  *
  * Dal 01/10/2026 quel valore e' zero — la trasferta non toglie piu' niente —
  * ma per i giorni precedenti resta un'ora, perche' i mesi chiusi vanno
@@ -33,12 +42,35 @@ final class GiornataLavorativa
     ) {}
 
     /**
-     * @param  \Carbon\CarbonInterface|string|null  $giorno  il giorno della
-     *         prestazione, che decide quale regola applicare. Null = regola di
-     *         oggi: e' il caso di un calcolo senza data, non di un giorno
-     *         vecchio.
+     * Le ore di una giornata al netto della pausa.
+     *
+     * La pausa si toglie SOLO se non e' gia' nel cartellino. Chi timbra due
+     * turni — 08:00-12:00 e 13:00-17:00 — la pausa ce l'ha gia' fuori: 8 ore
+     * sono 8 ore, e toglierne una seconda ne farebbe 7. Chi invece timbra
+     * una volta sola, 08:00-19:00, quelle 11 ore la pausa ce l'hanno dentro.
+     *
+     * La soglia e' il contratto: una mezza giornata timbrata in un colpo solo
+     * (08:00-12:00) non ha pausa da togliere, e senza questo controllo
+     * diventerebbe di tre ore.
+     *
+     * @param  int  $timbrature  quante timbrature ha quel giorno
      */
-    public static function ripartisci(float $lavorate, float $contratto, bool $trasferta, $giorno = null): self
+    public static function lavorateNette(float $lavorate, int $timbrature, float $contratto, float $pausaOre): float
+    {
+        if ($pausaOre <= 0 || $timbrature !== 1 || $lavorate <= $contratto) {
+            return $lavorate;
+        }
+
+        return max(0.0, round($lavorate - $pausaOre, 2));
+    }
+
+    /**
+     * @param  CarbonInterface|string|null  $giorno  il giorno della
+     *                                               prestazione, che decide quale regola applicare. Null = regola di
+     *                                               oggi: e' il caso di un calcolo senza data, non di un giorno
+     *                                               vecchio.
+     */
+    public static function ripartisci(float $lavorate, float $contratto, bool $trasferta, $giorno = null, ?float $oreIncluseUtente = null): self
     {
         $lavorate = max(0.0, $lavorate);
         $contratto = max(0.0, $contratto);
@@ -49,7 +81,7 @@ final class GiornataLavorativa
         $ordinarie = min($lavorate, $contratto);
         $oltre = $lavorate - $ordinarie;
 
-        $incluse = $trasferta ? self::oreIncluse($giorno) : 0.0;
+        $incluse = $trasferta ? ($oreIncluseUtente ?? self::oreIncluse($giorno)) : 0.0;
         $coperte = min($oltre, $incluse);
 
         return new self(
@@ -70,8 +102,8 @@ final class GiornataLavorativa
         $dal = config('presenze.trasferta_regola_nuova_dal');
 
         if ($giorno !== null && filled($dal)
-            && \Illuminate\Support\Carbon::parse($giorno)->startOfDay()
-                ->lt(\Illuminate\Support\Carbon::parse($dal)->startOfDay())) {
+            && Carbon::parse($giorno)->startOfDay()
+                ->lt(Carbon::parse($dal)->startOfDay())) {
             return (float) config('presenze.trasferta_ore_incluse_prima', 1);
         }
 

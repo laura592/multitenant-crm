@@ -684,6 +684,42 @@ Entrambi i valori e la data stanno in `config/presenze.php`.
 
 Sotto il contratto, le ore mancanti restano mancanti.
 
+### Quando il dipendente ha una regola sua
+
+Dal **02/11/2026** trasferta e pausa si possono scrivere sul profilo della
+singola persona, e quello che c'è lì vince sulla regola aziendale. Nasce per
+Igor, che è in giro tutti i giorni: per lui la trasferta non è l'eccezione da
+spuntare ed è la sua indennità a pagare la prima ora oltre il contratto.
+
+Tre campi, nella scheda del dipendente, tutti vuoti per chi non ha niente di
+diverso dagli altri:
+
+| Campo | Cosa fa |
+|---|---|
+| **Sempre in trasferta** | Le sue timbrature nascono già segnate come giornata in trasferta |
+| **Pausa (minuti)** | La pausa che la sua giornata si porta dentro |
+| **Ore di straordinario nella trasferta** | Quante ore oltre il contratto le paga già l'indennità |
+
+**Il valore sulla persona non ha data di stacco**: vale anche sui mesi
+passati. Non è una regola che cambia a una certa data, è una condizione di
+quel dipendente (indicazione di Laura, 02/11/2026: «da sempre»). Attivarla non
+tocca i mesi in cui quella persona non ha giornate di trasferta.
+
+**La pausa si toglie una volta sola.** Chi timbra due turni — 08:00-12:00 e
+13:00-17:00 — la pausa ce l'ha già fuori dal cartellino: 8 ore sono 8 ore.
+Toglierne una seconda ne farebbe 7. Si scala quindi solo quando la giornata è
+**una timbratura sola più lunga del contratto**, perché lì la pausa è dentro.
+Una mezza giornata timbrata in un colpo solo (08:00-12:00) non perde niente.
+
+La giornata tipo di Igor, con un'ora di pausa e un'ora inclusa nell'indennità:
+
+| Cartellino | Lorde | Nette | Ordinarie | Coperte dalla trasferta | Straordinario |
+|---|---|---|---|---|---|
+| 08:00-19:00 in una volta, in trasferta | 11 | 10 | 8 | 1 | **1** |
+| 08:00-19:00 in una volta, senza trasferta | 11 | 10 | 8 | 0 | 2 |
+| 08:00-12:00 / 13:00-17:00, in trasferta | 8 | 8 | 8 | 0 | 0 |
+| 08:00-12:00 / 13:00-19:00, in trasferta | 10 | 10 | 8 | 1 | 1 |
+
 ### Ferie e permessi
 
 - Le **ferie** saltano sabati, domeniche e festivi; la **malattia** conta

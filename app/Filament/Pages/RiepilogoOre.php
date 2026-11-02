@@ -37,7 +37,6 @@ class RiepilogoOre extends Page implements HasForms
 
     protected static ?string $navigationGroup = 'Personale';
 
-
     protected static ?int $navigationSort = 2;
 
     protected static ?string $navigationLabel = 'Riepilogo ore';
@@ -80,16 +79,30 @@ class RiepilogoOre extends Page implements HasForms
      */
     protected function bulkDailyWorkedHours(Collection $users, Carbon $start, Carbon $end): Collection
     {
+        $perUtente = $users->keyBy('id');
+
         return TimeEntry::whereIn('user_id', $users->pluck('id'))
             ->whereNotNull('clock_out')
             ->whereBetween('clock_in', [$start, $end->copy()->endOfDay()])
             ->get()
             ->groupBy('user_id')
-            ->map(fn (Collection $entries) => $entries
-                ->groupBy(fn (TimeEntry $e) => $e->clock_in->format('Y-m-d'))
-                ->map(fn (Collection $dayEntries) => $dayEntries->sum(
-                    fn (TimeEntry $e) => $e->clock_in->diffInMinutes($e->clock_out) / 60
-                )));
+            ->map(function (Collection $entries, string $userId) use ($perUtente) {
+                $utente = $perUtente->get($userId);
+                $pausa = $utente ? $utente->pausaOre() : 0.0;
+                $contratto = $utente ? (float) $utente->daily_contract_hours : 0.0;
+
+                return $entries
+                    ->groupBy(fn (TimeEntry $e) => $e->clock_in->format('Y-m-d'))
+                    ->map(function (Collection $dayEntries) use ($pausa, $contratto) {
+                        $ore = $dayEntries->sum(fn (TimeEntry $e) => $e->clock_in->diffInMinutes($e->clock_out) / 60);
+
+                        // La pausa si toglie qui, dove la giornata e' intera:
+                        // e' l'unico punto che sa quante timbrature ha quel
+                        // giorno, ed e' quello che decide se la pausa sia gia'
+                        // nel cartellino o no.
+                        return GiornataLavorativa::lavorateNette((float) $ore, $dayEntries->count(), $contratto, $pausa);
+                    });
+            });
     }
 
     /**
@@ -190,7 +203,7 @@ class RiepilogoOre extends Page implements HasForms
         $ordinarieByWeek = [];
 
         foreach ($dailyHours as $day => $totalDay) {
-            $giornata = GiornataLavorativa::ripartisci((float) $totalDay, $dailyContract, $trasferte->has($day), $day);
+            $giornata = GiornataLavorativa::ripartisci((float) $totalDay, $dailyContract, $trasferte->has($day), $day, $user->oreIncluseInTrasferta());
 
             $ordinarie += $giornata->ordinarie;
             $straordinarioGiornaliero += $giornata->straordinario;
@@ -300,7 +313,7 @@ class RiepilogoOre extends Page implements HasForms
                     continue;
                 }
 
-                $giornata = GiornataLavorativa::ripartisci($worked, $dailyContract, $inTrasferta, $day);
+                $giornata = GiornataLavorativa::ripartisci($worked, $dailyContract, $inTrasferta, $day, $user->oreIncluseInTrasferta());
 
                 $rows->push([
                     'user' => $user->name,

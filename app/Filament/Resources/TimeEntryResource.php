@@ -2,9 +2,9 @@
 
 namespace App\Filament\Resources;
 
+use App\Exports\TimbratureExport;
 use App\Filament\Concerns\ScopesToOwnUserUnlessResponsabile;
 use App\Filament\Resources\TimeEntryResource\Pages;
-use App\Exports\TimbratureExport;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Carbon\Carbon;
@@ -26,7 +26,6 @@ class TimeEntryResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-clock';
 
     protected static ?string $navigationGroup = 'Personale';
-
 
     protected static ?int $navigationSort = 1;
 
@@ -129,6 +128,10 @@ class TimeEntryResource extends Resource
                 ->schema([
                     Forms\Components\Toggle::make('trasferta')
                         ->label('Giornata in trasferta')
+                        // Chi ha "sempre in trasferta" sul profilo la trova
+                        // gia' accesa: per lui spuntarla ogni volta e' il
+                        // gesto che si dimentica (Laura, 02/11/2026).
+                        ->default(fn () => (bool) auth()->user()?->trasferta_predefinita)
                         ->helperText(fn () => static::oreIncluseTesto().' Basta segnarla su un turno della giornata.')
                         ->live()
                         ->afterStateUpdated(function (Forms\Set $set, ?bool $state) {

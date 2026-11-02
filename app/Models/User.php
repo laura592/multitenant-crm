@@ -49,6 +49,11 @@ class User extends Authenticatable implements FilamentUser, HasTenants
         'default_morning_out',
         'default_afternoon_in',
         'default_afternoon_out',
+        // Trasferta e pausa di questa persona: vedi la migration del
+        // 02/11/2026 e GiornataLavorativa.
+        'trasferta_predefinita',
+        'pausa_minuti',
+        'trasferta_ore_incluse',
     ];
 
     /**
@@ -89,6 +94,9 @@ class User extends Authenticatable implements FilamentUser, HasTenants
             'default_morning_out' => 'datetime:H:i',
             'default_afternoon_in' => 'datetime:H:i',
             'default_afternoon_out' => 'datetime:H:i',
+            'trasferta_predefinita' => 'boolean',
+            'pausa_minuti' => 'integer',
+            'trasferta_ore_incluse' => 'decimal:2',
         ];
     }
 
@@ -192,6 +200,25 @@ class User extends Authenticatable implements FilamentUser, HasTenants
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * Le ore di straordinario che l'indennita' di trasferta di questa persona
+     * si porta dentro, o null se vale la regola generale dell'azienda.
+     *
+     * Quando c'e', vince su config/presenze.php e sulla sua data di stacco:
+     * e' una condizione di quel dipendente, non una regola che e' cambiata a
+     * una certa data (Laura, 02/11/2026: vale "da sempre").
+     */
+    public function oreIncluseInTrasferta(): ?float
+    {
+        return $this->trasferta_ore_incluse === null ? null : (float) $this->trasferta_ore_incluse;
+    }
+
+    /** La pausa da togliere alla giornata, in ore. Zero se non ne ha una configurata. */
+    public function pausaOre(): float
+    {
+        return round((int) ($this->pausa_minuti ?? 0) / 60, 2);
     }
 
     public function hasStandardSchedule(): bool

@@ -163,6 +163,36 @@ class UserResource extends Resource
                     Forms\Components\TextInput::make('weekly_contract_hours')->label('Ore settimanali')->numeric()->default(40)->required(),
                     Forms\Components\TextInput::make('annual_leave_days')->label('Giorni ferie annui')->numeric()->default(26)->required(),
                 ]),
+            // Chi sta in giro tutti i giorni (Igor) ha una giornata fatta
+            // diversamente: la trasferta e' la norma e non l'eccezione, la
+            // pausa non sempre si vede nel cartellino, e l'indennita' si
+            // porta dentro un'ora di straordinario. Lasciando tutto vuoto
+            // vale la regola dell'azienda, uguale per tutti.
+            Forms\Components\Section::make('Trasferta e pausa')
+                ->description('Da compilare solo per chi fa una giornata diversa dagli altri. Vuoto = regola aziendale.')
+                ->columns(3)
+                ->schema([
+                    Forms\Components\Toggle::make('trasferta_predefinita')
+                        ->label('Sempre in trasferta')
+                        ->helperText('Le sue timbrature nascono gia\' segnate come giornata in trasferta.')
+                        ->inline(false),
+                    Forms\Components\TextInput::make('pausa_minuti')
+                        ->label('Pausa (minuti)')
+                        ->numeric()
+                        ->minValue(0)
+                        ->maxValue(480)
+                        ->suffix('min')
+                        ->placeholder('60')
+                        ->helperText('Tolta solo quando non si vede gia\' nel cartellino: su 08:00-19:00 timbrato in una volta sola. Su due turni con lo stacco in mezzo non tocca niente.'),
+                    Forms\Components\TextInput::make('trasferta_ore_incluse')
+                        ->label('Ore di straordinario nella trasferta')
+                        ->numeric()
+                        ->step('0.25')
+                        ->minValue(0)
+                        ->maxValue(8)
+                        ->suffix('h')
+                        ->helperText('Quante ore oltre il contratto le paga gia\' l\'indennita\'. Vuoto = regola aziendale; un valore qui vale per tutti i mesi, anche passati.'),
+                ]),
             Forms\Components\Section::make('Orario standard')
                 ->description('Usato per pre-compilare gli orari in Presenze e per il pulsante "Turno standard di oggi". Lascia vuoto se l\'orario di questo dipendente varia troppo per avere un default.')
                 ->columns(4)
