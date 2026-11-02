@@ -35,6 +35,9 @@ class AgenteResource extends Resource
 
     protected static bool $hasTitleCaseModelLabel = false;
 
+    // Senza, Filament pluralizza all'inglese e la rotta viene "/agentes".
+    protected static ?string $slug = 'agenti';
+
     public static function form(Form $form): Form
     {
         return $form->schema([

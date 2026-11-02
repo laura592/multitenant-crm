@@ -122,7 +122,7 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
      */
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['customer.billingCustomer', 'technician', 'machineUnit.billingCustomer', 'billingCustomer']);
+        return parent::getEloquentQuery()->with(['customer.billingCustomer', 'customer.agente', 'technician', 'machineUnit.billingCustomer', 'billingCustomer']);
     }
 
     public static function infolist(Infolist $infolist): Infolist
@@ -1573,8 +1573,17 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                     // default per non riportare via lo spazio recuperato
                     // sulla colonna Eureka — visibile via toggle colonne.
                     ->toggleable(isToggledHiddenByDefault: true),
+                // L'agente fra parentesi accanto al cliente (Laura,
+                // 02/11/2026): guardando l'elenco dei rapportini si vuole
+                // sapere di chi e' quel cliente senza aprirne la scheda.
                 Tables\Columns\TextColumn::make('customer.company_name')->wrap()->label('Cliente')->searchable()
-                    ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
+                    ->formatStateUsing(function (?string $state, ServiceReport $record) {
+                        $nome = DisplayName::titleCase($state);
+                        $cliente = $record->customer;
+                        $agente = $cliente instanceof Customer ? $cliente->agente?->nome : null;
+
+                        return $agente ? "{$nome} ({$agente})" : $nome;
+                    }),
                 Tables\Columns\TextColumn::make('technician.name')->visibleFrom('md')->label('Tecnico'),
                 Tables\Columns\TextColumn::make('intervention_type')->visibleFrom('md')
                     ->label('Tipo')
