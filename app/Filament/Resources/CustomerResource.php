@@ -11,9 +11,10 @@ use App\Filament\Resources\CustomerResource\RelationManagers\DocumentiRelationMa
 use App\Filament\Resources\CustomerResource\RelationManagers\LavaggiRelationManager;
 use App\Filament\Resources\CustomerResource\RelationManagers\MacchinariRelationManager;
 use App\Filament\Resources\CustomerResource\RelationManagers\NoleggiRelationManager;
-use App\Filament\Resources\CustomerResource\RelationManagers\RichiesteRelationManager;
 use App\Filament\Resources\CustomerResource\RelationManagers\QuotesRelationManager;
+use App\Filament\Resources\CustomerResource\RelationManagers\RichiesteRelationManager;
 use App\Filament\Resources\CustomerResource\RelationManagers\ServiceReportsRelationManager;
+use App\Models\Agente;
 use App\Models\Customer;
 use App\Support\DisplayName;
 use App\Support\Gestionale\EurekaClient;
@@ -87,6 +88,20 @@ class CustomerResource extends Resource
                         ->helperText('Obbligatoria la ragione sociale oppure almeno il nome del referente.'),
                     ...CustomerContactFields::schema(),
                     Forms\Components\TextInput::make('website')->label('Sito web')->url()->maxLength(255),
+                    // Chi segue il cliente. Dall'elenco si assegna anche a
+                    // gruppi (azione di massa "Assegna agente"): 1.500
+                    // clienti uno alla volta non li compila nessuno.
+                    Forms\Components\Select::make('agente_id')
+                        ->label('Agente')
+                        ->relationship('agente', 'nome', fn ($query) => $query->where('attivo', true)->orderBy('nome'))
+                        ->getOptionLabelFromRecordUsing(fn (Agente $record) => $record->etichetta())
+                        ->searchable()
+                        ->preload()
+                        ->createOptionForm([
+                            Forms\Components\TextInput::make('nome')->label('Nome')->required()->maxLength(255),
+                            Forms\Components\TextInput::make('zona')->label('Zona')->maxLength(255),
+                        ])
+                        ->helperText('Chi segue questo cliente. Si gestiscono in Vendite → Agenti.'),
                 ]),
             Forms\Components\Section::make('Indirizzo')
                 ->columns(3)
@@ -246,6 +261,12 @@ class CustomerResource extends Resource
                     ->limit(30)
                     ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('city')->label('Città')->sortable(),
+                Tables\Columns\TextColumn::make('agente.nome')
+                    ->label('Agente')
+                    ->description(fn (Customer $record) => $record->agente?->zona)
+                    ->placeholder('—')
+                    ->sortable()
+                    ->toggleable(),
                 Tables\Columns\IconColumn::make('source')->visibleFrom('md')
                     ->label('Eureka')
                     // Uniformato con la colonna "Da Eureka" di MachineUnitResource
@@ -270,6 +291,17 @@ class CustomerResource extends Resource
             ])
             ->defaultSort('company_name')
             ->filters([
+                // "Tutti i clienti di Guirotto": e' il motivo per cui
+                // l'agente e' un'anagrafica e non un campo di testo.
+                Tables\Filters\SelectFilter::make('agente_id')
+                    ->label('Agente')
+                    ->relationship('agente', 'nome', fn ($query) => $query->orderBy('nome'))
+                    ->getOptionLabelFromRecordUsing(fn (Agente $record) => $record->etichetta())
+                    ->searchable()
+                    ->preload(),
+                Tables\Filters\Filter::make('senza_agente')
+                    ->label('Senza agente')
+                    ->query(fn ($query) => $query->whereNull('agente_id')),
                 Tables\Filters\Filter::make('no_location')
                     ->label('Senza posizione GPS')
                     ->query(fn ($query) => $query->where(function ($inner) {
@@ -406,6 +438,34 @@ class CustomerResource extends Resource
                 // cliente alla volta (richiesta dell'ufficio, 04/09/2026).
                 // Fuori dal gruppo "azioni di massa" perche' e' l'unica non
                 // distruttiva e la si cerca subito.
+                // Assegnare l'agente cliente per cliente vuol dire non farlo
+                // mai: sono millecinquecento. Si selezionano e si assegnano.
+                Tables\Actions\BulkAction::make('assegna_agente')
+                    ->label('Assegna agente')
+                    ->icon('heroicon-o-identification')
+                    ->color('gray')
+                    ->deselectRecordsAfterCompletion()
+                    ->form([
+                        Forms\Components\Select::make('agente_id')
+                            ->label('Agente')
+                            ->options(fn () => Agente::query()
+                                ->where('attivo', true)
+                                ->orderBy('nome')
+                                ->get()
+                                ->mapWithKeys(fn (Agente $a) => [$a->getKey() => $a->etichetta()])
+                                ->all())
+                            ->searchable()
+                            ->required()
+                            ->helperText('Lo stesso agente a tutti i clienti selezionati. Per toglierlo, si svuota il campo sulla scheda.'),
+                    ])
+                    ->action(function (Collection $records, array $data) {
+                        Customer::whereKey($records->pluck('id'))->update(['agente_id' => $data['agente_id']]);
+
+                        Notification::make()
+                            ->title($records->count().' '.($records->count() === 1 ? 'cliente assegnato' : 'clienti assegnati'))
+                            ->success()
+                            ->send();
+                    }),
                 Tables\Actions\BulkAction::make('schede_anagrafiche')
                     ->label('Stampa schede anagrafiche')
                     ->icon('heroicon-o-printer')

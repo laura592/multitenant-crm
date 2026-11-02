@@ -106,6 +106,31 @@ paganti.
 
 ---
 
+### Chi segue il cliente
+
+Dal **02/11/2026** l'anagrafica cliente ha un campo **Agente**: «Hotel
+Orizzonte è Jesolo Modolo, Neps invece è Guirotto» era un'informazione che
+stava solo nella testa dell'ufficio.
+
+**Non arriva da Eureka.** Verificato il 02/11/2026: la loro scheda cliente
+via API torna nove campi (ragione sociale, partita IVA, codice fiscale,
+città, provincia, email, telefono) e nessun agente; `/agenti` risponde 404 e
+le query di `/show/q/` sono definite da loro. Quindi è un dato nostro, che
+teniamo noi.
+
+È **un'anagrafica** (Vendite → Agenti) e non un campo di testo libero:
+scritto a mano, in sei mesi lo stesso agente diventa «Modolo», «modolo» e
+«Jesolo Modolo», e raggruppare per agente smette di funzionare — che è tutto
+il motivo per cui esiste. Nome e zona sono campi separati, così si cerca per
+l'uno o per l'altra.
+
+Dall'elenco clienti si filtra per agente e per «senza agente», e si assegna
+**a gruppi** con l'azione di massa: millecinquecento clienti uno alla volta
+non li compila nessuno. Un agente che non lavora più si disattiva: sparisce
+dai menu ma i clienti che seguiva restano attribuiti a lui.
+
+---
+
 ## 2. Macchine e storico
 
 ### Eureka non chiude mai la consegna vecchia

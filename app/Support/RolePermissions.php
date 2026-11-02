@@ -132,6 +132,8 @@ class RolePermissions
                 // crea e corregge (un numero battuto male sul telefono si
                 // sistema subito), cancellare no.
                 ...self::expand('lettura::casetta', self::MANAGE_NO_DELETE),
+                // Sapere chi segue il cliente serve anche a chi ci va.
+                ...self::expand('agente', self::VIEW),
                 ...self::expand('material', self::VIEW),
                 ...self::expand('material::order', self::MANAGE_NO_DELETE),
                 ...self::expand('supplier', self::VIEW),
@@ -200,6 +202,7 @@ class RolePermissions
                 // Il rendiconto delle casette lo manda al Comune l'ufficio:
                 // deve poter correggere una lettura prima di stamparla.
                 ...self::expand('lettura::casetta', self::UFFICIO),
+                ...self::expand('agente', self::VIEW),
                 ...self::expand('machine::unit', self::UFFICIO),
                 ...self::expand('maintenance::schedule', self::UFFICIO),
                 ...self::expand('material', self::UFFICIO),
@@ -253,6 +256,7 @@ class RolePermissions
                 ...self::expand('machine::unit', self::FULL_MANAGE),
                 ...self::expand('lavaggio', self::MANAGE),
                 ...self::expand('lettura::casetta', self::MANAGE),
+                ...self::expand('agente', self::MANAGE),
                 // Unico ruolo (oltre allo staff master is_super_admin) che puo'
                 // creare/gestire utenti.
                 ...self::expand('user', self::MANAGE),
@@ -314,6 +318,7 @@ class RolePermissions
                 ...self::expand('machine::unit', self::MANAGE_NO_DELETE),
                 ...self::expand('lavaggio', self::MANAGE_NO_DELETE),
                 ...self::expand('lettura::casetta', self::MANAGE_NO_DELETE),
+                ...self::expand('agente', self::MANAGE_NO_DELETE),
                 ...self::expand('user', self::MANAGE_NO_DELETE),
                 ...self::expand('audit::log', self::VIEW),
                 'widget_TimbraWidget',

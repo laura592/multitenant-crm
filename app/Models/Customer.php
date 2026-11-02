@@ -29,6 +29,8 @@ class Customer extends Model
     protected $fillable = [
         'tenant_id',
         'billing_customer_id',
+        // Chi segue il cliente: vedi Agente.
+        'agente_id',
         'first_name',
         'last_name',
         'company_name',
@@ -157,7 +159,7 @@ class Customer extends Model
      * I documenti consegnati: visura, esenzione IVA, mandato, documento
      * d'identita'. Vedi CustomerDocument.
      */
-    public function documenti(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function documenti(): HasMany
     {
         return $this->hasMany(CustomerDocument::class);
     }
@@ -304,6 +306,12 @@ class Customer extends Model
      * (dove si lavora davvero), ma vanno intestati/inviati al cliente
      * restituito da invoiceRecipient() se impostato.
      */
+    /** @return BelongsTo<Agente, $this> */
+    public function agente(): BelongsTo
+    {
+        return $this->belongsTo(Agente::class);
+    }
+
     public function billingCustomer(): BelongsTo
     {
         return $this->belongsTo(self::class, 'billing_customer_id');
