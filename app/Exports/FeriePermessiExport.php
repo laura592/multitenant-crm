@@ -46,7 +46,8 @@ class FeriePermessiExport implements FromCollection, ShouldAutoSize, WithHeading
     {
         return [
             DisplayName::titleCase($row->user?->name) ?? '—',
-            LeaveRequestResource::typeLabels()[$row->type] ?? $row->type,
+            (LeaveRequestResource::typeLabels()[$row->type] ?? $row->type)
+                .($row->eLegge104() ? ' (Legge 104)' : ''),
             $row->date_from->format('d/m/Y'),
             $row->date_to->format('d/m/Y'),
             $row->type === 'permesso'

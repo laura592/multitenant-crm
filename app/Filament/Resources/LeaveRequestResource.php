@@ -2,11 +2,13 @@
 
 namespace App\Filament\Resources;
 
+use App\Exports\FeriePermessiExport;
 use App\Filament\Concerns\ScopesToOwnUserUnlessResponsabile;
 use App\Filament\Resources\LeaveRequestResource\Pages;
 use App\Mail\LeaveRequestDecisionMail;
-use App\Exports\FeriePermessiExport;
 use App\Models\LeaveRequest;
+use App\Models\User;
+use Carbon\Carbon;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Notifications\Notification;
@@ -27,7 +29,6 @@ class LeaveRequestResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-calendar';
 
     protected static ?string $navigationGroup = 'Personale';
-
 
     protected static ?int $navigationSort = 3;
 
@@ -63,7 +64,7 @@ class LeaveRequestResource extends Resource
                         ->required()
                         ->helperText(function (Forms\Get $get) {
                             $userId = $get('user_id') ?? auth()->id();
-                            $user = $userId ? \App\Models\User::find($userId) : null;
+                            $user = $userId ? User::find($userId) : null;
                             $remaining = $user?->remainingFerieDays();
 
                             return $remaining === null ? null : "Residuo ferie anno corrente: {$remaining} giorni";
@@ -75,6 +76,15 @@ class LeaveRequestResource extends Resource
                         ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => static::syncPermessoDateTo($get, $set))
                         ->required()
                         ->extraAttributes(['data-tour' => 'leave-requests-field-type']),
+                    // I permessi della Legge 104 si contano a parte nei
+                    // riepiloghi: li rimborsa l'INPS e il commercialista li
+                    // vuole separati dal dentista e dall'ora di anticipo
+                    // (Laura, 02/11/2026).
+                    Forms\Components\Toggle::make('legge_104')
+                        ->label('Permesso ai sensi della Legge 104')
+                        ->helperText('Nei riepiloghi finisce in una colonna sua, non fra le ore di permesso.')
+                        ->visible(fn (Forms\Get $get) => $get('type') === LeaveRequest::TYPE_PERMESSO)
+                        ->inline(false),
                     // La malattia si segnala spesso a posteriori (il giorno dopo
                     // l'assenza): il vincolo "non nel passato" vale solo per
                     // ferie/permesso, che invece sono richieste pianificate.
@@ -298,7 +308,7 @@ class LeaveRequestResource extends Resource
         $data['hours'] = null;
 
         if (! empty($data['time_from']) && ! empty($data['time_to'])) {
-            $minutes = \Carbon\Carbon::parse($data['time_from'])->diffInMinutes(\Carbon\Carbon::parse($data['time_to']), false);
+            $minutes = Carbon::parse($data['time_from'])->diffInMinutes(Carbon::parse($data['time_to']), false);
 
             if ($minutes > 0) {
                 $data['hours'] = round($minutes / 60, 2);

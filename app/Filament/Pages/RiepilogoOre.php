@@ -237,9 +237,13 @@ class RiepilogoOre extends Page implements HasForms
         $malattiaGiorni = $leaveRequests->where('type', 'malattia')
             ->sum(fn (LeaveRequest $lr) => $lr->daysWithin($start, $end));
 
-        $permessiOre = (float) $leaveRequests->where('type', 'permesso')
-            ->filter(fn (LeaveRequest $lr) => $lr->date_from->between($start, $end))
-            ->sum('hours');
+        $permessiDelMese = $leaveRequests->where('type', 'permesso')
+            ->filter(fn (LeaveRequest $lr) => $lr->date_from->between($start, $end));
+
+        // La 104 esce dalle ore di permesso e ha la sua colonna: sommarle
+        // insieme e' proprio quello che il commercialista non vuole.
+        $permessi104Ore = (float) $permessiDelMese->filter(fn (LeaveRequest $lr) => $lr->eLegge104())->sum('hours');
+        $permessiOre = (float) $permessiDelMese->reject(fn (LeaveRequest $lr) => $lr->eLegge104())->sum('hours');
 
         return [
             'user' => $user->name,
@@ -248,6 +252,7 @@ class RiepilogoOre extends Page implements HasForms
             'ferie_giorni' => $ferieGiorni,
             'malattia_giorni' => $malattiaGiorni,
             'permessi_ore' => round($permessiOre, 2),
+            'permessi_104_ore' => round($permessi104Ore, 2),
             'trasferta_giorni' => $trasferte->count(),
         ];
     }
@@ -264,6 +269,7 @@ class RiepilogoOre extends Page implements HasForms
             'ferie_giorni' => round($rows->sum('ferie_giorni'), 2),
             'malattia_giorni' => round($rows->sum('malattia_giorni'), 2),
             'permessi_ore' => round($rows->sum('permessi_ore'), 2),
+            'permessi_104_ore' => round($rows->sum('permessi_104_ore'), 2),
             'trasferta_giorni' => $rows->sum('trasferta_giorni'),
         ];
     }
@@ -326,7 +332,7 @@ class RiepilogoOre extends Page implements HasForms
                     'trasferta' => $inTrasferta ? ($trasferte[$key] ?: 'Sì') : null,
                     'assenza' => match ($leave?->type) {
                         'ferie' => 'Ferie',
-                        'permesso' => 'Permesso ('.number_format((float) $leave->hours, 2).' h)',
+                        'permesso' => ($leave->eLegge104() ? 'Permesso 104 (' : 'Permesso (').number_format((float) $leave->hours, 2).' h)',
                         'malattia' => 'Malattia',
                         default => null,
                     },

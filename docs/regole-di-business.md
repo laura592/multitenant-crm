@@ -711,6 +711,12 @@ Toglierne una seconda ne farebbe 7. Si scala quindi solo quando la giornata è
 **una timbratura sola più lunga del contratto**, perché lì la pausa è dentro.
 Una mezza giornata timbrata in un colpo solo (08:00-12:00) non perde niente.
 
+Il **PDF del dettaglio giorni stampa un dipendente per foglio** (02/11/2026):
+prima era un elenco unico e il cartellino di una persona cominciava a metà
+della pagina di un'altra, impossibile da staccare e consegnare. Ogni foglio
+porta il nome, le sue giornate e i suoi totali del mese; il quadro d'insieme
+di tutti resta su una pagina finale.
+
 La giornata tipo di Igor, con un'ora di pausa e un'ora inclusa nell'indennità:
 
 | Cartellino | Lorde | Nette | Ordinarie | Coperte dalla trasferta | Straordinario |
@@ -722,6 +728,13 @@ La giornata tipo di Igor, con un'ora di pausa e un'ora inclusa nell'indennità:
 
 ### Ferie e permessi
 
+- I permessi della **Legge 104** si contano a parte (02/11/2026): sono
+  permessi come gli altri — stesse ore, stessa approvazione, stesso calcolo —
+  ma nei riepiloghi hanno una colonna loro, perché li rimborsa l'INPS e il
+  commercialista li vuole separati dal dentista e dall'ora di anticipo. Si
+  marcano con una casella sul permesso, non con un tipo nuovo. La colonna
+  compare nel riepilogo a schermo, nei due PDF e nell'export mensile; nel
+  dettaglio giornaliero l'assenza si legge «Permesso 104».
 - Le **ferie** saltano sabati, domeniche e festivi; la **malattia** conta
   giorni di calendario.
 - Un permesso calcola le ore dall'intervallo orario e resta su un giorno solo;

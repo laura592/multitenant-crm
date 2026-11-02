@@ -21,7 +21,8 @@
 
     <table class="items">
         <thead>
-            <tr><th>Dipendente</th><th class="numeric">Ore ordinarie</th><th class="numeric">Straordinario</th><th class="numeric">Giorni ferie</th><th class="numeric">Giorni malattia</th><th class="numeric">Ore permesso</th><th class="numeric">Giorni trasferta</th></tr>
+            <tr><th>Dipendente</th><th class="numeric">Ore ordinarie</th><th class="numeric">Straordinario</th><th class="numeric">Giorni ferie</th><th class="numeric">Giorni malattia</th><th class="numeric">Ore permesso</th>
+                    <th class="numeric">Ore Legge 104</th><th class="numeric">Giorni trasferta</th></tr>
         </thead>
         <tbody>
         @foreach($rows as $row)
@@ -32,6 +33,7 @@
                 <td class="numeric">{{ $row['ferie_giorni'] }}</td>
                 <td class="numeric">{{ $row['malattia_giorni'] }}</td>
                 <td class="numeric">{{ $row['permessi_ore'] }}</td>
+                <td class="numeric">{{ $row['permessi_104_ore'] ?? 0 }}</td>
                 <td class="numeric">{{ $row['trasferta_giorni'] }}</td>
             </tr>
         @endforeach

@@ -5,6 +5,8 @@ namespace App\Models;
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\LogsAuditTrail;
 use App\Support\Presenze\Festivi;
+use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,13 +16,18 @@ class LeaveRequest extends Model
     use BelongsToTenant, HasUuids, LogsAuditTrail;
 
     public const TYPE_FERIE = 'ferie';
+
     public const TYPE_PERMESSO = 'permesso';
+
     public const TYPE_MALATTIA = 'malattia';
 
     protected $fillable = [
         'tenant_id',
         'user_id',
         'type',
+        // Permesso ai sensi della Legge 104: si conta a parte nei
+        // riepiloghi, vedi la migration del 02/11/2026.
+        'legge_104',
         'date_from',
         'date_to',
         'time_from',
@@ -34,6 +41,7 @@ class LeaveRequest extends Model
     ];
 
     protected $casts = [
+        'legge_104' => 'boolean',
         'date_from' => 'date',
         'date_to' => 'date',
         'hours' => 'decimal:2',
@@ -50,6 +58,12 @@ class LeaveRequest extends Model
         static::creating(function (self $request) {
             $request->requested_at ??= now();
         });
+    }
+
+    /** Un permesso della Legge 104: permesso con la casella spuntata. */
+    public function eLegge104(): bool
+    {
+        return $this->type === self::TYPE_PERMESSO && (bool) $this->legge_104;
     }
 
     public function user(): BelongsTo
@@ -93,7 +107,7 @@ class LeaveRequest extends Model
      * festivi sono ferie: o sono festa o sono lavorati (Festivi). La malattia
      * resta a giorni di calendario, come la conta l'INPS.
      */
-    public function daysWithin(?\Carbon\CarbonInterface $from = null, ?\Carbon\CarbonInterface $to = null): int
+    public function daysWithin(?CarbonInterface $from = null, ?CarbonInterface $to = null): int
     {
         $start = $from && $from->gt($this->date_from) ? $from->copy()->startOfDay() : $this->date_from->copy();
         $end = $to && $to->lt($this->date_to) ? $to->copy()->startOfDay() : $this->date_to->copy();
@@ -124,8 +138,8 @@ class LeaveRequest extends Model
     public function periodLabel(): string
     {
         if ($this->type === self::TYPE_PERMESSO && $this->time_from && $this->time_to) {
-            $from = \Carbon\Carbon::parse($this->time_from)->format('H:i');
-            $to = \Carbon\Carbon::parse($this->time_to)->format('H:i');
+            $from = Carbon::parse($this->time_from)->format('H:i');
+            $to = Carbon::parse($this->time_to)->format('H:i');
 
             return "{$this->date_from->format('d/m/Y')}, {$from} - {$to}";
         }
