@@ -43,18 +43,37 @@ costruiamo noi):
   (vedi [articoli-e-tariffe.md](articoli-e-tariffe.md)).
 - `sl_sintomo` (obbligatorio), `sl_lavorazione` — problema riscontrato /
   lavoro svolto.
-- `sl_id_operatore` — il tecnico. Se non lo si manda, Eureka intesta la
-  scheda al suo operatore predefinito (il **2**): verificato il 23/10/2026
-  rileggendo le schede che avevamo creato noi, tutte con operatore 2 anche
-  quando era andato Igor. I codici vivono solo nell'anagrafica operatori di
-  Eureka e non sono esposti via API: **1 = Alessandro, 6 = Igor**
-  (comunicati dall'amministrazione). Igor e' stato 5 fino al 29/10/2026:
-  rileggendo le sue schede, Eureka ne riportava 12 su 14 con operatore 6
-  anche se avevamo mandato 5, e il 6 e' stato confermato come il codice
-  vero. Se un tecnico risulta con un operatore diverso da quello mandato,
-  il sospetto e' questo: il codice nel CRM non e' quello della loro
-  anagrafica. Noi li teniamo su
+- `sl_id_operatore` — il tecnico. Serve all'amministrazione per sapere di
+  chi e' l'intervento quando fattura. Noi lo teniamo su
   `users.gestionale_operatore_id`.
+
+  **I codici si leggono, non si chiedono** (02/11/2026). L'elenco delle
+  schede (`GET /schedelavoro/`) porta `id_operatore_p61` e `operatore`, cioe'
+  codice e nome per esteso: su 917 schede del 2026 l'anagrafica operatori
+  esce da sola, senza che nessuno la debba comunicare.
+
+  | Codice | Operatore | Schede 2026 |
+  |---|---|---|
+  | 6 | CAPIOTTO IGOR | 557 |
+  | 2 | SIGNORATO ALEX | 324 |
+  | 8 | FINOTTO STEFANO | 19 |
+  | 5 | NISATO RICCARDO | 3 |
+  | 3 | CANDELU' LORIS | 1 |
+
+  **Il codice 1 non esiste**, ed era quello che avevamo su Alessandro. Fino
+  al 27/10/2026 Eureka lo accettava in silenzio e intestava la scheda a
+  qualcun altro; dal 29/10 risponde `422 Operatore non trovato` e l'invio
+  fallisce. Due rapportini di Tiziana SRL sono rimasti li' per questo.
+
+  **Due cose che avevamo scritto qui erano sbagliate.** Il 2 non e'
+  "l'operatore predefinito di Eureka": e' Alessandro, e le schede che
+  uscivano col 2 erano intestate giusto per caso. E il 5, che per un periodo
+  abbiamo mandato per Igor, e' **Riccardo Nisato**: il lavoro di Igor
+  risultava fatto da lui.
+
+  La morale e' il metodo, non i numeri: se un tecnico risulta con un
+  operatore diverso da quello mandato, si rilegge l'elenco delle schede e il
+  codice vero si vede.
 - `sl_dataora_appuntamento` — data **e ora** dell'intervento. L'ora serve
   all'amministrazione per fatturare; mandando solo `data` la scheda restava
   a mezzanotte. Noi la componiamo con la data dell'intervento e l'ora di
