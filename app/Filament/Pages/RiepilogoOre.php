@@ -9,6 +9,7 @@ use App\Filament\Resources\TimeEntryResource;
 use App\Models\LeaveRequest;
 use App\Models\TimeEntry;
 use App\Models\User;
+use App\Support\DisplayName;
 use App\Support\Presenze\Festivi;
 use App\Support\Presenze\GiornataLavorativa;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -281,6 +282,49 @@ class RiepilogoOre extends Page implements HasForms
      * (getRows/summaryRowFor): attribuirlo a un giorno specifico qui sarebbe
      * arbitrario, quindi ogni riga mostra lo straordinario "giornaliero" puro.
      */
+    /**
+     * I dati del modulo rimborso spese: un dipendente, le sue giornate di
+     * trasferta del mese con data e destinazione, e quante righe vuote
+     * servono a riempire il foglio.
+     *
+     * Il modulo e' "prestampato" ma non cieco: le trasferte il programma le
+     * sa gia', e ricopiarle a mano e' il momento in cui si sbaglia una data.
+     * Al tecnico restano gli importi.
+     *
+     * @return Collection<int, array{nome: string, giorni: Collection<int, array{data: Carbon, destinazione: string}>, righe_vuote: int}>
+     */
+    public function getRimborsoSpeseRows(): Collection
+    {
+        $start = Carbon::create($this->year, $this->month, 1)->startOfMonth();
+        $end = $start->copy()->endOfMonth();
+
+        $users = $this->visibleUsers();
+        $trasferteByUser = $this->bulkTrasferte($users, $start, $end);
+
+        // Quante righe entrano in una pagina: sotto questa soglia si aggiungono
+        // righe vuote, sopra si lascia che il foglio cresca.
+        $righePerPagina = 16;
+
+        return $users
+            ->map(function (User $user) use ($trasferteByUser, $righePerPagina) {
+                $giorni = $trasferteByUser->get($user->id, collect())
+                    ->map(fn (?string $destinazione, string $giorno) => [
+                        'data' => Carbon::parse($giorno),
+                        'destinazione' => $destinazione ?: '',
+                    ])
+                    ->sortBy('data')
+                    ->values();
+
+                return [
+                    'nome' => DisplayName::titleCase($user->name) ?? $user->name,
+                    'giorni' => $giorni,
+                    'righe_vuote' => max(3, $righePerPagina - $giorni->count()),
+                ];
+            })
+            ->sortBy('nome')
+            ->values();
+    }
+
     public function getDailyDetailRows(): Collection
     {
         $start = Carbon::create($this->year, $this->month, 1)->startOfMonth();
@@ -370,6 +414,23 @@ class RiepilogoOre extends Page implements HasForms
             // Dettaglio giorno per giorno, in aggiunta al riepilogo mensile
             // aggregato: serve per verificare una singola giornata invece di
             // dover ricostruirla a mano dalle timbrature.
+            // Il modulo cartaceo che il tecnico compila a mano: carta
+            // intestata, un foglio per dipendente, e le trasferte del mese
+            // gia' scritte (Laura, 02/11/2026).
+            Action::make('moduloRimborsoSpese')
+                ->label('Modulo rimborso spese')
+                ->color('gray')
+                ->icon('heroicon-o-printer')
+                ->action(fn () => static::apriPdfInNuovaScheda(
+                    fn () => Pdf::loadView('pdf.rimborso-spese', [
+                        'dipendenti' => $this->getRimborsoSpeseRows(),
+                        'month' => $this->month,
+                        'year' => $this->year,
+                        'tenant' => Filament::getTenant(),
+                    ]),
+                    "rimborso-spese-{$this->year}-{$this->month}.pdf",
+                    $this,
+                )),
             Action::make('exportDetailExcel')
                 ->label('Esporta Excel (dettaglio giorni)')
                 ->color('gray')

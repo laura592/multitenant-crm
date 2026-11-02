@@ -22,7 +22,10 @@
            altro, impossibile da staccare e consegnare. L'ultimo blocco non
            ha il salto, se no esce una pagina bianca in fondo. */
         .dipendente { page-break-after: always; }
-        .dipendente:last-of-type { page-break-after: auto; }
+        /* DomPDF non applica :last-of-type: l'ultimo blocco si marca a mano.
+           Qui dopo c'e' il riepilogo generale, quindi il salto ci vuole
+           sempre tranne quando il riepilogo non c'e'. */
+        .dipendente.ultimo { page-break-after: auto; }
         h2.nome { margin: 0 0 6px; font-size: 13px; color: #020F30; }
         .sottotitolo { margin: 0 0 10px; font-size: 9px; color: #6b7280; }
     </style>
@@ -44,7 +47,7 @@
     @endphp
 
     @foreach($perDipendente as $nome => $righe)
-        <div class="dipendente">
+        <div class="dipendente {{ $loop->last && empty($riepilogo) ? 'ultimo' : '' }}">
             <h2 class="nome">{{ $nome }}</h2>
             <p class="sottotitolo">Dettaglio del mese {{ sprintf('%02d', $month) }}/{{ $year }} &mdash; {{ $righe->count() }} {{ $righe->count() === 1 ? 'giornata' : 'giornate' }}</p>
 

@@ -711,6 +711,23 @@ Toglierne una seconda ne farebbe 7. Si scala quindi solo quando la giornata è
 **una timbratura sola più lunga del contratto**, perché lì la pausa è dentro.
 Una mezza giornata timbrata in un colpo solo (08:00-12:00) non perde niente.
 
+### Il modulo rimborso spese
+
+Dal **02/11/2026** la pagina Riepilogo ore stampa anche il **modulo cartaceo
+dei rimborsi spese**, un foglio per dipendente con la carta intestata.
+
+Non è un foglio cieco: le **giornate di trasferta del mese arrivano già
+scritte**, con data e destinazione, perché quelle il programma le sa e
+ricopiarle a mano è il momento in cui si sbaglia una data. Al tecnico restano
+gli importi. Sotto ci sono righe vuote per le spese di un giorno senza
+trasferta segnata, e per chi di trasferte non ne ha nessuna.
+
+Le colonne sono km, pedaggi, carburante, vitto, alloggio, altro. **L'indennità
+di trasferta non si scrive lì**: è già nel cartellino delle ore e la calcola
+l'ufficio — metterla anche qui vorrebbe dire pagarla due volte. I chilometri
+valgono solo col mezzo proprio; col furgone aziendale si segna il carburante.
+Senza ricevuta allegata la voce non si rimborsa.
+
 Il **PDF del dettaglio giorni stampa un dipendente per foglio** (02/11/2026):
 prima era un elenco unico e il cartellino di una persona cominciava a metà
 della pagina di un'altra, impossibile da staccare e consegnare. Ogni foglio
