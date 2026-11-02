@@ -7,10 +7,12 @@ use App\Exports\MonthlyTimeSummaryExport;
 use App\Filament\Concerns\ApreStampeInNuovaScheda;
 use App\Filament\Resources\TimeEntryResource;
 use App\Models\LeaveRequest;
+use App\Models\Tenant;
 use App\Models\TimeEntry;
 use App\Models\User;
 use App\Support\DisplayName;
 use App\Support\Presenze\Festivi;
+use App\Support\Presenze\FoglioPresenzeConsulente;
 use App\Support\Presenze\GiornataLavorativa;
 use Barryvdh\DomPDF\Facade\Pdf;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
@@ -20,6 +22,7 @@ use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Facades\Excel;
@@ -414,6 +417,33 @@ class RiepilogoOre extends Page implements HasForms
             // Dettaglio giorno per giorno, in aggiunta al riepilogo mensile
             // aggregato: serve per verificare una singola giornata invece di
             // dover ricostruirla a mano dalle timbrature.
+            // Il foglio nel formato che vuole il consulente del lavoro:
+            // si riempie il LORO modello, cosi' ricevono esattamente il file
+            // che hanno mandato (Patrizia, Studio Menoncello, 02/11/2026).
+            Action::make('foglioPresenzeConsulente')
+                ->label('Foglio presenze (consulente)')
+                ->icon('heroicon-o-document-check')
+                ->action(function () {
+                    $esito = FoglioPresenzeConsulente::componi(
+                        $this->year,
+                        $this->month,
+                        $this->getDailyDetailRows(),
+                        self::ragioneSociale(),
+                    );
+
+                    if ($esito['fuori'] !== []) {
+                        Notification::make()
+                            ->title('Il modello ha '.FoglioPresenzeConsulente::POSTI.' posti')
+                            ->body('Fuori dal foglio: '.implode(', ', $esito['fuori']).'. Vanno aggiunte le righe a mano.')
+                            ->warning()
+                            ->persistent()
+                            ->send();
+                    }
+
+                    return response()
+                        ->download($esito['percorso'], "foglio-presenze-{$this->year}-".sprintf('%02d', $this->month).'.xls')
+                        ->deleteFileAfterSend();
+                }),
             // Il modulo cartaceo che il tecnico compila a mano: carta
             // intestata, un foglio per dipendente, e le trasferte del mese
             // gia' scritte (Laura, 02/11/2026).
@@ -464,5 +494,13 @@ class RiepilogoOre extends Page implements HasForms
                     $this,
                 )),
         ];
+    }
+
+    /** La ragione sociale per l'intestazione del foglio del consulente. */
+    protected static function ragioneSociale(): ?string
+    {
+        $tenant = Filament::getTenant();
+
+        return $tenant instanceof Tenant ? ($tenant->legal_name ?: $tenant->name) : null;
     }
 }

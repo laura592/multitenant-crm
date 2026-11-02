@@ -750,6 +750,31 @@ Toglierne una seconda ne farebbe 7. Si scala quindi solo quando la giornata è
 **una timbratura sola più lunga del contratto**, perché lì la pausa è dentro.
 Una mezza giornata timbrata in un colpo solo (08:00-12:00) non perde niente.
 
+### Il foglio presenze per il consulente
+
+Dal **02/11/2026** la pagina Riepilogo ore produce il foglio presenze nel
+formato dello **Studio Menoncello** (il consulente del lavoro), che ha mandato
+il modello in bianco «da utilizzare per i mesi futuri».
+
+Si riempie **il loro file**, non una copia somigliante: il modello sta in
+`resources/templates/foglio-presenze.xls` e l'export lo carica, ci scrive
+dentro e lo restituisce. Così il consulente riceve esattamente il foglio che
+ha mandato, con le sue colonne e i suoi totali, e non deve fidarsi del fatto
+che gli assomigli. I totali in colonna AN sono formule sue: non si toccano.
+
+La mappa: `N2` mese e anno, `V2` ragione sociale, i giorni 1-31 nelle colonne
+`I`-`AM`, e ogni dipendente occupa **tre righe** — O (ordinarie), S
+(straordinario), Altro. Il cognome va in `B`, il nome nella riga sotto.
+
+Nel modello ci sono **nove posti**: se i dipendenti del mese sono di più,
+l'export lo dice con un avviso invece di lasciarne fuori qualcuno in silenzio.
+
+**La riga «Altro» è una sola** per ferie, permessi, malattia e Legge 104, e la
+sigla sta accanto alle ore perché una cifra nuda non dice di che assenza si
+tratta: `104 3`, `P 3` (permesso), `F` (ferie), `M` (malattia). **Questa
+convenzione l'abbiamo scelta noi**: va confermata con lo studio, perché il
+modello non porta nessuna legenda.
+
 ### Il modulo rimborso spese
 
 Dal **02/11/2026** la pagina Riepilogo ore stampa anche il **modulo cartaceo
