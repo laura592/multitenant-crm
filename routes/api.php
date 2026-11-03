@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\LeadIntakeController;
+use App\Http\Controllers\NewsletterIntakeController;
 use App\Http\Middleware\VerifyLeadSignature;
 use Illuminate\Support\Facades\Route;
 
@@ -15,4 +16,7 @@ Route::middleware([VerifyLeadSignature::class, 'throttle:30,1'])
     ->prefix('v1')
     ->group(function () {
         Route::post('lead', [LeadIntakeController::class, 'store'])->name('api.lead.store');
+        // L'iscrizione alla newsletter dal footer: registra un consenso, non
+        // crea una richiesta da lavorare (NewsletterIntakeController).
+        Route::post('newsletter', [NewsletterIntakeController::class, 'store'])->name('api.newsletter.store');
     });

@@ -98,86 +98,123 @@ class NoleggioResource extends Resource
                         ->preload(),
                 ]),
 
+            // Tre gruppi, non tredici caselle in fila (03/11/2026). Erano
+            // tutte sullo stesso piano in una griglia a tre colonne, ognuna
+            // con la sua frase sotto: tredici numeri senza gerarchia, in cui
+            // non si vedeva che il canone nasce da tre cose diverse -- quanto
+            // costa la macchina, in quanto tempo rientra, quanto consuma al
+            // mese. Le unita' sono uscite dalle etichette (prefisso e
+            // suffisso del campo), cosi' le etichette stanno su una riga sola
+            // e le righe non si sfasano.
             Forms\Components\Section::make('Da cosa nasce il canone')
                 ->description('Il canone non si scrive: si calcola da questi numeri, e resta ricostruibile anche fra due anni.')
-                ->columns(3)
                 ->schema([
-                    Forms\Components\TextInput::make('listino')
-                        ->label('Listino (€)')
-                        ->helperText('Base del Full-Service, che costa il 10% annuo del listino.')
-                        ->numeric()->required()->live(onBlur: true),
-                    Forms\Components\TextInput::make('sconto_acquisto')
-                        ->label('Sconto fornitore (%)')
-                        ->helperText('Compilandolo, il costo si calcola da sé.')
-                        ->numeric()->live(onBlur: true)
-                        ->afterStateUpdated(function (Forms\Set $set, Get $get, $state) {
-                            if ($state === null || $state === '' || ! (float) $get('listino')) {
-                                return;
-                            }
-                            $set('costo', round((float) $get('listino') * (1 - (float) $state / 100), 2));
-                        }),
-                    Forms\Components\TextInput::make('costo')
-                        ->label('Costo d\'acquisto (€)')
-                        ->helperText('Quanto costa a voi. Il canone recupera questo, non il listino.')
-                        ->numeric()->required()->live(onBlur: true),
-                    Forms\Components\TextInput::make('mesi')
-                        ->label('Durata (mesi)')
-                        ->numeric()->minValue(1)->default(60)->required()->live(onBlur: true),
-                    // Il contratto puo' durare cinque anni e la macchina
-                    // rientrare in tre: da li' in poi quella quota resta nel
-                    // canone ed e' margine. E si puo' ammortizzare il listino
-                    // invece del costo (Laura, 07/10/2026).
-                    Forms\Components\Select::make('ammortamento_base')
-                        ->label('Ammortamento calcolato su')
-                        ->options(['costo' => 'Costo d\'acquisto', 'listino' => 'Prezzo di listino'])
-                        // Di norma il listino: e' il valore che si concede in
-                        // uso. Lo sconto strappato al fornitore e' margine di
-                        // Alex, non uno sconto da girare al cliente.
-                        ->default('listino')->required()->live()
-                        ->helperText(fn (Get $get) => $get('ammortamento_base') === 'costo'
-                            ? 'Sul costo si rientra della spesa e basta: nessun margine sulla macchina.'
-                            : null),
-                    Forms\Components\TextInput::make('ammortamento_mesi')
-                        ->label('Da recuperare in (mesi)')
-                        ->placeholder('come la durata del contratto')
-                        ->helperText('Es. 36 per rientrare in tre anni su un contratto di cinque.')
-                        ->numeric()->minValue(1)->live(onBlur: true),
-                    Forms\Components\TextInput::make('margine')
-                        ->label('Maggiorazione sulla macchina (%)')
-                        ->helperText('Copre insieme margine e costo del denaro immobilizzato.')
-                        ->numeric()->default(15)->live(onBlur: true),
-                    Forms\Components\TextInput::make('detergenti_mese')
-                        ->label('Detergenti al mese (€)')
-                        ->helperText('Non sono nel Full-Service, che copre i ricambi.')
-                        ->numeric()->default(0)->live(onBlur: true),
-                    Forms\Components\TextInput::make('ricarico_detergenti')
-                        ->label('Ricarico sui detergenti (%)')
-                        ->helperText('Zero se l\'importo sopra e\' gia\' un prezzo di vendita.')
-                        ->numeric()->default(0)->live(onBlur: true),
-                    Forms\Components\TextInput::make('caffe_mese')
-                        ->label('Caffè al mese (€)')
-                        ->helperText('Consumo stimato. Dentro il canone il cliente ha un numero solo, ma se consuma più del previsto la differenza è vostra.')
-                        ->numeric()->default(0)->live(onBlur: true),
-                    Forms\Components\TextInput::make('ricarico_caffe')
-                        ->label('Ricarico sul caffè (%)')
-                        ->helperText('Zero se l\'importo sopra è già un prezzo di vendita.')
-                        ->numeric()->default(0)->live(onBlur: true),
-                    // "Caffè compreso (kg/mese)" e "Detergenti compresi"
-                    // stavano qui: due caselle di testo libero per dire cosa
-                    // spettava al cliente. Le ha sostituite la sezione "Cosa
-                    // comprende il canone", che le stesse quantita' le tiene
-                    // voce per voce e le stampa nel contratto. Lasciarle
-                    // sarebbe peggio che inutile: si compilano credendo che
-                    // finiscano nel documento, e invece non le legge piu'
-                    // nessuno (Laura, 07/10/2026). Le colonne restano, con
-                    // quanto c'era scritto.
-                    Forms\Components\TextInput::make('valore_residuo')
-                        ->label('Valore residuo a fine contratto (€)')
-                        ->helperText('Se la macchina torna a voi e vale ancora qualcosa, il canone scende.')
-                        ->numeric()->default(0)->live(onBlur: true),
-                    Forms\Components\TextInput::make('full_service_percentuale')
-                        ->label('Full-Service (% annuo del listino)')
-                        ->numeric()->default(10)->live(onBlur: true),
+                    Forms\Components\Fieldset::make('La macchina')
+                        ->columns(3)
+                        ->schema([
+                            Forms\Components\TextInput::make('listino')
+                                ->label('Listino')
+                                ->prefix('€')
+                                ->helperText('Base del Full-Service.')
+                                ->numeric()->required()->live(onBlur: true),
+                            Forms\Components\TextInput::make('sconto_acquisto')
+                                ->label('Sconto fornitore')
+                                ->suffix('%')
+                                ->helperText('Compilandolo, il costo si calcola da sé.')
+                                ->numeric()->live(onBlur: true)
+                                ->afterStateUpdated(function (Forms\Set $set, Get $get, $state) {
+                                    if ($state === null || $state === '' || ! (float) $get('listino')) {
+                                        return;
+                                    }
+                                    $set('costo', round((float) $get('listino') * (1 - (float) $state / 100), 2));
+                                }),
+                            Forms\Components\TextInput::make('costo')
+                                ->label("Costo d'acquisto")
+                                ->prefix('€')
+                                ->helperText('Quanto costa a voi: il canone recupera questo, non il listino.')
+                                ->numeric()->required()->live(onBlur: true),
+                            Forms\Components\TextInput::make('margine')
+                                ->label('Maggiorazione')
+                                ->suffix('%')
+                                ->helperText('Margine e costo del denaro immobilizzato.')
+                                ->numeric()->default(15)->live(onBlur: true),
+                            Forms\Components\TextInput::make('valore_residuo')
+                                ->label('Valore residuo')
+                                ->prefix('€')
+                                ->helperText('Se a fine contratto torna a voi e vale ancora qualcosa, il canone scende.')
+                                ->numeric()->default(0)->live(onBlur: true)
+                                ->columnSpan(2),
+                        ]),
+
+                    Forms\Components\Fieldset::make('In quanto tempo rientra')
+                        ->columns(3)
+                        ->schema([
+                            Forms\Components\TextInput::make('mesi')
+                                ->label('Durata del contratto')
+                                ->suffix('mesi')
+                                ->numeric()->minValue(1)->default(60)->required()->live(onBlur: true),
+                            // Il contratto puo' durare cinque anni e la macchina
+                            // rientrare in tre: da li' in poi quella quota resta nel
+                            // canone ed e' margine. E si puo' ammortizzare il listino
+                            // invece del costo (Laura, 07/10/2026).
+                            Forms\Components\Select::make('ammortamento_base')
+                                ->label('Ammortamento su')
+                                ->options(['costo' => "Costo d'acquisto", 'listino' => 'Prezzo di listino'])
+                                // Di norma il listino: e' il valore che si concede in
+                                // uso. Lo sconto strappato al fornitore e' margine di
+                                // Alex, non uno sconto da girare al cliente.
+                                ->default('listino')->required()->live()
+                                ->helperText(fn (Get $get) => $get('ammortamento_base') === 'costo'
+                                    ? 'Si rientra della spesa e basta: nessun margine sulla macchina.'
+                                    : null),
+                            Forms\Components\TextInput::make('ammortamento_mesi')
+                                ->label('Da recuperare in')
+                                ->suffix('mesi')
+                                ->placeholder('quanto il contratto')
+                                ->helperText('Es. 36 per rientrare in tre anni su un contratto di cinque.')
+                                ->numeric()->minValue(1)->live(onBlur: true),
+                        ]),
+
+                    // Fieldset non ha description(): la frase sul consumo
+                    // stimato sta sul campo del caffè, che è quello a cui si
+                    // riferisce.
+                    Forms\Components\Fieldset::make('Cosa consuma ogni mese')
+                        ->columns(4)
+                        ->schema([
+                            Forms\Components\TextInput::make('caffe_mese')
+                                ->label('Caffè')
+                                ->prefix('€')
+                                ->helperText('Stima: se consuma più del previsto la differenza è vostra.')
+                                ->numeric()->default(0)->live(onBlur: true),
+                            Forms\Components\TextInput::make('ricarico_caffe')
+                                ->label('Ricarico')
+                                ->suffix('%')
+                                ->helperText("Zero se l'importo accanto è già un prezzo di vendita.")
+                                ->numeric()->default(0)->live(onBlur: true),
+                            Forms\Components\TextInput::make('detergenti_mese')
+                                ->label('Detergenti')
+                                ->prefix('€')
+                                ->helperText('Non sono nel Full-Service, che copre i ricambi.')
+                                ->numeric()->default(0)->live(onBlur: true),
+                            Forms\Components\TextInput::make('ricarico_detergenti')
+                                ->label('Ricarico')
+                                ->suffix('%')
+                                ->numeric()->default(0)->live(onBlur: true),
+                            // "Caffè compreso (kg/mese)" e "Detergenti compresi"
+                            // stavano qui: due caselle di testo libero per dire cosa
+                            // spettava al cliente. Le ha sostituite la sezione "Cosa
+                            // comprende il canone", che le stesse quantita' le tiene
+                            // voce per voce e le stampa nel contratto. Lasciarle
+                            // sarebbe peggio che inutile: si compilano credendo che
+                            // finiscano nel documento, e invece non le legge piu'
+                            // nessuno (Laura, 07/10/2026). Le colonne restano, con
+                            // quanto c'era scritto.
+                            Forms\Components\TextInput::make('full_service_percentuale')
+                                ->label('Full-Service')
+                                ->suffix('% annuo del listino')
+                                ->numeric()->default(10)->live(onBlur: true)
+                                ->columnSpan(2),
+                        ]),
                 ]),
 
             Forms\Components\Section::make('Cosa comprende il canone')

@@ -36,7 +36,7 @@ class ViewNoleggio extends ViewRecord
     {
         $eur = fn ($v) => '€ '.number_format((float) $v, 2, ',', '.');
 
-        return $infolist->schema([
+        return $infolist->columns(2)->schema([
             // La stessa striscia dei rapportini e dei preventivi: quello che
             // serve sapere senza scorrere. Cio' che sta qui non si ripete
             // sotto.
@@ -66,11 +66,11 @@ class ViewNoleggio extends ViewRecord
                         // risolve le closure per NOME, non per posizione, e
                         // con un nome inventato la pagina va in errore.
                         ->formatStateUsing(fn (string $state) => \App\Models\Noleggio::statiLabels()[$state] ?? $state)
-                        ->columnSpan(['default' => 1, 'lg' => 1]),
+                        ->columnSpan(['default' => 1, 'lg' => 2]),
                     TextEntry::make('attrezzatura')->label('Attrezzatura')
                         ->state(fn ($record) => $record->descrizione
                             ?: ($record->machineUnit?->model_name ?: '—'))
-                        ->columnSpan(['default' => 1, 'lg' => 7]),
+                        ->columnSpan(['default' => 1, 'lg' => 5]),
                     // Le condizioni di pagamento erano solo nel contratto: per
                     // sapere a quanti giorni si incassa bisognava stampare il
                     // PDF.
@@ -87,6 +87,7 @@ class ViewNoleggio extends ViewRecord
             // riquadri affiancati: e' il modo in cui questi numeri si
             // leggono davvero, uno sotto l'altro fino al totale.
             Section::make('Com\'è composto il canone')
+                ->columnSpan(1)
                 ->description('Numeri interni: nel contratto il cliente vede solo il totale.')
                 ->schema([
                     TextEntry::make('composizione')
@@ -106,20 +107,17 @@ class ViewNoleggio extends ViewRecord
                                 ['Consumabili', $record->quota_consumabili, null],
                             ];
 
-                            $out = '<div style="max-width:34rem;">';
+                            $out = '<div style="width:34rem;max-width:100%;">';
                             foreach ($voci as [$etichetta, $importo, $come]) {
                                 // Le voci a zero non si stampano: una riga che
                                 // dice "niente" e' una riga in piu' da leggere.
                                 if ((float) $importo <= 0) {
                                     continue;
                                 }
-                                $out .= '<div style="display:flex;justify-content:space-between;gap:1rem;padding:3px 0;">'
-                                    .'<span>'.e($etichetta)
-                                    .($come ? '<span style="opacity:.6;font-size:.85em;"> — '.e($come).'</span>' : '')
-                                    .'</span><span style="white-space:nowrap;">'.$eur($importo).'</span></div>';
+                                $out .= static::riga($etichetta, $come, $eur($importo));
                             }
 
-                            $out .= '<div style="display:flex;justify-content:space-between;gap:1rem;border-top:2px solid currentColor;margin-top:6px;padding-top:6px;font-weight:700;">'
+                            $out .= '<div style="display:flex;justify-content:space-between;gap:1rem;border-top:2px solid currentColor;margin-top:8px;padding-top:8px;font-weight:700;">'
                                 .'<span>Canone mensile</span><span>'.$eur($record->canone).'</span></div>'
                                 .'<div style="display:flex;justify-content:space-between;gap:1rem;padding-top:4px;opacity:.75;">'
                                 .'<span>Su tutto il contratto ('.$record->mesi.' mesi)</span>'
@@ -133,6 +131,7 @@ class ViewNoleggio extends ViewRecord
             // La domanda che si fa chi prepara un noleggio e che il prospetto
             // non rispondeva: alla fine, quanto ci resta?
             Section::make('Quanto ci resta')
+                ->columnSpan(1)
                 ->description('I prezzi delle righe sono di vendita: il margine si calcola solo dove è indicato anche il prezzo d\'acquisto. Il full-service non entra nel conto: copre manutenzioni, ricambi e trasferte, non è guadagno.')
                 ->schema([
                     TextEntry::make('margine_contratto')
@@ -152,34 +151,36 @@ class ViewNoleggio extends ViewRecord
                                 fn ($f) => round((float) $f->quantita / 12 * (float) ($f->prezzo_acquisto ?? 0), 2)
                             );
 
-                            $out = '<div style="max-width:34rem;">'
-                                .'<div style="display:flex;justify-content:space-between;gap:1rem;padding:3px 0;">'
-                                .'<span>Sulla macchina<span style="opacity:.6;font-size:.85em;"> — '
-                                .e($eur($incassoMacchina).' incassati − '.$eur($record->costo).' di costo').'</span></span>'
-                                .'<span style="white-space:nowrap;'.($margineMacchina < 0 ? 'color:#b91c1c;' : '').'">'
-                                .$eur($margineMacchina).'</span></div>';
+                            $out = '<div style="width:34rem;max-width:100%;">'.static::riga(
+                                'Sulla macchina',
+                                $eur($incassoMacchina).' incassati − '.$eur($record->costo).' di costo',
+                                $eur($margineMacchina),
+                                $margineMacchina < 0 ? 'color:#b91c1c;' : '',
+                            );
 
                             if ($record->forniture->isEmpty()) {
                                 $margineForniture = 0.0;
-                                $out .= '<div style="display:flex;justify-content:space-between;gap:1rem;padding:3px 0;opacity:.7;">'
-                                    .'<span>Sulle forniture</span><span>nessuna fornitura indicata</span></div>';
+                                $out .= static::riga('Sulle forniture', null, 'nessuna fornitura indicata', 'opacity:.7;');
                             } elseif ($senzaCosto->isNotEmpty()) {
                                 $margineForniture = null;
-                                $out .= '<div style="display:flex;justify-content:space-between;gap:1rem;padding:3px 0;">'
-                                    .'<span>Sulle forniture<span style="opacity:.6;font-size:.85em;"> — '
-                                    .e($eur($ricavoForniture).'/mese venduti').'</span></span>'
-                                    .'<span style="white-space:nowrap;opacity:.7;">non calcolabile</span></div>';
+                                $out .= static::riga(
+                                    'Sulle forniture',
+                                    $eur($ricavoForniture).'/mese venduti',
+                                    'non calcolabile',
+                                    'opacity:.7;',
+                                );
                             } else {
                                 $margineForniture = ($ricavoForniture - $costoForniture) * $mesi;
-                                $out .= '<div style="display:flex;justify-content:space-between;gap:1rem;padding:3px 0;">'
-                                    .'<span>Sulle forniture<span style="opacity:.6;font-size:.85em;"> — '
-                                    .e($eur($ricavoForniture).'/mese venduti − '.$eur($costoForniture).'/mese di costo').'</span></span>'
-                                    .'<span style="white-space:nowrap;'.($margineForniture < 0 ? 'color:#b91c1c;' : '').'">'
-                                    .$eur($margineForniture).'</span></div>';
+                                $out .= static::riga(
+                                    'Sulle forniture',
+                                    $eur($ricavoForniture).'/mese venduti − '.$eur($costoForniture).'/mese di costo',
+                                    $eur($margineForniture),
+                                    $margineForniture < 0 ? 'color:#b91c1c;' : '',
+                                );
                             }
 
                             $totale = $margineMacchina + ($margineForniture ?? 0);
-                            $out .= '<div style="display:flex;justify-content:space-between;gap:1rem;border-top:2px solid currentColor;margin-top:6px;padding-top:6px;font-weight:700;'
+                            $out .= '<div style="display:flex;justify-content:space-between;gap:1rem;border-top:2px solid currentColor;margin-top:8px;padding-top:8px;font-weight:700;'
                                 .($totale < 0 ? 'color:#b91c1c;' : '').'">'
                                 .'<span>Margine su '.$mesi.' mesi'.($margineForniture === null ? ' (solo macchina)' : '').'</span>'
                                 .'<span>'.$eur($totale).'</span></div>';
@@ -196,6 +197,7 @@ class ViewNoleggio extends ViewRecord
                 ]),
 
             Section::make('Cosa comprende il canone')
+                ->columnSpanFull()
                 ->schema([
                     // Il presupposto da cui nascono le quantita': si legge
                     // prima dell'elenco, perche' e' quello che lo spiega.
@@ -216,14 +218,25 @@ class ViewNoleggio extends ViewRecord
                                     .e(NoleggioFornitura::gruppiLabels()[$g] ?? $g)
                                     .' — € '.number_format((float) $voci->sum('costo_mensile'), 2, ',', '.').'</div>';
                                 foreach ($voci as $v) {
-                                    // La quantita' e' annua, il costo a destra e' mensile:
+                                    // La quantita' e' annua, l'importo a destra e' mensile:
                                     // senza dirlo la riga sembra sbagliata di dodici volte.
                                     $q = rtrim(rtrim(number_format((float) $v->quantita, 3, ',', '.'), '0'), ',');
-                                    $out .= '<div style="padding-left:14px;">'.e($v->voce).' — '.$q.' '.e($v->unita).'/anno'
-                                        .' × € '.number_format((float) $v->prezzo_unitario, 4, ',', '.')
-                                        .' = <strong>€ '.number_format((float) $v->costo_mensile, 2, ',', '.').'</strong>/mese'
-                                        .(filled($v->note) ? '<span style="opacity:.65;"> — '.e($v->note).'</span>' : '')
-                                        .'</div>';
+                                    // Il prezzo unitario sta in colonna a quattro decimali,
+                                    // ma "€ 17,0000" si legge come un errore di battitura:
+                                    // gli zeri in coda si tolgono e restano i centesimi.
+                                    $pu = number_format((float) $v->prezzo_unitario, 4, ',', '.');
+                                    $pu = preg_replace('/(,\d\d)0+$/', '$1', $pu);
+
+                                    $conto = $q.' × '.e($v->unita).' all\'anno · € '.$pu.' l\'uno'
+                                        .(filled($v->note) ? ' · '.e($v->note) : '');
+
+                                    $out .= static::riga(
+                                        e($v->voce),
+                                        $conto,
+                                        '€ '.number_format((float) $v->costo_mensile, 2, ',', '.').'/mese',
+                                        '',
+                                        'padding-left:14px;',
+                                    );
                                 }
                             }
 
@@ -232,9 +245,34 @@ class ViewNoleggio extends ViewRecord
                 ]),
 
             Section::make('Note')
+                ->columnSpanFull()
                 ->collapsed()
                 ->visible(fn ($record) => filled($record->note))
                 ->schema([TextEntry::make('note')->label('')]),
         ]);
+    }
+
+    /**
+     * Una riga dei prospetti: voce a sinistra, importo a destra, e sotto la
+     * voce -- piu' piccolo e in grigio -- come quell'importo e' venuto fuori.
+     *
+     * Prima il "come" stava in mezzo, fra l'etichetta e la cifra: la riga
+     * diventava un periodo da leggere ("Macchina — € 18.500,00 (listino) ÷
+     * 36 mesi + 15%   € 543,06") invece di una voce da scorrere, e le cifre
+     * a destra non si incolonnavano piu' con l'occhio. Su una riga sua il
+     * conto resta -- serve, e' la ricostruibilita' -- ma non si mette in
+     * mezzo (Laura, 03/11/2026: "dati troppo macchinosi").
+     *
+     * $come arriva gia' scappato dove contiene dati; qui non si ri-escapa,
+     * altrimenti i '×' e i '·' tornerebbero entita'.
+     */
+    protected static function riga(string $etichetta, ?string $come, string $valore, string $stileValore = '', string $stileRiga = ''): string
+    {
+        return '<div style="display:flex;justify-content:space-between;gap:1rem;padding:5px 0;'.$stileRiga.'">'
+            .'<span>'.$etichetta
+            .($come ? '<br><span style="opacity:.55;font-size:.82em;">'.$come.'</span>' : '')
+            .'</span>'
+            .'<span style="white-space:nowrap;'.$stileValore.'">'.$valore.'</span>'
+            .'</div>';
     }
 }
