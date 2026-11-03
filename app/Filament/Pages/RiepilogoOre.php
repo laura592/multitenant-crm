@@ -2,8 +2,6 @@
 
 namespace App\Filament\Pages;
 
-use App\Exports\DailyTimeDetailExport;
-use App\Exports\MonthlyTimeSummaryExport;
 use App\Filament\Concerns\ApreStampeInNuovaScheda;
 use App\Filament\Resources\TimeEntryResource;
 use App\Models\LeaveRequest;
@@ -25,7 +23,6 @@ use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Collection;
-use Maatwebsite\Excel\Facades\Excel;
 
 /**
  * Riepilogo mensile ore per il commercialista (docs/architecture.md §12.2).
@@ -156,7 +153,7 @@ class RiepilogoOre extends Page implements HasForms
      * la pagina e' nel suo perimetro (page_RiepilogoOre in RolePermissions)
      * perche' deve poter controllare le proprie ore, ma le ore/ferie/malattie
      * dei colleghi sono dati altrui e non deve ne' vederle a schermo ne'
-     * scaricarle nei PDF/Excel. Stessa regola di visibilita' di
+     * scaricarle nel PDF. Stessa regola di visibilita' di
      * ScopesToOwnUserUnlessResponsabile (usata da TimeEntryResource e
      * LeaveRequestResource): tutto il tenant per responsabile
      * (is_super_admin/admin) e per "amministrazione", che il riepilogo lo
@@ -393,36 +390,13 @@ class RiepilogoOre extends Page implements HasForms
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('exportExcel')
-                ->label('Esporta Excel (riepilogo)')
-                ->icon('heroicon-o-table-cells')
-                ->extraAttributes(['data-tour' => 'riepilogo-ore-export'])
-                ->action(fn () => Excel::download(
-                    new MonthlyTimeSummaryExport($this->getRows()),
-                    "riepilogo-ore-{$this->year}-{$this->month}.xlsx"
-                )),
-            Action::make('exportPdf')
-                ->label('Esporta PDF (riepilogo)')
-                ->icon('heroicon-o-document-arrow-down')
-                ->action(fn () => static::apriPdfInNuovaScheda(
-                    fn () => Pdf::loadView('pdf.riepilogo-ore', [
-                        'rows' => $this->getRows(),
-                        'month' => $this->month,
-                        'year' => $this->year,
-                        'tenant' => Filament::getTenant(),
-                    ]),
-                    "riepilogo-ore-{$this->year}-{$this->month}.pdf",
-                    $this,
-                )),
-            // Dettaglio giorno per giorno, in aggiunta al riepilogo mensile
-            // aggregato: serve per verificare una singola giornata invece di
-            // dover ricostruirla a mano dalle timbrature.
             // Il foglio nel formato che vuole il consulente del lavoro:
             // si riempie il LORO modello, cosi' ricevono esattamente il file
             // che hanno mandato (Patrizia, Studio Menoncello, 02/11/2026).
             Action::make('foglioPresenzeConsulente')
                 ->label('Foglio presenze (consulente)')
                 ->icon('heroicon-o-document-check')
+                ->extraAttributes(['data-tour' => 'riepilogo-ore-export'])
                 ->action(function () {
                     $esito = FoglioPresenzeConsulente::componi(
                         $this->year,
@@ -460,14 +434,6 @@ class RiepilogoOre extends Page implements HasForms
                     ]),
                     "rimborso-spese-{$this->year}-{$this->month}.pdf",
                     $this,
-                )),
-            Action::make('exportDetailExcel')
-                ->label('Esporta Excel (dettaglio giorni)')
-                ->color('gray')
-                ->icon('heroicon-o-table-cells')
-                ->action(fn () => Excel::download(
-                    new DailyTimeDetailExport($this->getDailyDetailRows()),
-                    "dettaglio-ore-{$this->year}-{$this->month}.xlsx"
                 )),
             Action::make('exportDetailPdf')
                 ->label('Esporta PDF (dettaglio giorni)')

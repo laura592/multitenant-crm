@@ -419,7 +419,7 @@ class TourRegistry
                 [
                     'element' => '[data-tour="riepilogo-ore-export"]',
                     'title' => 'Passo 3 — Esporta',
-                    'text' => 'Scarica il riepilogo del periodo selezionato in Excel da qui, utile per il controllo mensile.',
+                    'text' => 'Tre fogli: quello nel formato del consulente del lavoro, il modulo rimborso spese da stampare, e il PDF col dettaglio giorno per giorno, una pagina per dipendente.',
                 ],
             ],
 
