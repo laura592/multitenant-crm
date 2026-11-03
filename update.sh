@@ -23,8 +23,14 @@ git pull
 echo "==> Composer install"
 "$PHP_BIN" "$(command -v "$COMPOSER_BIN")" install --no-interaction --prefer-dist $COMPOSER_FLAGS
 
-echo "==> NPM install + build"
-npm install
+echo "==> NPM ci + build"
+# `npm ci`, non `npm install`: install riscrive package-lock.json con quello
+# che trova installato, e il lock e' un file tracciato. Risultato, il 03/11/2026
+# il deploy si e' fermato su "Your local changes to the following files would be
+# overwritten by merge: package-lock.json", con dentro solo rumore generato
+# (il nome del pacchetto e le voci libc). ci installa esattamente quello che
+# dice il lock e non lo tocca mai.
+npm ci
 npm run build
 
 echo "==> Migrazioni database"
