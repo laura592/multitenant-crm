@@ -31,7 +31,7 @@ class AgenteResource extends Resource
 
     protected static ?string $modelLabel = 'agente';
 
-    protected static ?string $pluralModelLabel = 'agenti';
+    protected static ?string $pluralModelLabel = 'Agenti';
 
     protected static bool $hasTitleCaseModelLabel = false;
 

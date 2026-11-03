@@ -9,6 +9,7 @@ use App\Filament\Widgets\IlMioGiroWidget;
 use App\Filament\Widgets\LatestQuotesWidget;
 use App\Filament\Widgets\MagazzinoStatsWidget;
 use App\Filament\Widgets\PrioritaWidget;
+use App\Filament\Widgets\RapportiniBloccatiWidget;
 use App\Filament\Widgets\Sezioni\SezioneAndamento;
 use App\Filament\Widgets\Sezioni\SezioneAzioniRapide;
 use App\Filament\Widgets\Sezioni\SezioneDaFare;
@@ -190,6 +191,10 @@ class AdminPanelProvider extends PanelProvider
                 PrioritaWidget::class,
                 UpcomingDeadlinesWidget::class,
                 FailedGestionaleServiceReportsWidget::class,
+                // I rapportini che non si possono nemmeno provare a mandare:
+                // sta accanto agli invii falliti perche' e' la stessa
+                // domanda, un attimo prima.
+                RapportiniBloccatiWidget::class,
                 UpcomingMaintenanceWidget::class,
 
                 SezioneAndamento::class,
