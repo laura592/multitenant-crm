@@ -44,12 +44,24 @@ class SincronizzaConsensiBrevo extends Command
             ->when($this->option('tenant'), fn ($q, $slug) => $q->where('slug', $slug))
             ->get();
 
+        $falliti = 0;
+
         foreach ($tenants as $tenant) {
             [$inviati, $bloccati, $errori] = $this->sincronizza($tenant, $brevo, $dry);
             $this->info("{$tenant->name}: {$inviati} contatti inviati, {$bloccati} bloccati, {$errori} errori".($dry ? ' (simulazione)' : ''));
+
+            // Niente passato e qualcosa fallito: il giro e' andato male, non
+            // "bene con qualche errore". Prima si usciva sempre SUCCESS, e il
+            // sync ha rifiutato 1.125 contatti di fila dal trasloco su OVH al
+            // 03/11/2026 senza che nessuno se ne accorgesse (la chiave Brevo
+            // non autorizzava l'IPv6 della VPS). Un comando schedulato che
+            // non sbaglia mai non si guarda piu'.
+            if ($errori > 0 && $inviati === 0 && $bloccati === 0) {
+                $falliti++;
+            }
         }
 
-        return self::SUCCESS;
+        return $falliti > 0 ? self::FAILURE : self::SUCCESS;
     }
 
     /** @return array{0: int, 1: int, 2: int} */

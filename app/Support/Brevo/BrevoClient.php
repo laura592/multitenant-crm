@@ -146,6 +146,15 @@ class BrevoClient
             ->withHeaders(['api-key' => $this->key])
             ->acceptJson()
             ->asJson()
+            // Si esce in IPv4 per forza. La chiave Brevo e' legata agli IP
+            // autorizzati, e sulla VPS OVH e' autorizzato solo l'IPv4
+            // (51.255.35.205): PHP preferisce l'IPv6, quindi ogni chiamata
+            // partiva da 2001:41d0:305:2100::1:513d e Brevo rispondeva 401
+            // "unrecognised IP address". Dal trasloco su OVH al 03/11/2026
+            // non e' arrivato un solo contatto -- 1.125 rifiuti di fila, e
+            // nessuno se n'era accorto perche' il comando non fallisce: conta
+            // gli errori e va avanti.
+            ->withOptions(['curl' => [CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4]])
             ->timeout(120);
     }
 }
