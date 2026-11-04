@@ -100,12 +100,18 @@ class RichiesteSullaMappa extends Page
                     'giorni' => (int) $r->created_at->diffInDays($oggi),
                     'appuntamento' => $r->appointment_at?->format('d/m/Y'),
                     'appuntamentoFuturo' => $r->appointment_at?->isFuture() ?? false,
+                    'stato' => $r->status,
                     // Il colore e' quello che rende la mappa utilizzabile da
-                    // soli: verde = ci vai gia', rosso = aspetta da troppo,
-                    // blu = aperta e tranquilla. Si guarda il verde, si
-                    // guarda cosa gli sta attorno, e il giro e' fatto.
+                    // soli. L'ordine conta: prima dove si va gia', poi chi
+                    // aspetta una risposta da noi, poi chi aspetta e basta.
+                    //
+                    // L'arancione sono i preventivi mandati e non ancora
+                    // accettati: li' la palla e' nel loro campo, ma e' anche
+                    // la gente che una telefonata la merita piu' di tutti
+                    // (Laura, 04/11/2026).
                     'colore' => match (true) {
                         $r->appointment_at?->isFuture() ?? false => '#16a34a',
+                        $r->status === 'preventivo_inviato' => '#ea580c',
                         $r->created_at->diffInDays($oggi) > 60 => '#dc2626',
                         default => '#2563eb',
                     },
