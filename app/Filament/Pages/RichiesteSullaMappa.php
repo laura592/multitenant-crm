@@ -33,6 +33,16 @@ class RichiesteSullaMappa extends Page
 
     protected static ?string $navigationIcon = 'heroicon-o-map';
 
+    // Fuori dal menu di proposito: e' un altro modo di guardare l'elenco
+    // delle richieste, non un posto dove si va per conto suo. Ci si arriva
+    // dal bottone "Sulla mappa" sopra l'elenco, che e' dove ti viene in
+    // mente di volerla. Una voce in piu' nella barra laterale e' un costo
+    // che pagano tutte le altre voci (Laura, 04/11/2026).
+    //
+    // Il permesso resta: page_RichiesteSullaMappa decide chi ci entra, e
+    // chi non ce l'ha non vede nemmeno il bottone.
+    protected static bool $shouldRegisterNavigation = false;
+
     protected static ?string $navigationGroup = 'Vendite';
 
     protected static ?int $navigationSort = 3;
