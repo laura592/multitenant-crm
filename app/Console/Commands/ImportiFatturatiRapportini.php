@@ -38,6 +38,7 @@ class ImportiFatturatiRapportini extends Command
         {--tenant=    : Slug tenant (default: tenant master)}
         {--fattura=   : Solo i rapportini di questo numero di fattura}
         {--tutti      : Rilegge anche quelli che un importo ce l\'hanno gia\'}
+        {--azzera-righe : Dove la fattura vale zero, porta a zero anche le righe del rapportino}
         {--dry-run    : Mostra cosa cambierebbe senza scrivere}';
 
     protected $description = 'Legge dai documenti FB quanto e\' stato fatturato per ogni rapportino';
@@ -49,6 +50,7 @@ class ImportiFatturatiRapportini extends Command
             : Tenant::query()->firstOrFail();
 
         $dryRun = (bool) $this->option('dry-run');
+        $azzera = (bool) $this->option('azzera-righe');
         $client = new EurekaClient($tenant);
 
         $query = ServiceReport::query()
@@ -74,7 +76,7 @@ class ImportiFatturatiRapportini extends Command
         }
 
         $barra = $this->output->createProgressBar($totale);
-        $conti = ['letti' => 0, 'scritti' => 0, 'a_zero' => 0, 'non_leggibili' => 0, 'saltati' => 0];
+        $conti = ['letti' => 0, 'scritti' => 0, 'a_zero' => 0, 'non_leggibili' => 0, 'saltati' => 0, 'righe_azzerate' => 0];
         $zeri = [];
 
         $query->chunkById(self::BLOCCO, function (Collection $rapportini) use ($client, $dryRun, $numero, &$conti, &$zeri, $barra) {
@@ -111,6 +113,30 @@ class ImportiFatturatiRapportini extends Command
                 if ($importo <= 0.0 && $suo > 0.0) {
                     $conti['a_zero']++;
                     $zeri[] = [$r->number, $r->customer?->company_name, $suo];
+
+                    // Quando il documento vale zero, zero valgono tutte le
+                    // sue righe: qui non serve abbinarle una per una (e non
+                    // si potrebbe, perche' sulle voci di intervento il FB
+                    // porta solo il testo e non il codice articolo). Il
+                    // rapportino smette di mostrare un prezzo che nessuno ha
+                    // pagato, invece di dirlo solo in un riquadro a parte
+                    // (Laura, 04/11/2026).
+                    //
+                    // Non si perde niente di irrecuperabile: quel numero
+                    // veniva dal listino dell'articolo, ed e' sempre li'.
+                    if ($azzera && ! $dryRun) {
+                        foreach ($r->materialsUsed as $riga) {
+                            $riga->forceFill([
+                                'unit_cost_snapshot' => 0,
+                                'line_total_snapshot' => 0,
+                                // Zero e' quello che Eureka ha fatturato
+                                // davvero: non e' piu' una stima nostra.
+                                'prezzo_stimato' => false,
+                            ])->saveQuietly();
+                        }
+
+                        $conti['righe_azzerate'] += $r->materialsUsed->count();
+                    }
                 }
 
                 if ($dryRun) {
@@ -135,6 +161,7 @@ class ImportiFatturatiRapportini extends Command
             ['Documento non leggibile', $conti['non_leggibili']],
             ['Saltati (altra fattura)', $conti['saltati']],
             ['FATTURATI A ZERO ma con un importo nel CRM', $conti['a_zero']],
+            ['Righe portate a zero', $conti['righe_azzerate']],
         ]);
 
         if ($zeri !== []) {

@@ -37,7 +37,10 @@ class Agenda extends Page
 
     protected static ?string $navigationGroup = 'Interventi tecnici';
 
-    protected static ?int $navigationSort = 6;
+    // In cima al gruppo, non in fondo: l'agenda si apre al mattino, prima
+    // di tutto il resto. Stava per ultima dopo "Chi paga per chi" e non si
+    // trovava (Laura, 04/11/2026).
+    protected static ?int $navigationSort = 0;
 
     protected static ?string $navigationLabel = 'Agenda';
 

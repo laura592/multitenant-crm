@@ -804,7 +804,12 @@ class ImportEurekaServiceReports extends Command
             ))->sort()->values()->all();
 
         $nelCrm = $report->materialsUsed()->with('material')->get()
-            ->map(fn ($m) => $chiave($m->material?->eureka_article_id, $m->quantity))
+            // gestionale_code e non eureka_article_id: quest'ultimo e' una
+            // colonna di `products`, su Material non esiste. Leggendolo si
+            // otteneva sempre null, il confronto non coincideva mai e ogni
+            // import rifaceva da zero le righe di ogni rapportino -- ed e'
+            // il motivo per cui le righe spazzatura rinascevano ogni notte.
+            ->map(fn ($m) => $chiave($m->material?->gestionale_code, $m->quantity))
             ->sort()->values()->all();
 
         return $daEureka !== $nelCrm;
@@ -813,7 +818,6 @@ class ImportEurekaServiceReports extends Command
     private function syncDetailRows(Tenant $tenant, ServiceReport $report, array $detail, array &$materialCache): void
     {
         $report->materialsUsed()->delete();
-        $createdMaterialIds = [];
 
         foreach (($detail['dettaglio'] ?? []) as $row) {
             if (! is_array($row)) {
@@ -831,7 +835,6 @@ class ImportEurekaServiceReports extends Command
                 continue;
             }
 
-            $createdMaterialIds[] = $material->id;
 
             $quantita = max(0.0, (float) ($row['quantita'] ?? 1));
 
@@ -871,14 +874,19 @@ class ImportEurekaServiceReports extends Command
             ]);
         }
 
-        $this->syncArticleMentionsFromNotes($tenant, $report, $detail, $createdMaterialIds, $materialCache);
+        $this->syncArticleMentionsFromNotes($report, $detail);
     }
 
     /**
+     * Toglie dalle note le righe "Aggiunto articolo: ..." di Eureka.
+     *
+     * Solo pulizia: fino al 04/11/2026 da quelle righe nasceva anche un
+     * materiale, ed e' la sorgente delle 2.505 righe inventate. L'articolo
+     * vero sta nel dettaglio della scheda, non nel log di chi l'ha aggiunto.
+     *
      * @param  array<string, mixed>  $detail
-     * @param  array<string, Material>  $materialCache
      */
-    private function syncArticleMentionsFromNotes(Tenant $tenant, ServiceReport $report, array $detail, array $createdMaterialIds, array &$materialCache): void
+    private function syncArticleMentionsFromNotes(ServiceReport $report, array $detail): void
     {
         $note = $detail['note'] ?? null;
 
@@ -906,32 +914,21 @@ class ImportEurekaServiceReports extends Command
                 continue;
             }
 
+            // La riga "Aggiunto articolo: 2x CHIORD" si toglie dalle note,
+            // ma NON diventa una riga materiale.
+            //
+            // Prima ne nasceva una, senza prezzo, e il listino glielo metteva
+            // l'hook di ServiceReportMaterial: 2.505 righe inventate per
+            // 183.460,20 €, una per rapportino. Il 94,6% duplicava una riga
+            // vera dello stesso rapportino, e un vecchio bug sulle parentesi
+            // in resolveOrCreateMaterial faceva puntare 2.469 di quelle righe
+            // tutte a CHIORD (46,20 €) qualunque codice citasse la nota
+            // (04/11/2026).
+            //
+            // L'articolo vero sta nel dettaglio della scheda, che si importa
+            // sopra con prezzo e quantita' di Eureka: la nota e' il LOG di
+            // chi l'ha aggiunto, non un secondo documento.
             if ($this->isArticleMention($line)) {
-                $mention = $this->extractArticleMention($line);
-                if ($mention === null) {
-                    continue;
-                }
-
-                $material = $this->resolveOrCreateMaterial($tenant, [
-                    'id_eureka' => null,
-                    'codice' => $mention['code'],
-                    'descr1' => $mention['code'],
-                    'descrizione' => $mention['code'],
-                ], $materialCache);
-
-                if (! $material || in_array($material->id, $createdMaterialIds, true)) {
-                    continue;
-                }
-
-                $createdMaterialIds[] = $material->id;
-
-                ServiceReportMaterial::create([
-                    'service_report_id' => $report->id,
-                    'material_id' => $material->id,
-                    'quantity' => max(0.0, (float) $mention['quantity']),
-                    'notes' => $line,
-                ]);
-
                 continue;
             }
 
