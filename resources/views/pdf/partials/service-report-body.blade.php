@@ -28,6 +28,18 @@
         // l'intervento, non l'elenco dei ricambi montati, che e' materia di
         // chi fattura. Nel download interno resta tutto.
         $showArticoli ??= true;
+
+        // Quanto Eureka ha DAVVERO fatturato per questo rapportino, letto dal
+        // documento FB (eureka:importi-fatturati). Dove l'import ha messo il
+        // listino al posto di uno zero mandato da Eureka i due numeri non
+        // coincidono, ed e' esattamente quello che bisogna vedere: sulla FT
+        // 516 di Dersut il CRM diceva 2.737,13 € contro 1.286,76 €
+        // di imponibile (04/11/2026).
+        $totaleCrm = (float) $report->materialsUsed->sum('line_total_snapshot');
+        $fatturato = $report->eureka_importo_letto_il !== null
+            ? (float) $report->eureka_importo_fatturato
+            : null;
+        $scostanoGliImporti = $fatturato !== null && abs($fatturato - $totaleCrm) >= 0.01;
     @endphp
 
     {{-- Solo numero e data qui, come semplice testo (niente piu' un box a
@@ -153,8 +165,19 @@
             @if($showPrices && $report->materialsUsed->sum('line_total_snapshot') > 0)
                 <tr>
                     <td colspan="3" class="numeric"><strong>Totale</strong></td>
-                    <td class="numeric"><strong>€ {{ number_format($report->materialsUsed->sum('line_total_snapshot'), 2, ',', '.') }}</strong></td>
+                    <td class="numeric"><strong>€ {{ number_format($totaleCrm, 2, ',', '.') }}</strong></td>
                 </tr>
+                @if($scostanoGliImporti)
+                    <tr>
+                        <td colspan="3" class="numeric">In fattura</td>
+                        <td class="numeric"><strong>€ {{ number_format($fatturato, 2, ',', '.') }}</strong></td>
+                    </tr>
+                    @if($fatturato <= 0)
+                        <tr>
+                            <td colspan="4">Questo intervento non è stato fatturato: in documento risulta a zero.</td>
+                        </tr>
+                    @endif
+                @endif
             @endif
             </tbody>
         </table>

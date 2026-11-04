@@ -158,6 +158,11 @@ class ServiceReport extends Model
         'gestionale_synced_at' => 'datetime',
         'eureka_fatture' => 'array',
         'eureka_fatturato_il' => 'date',
+        // Quanto Eureka ha DAVVERO fatturato per questo rapportino, letto
+        // dal documento FB. Diverso da materialsUsed.sum(line_total_snapshot),
+        // che dove Eureka mandava zero porta il listino.
+        'eureka_importo_fatturato' => 'decimal:2',
+        'eureka_importo_letto_il' => 'datetime',
         'eureka_fatture_controllate_il' => 'datetime',
     ];
 
