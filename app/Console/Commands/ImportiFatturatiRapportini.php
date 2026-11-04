@@ -2,7 +2,9 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Material;
 use App\Models\ServiceReport;
+use App\Models\ServiceReportMaterial;
 use App\Models\Tenant;
 use App\Support\Gestionale\EurekaClient;
 use Illuminate\Console\Command;
@@ -22,9 +24,14 @@ use Illuminate\Database\Eloquent\Collection;
  * consentito", quindi la fattura in se' non si apre -- ma non serve, perche'
  * ogni FB appartiene a un rapportino solo.
  *
- * Si somma il TOTALE del documento e non si toccano le righe: riga per riga
- * l'abbinamento non regge, perche' sulle voci di intervento il FB porta solo
- * il testo e non il codice articolo (su 16 righe se ne riconoscono 2).
+ * Di suo scrive solo il TOTALE. Con --allinea-righe riscrive anche le righe
+ * del rapportino prendendole dalla fattura, una per una.
+ *
+ * Quell'abbinamento per un po' si e' creduto impossibile: il campo annidato
+ * `articolo` del FB arriva sempre vuoto, e leggendo quello sembrava che la
+ * fattura portasse solo del testo. Il codice invece c'e', piatto accanto
+ * alla descrizione -- `id_articolo`, con `quantita` e `prezzo`. Su un
+ * campione di 60 righe se ne abbinano 59 (04/11/2026).
  *
  * Comando e non parte del sync: sono migliaia di chiamate a Eureka, e il
  * giro notturno non deve allungarsi di mezz'ora per un dato che serve
@@ -39,6 +46,7 @@ class ImportiFatturatiRapportini extends Command
         {--fattura=   : Solo i rapportini di questo numero di fattura}
         {--tutti      : Rilegge anche quelli che un importo ce l\'hanno gia\'}
         {--azzera-righe : Dove la fattura vale zero, porta a zero anche le righe del rapportino}
+        {--allinea-righe : Riscrive le righe del rapportino con quelle della fattura}
         {--dry-run    : Mostra cosa cambierebbe senza scrivere}';
 
     protected $description = 'Legge dai documenti FB quanto e\' stato fatturato per ogni rapportino';
@@ -51,6 +59,7 @@ class ImportiFatturatiRapportini extends Command
 
         $dryRun = (bool) $this->option('dry-run');
         $azzera = (bool) $this->option('azzera-righe');
+        $allinea = (bool) $this->option('allinea-righe');
         $client = new EurekaClient($tenant);
 
         $query = ServiceReport::query()
@@ -75,11 +84,20 @@ class ImportiFatturatiRapportini extends Command
             return self::SUCCESS;
         }
 
-        $barra = $this->output->createProgressBar($totale);
-        $conti = ['letti' => 0, 'scritti' => 0, 'a_zero' => 0, 'non_leggibili' => 0, 'saltati' => 0, 'righe_azzerate' => 0];
-        $zeri = [];
+        // Cinque fatture coprono piu' di un rapportino (04/11/2026).
+        // Allinearli tutti e due allo stesso documento vorrebbe dire
+        // scrivere le stesse righe due volte e cancellare quelle vere:
+        // meglio lasciarli stare e dirlo.
+        $condivise = $allinea ? $this->bolleCondivise($tenant) : [];
 
-        $query->chunkById(self::BLOCCO, function (Collection $rapportini) use ($client, $dryRun, $numero, &$conti, &$zeri, $barra) {
+        $barra = $this->output->createProgressBar($totale);
+        $conti = ['letti' => 0, 'scritti' => 0, 'a_zero' => 0, 'non_leggibili' => 0, 'saltati' => 0, 'righe_azzerate' => 0,
+            'allineati' => 0, 'righe_aggiunte' => 0, 'righe_corrette' => 0, 'righe_tolte' => 0, 'bolla_condivisa' => 0];
+        $zeri = [];
+        $scartate = [];
+        $diff = [];
+
+        $query->chunkById(self::BLOCCO, function (Collection $rapportini) use ($client, $dryRun, $numero, $allinea, $condivise, &$conti, &$zeri, &$scartate, &$diff, $barra) {
             foreach ($rapportini as $r) {
                 $barra->advance();
 
@@ -139,6 +157,26 @@ class ImportiFatturatiRapportini extends Command
                     }
                 }
 
+                if ($allinea && $importo > 0.0 && in_array($idBolla, $condivise, true)) {
+                    $conti['bolla_condivisa']++;
+                } elseif ($allinea && $importo > 0.0) {
+                    $esito = $this->allineaRighe($r, $documento['dettaglio'] ?? [], $dryRun);
+
+                    if ($esito['cambiate'] > 0) {
+                        $conti['allineati']++;
+                        $conti['righe_aggiunte'] += $esito['aggiunte'];
+                        $conti['righe_corrette'] += $esito['corrette'];
+                        $conti['righe_tolte'] += $esito['tolte'];
+                        $diff[] = [$r->number, mb_substr((string) $r->customer?->company_name, 0, 26),
+                            number_format($suo, 2, ',', '.'), number_format($importo, 2, ',', '.'),
+                            '+'.$esito['aggiunte'].' ~'.$esito['corrette'].' -'.$esito['tolte']];
+                    }
+
+                    foreach ($esito['scartate'] as $s) {
+                        $scartate[] = $s;
+                    }
+                }
+
                 if ($dryRun) {
                     continue;
                 }
@@ -162,7 +200,34 @@ class ImportiFatturatiRapportini extends Command
             ['Saltati (altra fattura)', $conti['saltati']],
             ['FATTURATI A ZERO ma con un importo nel CRM', $conti['a_zero']],
             ['Righe portate a zero', $conti['righe_azzerate']],
+            ['Allineati alla fattura', $conti['allineati']],
+            ['Saltati: fattura condivisa con altri rapportini', $conti['bolla_condivisa']],
         ]);
+
+        if ($diff !== []) {
+            $this->newLine();
+            $this->info('Rapportini riallineati alla fattura:');
+            $this->table(
+                ['Rapportino', 'Cliente', 'Prima', 'Fattura', 'Righe'],
+                array_slice($diff, 0, 60),
+            );
+
+            if (count($diff) > 60) {
+                $this->line('  ... e altri '.(count($diff) - 60).'.');
+            }
+
+            $this->line(sprintf(
+                '  Righe: %d aggiunte, %d corrette, %d tolte.',
+                $conti['righe_aggiunte'], $conti['righe_corrette'], $conti['righe_tolte'],
+            ));
+        }
+
+        if ($scartate !== []) {
+            $this->newLine();
+            $this->warn('Righe della fattura senza un materiale corrispondente nel CRM.');
+            $this->line('Qui il totale resta diverso: va creato l\'articolo, oppure la riga va messa a mano.');
+            $this->table(['Rapportino', 'Codice', 'Descrizione', 'Importo'], array_slice($scartate, 0, 40));
+        }
 
         if ($zeri !== []) {
             $this->newLine();
@@ -178,5 +243,152 @@ class ImportiFatturatiRapportini extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Le bolle che appartengono a piu' di un rapportino.
+     *
+     * Succede quando una fattura raccoglie piu' interventi: il totale e'
+     * di tutti insieme, e non si puo' dare per intero a nessuno dei due.
+     *
+     * @return array<int, int>
+     */
+    private function bolleCondivise(Tenant $tenant): array
+    {
+        $conteggio = [];
+
+        ServiceReport::query()->withoutGlobalScopes()
+            ->whereNull('deleted_at')->where('tenant_id', $tenant->id)
+            ->whereNotNull('eureka_fatture')
+            ->select(['id', 'eureka_fatture'])
+            ->chunkById(500, function (Collection $blocco) use (&$conteggio): void {
+                foreach ($blocco as $r) {
+                    $id = (int) ($r->eureka_fatture[0]['id_bolla'] ?? 0);
+
+                    if ($id > 0) {
+                        $conteggio[$id] = ($conteggio[$id] ?? 0) + 1;
+                    }
+                }
+            }, 'id');
+
+        return array_keys(array_filter($conteggio, fn (int $n) => $n > 1));
+    }
+
+    /**
+     * Riscrive le righe di un rapportino con quelle della fattura.
+     *
+     * Il rapportino racconta quello che il tecnico ha scritto sulla scheda,
+     * prezzato col nostro listino. La fattura racconta quello che l'ufficio
+     * ha poi davvero messo in conto -- spesso non e' la stessa cosa: su
+     * RT-2026-0994 il tecnico aveva segnato un'ora e la fattura ne porta
+     * tre, piu' un decalcificante e quattro guarnizioni che sulla scheda non
+     * c'erano. Il foglio che si allega alla fattura deve dire quello che il
+     * cliente paga, non quello che avevamo previsto.
+     *
+     * L'abbinamento e' per codice articolo (`id_articolo` sul FB,
+     * `gestionale_code` da noi), uno a uno: due righe dello stesso articolo
+     * nella stessa fattura si consumano in ordine. Le righe della fattura
+     * che non hanno un materiale corrispondente NON si inventano -- la
+     * tabella vuole un material_id -- ma si elencano a fine comando, perche'
+     * sono l'unico caso in cui il totale resta diverso.
+     *
+     * Le righe nostre che la fattura non ha vanno in soft delete: si
+     * recuperano, ma smettono di far tornare un totale che nessuno ha pagato.
+     *
+     * @param  array<int, array<string, mixed>>  $dettaglio
+     * @return array{cambiate:int, aggiunte:int, corrette:int, tolte:int, scartate:array<int, array<int, string>>}
+     */
+    private function allineaRighe(ServiceReport $r, array $dettaglio, bool $dryRun): array
+    {
+        $esito = ['cambiate' => 0, 'aggiunte' => 0, 'corrette' => 0, 'tolte' => 0, 'scartate' => []];
+
+        // Solo le righe che portano un importo: il FB apre sempre con tre
+        // righe di intestazione (cliente, articolo, matricola) a zero, che
+        // sono testo di stampa e non voci di spesa.
+        $voci = array_values(array_filter($dettaglio, fn ($riga) => (float) ($riga['importo'] ?? 0) !== 0.0));
+
+        if ($voci === []) {
+            return $esito;
+        }
+
+        $libere = $r->materialsUsed->keyBy(fn (ServiceReportMaterial $m) => $m->getKey());
+
+        foreach ($voci as $voce) {
+            $codice = (string) ($voce['id_articolo'] ?? '');
+            $materiale = $codice !== ''
+                ? Material::withoutGlobalScopes()->where('gestionale_code', $codice)->first()
+                : null;
+
+            if (! $materiale) {
+                $esito['scartate'][] = [
+                    $r->number,
+                    $codice.' '.($voce['codice'] ?? ''),
+                    mb_substr((string) ($voce['descrizione'] ?? ''), 0, 34),
+                    number_format((float) ($voce['importo'] ?? 0), 2, ',', '.').' EUR',
+                ];
+
+                continue;
+            }
+
+            $quantita = (float) ($voce['quantita'] ?? 0);
+            $prezzo = (float) ($voce['prezzo'] ?? 0);
+            $importo = round((float) ($voce['importo'] ?? 0), 2);
+
+            $riga = $libere->first(fn (ServiceReportMaterial $m) => $m->material_id === $materiale->getKey());
+
+            if ($riga) {
+                $libere->forget($riga->getKey());
+
+                $uguale = (float) $riga->quantity === $quantita
+                    && (float) $riga->line_total_snapshot === $importo;
+
+                if ($uguale) {
+                    continue;
+                }
+
+                $esito['corrette']++;
+                $esito['cambiate']++;
+
+                if (! $dryRun) {
+                    // saveQuietly: il saving() del modello rifarebbe
+                    // l'importo come prezzo x quantita', e su una fattura
+                    // scontata non e' quello il numero giusto.
+                    $riga->forceFill([
+                        'quantity' => $quantita,
+                        'unit_cost_snapshot' => $prezzo,
+                        'line_total_snapshot' => $importo,
+                        'prezzo_stimato' => false,
+                    ])->saveQuietly();
+                }
+
+                continue;
+            }
+
+            $esito['aggiunte']++;
+            $esito['cambiate']++;
+
+            if (! $dryRun) {
+                $nuova = new ServiceReportMaterial;
+                $nuova->forceFill([
+                    'service_report_id' => $r->getKey(),
+                    'material_id' => $materiale->getKey(),
+                    'quantity' => $quantita,
+                    'unit_cost_snapshot' => $prezzo,
+                    'line_total_snapshot' => $importo,
+                    'prezzo_stimato' => false,
+                ])->saveQuietly();
+            }
+        }
+
+        foreach ($libere as $avanzo) {
+            $esito['tolte']++;
+            $esito['cambiate']++;
+
+            if (! $dryRun) {
+                $avanzo->delete();
+            }
+        }
+
+        return $esito;
     }
 }
