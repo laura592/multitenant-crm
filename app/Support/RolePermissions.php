@@ -153,6 +153,7 @@ class RolePermissions
                 // macchine, quindi la vede chi vede le macchine.
                 'page_PagantiMacchine',
                 'page_Agenda',
+                'page_RichiesteSullaMappa',
             ],
             'amministrazione' => [
                 // Profilo ufficio: la gestione amministrativa del personale,
@@ -213,6 +214,7 @@ class RolePermissions
                 // macchine, quindi la vede chi vede le macchine.
                 'page_PagantiMacchine',
                 'page_Agenda',
+                'page_RichiesteSullaMappa',
             ],
             'admin' => [
                 ...self::expand('brand', self::MANAGE),
@@ -275,6 +277,7 @@ class RolePermissions
                 // macchine, quindi la vede chi vede le macchine.
                 'page_PagantiMacchine',
                 'page_Agenda',
+                'page_RichiesteSullaMappa',
                 'page_NotificationSettings',
                 'page_GestionaleSyncReview',
                 // Le tre pagine contabili. Fino al 03/09/2026 non erano
@@ -332,6 +335,7 @@ class RolePermissions
                 // macchine, quindi la vede chi vede le macchine.
                 'page_PagantiMacchine',
                 'page_Agenda',
+                'page_RichiesteSullaMappa',
                 'page_NotificationSettings',
                 'page_GestionaleSyncReview',
             ],

@@ -173,13 +173,20 @@ async function renderNearbyMap(mapElement) {
 	const userLng = Number(mapElement.dataset.userLng);
 	const markersId = mapElement.dataset.markersId;
 
-	if (Number.isNaN(userLat) || Number.isNaN(userLng) || !markersId) {
+	// Il centro e' facoltativo: "Clienti vicini" parte da un punto e mostra
+	// chi gli sta attorno, "Richieste sulla mappa" non ha un punto di
+	// partenza e si inquadra sui marker. Senza questo controllo la seconda
+	// usciva qui in silenzio, lasciando "Caricamento mappa in corso..."
+	// per sempre (04/11/2026).
+	const hasCenter = !Number.isNaN(userLat) && !Number.isNaN(userLng);
+
+	if (!markersId) {
 		return;
 	}
 
 	const markersScript = document.getElementById(markersId);
 	const markersJson = markersScript?.textContent ?? '[]';
-	const signature = `${userLat}|${userLng}|${markersJson}`;
+	const signature = `${hasCenter ? userLat : '-'}|${hasCenter ? userLng : '-'}|${markersJson}`;
 
 	if (mapElement.dataset.nearbyMapSignature === signature) {
 		return;
@@ -214,16 +221,18 @@ async function renderNearbyMap(mapElement) {
 			attribution: '&copy; OpenStreetMap contributors',
 		}).addTo(map);
 
-		const bounds = L.latLngBounds([[userLat, userLng]]);
+		const bounds = hasCenter ? L.latLngBounds([[userLat, userLng]]) : L.latLngBounds([]);
 
-		const userMarker = L.circleMarker([userLat, userLng], {
-			radius: 8,
-			color: '#2563eb',
-			fillColor: '#2563eb',
-			fillOpacity: 0.9,
-			weight: 2,
-		}).addTo(map);
-		userMarker.bindPopup('Posizione corrente');
+		if (hasCenter) {
+			const userMarker = L.circleMarker([userLat, userLng], {
+				radius: 8,
+				color: '#2563eb',
+				fillColor: '#2563eb',
+				fillOpacity: 0.9,
+				weight: 2,
+			}).addTo(map);
+			userMarker.bindPopup('Posizione corrente');
+		}
 
 		for (const marker of markers || []) {
 			const lat = Number(marker.lat);
@@ -240,8 +249,9 @@ async function renderNearbyMap(mapElement) {
 				<div style="min-width: 180px; font-size: 13px; line-height: 1.35;">
 					<strong>${escapeHtml(marker.name ?? 'Cliente')}</strong><br>
 					${escapeHtml(marker.street ?? '')}${marker.city ? ', ' + escapeHtml(marker.city) : ''}<br>
-					<span style="color:#6b7280;">${escapeHtml(marker.distance ?? '-')} km · ${escapeHtml(marker.source ?? '')}</span><br>
-					<a href="${escapeHtml(marker.mapsUrl)}" target="_blank" rel="noopener" style="color:#2563eb;">Apri in Maps</a>
+					${marker.distance != null ? `<span style="color:#6b7280;">${escapeHtml(marker.distance)} km · ${escapeHtml(marker.source ?? '')}</span><br>` : ''}
+					${marker.mapsUrl ? `<a href="${escapeHtml(marker.mapsUrl)}" target="_blank" rel="noopener" style="color:#2563eb;">Apri in Maps</a>` : ''}
+					${marker.serviceReportUrl ? `<a href="${escapeHtml(marker.serviceReportUrl)}" style="color:#2563eb;">Apri</a>` : ''}
 				</div>
 			`;
 
@@ -250,8 +260,12 @@ async function renderNearbyMap(mapElement) {
 
 		if ((markers || []).length > 0) {
 			map.fitBounds(bounds.pad(0.2));
-		} else {
+		} else if (hasCenter) {
 			map.setView([userLat, userLng], 13);
+		} else {
+			// Nessun marker e nessun centro: si mostra il nord-est, che e'
+			// dove lavora Alex, invece di una mappa del mondo.
+			map.setView([45.7, 12.3], 8);
 		}
 
 		nearbyMapInstances.set(mapElement, map);
