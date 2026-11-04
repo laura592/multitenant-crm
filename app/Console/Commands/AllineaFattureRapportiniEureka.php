@@ -69,7 +69,7 @@ class AllineaFattureRapportiniEureka extends Command
             'tenant' => $tenant->slug, 'rapportini' => $totale, 'tutti' => (bool) $this->option('tutti'), 'dry_run' => $dryRun,
         ]);
 
-        $conti = ['controllati' => 0, 'fatturati_ora' => 0, 'ancora_da_fatturare' => 0, 'senza_risposta' => 0];
+        $conti = ['controllati' => 0, 'fatturati_ora' => 0, 'ancora_da_fatturare' => 0, 'senza_risposta' => 0, 'gia_fatturati_tenuti' => 0];
 
         $barra = $this->output->createProgressBar($totale);
 
@@ -92,6 +92,23 @@ class AllineaFattureRapportiniEureka extends Command
 
                 $conti['controllati']++;
                 $fatture = array_values(array_filter($risposte[$rapportino->id] ?? [], 'is_array'));
+
+                // Una risposta vuota NON cancella una fattura gia' collegata.
+                //
+                // /show/q/sl_fattura risponde solo sui documenti FT. Quando in
+                // fattura il rapportino diventa un FB, Eureka da quella via
+                // dice "non fatturata" per sempre, anche se la fattura esiste
+                // e qualcuno l'ha collegata a mano (Tiziana FT 513, Villa
+                // Gentile FT 498 e 499, novembre 2026). Senza questo controllo
+                // --tutti cancellava proprio le correzioni fatte a mano, che
+                // sono le uniche che quei casi li sanno.
+                //
+                // Vuoto vuol dire "non lo so", non "non c'e'".
+                if ($fatture === [] && $rapportino->eureka_fatturato_il !== null) {
+                    $conti['gia_fatturati_tenuti']++;
+
+                    continue;
+                }
 
                 if ($fatture === []) {
                     $conti['ancora_da_fatturare']++;
@@ -119,6 +136,7 @@ class AllineaFattureRapportiniEureka extends Command
             ['Fatturati da questo giro', $conti['fatturati_ora']],
             ['Senza fattura collegata', $conti['ancora_da_fatturare']],
             ['Eureka non ha risposto (si riprova)', $conti['senza_risposta']],
+            ['Gia\' fatturati, collegamento tenuto', $conti['gia_fatturati_tenuti']],
         ]);
 
         if ($dryRun) {
