@@ -189,12 +189,25 @@ class Agenda extends Page
             return $this->scaduti;
         }
 
-        return $this->scaduti = InformationRequestAppointment::query()
-            ->where('scheduled_at', '<', Carbon::today()->startOfDay())
+        // Conta solo l'ULTIMO appuntamento di ogni richiesta.
+        //
+        // Prima si elencava ogni appuntamento passato, e uno rifissato
+        // restava in sospeso per sempre: Naturae Lodge aveva il 23/10
+        // mancato e il 01/12 gia' preso, e compariva lo stesso. Se nel
+        // frattempo e' stata fissata un'altra data, quella vecchia e' stata
+        // gestita -- che e' esattamente cosa vuol dire rifissare
+        // (Laura, 04/11/2026).
+        $ultimi = InformationRequestAppointment::query()
             ->whereHas('informationRequest', fn ($q) => $q->whereIn('status', ['nuova', 'in_lavorazione']))
             ->with('informationRequest.customer')
             ->orderBy('scheduled_at')
             ->get()
+            ->groupBy('information_request_id')
+            ->map(fn ($gruppo) => $gruppo->last());
+
+        return $this->scaduti = $ultimi
+            ->filter(fn (InformationRequestAppointment $a) => $a->scheduled_at->lt(Carbon::today()->startOfDay()))
+            ->sortBy('scheduled_at')
             ->map(fn (InformationRequestAppointment $a) => $this->daAppuntamento($a))
             ->values();
     }
