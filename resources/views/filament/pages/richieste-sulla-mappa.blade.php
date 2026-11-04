@@ -55,6 +55,7 @@
                 'lat' => $r['lat'],
                 'lng' => $r['lng'],
                 'color' => $r['colore'],
+                'radius' => $r['raggio'],
                 'serviceReportUrl' => $r['url'],
             ])->values())
 
@@ -78,7 +79,7 @@
                         Ci vai già: c'è un appuntamento
                     </span>
                     <span class="flex items-center gap-1.5">
-                        <span class="size-3 rounded-full" style="background:#ea580c"></span>
+                        <span class="size-4 rounded-full" style="background:#9333ea"></span>
                         Preventivo mandato, risposta non arrivata
                     </span>
                     <span class="flex items-center gap-1.5">
@@ -115,7 +116,7 @@
                         </span>
 
                         @if ($r['stato'] === 'preventivo_inviato')
-                            <span class="text-xs font-medium" style="color:#ea580c">preventivo mandato</span>
+                            <span class="text-xs font-medium" style="color:#9333ea">preventivo mandato</span>
                         @endif
 
                         @if ($r['appuntamento'])

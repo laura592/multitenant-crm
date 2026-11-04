@@ -105,16 +105,21 @@ class RichiesteSullaMappa extends Page
                     // soli. L'ordine conta: prima dove si va gia', poi chi
                     // aspetta una risposta da noi, poi chi aspetta e basta.
                     //
-                    // L'arancione sono i preventivi mandati e non ancora
+                    // Il viola sono i preventivi mandati e non ancora
                     // accettati: li' la palla e' nel loro campo, ma e' anche
-                    // la gente che una telefonata la merita piu' di tutti
-                    // (Laura, 04/11/2026).
+                    // la gente che una telefonata la merita piu' di tutti.
+                    //
+                    // Viola e non arancione: l'arancione accanto al rosso non
+                    // si distingueva (Laura, 04/11/2026). E il pallino e' piu'
+                    // grosso, cosi' la differenza si vede anche senza fidarsi
+                    // del colore.
                     'colore' => match (true) {
                         $r->appointment_at?->isFuture() ?? false => '#16a34a',
-                        $r->status === 'preventivo_inviato' => '#ea580c',
+                        $r->status === 'preventivo_inviato' => '#9333ea',
                         $r->created_at->diffInDays($oggi) > 60 => '#dc2626',
                         default => '#2563eb',
                     },
+                    'raggio' => $r->status === 'preventivo_inviato' ? 12 : 9,
                     'url' => InformationRequestResource::getUrl('edit', ['record' => $r->getKey()], tenant: Filament::getTenant()),
                 ];
             })

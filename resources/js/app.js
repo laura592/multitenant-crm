@@ -248,7 +248,9 @@ async function renderNearbyMap(mapElement) {
 			// dicono niente.
 			const customerMarker = marker.color
 				? L.circleMarker([lat, lng], {
-					radius: 9,
+					// Il raggio lo decide chi passa i marker: la dimensione
+					// distingue anche dove il colore non basta.
+					radius: Number(marker.radius) || 9,
 					color: '#ffffff',
 					weight: 2,
 					fillColor: marker.color,
