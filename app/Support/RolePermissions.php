@@ -152,6 +152,7 @@ class RolePermissions
                 // Chi paga per chi: e' la lettura dei paganti delle
                 // macchine, quindi la vede chi vede le macchine.
                 'page_PagantiMacchine',
+                'page_Agenda',
             ],
             'amministrazione' => [
                 // Profilo ufficio: la gestione amministrativa del personale,
@@ -211,6 +212,7 @@ class RolePermissions
                 // Chi paga per chi: e' la lettura dei paganti delle
                 // macchine, quindi la vede chi vede le macchine.
                 'page_PagantiMacchine',
+                'page_Agenda',
             ],
             'admin' => [
                 ...self::expand('brand', self::MANAGE),
@@ -272,6 +274,7 @@ class RolePermissions
                 // Chi paga per chi: e' la lettura dei paganti delle
                 // macchine, quindi la vede chi vede le macchine.
                 'page_PagantiMacchine',
+                'page_Agenda',
                 'page_NotificationSettings',
                 'page_GestionaleSyncReview',
                 // Le tre pagine contabili. Fino al 03/09/2026 non erano
@@ -328,6 +331,7 @@ class RolePermissions
                 // Chi paga per chi: e' la lettura dei paganti delle
                 // macchine, quindi la vede chi vede le macchine.
                 'page_PagantiMacchine',
+                'page_Agenda',
                 'page_NotificationSettings',
                 'page_GestionaleSyncReview',
             ],
