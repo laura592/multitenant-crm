@@ -104,6 +104,17 @@ class InterventoProgrammatoResource extends Resource
                         ->default(InterventoProgrammato::MOMENTO_GIORNATA)
                         ->required()
                         ->helperText('Si scrive solo quando conta: di norma l\'ordine lo decide il tecnico.'),
+                    // L'ora si mette solo quando c'e' un appuntamento preso.
+                    // Prima non c'era, e "giovedi alle 9:30" non si poteva
+                    // scrivere: finiva nelle note, dove non si ordina e non
+                    // si cerca (Laura, 04/11/2026).
+                    Forms\Components\TimePicker::make('ora')
+                        ->label('A che ora')
+                        ->seconds(false)
+                        ->native(false)
+                        ->displayFormat('H:i')
+                        ->placeholder('Solo se c\'e\' un orario concordato')
+                        ->helperText('Lasciala vuota se basta la mattina o il pomeriggio.'),
                     Forms\Components\Select::make('technician_id')
                         ->label('Chi ci va')
                         ->options(fn () => User::query()
@@ -197,9 +208,13 @@ class InterventoProgrammatoResource extends Resource
                     ->label('Giorno')
                     ->date('d/m/Y')
                     ->sortable()
-                    ->description(fn (InterventoProgrammato $r) => $r->momento === InterventoProgrammato::MOMENTO_GIORNATA
-                        ? null
-                        : InterventoProgrammato::momenti()[$r->momento] ?? null)
+                    // L'ora precisa vince sul momento: dire "mattina" sotto
+                    // un appuntamento delle 9:30 e' informazione in meno.
+                    ->description(fn (InterventoProgrammato $r) => $r->ora
+                        ? 'alle '.substr((string) $r->ora, 0, 5)
+                        : ($r->momento === InterventoProgrammato::MOMENTO_GIORNATA
+                            ? null
+                            : InterventoProgrammato::momenti()[$r->momento] ?? null))
                     ->color(fn (InterventoProgrammato $r) => $r->inRitardo() ? 'danger' : null),
                 Tables\Columns\TextColumn::make('customer.company_name')
                     ->label('Dove')
@@ -215,6 +230,8 @@ class InterventoProgrammatoResource extends Resource
                         InterventoProgrammato::TIPO_CHIUSURA => 'warning',
                         InterventoProgrammato::TIPO_APERTURA => 'success',
                         InterventoProgrammato::TIPO_RITIRO => 'danger',
+                        InterventoProgrammato::TIPO_RICHIAMO => 'info',
+                        InterventoProgrammato::TIPO_APPUNTAMENTO => 'primary',
                         default => 'gray',
                     }),
                 Tables\Columns\TextColumn::make('stato')

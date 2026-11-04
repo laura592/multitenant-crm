@@ -50,6 +50,20 @@ class InterventoProgrammato extends Model
 
     public const TIPO_ALTRO = 'altro';
 
+    /**
+     * Un cliente da richiamare in un giorno preciso.
+     *
+     * Non e' un lavoro: non ci va un tecnico e non nascera' un rapportino.
+     * Ma e' un impegno preso con una data, e finche' non stava qui stava nel
+     * testo libero delle richieste informazioni -- dove nessuno lo vede.
+     * Su RI-2026-0215 c'era scritto "CHIAMARE A INIZIO NOVEMBRE" in mezzo al
+     * resto, ed e' passato (Laura, 04/11/2026: "fuggono").
+     */
+    public const TIPO_RICHIAMO = 'richiamo';
+
+    /** Un appuntamento preso col cliente: si va la', in un'ora concordata. */
+    public const TIPO_APPUNTAMENTO = 'appuntamento';
+
     public const STATO_DA_FARE = 'da_fare';
 
     public const STATO_FATTO = 'fatto';
@@ -60,6 +74,7 @@ class InterventoProgrammato extends Model
         'tenant_id',
         'data',
         'momento',
+        'ora',
         'customer_id',
         'machine_unit_id',
         'maintenance_schedule_id',
@@ -75,6 +90,9 @@ class InterventoProgrammato extends Model
     protected $casts = [
         'data' => 'date',
         'fatto_il' => 'datetime',
+        // Solo l'ora, non una data: 'H:i' e non datetime, altrimenti Carbon
+        // ci appiccica il primo gennaio 1970 e la colonna time la rifiuta.
+        'ora' => 'string',
     ];
 
     /** @return array<string, string> */
@@ -97,6 +115,8 @@ class InterventoProgrammato extends Model
             self::TIPO_MANUTENZIONE => 'Manutenzione',
             self::TIPO_INSTALLAZIONE => 'Installazione',
             self::TIPO_RITIRO => 'Ritiro',
+            self::TIPO_RICHIAMO => 'Richiamo',
+            self::TIPO_APPUNTAMENTO => 'Appuntamento',
             self::TIPO_ALTRO => 'Altro',
         ];
     }
