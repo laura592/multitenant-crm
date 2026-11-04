@@ -242,7 +242,20 @@ async function renderNearbyMap(mapElement) {
 				continue;
 			}
 
-			const customerMarker = L.marker([lat, lng]).addTo(map);
+			// Con un colore si usa un cerchio invece della goccia: su una
+			// mappa di pianificazione il colore E' l'informazione (dove si
+			// va gia', chi aspetta da troppo), e venti gocce identiche non
+			// dicono niente.
+			const customerMarker = marker.color
+				? L.circleMarker([lat, lng], {
+					radius: 9,
+					color: '#ffffff',
+					weight: 2,
+					fillColor: marker.color,
+					fillOpacity: 0.95,
+				}).addTo(map)
+				: L.marker([lat, lng]).addTo(map);
+
 			bounds.extend([lat, lng]);
 
 			const popup = `

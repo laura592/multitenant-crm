@@ -53,6 +53,7 @@
                 'city' => trim(($r['citta'] ?? '').' ('.($r['provincia'] ?? '—').')'),
                 'lat' => $r['lat'],
                 'lng' => $r['lng'],
+                'color' => $r['colore'],
                 'serviceReportUrl' => $r['url'],
             ])->values())
 
@@ -69,6 +70,22 @@
                 <p data-nearby-map-status class="text-xs text-gray-500 dark:text-gray-400">
                     Caricamento mappa in corso...
                 </p>
+
+                <div class="flex flex-wrap items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+                    <span class="flex items-center gap-1.5">
+                        <span class="size-3 rounded-full" style="background:#16a34a"></span>
+                        Ci vai già: c'è un appuntamento
+                    </span>
+                    <span class="flex items-center gap-1.5">
+                        <span class="size-3 rounded-full" style="background:#dc2626"></span>
+                        Aspetta da più di 60 giorni
+                    </span>
+                    <span class="flex items-center gap-1.5">
+                        <span class="size-3 rounded-full" style="background:#2563eb"></span>
+                        Aperta
+                    </span>
+                    <span>Il verde dice dove sei già diretta: guarda chi gli sta attorno.</span>
+                </div>
             </div>
         </x-filament::section>
 

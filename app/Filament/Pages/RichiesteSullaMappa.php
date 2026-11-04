@@ -99,6 +99,16 @@ class RichiesteSullaMappa extends Page
                     // prima, piu' dello stato.
                     'giorni' => (int) $r->created_at->diffInDays($oggi),
                     'appuntamento' => $r->appointment_at?->format('d/m/Y'),
+                    'appuntamentoFuturo' => $r->appointment_at?->isFuture() ?? false,
+                    // Il colore e' quello che rende la mappa utilizzabile da
+                    // soli: verde = ci vai gia', rosso = aspetta da troppo,
+                    // blu = aperta e tranquilla. Si guarda il verde, si
+                    // guarda cosa gli sta attorno, e il giro e' fatto.
+                    'colore' => match (true) {
+                        $r->appointment_at?->isFuture() ?? false => '#16a34a',
+                        $r->created_at->diffInDays($oggi) > 60 => '#dc2626',
+                        default => '#2563eb',
+                    },
                     'url' => InformationRequestResource::getUrl('edit', ['record' => $r->getKey()], tenant: Filament::getTenant()),
                 ];
             })
