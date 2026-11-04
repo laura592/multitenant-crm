@@ -97,7 +97,7 @@ class ImportiFatturatiRapportini extends Command
         $scartate = [];
         $diff = [];
 
-        $query->chunkById(self::BLOCCO, function (Collection $rapportini) use ($client, $dryRun, $numero, $allinea, $condivise, &$conti, &$zeri, &$scartate, &$diff, $barra) {
+        $query->chunkById(self::BLOCCO, function (Collection $rapportini) use ($client, $dryRun, $numero, $azzera, $allinea, $condivise, &$conti, &$zeri, &$scartate, &$diff, $barra) {
             foreach ($rapportini as $r) {
                 $barra->advance();
 
