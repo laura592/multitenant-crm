@@ -18,6 +18,7 @@ class ServiceReportMaterial extends Model
         'quantity',
         'unit_cost_snapshot',
         'line_total_snapshot',
+        'prezzo_stimato',
         'notes',
     ];
 
@@ -25,6 +26,9 @@ class ServiceReportMaterial extends Model
         'quantity' => 'decimal:2',
         'unit_cost_snapshot' => 'decimal:2',
         'line_total_snapshot' => 'decimal:2',
+        // true = il prezzo l'abbiamo messo noi dal listino perche' Eureka
+        // mandava zero. false = e' quello che Eureka ha davvero fatturato.
+        'prezzo_stimato' => 'boolean',
     ];
 
     /**
@@ -66,6 +70,7 @@ class ServiceReportMaterial extends Model
 
                 $riga->unit_cost_snapshot = $listino > 0 ? $listino : null;
                 $riga->line_total_snapshot = null;
+                $riga->prezzo_stimato = $listino > 0;
             }
 
             if ($riga->unit_cost_snapshot === null) {
@@ -73,6 +78,9 @@ class ServiceReportMaterial extends Model
 
                 if ($listino > 0) {
                     $riga->unit_cost_snapshot = $listino;
+                    // Il prezzo lo mettiamo noi: va detto, altrimenti una
+                    // riga che Eureka non ha mai fatturato sembra fatturata.
+                    $riga->prezzo_stimato = true;
                 }
             }
 

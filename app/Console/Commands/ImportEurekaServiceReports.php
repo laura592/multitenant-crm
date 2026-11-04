@@ -842,6 +842,14 @@ class ImportEurekaServiceReports extends Command
             // listino dell'articolo, che l'import del catalogo tiene
             // aggiornato — meglio il prezzo corrente del nulla.
             $prezzo = (float) ($row['prezzo'] ?? 0) ?: null;
+
+            // Si segna da dove viene il prezzo, non solo quale e'. Un
+            // intervento regalato -- Eureka manda zero -- qui prendeva il
+            // listino e diventava indistinguibile da uno fatturato davvero:
+            // quadrando la FT 516 di Dersut il 04/11/2026 sono saltate fuori
+            // tre disinstallazioni a zero, 201,00 €, che nel CRM risultavano
+            // da 79,50 e 42,00.
+            $stimato = $prezzo === null;
             $prezzo ??= ((float) ($material->list_price ?? 0) ?: null);
 
             // "importo" = prezzo_netto * quantita' (sconti di riga gia'
@@ -858,6 +866,7 @@ class ImportEurekaServiceReports extends Command
                 'quantity' => $quantita,
                 'unit_cost_snapshot' => $prezzo,
                 'line_total_snapshot' => $importo,
+                'prezzo_stimato' => $stimato && $prezzo !== null,
                 'notes' => $this->normalizeText($row['descrizione'] ?? null),
             ]);
         }

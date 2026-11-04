@@ -211,16 +211,39 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                                 )),
                             TextEntry::make('quantity')->label('Quantità'),
                             TextEntry::make('unit_cost_snapshot')->label('Prezzo unit.')->money('EUR')->placeholder('—'),
-                            TextEntry::make('line_total_snapshot')->label('Importo')->money('EUR')->placeholder('—'),
+                            // "stimato" non e' un dettaglio: e' la differenza
+                            // fra quello che il cliente ha pagato e quello che
+                            // avremmo voluto fargli pagare.
+                            TextEntry::make('line_total_snapshot')
+                                ->label('Importo')
+                                ->money('EUR')
+                                ->placeholder('—')
+                                ->badge()
+                                ->color(fn ($record) => $record->prezzo_stimato ? 'warning' : 'gray')
+                                ->tooltip(fn ($record) => $record->prezzo_stimato
+                                    ? 'Prezzo preso dal listino: Eureka su questa riga non ha fatturato niente.'
+                                    : null),
                         ]),
-                    // Somma degli importi riga: solo dove valorizzato (da
-                    // Eureka), i rapportini compilati a mano oggi non hanno
-                    // ancora un importo per materiale.
+                    // Somma degli importi riga, separando quello che Eureka ha
+                    // davvero fatturato da quello che ci siamo messi noi dal
+                    // listino. Prima era un numero solo, e tre disinstallazioni
+                    // regalate su una sola fattura Dersut (201,00 €, FT 516)
+                    // sembravano incassate (04/11/2026).
                     TextEntry::make('materials_total')
                         ->label('Totale')
-                        ->state(fn (ServiceReport $record) => $record->materialsUsed->sum('line_total_snapshot'))
-                        ->money('EUR')
+                        ->state(function (ServiceReport $record): string {
+                            $righe = $record->materialsUsed;
+                            $fatturato = (float) $righe->where('prezzo_stimato', false)->sum('line_total_snapshot');
+                            $stimato = (float) $righe->where('prezzo_stimato', true)->sum('line_total_snapshot');
+
+                            $eur = fn (float $v) => '€ '.number_format($v, 2, ',', '.');
+
+                            return $stimato > 0
+                                ? $eur($fatturato + $stimato).' — di cui '.$eur($stimato).' stimati da listino'
+                                : $eur($fatturato);
+                        })
                         ->weight('bold')
+                        ->color(fn (ServiceReport $record) => $record->materialsUsed->where('prezzo_stimato', true)->isNotEmpty() ? 'warning' : null)
                         ->visible(fn (ServiceReport $record) => $record->materialsUsed->sum('line_total_snapshot') > 0),
                 ]),
             // Rapportini compilati prima del passaggio a Materiali avevano i

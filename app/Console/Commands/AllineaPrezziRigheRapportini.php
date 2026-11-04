@@ -89,6 +89,8 @@ class AllineaPrezziRigheRapportini extends Command
 
             $riga->update([
                 'unit_cost_snapshot' => $prezzo,
+                // Prezzo preso dal listino, non fatturato da Eureka.
+                'prezzo_stimato' => true,
                 // Solo se manca: un importo arrivato da Eureka porta gli
                 // sconti di riga gia' applicati e vale piu' del calcolo.
                 'line_total_snapshot' => $riga->line_total_snapshot
