@@ -2,20 +2,31 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
-# Su hosting condiviso (cPanel) il `php`/`composer` di default in PATH puo'
-# non essere la versione richiesta da composer.json (vedi docs/deploy-cutover.md,
-# Fase 1). Sovrascrivi con: PHP_BIN=php8.4 ./update.sh
+# PHP_BIN non serve piu' sulla VPS: /usr/bin/php e' gia' php8.5, ed e'
+# l'unica versione installata. Serviva su cPanel, dove il `php` in PATH era
+# una versione piu' vecchia di quella che chiede composer.json. Resta
+# sovrascrivibile per quel caso, ma non va scritto a ogni deploy -- e se la
+# versione fosse sbagliata lo script si ferma da solo, due righe sotto.
 PHP_BIN="${PHP_BIN:-php}"
 COMPOSER_BIN="${COMPOSER_BIN:-composer}"
 
 # Sulla VPS si installa senza le dipendenze di sviluppo:
-#     PHP_BIN=php8.5 COMPOSER_FLAGS="--no-dev --optimize-autoloader" ./update.sh
+#     COMPOSER_FLAGS="--no-dev --optimize-autoloader" ./update.sh
 # Senza --no-dev, composer rimette in produzione laravel/pail e compagnia, e
 # bootstrap/cache torna a citare un service provider che in produzione non ci
 # deve stare: e' il 500 su ogni pagina del 28/09/2026.
 COMPOSER_FLAGS="${COMPOSER_FLAGS:-}"
 
 echo "==> PHP in uso: $($PHP_BIN -v | head -1)"
+
+# Meglio fermarsi qui che a meta' di un composer install. La versione
+# minima e' quella di composer.json ("php": "^8.2").
+PHP_MINIMA="8.2"
+if ! "$PHP_BIN" -r 'exit(version_compare(PHP_VERSION, $argv[1], ">=") ? 0 : 1);' "$PHP_MINIMA"; then
+    echo "   PHP troppo vecchio: serve almeno $PHP_MINIMA." >&2
+    echo "   Indica quello giusto con PHP_BIN=phpX.Y ./update.sh" >&2
+    exit 1
+fi
 
 echo "==> Git pull"
 git pull
