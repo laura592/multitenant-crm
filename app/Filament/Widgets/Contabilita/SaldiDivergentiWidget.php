@@ -45,10 +45,24 @@ class SaldiDivergentiWidget extends TableWidget
     // una Page e la tabella e' interattiva.
     protected static bool $isLazy = false;
 
+    /**
+     * Un riquadro vuoto non si mostra.
+     *
+     * "Clienti dove Eureka e le partite non tornano" senza nessuna riga non
+     * dice "va tutto bene": dice niente, e occupa mezza schermata fra due
+     * cose che invece contano. Quando non ci sono divergenze il blocco
+     * sparisce, e la pagina resta lunga quanto le cose da guardare
+     * (Laura, 04/11/2026).
+     */
+    public static function canView(): bool
+    {
+        return static::query()->exists();
+    }
+
     public function table(Table $table): Table
     {
         return $table
-            ->query(fn (): Builder => $this->query())
+            ->query(fn (): Builder => static::query())
             ->columns([
                 Tables\Columns\TextColumn::make('ragione_sociale')
                     ->label(static::$etichettaAnagrafica)
@@ -94,7 +108,7 @@ class SaldiDivergentiWidget extends TableWidget
      * saldo ma il dettaglio torna vuoto) devono comparire, e sono proprio i
      * casi piu' interessanti — con una join interna sparirebbero.
      */
-    private function query(): Builder
+    protected static function query(): Builder
     {
         $tenantId = Filament::getTenant()?->id;
 

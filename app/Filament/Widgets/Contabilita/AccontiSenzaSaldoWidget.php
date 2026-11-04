@@ -38,18 +38,32 @@ class AccontiSenzaSaldoWidget extends TableWidget
     // fallirebbe con un 419.
     protected static bool $isLazy = false;
 
+    /**
+     * Niente acconti scoperti, niente riquadro: vedi
+     * SaldiDivergentiWidget::canView() (Laura, 04/11/2026).
+     */
+    public static function canView(): bool
+    {
+        return static::query()->exists();
+    }
+
+    protected static function query(): Builder
+    {
+        return EurekaFattura::query()
+            ->where('tenant_id', Filament::getTenant()?->id)
+            ->where('tipo', EurekaFattura::TIPO_CLIENTE)
+            ->where('e_acconto', true)
+            // Prima i casi netti, poi quelli con una detrazione senza
+            // numero: quelli si controllano a mano e non sono un buco di
+            // fatturato accertato.
+            ->orderBy('detrazione_ambigua')
+            ->orderBy('data_doc');
+    }
+
     public function table(Table $table): Table
     {
         return $table
-            ->query(fn (): Builder => EurekaFattura::query()
-                ->where('tenant_id', Filament::getTenant()?->id)
-                ->where('tipo', EurekaFattura::TIPO_CLIENTE)
-                ->where('e_acconto', true)
-                // Prima i casi netti, poi quelli con una detrazione senza
-                // numero: quelli si controllano a mano e non sono un buco di
-                // fatturato accertato.
-                ->orderBy('detrazione_ambigua')
-                ->orderBy('data_doc'))
+            ->query(fn (): Builder => static::query())
             ->columns([
                 Tables\Columns\TextColumn::make('data_doc')
                     ->label('Emesso il')
