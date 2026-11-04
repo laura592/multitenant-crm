@@ -45,6 +45,12 @@ class PagantiMacchine extends Page implements HasTable
 
     protected static ?string $navigationIcon = 'heroicon-o-building-office-2';
 
+    // Fuori dal menu: ci si arriva da l'elenco dei macchinari, che e' il posto da cui
+    // viene voglia di aprirla. Il permesso non cambia -- page_PagantiMacchine decide
+    // ancora chi ci entra, e chi non ce l'ha non vede nemmeno il bottone
+    // (Laura, 04/11/2026).
+    protected static bool $shouldRegisterNavigation = false;
+
     protected static ?string $navigationGroup = 'Interventi tecnici';
 
     protected static ?int $navigationSort = 5;

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\MachineUnitResource\Pages;
 
 use App\Filament\Concerns\ApreStampeInNuovaScheda;
+use App\Filament\Pages\PagantiMacchine;
 use App\Filament\Resources\MachineUnitResource;
 use App\Models\MachineUnit;
 use App\Support\DisplayName;
@@ -30,6 +31,15 @@ class ListMachineUnits extends ListRecords
                 ->icon('heroicon-o-printer')
                 ->color('gray')
                 ->action(fn () => $this->riepilogoPdf()),
+            // Chi paga per chi si legge dalle macchine: sta qui e non nel
+            // menu, perche' e' lo stesso parco guardato dal lato di chi
+            // riceve la fattura.
+            Actions\Action::make('paganti')
+                ->label('Chi paga per chi')
+                ->icon('heroicon-o-banknotes')
+                ->color('gray')
+                ->visible(fn () => PagantiMacchine::canAccess())
+                ->url(fn () => PagantiMacchine::getUrl()),
             Actions\CreateAction::make()
                 ->extraAttributes(['data-tour' => 'machine-units-create']),
         ];

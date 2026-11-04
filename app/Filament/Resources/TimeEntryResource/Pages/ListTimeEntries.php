@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\TimeEntryResource\Pages;
 
+use App\Filament\Pages\RiepilogoOre;
 use App\Filament\Resources\TimeEntryResource;
 use Filament\Actions;
 use Filament\Resources\Pages\ListRecords;
@@ -20,6 +21,14 @@ class ListTimeEntries extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
+            // Il riepilogo sono queste stesse timbrature sommate per
+            // persona e per giorno: sta qui, non nel menu.
+            Actions\Action::make('riepilogo')
+                ->label('Riepilogo ore')
+                ->icon('heroicon-o-document-chart-bar')
+                ->color('gray')
+                ->visible(fn () => RiepilogoOre::canAccess())
+                ->url(fn () => RiepilogoOre::getUrl()),
             Actions\CreateAction::make()
                 ->extraAttributes(['data-tour' => 'time-entries-create']),
         ];

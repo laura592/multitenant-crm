@@ -36,6 +36,12 @@ class RiepilogoOre extends Page implements HasForms
 
     protected static ?string $navigationIcon = 'heroicon-o-document-chart-bar';
 
+    // Fuori dal menu: ci si arriva da l'elenco delle presenze, che e' il posto da cui
+    // viene voglia di aprirla. Il permesso non cambia -- page_RiepilogoOre decide
+    // ancora chi ci entra, e chi non ce l'ha non vede nemmeno il bottone
+    // (Laura, 04/11/2026).
+    protected static bool $shouldRegisterNavigation = false;
+
     protected static ?string $navigationGroup = 'Personale';
 
     protected static ?int $navigationSort = 2;

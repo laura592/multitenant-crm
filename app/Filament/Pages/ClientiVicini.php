@@ -30,6 +30,12 @@ class ClientiVicini extends Page
 
     protected static ?string $navigationIcon = 'heroicon-o-map-pin';
 
+    // Fuori dal menu: ci si arriva da l'elenco dei rapportini, col bottone "Cliente piu' vicino", che e' il posto da cui
+    // viene voglia di aprirla. Il permesso non cambia -- page_ClientiVicini decide
+    // ancora chi ci entra, e chi non ce l'ha non vede nemmeno il bottone
+    // (Laura, 04/11/2026).
+    protected static bool $shouldRegisterNavigation = false;
+
     protected static ?string $navigationGroup = 'Interventi tecnici';
 
 
