@@ -245,6 +245,22 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                         ->weight('bold')
                         ->color(fn (ServiceReport $record) => $record->materialsUsed->where('prezzo_stimato', true)->isNotEmpty() ? 'warning' : null)
                         ->visible(fn (ServiceReport $record) => $record->materialsUsed->sum('line_total_snapshot') > 0),
+                    // Quanto la fattura dice DAVVERO, letto dal documento FB
+                    // (eureka:importi-fatturati). Stava solo nel PDF, e dalla
+                    // pagina del rapportino non si vedeva: RT-2026-0901
+                    // mostrava 79,50 mentre Eureka lo ha fatturato a zero
+                    // (Laura, 04/11/2026).
+                    TextEntry::make('eureka_importo_fatturato')
+                        ->label('In fattura')
+                        ->money('EUR')
+                        ->weight('bold')
+                        ->badge()
+                        ->color(fn (ServiceReport $record) => (float) $record->eureka_importo_fatturato <= 0 ? 'danger' : 'success')
+                        ->helperText(fn (ServiceReport $record) => (float) $record->eureka_importo_fatturato <= 0
+                            ? 'Questo intervento non è stato fatturato: sul documento risulta a zero.'
+                            : 'Letto dal documento Eureka il '.$record->eureka_importo_letto_il?->format('d/m/Y').'.')
+                        ->visible(fn (ServiceReport $record) => $record->eureka_importo_letto_il !== null
+                            && abs((float) $record->eureka_importo_fatturato - (float) $record->materialsUsed->sum('line_total_snapshot')) >= 0.01),
                 ]),
             // Rapportini compilati prima del passaggio a Materiali avevano i
             // ricambi salvati come Product (partsUsed) — sezione visibile
@@ -1688,6 +1704,17 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                     ->tooltip(fn (ServiceReport $record) => self::gestionaleSyncStatusLabels()[self::gestionaleDisplayState($record)] ?? self::gestionaleSyncStatusLabels()['none']),
             ])
             ->filters([
+                // I 322 interventi che Eureka ha fatturato a zero mentre nel
+                // CRM hanno un importo: 38.756,00 € di lavoro che sembrava
+                // incassato. Senza un filtro restano un numero che si sa e
+                // non si trova (04/11/2026).
+                Tables\Filters\Filter::make('fatturati_a_zero')
+                    ->label('Fatturati a zero')
+                    ->toggle()
+                    ->query(fn (Builder $query) => $query
+                        ->whereNotNull('eureka_importo_letto_il')
+                        ->where('eureka_importo_fatturato', '<=', 0)
+                        ->whereHas('materialsUsed', fn (Builder $q) => $q->where('line_total_snapshot', '>', 0))),
                 Tables\Filters\SelectFilter::make('intervention_type')
                     ->label('Tipo')
                     ->options(static::interventionTypeLabels()),
