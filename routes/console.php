@@ -133,6 +133,28 @@ Schedule::command('eureka:import-partite-aperte', ['--tenant' => 'alex'])
 Schedule::command('eureka:import-fatture', ['--tenant' => 'alex'])->dailyAt('05:45');
 Schedule::command('eureka:import-kpi-contabili', ['--tenant' => 'alex'])->dailyAt('06:15');
 
+// Le righe che l'ufficio corregge SU Eureka dopo l'invio, riportate qui.
+//
+// Dal momento in cui un rapportino e' su Eureka il CRM lo blocca in
+// modifica, quindi un codice articolo sbagliato o un ricambio dimenticato si
+// sistemano di la'. L'import delle 04:00 non li riprende: salta apposta i
+// rapportini nati nel CRM, perche' un suo giro aveva riportato tecnico, data
+// e descrizioni di RT-2026-0002..0014 ai valori di ripiego di Eureka. Senza
+// questa riga quelle correzioni non rientravano mai -- il 06/11/2026, su 34
+// rapportini di novembre, 13 righe erano diverse.
+//
+// Mezz'ora dopo l'import, cosi' le schede nuove ci sono gia'. Trenta giorni
+// di finestra come l'import, e SENZA --togli-avanzi: una riga che sta qui e
+// su Eureka no puo' essere una che l'ufficio ha tolto, ma anche una scheda
+// incompleta, e quella differenza la decide una persona. Il comando le
+// elenca nel log.
+Schedule::command('rapportini:allinea-schede', [
+    '--tenant' => 'alex',
+    '--dal' => now()->subDays(30)->toDateString(),
+])->dailyAt('04:30')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/eureka-import.log'));
+
 // La fattura su cui e' finita la scheda di ogni rapportino non ancora
 // fatturato: colonna "Fatturato" e filtro nell'elenco rapportini. Dopo
 // l'import rapportini delle 04:00, cosi' le schede nuove ci sono gia', e
@@ -141,6 +163,27 @@ Schedule::command('eureka:import-kpi-contabili', ['--tenant' => 'alex'])->dailyA
 // ~170, venti secondi.
 Schedule::command('eureka:allinea-fatture-rapportini', ['--tenant' => 'alex'])
     ->dailyAt('06:45')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/eureka-import.log'));
+
+// Gli importi davvero fatturati, letti dai documenti FB, e le righe
+// riallineate alla fattura.
+//
+// E' il controllo definitivo: la fattura batte la scheda, perche' sulle
+// schede i lavaggi valgono sempre zero e il prezzo vero lo scrive il
+// documento. Fino al 06/11/2026 questo comando esisteva ma non lo lanciava
+// nessuno, e il CRM restava con gli importi di listino anche a fattura
+// emessa.
+//
+// Alle 07:00: dopo l'import fatture delle 05:45 e dopo l'aggancio
+// scheda-fattura delle 06:45, che sono i due dati di cui ha bisogno.
+Schedule::command('eureka:importi-fatturati', [
+    '--tenant' => 'alex',
+    // Nudo e non '--allinea-righe' => true: con un valore Symfony lo passa
+    // come --allinea-righe='1' e un flag senza valore lo rifiuta. Stessa
+    // forma di --with-detail nell'import delle 04:00.
+    '--allinea-righe',
+])->dailyAt('07:00')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/eureka-import.log'));
 
