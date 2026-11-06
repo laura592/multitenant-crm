@@ -1194,7 +1194,7 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                 Forms\Components\Repeater::make('materialsUsed')
                     ->relationship('materialsUsed')
                     ->label('')
-                    ->columns(3)
+                    ->columns(4)
                     ->schema([
                         Forms\Components\Select::make('material_id')
                             ->label('Materiale')
@@ -1202,8 +1202,33 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                             ->getSearchResultsUsing(fn (string $search): array => self::cercaMateriali($search))
                             ->getOptionLabelUsing(fn ($value): ?string => Material::find($value)?->display_label)
                             ->required()
-                            ->columnSpan(['default' => 1, 'lg' => 2]),
+                            // Senza la colonna del prezzo il materiale si
+                            // prende lo spazio che avanza, invece di lasciare
+                            // un buco in fondo alla riga.
+                            ->columnSpan(['default' => 1, 'lg' => self::puoVedereIPrezzi() ? 2 : 3]),
                         Forms\Components\TextInput::make('quantity')->label('Quantità / ore')->numeric()->default(1)->required(),
+                        // Il prezzo si poteva vedere ma non correggere: la
+                        // riga lo fotografa dal listino (ServiceReportMaterial
+                        // ::booted) e dal form non c'era modo di dire che
+                        // quell'intervento e' stato fatto a un prezzo diverso
+                        // — RT-2026-1015, disinstallazione Neps a 79,50 di
+                        // listino (Laura, 06/11/2026).
+                        //
+                        // Lasciandolo vuoto torna il listino: il modello lo
+                        // rimette da solo e rifa' l'importo della riga.
+                        //
+                        // Lo vede solo chi puo' vedere i prezzi: la stessa
+                        // sezione la usa la visita a passi dei tecnici, e il
+                        // costo dell'intervento non e' roba da cantiere
+                        // (ServiceReportPolicy::viewPrices).
+                        Forms\Components\TextInput::make('unit_cost_snapshot')
+                            ->label('Prezzo unit.')
+                            ->numeric()
+                            ->step('0.01')
+                            ->minValue(0)
+                            ->prefix('€')
+                            ->placeholder('da listino')
+                            ->visible(fn (): bool => self::puoVedereIPrezzi()),
                     ])
                     // La riga manodopera (materiale ORE) non e' un default
                     // statico: dipende dal tipo intervento, scelto subito
@@ -1216,6 +1241,18 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                     ->addActionLabel('Aggiungi ricambio')
                     ->reorderable(false),
             ]);
+    }
+
+    /**
+     * Se chi sta compilando puo' vedere (e quindi correggere) i prezzi.
+     *
+     * Stesso permesso di ServiceReportPolicy::viewPrices(): la' si decide
+     * cosa esce stampato, qui cosa si puo' scrivere. Il tecnico i prezzi non
+     * li vede ne' in cantiere ne' nel form.
+     */
+    public static function puoVedereIPrezzi(): bool
+    {
+        return auth()->user()?->can('view_prices_service::report') ?? false;
     }
 
     /**
