@@ -757,6 +757,26 @@ class EurekaClient
     }
 
     /**
+     * Una scheda lavoro per intero (GET /schedelavoro/{id}): testata,
+     * intestatario, destinazione e righe di dettaglio.
+     *
+     * Serve a rileggere quello che l'ufficio ha corretto SU Eureka dopo
+     * l'invio: dal momento in cui un rapportino e' su Eureka il CRM lo
+     * blocca in modifica, quindi le correzioni si fanno di la' e di qua non
+     * tornano indietro da sole (Laura, 06/11/2026).
+     *
+     * NULL se Eureka non risponde o la scheda non c'e' piu': chi chiama non
+     * tocca niente e lo segnala, perche' i due casi si somigliano e nessuno
+     * dei due autorizza a cancellare righe nel CRM.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function schedaLavoro(int $id): ?array
+    {
+        return $this->getJson('/schedelavoro/'.$id, timeout: 30);
+    }
+
+    /**
      * Anagrafiche con almeno una partita aperta, in una chiamata
      * (/contabilita/saldi, o la variante fornitori). Sono ~87 clienti e ~56
      * fornitori: l'elenco serve a sapere PER CHI vale la pena chiedere il
