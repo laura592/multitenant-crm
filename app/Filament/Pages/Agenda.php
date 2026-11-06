@@ -143,6 +143,35 @@ class Agenda extends Page
         return $this->tutteLeVoci()->get($giorno->toDateString(), collect());
     }
 
+    /**
+     * Solo i giorni che hanno qualcosa, in ordine: la vista da telefono.
+     *
+     * Sul telefono la griglia del mese non si puo' usare — sette colonne in
+     * trecentosessanta pixel fanno celle da quarantacinque, dentro ci sta il
+     * numero del giorno e basta. Un'agenda su un telefono si legge come si
+     * legge un'agenda di carta: i giorni pieni uno sotto l'altro, i vuoti
+     * non si sfogliano (Laura, 06/11/2026).
+     *
+     * Si parte dagli stessi giorni della griglia, non dal mese: cosi' un
+     * appuntamento del 30 novembre guardando dicembre si vede in entrambe
+     * le viste, e non sparisce solo sul telefono.
+     *
+     * @return Collection<int, array{giorno: Carbon, fuoriMese: bool, voci: Collection<int, mixed>}>
+     */
+    public function giorniPieni(): Collection
+    {
+        $mese = $this->primoDelMese()->month;
+
+        return collect($this->giorniDellaGriglia())
+            ->map(fn (Carbon $g): array => [
+                'giorno' => $g,
+                'fuoriMese' => $g->month !== $mese,
+                'voci' => $this->vociDelGiorno($g),
+            ])
+            ->reject(fn (array $r): bool => $r['voci']->isEmpty())
+            ->values();
+    }
+
     /** @return Collection<array-key, Collection<int, mixed>> */
     protected function tutteLeVoci(): Collection
     {
@@ -226,11 +255,22 @@ class Agenda extends Page
             ?: trim(($cliente->first_name ?? '').' '.($cliente->last_name ?? ''))
             ?: ($richiesta->number ?? 'Richiesta');
 
+        // Mezzanotte vuol dire "ora non ancora fissata", non "alle 00:00":
+        // chi prende l'appuntamento scrive il giorno e l'ora la concorda
+        // dopo. Stamparlo come 00:00 lo faceva sembrare un orario vero e lo
+        // mandava in cima alla giornata, prima di quelli davvero fissati —
+        // come Baita Flora Alpina l'11/11 (Laura, 06/11/2026).
+        //
+        // Senza ora va in fondo alla giornata, esattamente come i lavori in
+        // programmazione: stessa regola, stesso 'zz'.
+        $ora = $a->scheduled_at->format('H:i');
+        $senzaOra = $ora === '00:00';
+
         return [
             'tipo' => 'appuntamento',
             'giorno' => $a->scheduled_at->toDateString(),
-            'ordine' => $a->scheduled_at->format('H:i'),
-            'ora' => $a->scheduled_at->format('H:i'),
+            'ordine' => $senzaOra ? 'zz' : $ora,
+            'ora' => $senzaOra ? null : $ora,
             'chi' => $chi,
             'etichetta' => $richiesta?->number,
             'note' => $a->notes,
