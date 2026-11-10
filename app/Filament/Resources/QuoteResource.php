@@ -18,6 +18,7 @@ use App\Models\Quote;
 use App\Models\QuoteGroup;
 use App\Models\QuoteResponse;
 use App\Support\DisplayName;
+use App\Support\OutsideLivewireRender;
 use App\Support\Pdf\OffertaCaffePdf;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Facades\Filament;
@@ -286,8 +287,17 @@ class QuoteResource extends Resource
                                     ->icon('heroicon-o-eye')
                                     ->color('gray')
                                     ->modalHeading(fn ($record) => "Anteprima email — {$record->recipient_email}")
+                                    // OutsideLivewireRender: senza, l'anteprima
+                                    // si rompe a meta'. Il rendering parte da
+                                    // dentro una richiesta Livewire, il
+                                    // compilatore infila i suoi
+                                    // <!--[if BLOCK]--> fra i tag, e da li' in
+                                    // poi il markup si vede a nudo nell'email
+                                    // (Laura, 10/11/2026 — sul preventivo
+                                    // all'Hotel Alemagna). L'email spedita era
+                                    // ed e' pulita: il difetto sta solo qui.
                                     ->modalContent(fn ($record) => new HtmlString(
-                                        '<iframe srcdoc="'.e((new QuoteMail($record->quote, '', $record->message, clientUrl: $record->quote->public_token ? $record->quote->clientUrl() : null))->render()).'" style="width:100%;height:70vh;border:0;border-radius:0.5rem;background:#fff;"></iframe>'
+                                        '<iframe srcdoc="'.e(OutsideLivewireRender::run(fn () => (new QuoteMail($record->quote, '', $record->message, clientUrl: $record->quote->public_token ? $record->quote->clientUrl() : null))->render())).'" style="width:100%;height:70vh;border:0;border-radius:0.5rem;background:#fff;"></iframe>'
                                     ))
                                     ->modalSubmitAction(false)
                                     ->modalCancelActionLabel('Chiudi')

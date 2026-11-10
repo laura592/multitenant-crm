@@ -323,7 +323,7 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                                     ->color('gray')
                                     ->modalHeading(fn ($record) => "Anteprima email — {$record->recipient_email}")
                                     ->modalContent(fn ($record) => new HtmlString(
-                                        '<iframe srcdoc="'.e((new ServiceReportMail($record->serviceReport, ''))->render()).'" style="width:100%;height:70vh;border:0;border-radius:0.5rem;background:#fff;"></iframe>'
+                                        '<iframe srcdoc="'.e(OutsideLivewireRender::run(fn () => (new ServiceReportMail($record->serviceReport, ''))->render())).'" style="width:100%;height:70vh;border:0;border-radius:0.5rem;background:#fff;"></iframe>'
                                     ))
                                     ->modalSubmitAction(false)
                                     ->modalCancelActionLabel('Chiudi')
