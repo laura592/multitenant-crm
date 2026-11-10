@@ -162,7 +162,7 @@ class ViewNoleggio extends ViewRecord
                 ->columnSpan(1)
                 ->description(fn ($record) => filled($record->prezzo_battuta)
                     ? 'Quante erogazioni al mese servono per coprire i costi. Sopra si guadagna, sotto ci si rimette.'
-                    : 'I prezzi delle righe sono di vendita: il margine si calcola solo dove è indicato anche il prezzo d\'acquisto. Il full-service non entra nel conto: copre manutenzioni, ricambi e trasferte, non è guadagno.')
+                    : 'Il full-service non entra nel conto: copre manutenzioni, ricambi e trasferte, non è guadagno.')
                 ->schema([
                     TextEntry::make('margine_contratto')
                         ->label('')
@@ -181,54 +181,28 @@ class ViewNoleggio extends ViewRecord
                             $incassoMacchina = (float) $record->quota_macchina * $mesi;
                             $margineMacchina = $incassoMacchina - (float) $record->costo;
 
-                            // I prezzi delle righe sono di VENDITA: il costo
-                            // e' un campo a parte, e se manca non si inventa
-                            // un margine -- si dice che non si sa.
-                            $senzaCosto = $record->forniture->filter(fn ($f) => blank($f->prezzo_acquisto));
-                            $ricavoForniture = $record->forniture->sum('costo_mensile');
-                            $costoForniture = $record->forniture->sum(
-                                fn ($f) => round((float) $f->quantita / 12 * (float) ($f->prezzo_acquisto ?? 0), 2)
-                            );
-
+                            // Il margine sulle forniture non si calcola piu':
+                            // il prezzo d'acquisto non si chiede nemmeno, e
+                            // una riga che dice "non calcolabile" occupava
+                            // posto per non dire niente (Laura, 10/11/2026).
+                            // Quello che si vende al mese si legge sotto,
+                            // voce per voce.
                             $out = '<div style="width:100%;">'.static::riga(
                                 'Sulla macchina',
-                                $eur($incassoMacchina).' incassati − '.$eur($record->costo).' di costo',
+                                $eur($incassoMacchina).' incassati in '.$mesi.' mesi − '.$eur($record->costo).' di costo',
                                 $eur($margineMacchina),
                                 $margineMacchina < 0 ? 'color:#b91c1c;' : '',
                             );
 
-                            if ($record->forniture->isEmpty()) {
-                                $margineForniture = 0.0;
-                                $out .= static::riga('Sulle forniture', null, 'nessuna fornitura indicata', 'opacity:.7;');
-                            } elseif ($senzaCosto->isNotEmpty()) {
-                                $margineForniture = null;
+                            $forniture = (float) $record->forniture->sum('costo_mensile');
+
+                            if ($forniture > 0) {
                                 $out .= static::riga(
-                                    'Sulle forniture',
-                                    $eur($ricavoForniture).'/mese venduti',
-                                    'non calcolabile',
+                                    'Forniture vendute',
+                                    'al prezzo delle righe, costo escluso',
+                                    $eur($forniture).'/mese',
                                     'opacity:.7;',
                                 );
-                            } else {
-                                $margineForniture = ($ricavoForniture - $costoForniture) * $mesi;
-                                $out .= static::riga(
-                                    'Sulle forniture',
-                                    $eur($ricavoForniture).'/mese venduti − '.$eur($costoForniture).'/mese di costo',
-                                    $eur($margineForniture),
-                                    $margineForniture < 0 ? 'color:#b91c1c;' : '',
-                                );
-                            }
-
-                            $totale = $margineMacchina + ($margineForniture ?? 0);
-                            $out .= '<div style="display:flex;justify-content:space-between;gap:1rem;border-top:2px solid currentColor;margin-top:8px;padding-top:8px;font-weight:700;'
-                                .($totale < 0 ? 'color:#b91c1c;' : '').'">'
-                                .'<span>Margine su '.$mesi.' mesi'.($margineForniture === null ? ' (solo macchina)' : '').'</span>'
-                                .'<span>'.$eur($totale).'</span></div>';
-
-                            if ($senzaCosto->isNotEmpty()) {
-                                $out .= '<div style="margin-top:8px;padding:7px 9px;border-radius:8px;background:rgba(180,83,9,.08);color:#b45309;font-size:.9em;">'
-                                    .'I prezzi delle forniture sono di vendita. Per sapere quanto si guadagna serve il '
-                                    .'<strong>prezzo d\'acquisto</strong>, che manca su '.$senzaCosto->count().' '
-                                    .($senzaCosto->count() === 1 ? 'riga' : 'righe').' su '.$record->forniture->count().'.</div>';
                             }
 
                             return new HtmlString($out.'</div>');

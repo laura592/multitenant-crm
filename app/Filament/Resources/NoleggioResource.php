@@ -271,14 +271,12 @@ class NoleggioResource extends Resource
                     // Vuoto = compresa nel canone, come e' sempre stato.
                     Forms\Components\TextInput::make('installazione_costo')
                         ->label('Installazione fatturata a parte (€)')
-                        ->helperText(fn (Get $get) => 'Lasciando vuoto resta compresa nel '
-                            .(filled($get('prezzo_battuta')) ? 'corrispettivo' : 'canone')
-                            .'. Con un importo, il contratto la sposta fra le cose escluse.')
+                        ->helperText('Vuoto = compresa. Con un importo il contratto la sposta fra le cose escluse.')
                         ->numeric()
                         ->columnSpanFull(),
                     Forms\Components\TextInput::make('spostamento_costo')
                         ->label('Spostamento fra i locali (€ per spostamento)')
-                        ->helperText('Con un importo il contratto lo autorizza e lo fattura: senza, l\'art. 7 vieta di spostare la macchina.')
+                        ->helperText('Vuoto = l\'art. 7 vieta di spostarla.')
                         ->numeric()
                         ->columnSpanFull(),
                     Forms\Components\TextInput::make('base_consumo')
@@ -396,7 +394,7 @@ class NoleggioResource extends Resource
             ->schema([
                 static::sceltaProdotto($gruppo),
                 Forms\Components\TextInput::make('voce')
-                    ->label('Voce')->required()->maxLength(255)->columnSpan(3),
+                    ->label('Nome nel contratto')->required()->maxLength(255)->columnSpan(3),
                 // Si scrive quello che il contratto promette -- "890 kg di
                 // caffe' all'anno" -- e il mensile lo calcola il programma.
                 Forms\Components\TextInput::make('quantita')
@@ -419,7 +417,7 @@ class NoleggioResource extends Resource
                     // solo un'altra cosa da guardare (Laura, 10/11/2026).
                     // dehydratedWhenHidden: nascosta si salva lo stesso, se
                     // no la pezzatura sparirebbe dal database.
-                    ->hidden(fn (Get $get): bool => static::prodottoDiListino($get) !== null)
+                    ->hidden(fn (Get $get): bool => filled($get('prodotto_caffe_id')) || filled($get('material_id')))
                     ->dehydrated()
                     ->dehydratedWhenHidden()
                     ->afterStateHydrated(function (Forms\Components\TextInput $campo, Get $get): void {
@@ -447,16 +445,8 @@ class NoleggioResource extends Resource
                             $campo->state($prezzo);
                         }
                     }),
-                // Facoltativo, e serve solo a noi: senza, la scheda non puo'
-                // dire quanto si guadagna e lo dichiara invece di inventare
-                // un margine zero (Laura, 07/10/2026).
-                Forms\Components\TextInput::make('prezzo_acquisto')
-                    ->label('€ acquisto')->numeric()->live(onBlur: true)
-                    ->helperText('Facoltativo: serve al margine.')
-                    ->columnSpan(1),
                 Forms\Components\TextInput::make('ricarico')
                     ->label('Ricarico %')
-                    ->helperText('Zero se è già di vendita.')
                     ->numeric()->default(0)->live(onBlur: true)->columnSpan(1),
                 Forms\Components\TextInput::make('note')
                     ->label('Nota (come si è calcolata la quantità)')->maxLength(255)->columnSpan(6),
@@ -500,6 +490,12 @@ class NoleggioResource extends Resource
                         return;
                     }
                     $set('voce', $m->display_label ?: $m->code);
+                    // A magazzino i detergenti stanno a CONFEZIONE -- "pastiglie
+                    // 100 pezzi", "15 taps" -- e il prezzo e' quello della
+                    // confezione. La quantita' allora e' quante confezioni
+                    // all'anno, e l'unita' non c'e' niente da sceglierla
+                    // (Laura, 10/11/2026).
+                    $set('unita', 'confezione');
                     // Due terzi del magazzino non ha un prezzo di listino:
                     // azzerare quello scritto a mano farebbe sparire il costo
                     // dal canone senza dirlo.
