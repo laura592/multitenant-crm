@@ -377,9 +377,15 @@ class NoleggioResource extends Resource
                 // "flaconi" li decide chi compila.
                 Forms\Components\TextInput::make('unita')
                     ->label('Unità')->default('pz')->maxLength(16)->columnSpan(1)
-                    ->disabled(fn (Get $get): bool => static::prodottoDiListino($get) !== null)
+                    // Nascosta, non bloccata: la tendina sopra la dice gia'
+                    // ("Caffe' Lyrae Dorsoduro — 1 kg — € 15,00"), e una
+                    // casella che ripete quello che si e' appena letto e'
+                    // solo un'altra cosa da guardare (Laura, 10/11/2026).
+                    // dehydratedWhenHidden: nascosta si salva lo stesso, se
+                    // no la pezzatura sparirebbe dal database.
+                    ->hidden(fn (Get $get): bool => static::prodottoDiListino($get) !== null)
                     ->dehydrated()
-                    ->helperText(fn (Get $get): ?string => static::prodottoDiListino($get) !== null ? 'dal listino' : null)
+                    ->dehydratedWhenHidden()
                     ->afterStateHydrated(function (Forms\Components\TextInput $campo, Get $get): void {
                         if ($p = static::prodottoDiListino($get)) {
                             $campo->state($p->formato);
@@ -394,11 +400,12 @@ class NoleggioResource extends Resource
                 // perderebbe quella voce senza dirlo.
                 Forms\Components\TextInput::make('prezzo_unitario')
                     ->label('€ vendita')->numeric()->required()->live(onBlur: true)->columnSpan(1)
-                    ->disabled(fn (Get $get): bool => static::prezzoDiCatalogo($get) !== null)
+                    ->hidden(fn (Get $get): bool => static::prezzoDiCatalogo($get) !== null)
                     ->dehydrated()
-                    ->helperText(fn (Get $get): string => static::prezzoDiCatalogo($get) !== null
-                        ? 'dal catalogo'
-                        : 'non e\' a catalogo: si scrive qui')
+                    ->dehydratedWhenHidden()
+                    ->helperText(fn (Get $get): ?string => filled($get('material_id')) || filled($get('prodotto_caffe_id'))
+                        ? 'Questo articolo non ha un prezzo a catalogo: si scrive qui.'
+                        : null)
                     ->afterStateHydrated(function (Forms\Components\TextInput $campo, Get $get): void {
                         if (($prezzo = static::prezzoDiCatalogo($get)) !== null) {
                             $campo->state($prezzo);
