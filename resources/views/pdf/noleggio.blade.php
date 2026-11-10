@@ -104,6 +104,29 @@
 
             return $r->voce.' '.number_format($n, 0, ',', '.').($confezione ? ' × ' : ' ').$unita;
         };
+
+        // Di caffe' e polveri si dice QUALI, non quanti: il Cliente paga
+        // quello che eroga, e un chilaggio scritto nel contratto diventa un
+        // impegno che il consumo smentisce a ogni stagione -- in eccesso o in
+        // difetto, e in tutti e due i casi si discute (Laura, 10/11/2026).
+        // Detergenti e consumabili restano a quantita': quelli si consegnano
+        // davvero, a cadenze decise da noi.
+        $soloNome = [
+            \App\Models\NoleggioFornitura::GRUPPO_CAFFE,
+            \App\Models\NoleggioFornitura::GRUPPO_POLVERI,
+        ];
+
+        // La frase si compone qui e non con un @if in mezzo alla riga: vedi
+        // sopra, Blade non compila una direttiva attaccata a una lettera.
+        $vociDelGruppo = function (string $gruppo, $righe) use ($quantita, $soloNome, $periodoQuantita): array {
+            $etichetta = mb_strtolower(\App\Models\NoleggioFornitura::gruppiLabels()[$gruppo] ?? $gruppo);
+
+            $coda = in_array($gruppo, $soloNome, true)
+                ? ': '.$righe->pluck('voce')->filter()->implode('; ')
+                : ', nei quantitativi '.$periodoQuantita.' di '.$righe->map($quantita)->implode('; ');
+
+            return [$etichetta, $coda];
+        };
     @endphp
 
     {{-- Il numero sul documento: e' cosi' che il contratto si richiama in
@@ -234,9 +257,8 @@
         <li>L'<strong>assistenza tecnica full-service</strong>: manutenzioni programmate, interventi su chiamata,
             fornitura e sostituzione dei ricambi, manodopera e trasferte del personale tecnico, supporto telefonico.</li>
         @foreach ($perGruppo as $gruppo => $righe)
-            <li>La fornitura di <strong>{{ mb_strtolower(\App\Models\NoleggioFornitura::gruppiLabels()[$gruppo] ?? $gruppo) }}</strong>,
-                nei quantitativi {{ $periodoQuantita }}
-                di @foreach ($righe as $r){{ $quantita($r) }}@if(! $loop->last); @endif@endforeach.</li>
+            @php([$etichettaGruppo, $codaGruppo] = $vociDelGruppo($gruppo, $righe))
+            <li>La fornitura di <strong>{{ $etichettaGruppo }}</strong>{{ $codaGruppo }}.</li>
         @endforeach
         @if ($forniture->isEmpty())
             <li>Le forniture di consumo nei quantitativi concordati fra le parti.</li>
