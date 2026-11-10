@@ -105,23 +105,24 @@
             return $r->voce.' '.number_format($n, 0, ',', '.').($confezione ? ' × ' : ' ').$unita;
         };
 
-        // Di caffe' e polveri si dice QUALI, non quanti: il Cliente paga
-        // quello che eroga, e un chilaggio scritto nel contratto diventa un
-        // impegno che il consumo smentisce a ogni stagione -- in eccesso o in
-        // difetto, e in tutti e due i casi si discute (Laura, 10/11/2026).
-        // Detergenti e consumabili restano a quantita': quelli si consegnano
-        // davvero, a cadenze decise da noi.
-        $soloNome = [
-            \App\Models\NoleggioFornitura::GRUPPO_CAFFE,
-            \App\Models\NoleggioFornitura::GRUPPO_POLVERI,
-        ];
+        // In un contratto A BATTUTA non si scrivono quantita', di niente: il
+        // Cliente paga quello che eroga, e ogni chilo o flacone messo nero su
+        // bianco diventa un impegno che il consumo smentisce -- in eccesso o
+        // in difetto, e in tutti e due i casi si discute. Si dice QUALI
+        // prodotti riceve, e basta (Laura, 10/11/2026).
+        //
+        // A canone le quantita' restano, perche' li' sono il presupposto del
+        // prezzo: gli art. 3 e 6 ci costruiscono sopra il conguaglio delle
+        // eccedenze, e senza non avrebbero piu' un riferimento. E' la stessa
+        // ragione per cui quelle due clausole gia' si spengono a battuta.
+        $soloNome = filled($noleggio->prezzo_battuta);
 
         // La frase si compone qui e non con un @if in mezzo alla riga: vedi
         // sopra, Blade non compila una direttiva attaccata a una lettera.
         $vociDelGruppo = function (string $gruppo, $righe) use ($quantita, $soloNome, $periodoQuantita): array {
             $etichetta = mb_strtolower(\App\Models\NoleggioFornitura::gruppiLabels()[$gruppo] ?? $gruppo);
 
-            $coda = in_array($gruppo, $soloNome, true)
+            $coda = $soloNome
                 ? ': '.$righe->pluck('voce')->filter()->implode('; ')
                 : ', nei quantitativi '.$periodoQuantita.' di '.$righe->map($quantita)->implode('; ');
 
