@@ -531,6 +531,22 @@ class NoleggioResource extends Resource
         return null;
     }
 
+    /**
+     * Un importo in euro. Con $decimali > 2 gli zeri in coda si tolgono:
+     * il prezzo a battuta sta su quattro decimali perche' puo' valere
+     * 0,4750, ma "€ 0,7000" si legge come un errore di battitura.
+     */
+    public static function importo(mixed $valore, int $decimali = 2): string
+    {
+        $scritto = number_format((float) $valore, $decimali, ',', '.');
+
+        if ($decimali > 2) {
+            $scritto = preg_replace('/(,\d\d)0+$/', '$1', $scritto);
+        }
+
+        return '€ '.$scritto;
+    }
+
     protected static function anteprima(Get $get): string
     {
         $n = new Noleggio([
@@ -639,7 +655,14 @@ class NoleggioResource extends Resource
                         Noleggio::STATO_CHIUSO => 'gray',
                         default => 'warning',
                     }),
-                Tables\Columns\TextColumn::make('canone')->label('Canone')->money('EUR')->sortable()
+                // A battuta il canone non si fattura: in colonna ci va
+                // quello che il cliente paga davvero, se no l'elenco mostra
+                // 580,08 accanto a un contratto da 0,50 a erogazione
+                // (Laura, 10/11/2026).
+                Tables\Columns\TextColumn::make('canone')->label('Corrispettivo')->sortable()
+                    ->state(fn (Noleggio $record): string => filled($record->prezzo_battuta)
+                        ? static::importo($record->prezzo_battuta, 4).' a erogazione'
+                        : static::importo($record->canone).' al mese')
                     ->description(fn (Noleggio $record) => $record->mesi.' mesi'),
                 // La domanda che ci si fa scorrendo l'elenco e' "gliel'ho
                 // mandato?": la risposta stava dentro la scheda, una per una.
