@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\LogsAuditTrail;
 use App\Support\Noleggio\CanoneOperativo;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -131,7 +132,24 @@ class Noleggio extends Model
      */
     public function totaleForniture(string $gruppo): ?float
     {
-        $righe = $this->relationLoaded('forniture') ? $this->forniture : $this->forniture()->get();
+        // Si rilegge dal database e NON si guarda la relazione gia' caricata.
+        //
+        // Il form ha quattro ripetitori sulla stessa relazione, uno per
+        // gruppo, ognuno con il suo filtro: caricandosi si sovrascrivono a
+        // vicenda `forniture` sul modello, e l'ultimo -- i consumabili, quasi
+        // sempre vuoti -- la lasciava caricata e VUOTA. Al salvataggio il
+        // canone si rifaceva su zero righe e cadeva sugli importi
+        // complessivi, che sono a zero: aprire un noleggio e premere Salva
+        // senza toccare niente portava il canone da 563,57 a 225,23, e le
+        // righe restavano al loro posto a dire il contrario (Laura,
+        // 10/11/2026).
+        //
+        // Un noleggio nuovo non ha ancora righe sul database: li' la
+        // relazione caricata e' l'unica cosa che c'e'.
+        $righe = $this->exists
+            ? $this->forniture()->get()
+            : ($this->relationLoaded('forniture') ? $this->forniture : new Collection);
+
         $delGruppo = $righe->where('gruppo', $gruppo);
 
         return $delGruppo->isEmpty() ? null : (float) $delGruppo->sum('costo_mensile');
