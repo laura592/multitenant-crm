@@ -304,8 +304,13 @@
             <li>I <strong>consumabili</strong> — bicchieri, palette, zucchero e simili — che restano a carico
                 del Cliente.</li>
         @endif
-        <li>Le riparazioni rese necessarie da <strong>uso improprio, negligenza, manomissioni</strong> o interventi
-            eseguiti da personale non autorizzato dal Fornitore.</li>
+        {{-- I danneggiamenti stanno nell'elenco accanto alla negligenza: senza,
+             una macchina rotta per una botta o un allagamento cadeva fuori da
+             tutte le voci e il full-service se la prendeva in carico come se
+             fosse un guasto (Laura, 10/11/2026). --}}
+        <li>Le riparazioni rese necessarie da <strong>uso improprio, negligenza, danneggiamenti anche
+            accidentali, manomissioni</strong> o interventi eseguiti da personale non autorizzato dal
+            Fornitore.</li>
         <li>I <strong>consumi di energia elettrica e acqua</strong> e gli oneri di legge.</li>
     </ul>
 
