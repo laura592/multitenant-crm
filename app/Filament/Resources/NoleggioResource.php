@@ -108,8 +108,35 @@ class NoleggioResource extends Resource
             // mese. Le unita' sono uscite dalle etichette (prefisso e
             // suffisso del campo), cosi' le etichette stanno su una riga sola
             // e le righe non si sfasano.
-            Forms\Components\Section::make('Da cosa nasce il canone')
-                ->description('Il canone non si scrive: si calcola da questi numeri, e resta ricostruibile anche fra due anni.')
+            // Stava in fondo, quinto campo della sezione "Contratto", dopo le
+            // date. Ma e' la scelta da cui dipende tutto il resto della
+            // pagina: con un prezzo qui il canone non si fattura piu', e
+            // cambiano le etichette, il pannello a destra e due articoli del
+            // contratto. Una cosa cosi' si decide prima, non per ultima
+            // (Laura, 10/11/2026).
+            Forms\Components\Section::make('Come si paga')
+                ->description('Due modi, e si sceglie qui: un canone fisso ogni mese, oppure un tanto a erogazione letto dal contatore.')
+                ->columns(2)
+                ->schema([
+                    Forms\Components\TextInput::make('prezzo_battuta')
+                        ->label('Prezzo a erogazione')
+                        ->prefix('€')
+                        ->helperText('Lasciandolo vuoto il contratto e\' a canone fisso.')
+                        ->numeric()->step('0.0001')->live(onBlur: true),
+                    Forms\Components\TextInput::make('minimo_mensile')
+                        ->label('Minimo per periodo')
+                        ->prefix('€')
+                        ->helperText('Senza minimo, una stagione andata male non copre nemmeno la macchina.')
+                        ->numeric()
+                        ->visible(fn (Get $get) => filled($get('prezzo_battuta'))),
+                ]),
+
+            Forms\Components\Section::make(fn (Get $get) => filled($get('prezzo_battuta'))
+                ? 'Quanto costa servirlo'
+                : 'Da cosa nasce il canone')
+                ->description(fn (Get $get) => filled($get('prezzo_battuta'))
+                    ? 'Non si fattura: e\' il costo pieno, e serve a sapere sotto quale cifra non si scende. Si calcola da questi numeri, e resta ricostruibile anche fra due anni.'
+                    : 'Il canone non si scrive: si calcola da questi numeri, e resta ricostruibile anche fra due anni.')
                 ->schema([
                     Forms\Components\Fieldset::make('La macchina')
                         ->columns(3)
@@ -180,7 +207,17 @@ class NoleggioResource extends Resource
                     // Fieldset non ha description(): la frase sul consumo
                     // stimato sta sul campo del caffè, che è quello a cui si
                     // riferisce.
-                    Forms\Components\Fieldset::make('Cosa consuma ogni mese')
+                    // Questi quattro importi sono il vecchio modo di prezzare
+                    // caffe' e detergenti, prima che esistessero le righe. Se
+                    // le righe ci sono, non li legge piu' nessuno -- restavano
+                    // pero' aperti in mezzo alla pagina, quattro caselle a
+                    // 0,00 che sembrano da compilare e non servono a niente.
+                    // Si chiudono da sole, e il titolo dice perche'.
+                    Forms\Components\Section::make(fn (Get $get) => static::ciSonoRighe($get)
+                        ? 'Importi complessivi — non usati, ci sono le righe'
+                        : 'Cosa consuma ogni mese')
+                        ->collapsible()
+                        ->collapsed(fn (Get $get): bool => static::ciSonoRighe($get))
                         ->columns(4)
                         ->schema([
                             Forms\Components\TextInput::make('caffe_mese')
@@ -219,8 +256,13 @@ class NoleggioResource extends Resource
                         ]),
                 ]),
 
-            Forms\Components\Section::make('Cosa comprende il canone')
-                ->description('Le quantità si scrivono ANNUE, come il contratto le promette al cliente: il costo mensile lo calcola il programma. Se ci sono righe, gli importi complessivi di detergenti e caffè qui sopra vengono ignorati.')
+            Forms\Components\Section::make(fn (Get $get) => filled($get('prezzo_battuta'))
+                ? 'Cosa comprende il corrispettivo'
+                : 'Cosa comprende il canone')
+                ->description(fn (Get $get) => 'Le quantità si scrivono ANNUE: il costo mensile lo calcola il programma.'
+                    .(filled($get('prezzo_battuta'))
+                        ? ' Nel contratto a erogazione non vengono stampate: il cliente legge quali prodotti riceve, non quanti.'
+                        : ' Sono quelle che il contratto promette al cliente.'))
                 ->schema([
                     // Da dove vengono le quantita'. Senza, fra due anni
                     // nessuno sa piu' perche' erano 890 kg di caffe' e non
@@ -229,7 +271,9 @@ class NoleggioResource extends Resource
                     // Vuoto = compresa nel canone, come e' sempre stato.
                     Forms\Components\TextInput::make('installazione_costo')
                         ->label('Installazione fatturata a parte (€)')
-                        ->helperText('Lasciando vuoto resta compresa nel canone. Con un importo, il contratto la sposta fra le cose escluse.')
+                        ->helperText(fn (Get $get) => 'Lasciando vuoto resta compresa nel '
+                            .(filled($get('prezzo_battuta')) ? 'corrispettivo' : 'canone')
+                            .'. Con un importo, il contratto la sposta fra le cose escluse.')
                         ->numeric()
                         ->columnSpanFull(),
                     Forms\Components\TextInput::make('spostamento_costo')
@@ -240,7 +284,9 @@ class NoleggioResource extends Resource
                     Forms\Components\TextInput::make('base_consumo')
                         ->label('Consumi calcolati su')
                         ->placeholder('Es. 250 colazioni al giorno')
-                        ->helperText('Finisce nel contratto, nell\'articolo del canone: è il presupposto su cui si regge.')
+                        ->helperText(fn (Get $get) => filled($get('prezzo_battuta'))
+                            ? 'Non finisce nel contratto a erogazione: resta qui, come presupposto dei conti.'
+                            : 'Finisce nel contratto, nell\'articolo del canone: è il presupposto su cui si regge.')
                         ->maxLength(255)
                         ->columnSpanFull(),
                 ]),
@@ -290,18 +336,6 @@ class NoleggioResource extends Resource
                     Forms\Components\DatePicker::make('consegna_al')
                         ->label('Montaggio entro il')
                         ->afterOrEqual('consegna_dal'),
-                    // Vuoto = canone fisso. Con un prezzo, il contratto
-                    // cambia articolo: si fattura sulle erogazioni lette dal
-                    // contatore, non una cifra fissa al mese.
-                    Forms\Components\TextInput::make('prezzo_battuta')
-                        ->label('Prezzo a battuta (€)')
-                        ->helperText('Vuoto = canone fisso. Con un prezzo, il contratto si paga a consumo.')
-                        ->numeric()->step('0.0001')->live(onBlur: true),
-                    Forms\Components\TextInput::make('minimo_mensile')
-                        ->label('Minimo per periodo (€)')
-                        ->helperText('Senza minimo, una stagione andata male non copre nemmeno la macchina.')
-                        ->numeric()
-                        ->visible(fn (Get $get) => filled($get('prezzo_battuta'))),
                     // Finiscono nel contratto parola per parola: un noleggio
                     // senza condizioni di pagamento non si firma, e su
                     // sessanta canoni la differenza fra "30 giorni data
@@ -324,7 +358,9 @@ class NoleggioResource extends Resource
             ]),
 
             Forms\Components\Group::make()->columnSpan(['default' => 3, 'lg' => 1])->schema([
-                Forms\Components\Section::make('Il canone')
+                Forms\Components\Section::make(fn (Get $get) => filled($get('prezzo_battuta'))
+                    ? 'Quanto costa servirlo'
+                    : 'Il canone')
                     ->schema([
                         Forms\Components\Placeholder::make('anteprima')
                             ->label('')
@@ -365,10 +401,10 @@ class NoleggioResource extends Resource
                 // caffe' all'anno" -- e il mensile lo calcola il programma.
                 Forms\Components\TextInput::make('quantita')
                     ->label('Q.tà/anno')->numeric()->required()->live(onBlur: true)
+                    ->columnSpan(2)
                     ->helperText(fn (Get $get) => filled($get('quantita'))
                         ? '= '.rtrim(rtrim(number_format((float) $get('quantita') / 12, 2, ',', '.'), '0'), ',').' al mese'
-                        : null)
-                    ->columnSpan(1),
+                        : null),
                 // La pezzatura la dice il listino: "500 g" sta sul prodotto.
                 // Riscriverla qui e' un doppione, e al primo cambio di formato
                 // resta indietro senza che nessuno se ne accorga (Laura,
@@ -416,11 +452,11 @@ class NoleggioResource extends Resource
                 // un margine zero (Laura, 07/10/2026).
                 Forms\Components\TextInput::make('prezzo_acquisto')
                     ->label('€ acquisto')->numeric()->live(onBlur: true)
-                    ->helperText('Quanto lo paghiamo. Facoltativo: serve a calcolare il margine.')
+                    ->helperText('Facoltativo: serve al margine.')
                     ->columnSpan(1),
                 Forms\Components\TextInput::make('ricarico')
                     ->label('Ricarico %')
-                    ->helperText('Lasciare a zero se il prezzo di vendita è già quello giusto.')
+                    ->helperText('Zero se è già di vendita.')
                     ->numeric()->default(0)->live(onBlur: true)->columnSpan(1),
                 Forms\Components\TextInput::make('note')
                     ->label('Nota (come si è calcolata la quantità)')->maxLength(255)->columnSpan(6),
@@ -538,6 +574,18 @@ class NoleggioResource extends Resource
         return null;
     }
 
+    /** Se il noleggio ha almeno una riga di fornitura fra quelle che si stanno scrivendo. */
+    protected static function ciSonoRighe(Get $get): bool
+    {
+        foreach (array_keys(NoleggioFornitura::gruppiLabels()) as $gruppo) {
+            if (filled($get('forniture_'.$gruppo))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
      * Un importo in euro. Con $decimali > 2 gli zeri in coda si tolgono:
      * il prezzo a battuta sta su quattro decimali perche' puo' valere
@@ -618,15 +666,37 @@ class NoleggioResource extends Resource
             $corpo .= '<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>'.$k.'</span><span>'.$v.'</span></div>';
         }
 
-        return '<div style="max-width:30rem;">'.$corpo
+        $battuta = (float) $get('prezzo_battuta');
+
+        $out = '<div style="max-width:30rem;">'.$corpo
             .'<div style="display:flex;justify-content:space-between;border-top:2px solid currentColor;margin-top:6px;padding-top:6px;font-weight:700;font-size:1.1em;">'
-            .'<span>Canone mensile</span><span>'.$eur($r->canone).'</span></div>'
-            .'<div style="margin-top:10px;font-size:.9em;opacity:.85;">'
-            .'Incasso totale su '.$r->mesi.' mesi: <strong>'.$eur($r->incassoTotale).'</strong><br>'
-            .'In pari dal <strong>'.($r->mesePareggio ? $r->mesePareggio.'° mese' : '—').'</strong>'
-            .($r->mesePareggio && $r->mesePareggio > $r->mesi ? ' <strong>(oltre la durata: il contratto non recupera il costo)</strong>' : '').'<br>'
-            .'Se disdicono al '.$meta.'° mese restano scoperti <strong>'.$eur($r->scopertoSeDisdettaAl($meta)).'</strong>'
-            .'</div></div>';
+            .'<span>'.($battuta > 0 ? 'Costo pieno mensile' : 'Canone mensile').'</span>'
+            .'<span>'.$eur($r->canone).'</span></div>'
+            .'<div style="margin-top:10px;font-size:.9em;opacity:.85;">';
+
+        // A erogazione l'incasso lo fanno le battute, e quante saranno non lo
+        // sa nessuno: moltiplicare il costo per i mesi darebbe un totale che
+        // non incassa nessuno, e il pareggio in mesi sarebbe altrettanto
+        // finto. L'unica cosa esatta e' quante erogazioni servono per
+        // coprire i costi (Laura, 10/11/2026).
+        if ($battuta > 0) {
+            $quante = fn (float $costo): string => number_format((int) ceil($costo / $battuta), 0, ',', '.');
+            $fisso = $r->quotaMacchina + $r->quotaServizio;
+
+            $out .= 'Macchina e full-service pagati da <strong>'.$quante($fisso).' erogazioni al mese</strong><br>'
+                .'Tutto pagato da <strong>'.$quante((float) $r->canone).' al mese</strong>';
+
+            if (filled($get('minimo_mensile')) && (float) $get('minimo_mensile') > 0) {
+                $out .= '<br>Il minimo ne copre <strong>'.$quante((float) $get('minimo_mensile')).'</strong>';
+            }
+        } else {
+            $out .= 'Incasso totale su '.$r->mesi.' mesi: <strong>'.$eur($r->incassoTotale).'</strong><br>'
+                .'In pari dal <strong>'.($r->mesePareggio ? $r->mesePareggio.'° mese' : '—').'</strong>'
+                .($r->mesePareggio && $r->mesePareggio > $r->mesi ? ' <strong>(oltre la durata: il contratto non recupera il costo)</strong>' : '').'<br>'
+                .'Se disdicono al '.$meta.'° mese restano scoperti <strong>'.$eur($r->scopertoSeDisdettaAl($meta)).'</strong>';
+        }
+
+        return $out.'</div></div>';
     }
 
     public static function table(Table $table): Table
