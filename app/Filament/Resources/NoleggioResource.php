@@ -369,12 +369,41 @@ class NoleggioResource extends Resource
                         ? '= '.rtrim(rtrim(number_format((float) $get('quantita') / 12, 2, ',', '.'), '0'), ',').' al mese'
                         : null)
                     ->columnSpan(1),
+                // La pezzatura la dice il listino: "500 g" sta sul prodotto.
+                // Riscriverla qui e' un doppione, e al primo cambio di formato
+                // resta indietro senza che nessuno se ne accorga (Laura,
+                // 10/11/2026). Resta scrivibile dove il catalogo non ce l'ha:
+                // i materiali di magazzino non hanno una pezzatura, e "pz" o
+                // "flaconi" li decide chi compila.
                 Forms\Components\TextInput::make('unita')
-                    ->label('Unità')->default('pz')->maxLength(16)->columnSpan(1),
+                    ->label('Unità')->default('pz')->maxLength(16)->columnSpan(1)
+                    ->disabled(fn (Get $get): bool => static::prodottoDiListino($get) !== null)
+                    ->dehydrated()
+                    ->helperText(fn (Get $get): ?string => static::prodottoDiListino($get) !== null ? 'dal listino' : null)
+                    ->afterStateHydrated(function (Forms\Components\TextInput $campo, Get $get): void {
+                        if ($p = static::prodottoDiListino($get)) {
+                            $campo->state($p->formato);
+                        }
+                    }),
                 // Di VENDITA: e' il prezzo che fa il canone. Il costo sta
                 // nella casella accanto, se lo si sa.
+                //
+                // Anche questo si legge dal catalogo e non si ridigita. Dove
+                // il catalogo il prezzo non ce l'ha -- due terzi del magazzino
+                // -- la casella torna scrivibile, altrimenti il canone
+                // perderebbe quella voce senza dirlo.
                 Forms\Components\TextInput::make('prezzo_unitario')
-                    ->label('€ vendita')->numeric()->required()->live(onBlur: true)->columnSpan(1),
+                    ->label('€ vendita')->numeric()->required()->live(onBlur: true)->columnSpan(1)
+                    ->disabled(fn (Get $get): bool => static::prezzoDiCatalogo($get) !== null)
+                    ->dehydrated()
+                    ->helperText(fn (Get $get): string => static::prezzoDiCatalogo($get) !== null
+                        ? 'dal catalogo'
+                        : 'non e\' a catalogo: si scrive qui')
+                    ->afterStateHydrated(function (Forms\Components\TextInput $campo, Get $get): void {
+                        if (($prezzo = static::prezzoDiCatalogo($get)) !== null) {
+                            $campo->state($prezzo);
+                        }
+                    }),
                 // Facoltativo, e serve solo a noi: senza, la scheda non puo'
                 // dire quanto si guadagna e lo dichiara invece di inventare
                 // un margine zero (Laura, 07/10/2026).
@@ -470,6 +499,36 @@ class NoleggioResource extends Resource
                 $set('prezzo_unitario', (float) $p->prezzo);
             })
             ->columnSpan(3);
+    }
+
+    /**
+     * Il prodotto di listino collegato a una riga, se c'e'.
+     *
+     * Serve a prendere pezzatura e prezzo da li' invece di farli ribattere:
+     * sono gia' scritti sul prodotto, e due copie dello stesso numero
+     * divergono al primo aggiornamento del listino.
+     */
+    protected static function prodottoDiListino(Get $get): ?ProdottoCaffe
+    {
+        $id = $get('prodotto_caffe_id');
+
+        return filled($id) ? ProdottoCaffe::find($id) : null;
+    }
+
+    /** Il prezzo di vendita che il catalogo gia' conosce, o null se non lo sa. */
+    protected static function prezzoDiCatalogo(Get $get): ?float
+    {
+        if ($p = static::prodottoDiListino($get)) {
+            return (float) $p->prezzo;
+        }
+
+        $id = $get('material_id');
+
+        if (filled($id) && ($m = Material::find($id)) && (float) $m->list_price > 0) {
+            return (float) $m->list_price;
+        }
+
+        return null;
     }
 
     protected static function anteprima(Get $get): string
