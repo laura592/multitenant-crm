@@ -124,6 +124,12 @@ class Tenant extends Model implements HasName
      * non solo per la lettura: senza queste, il pulsante "Nuovo" lancia
      * un'eccezione anche se il nostro global scope custom (BelongsToTenant)
      * gestisce gia' correttamente lettura e assegnazione automatica.
+     *
+     * Il nome lo cerca Filament, e di suo lo costruisce al plurale inglese
+     * del modello (`letturaCasettas`, `noleggios`): per quelle italiane la
+     * risorsa lo dichiara con $tenantRelationshipName. Dimenticarsene non
+     * si vede provando la pagina, perche' l'ELENCO funziona comunque --
+     * salta solo il salvataggio (09/11/2026, le casette dell'acqua).
      */
     public function categories(): HasMany
     {
@@ -203,6 +209,26 @@ class Tenant extends Model implements HasName
     public function materialOrders(): HasMany
     {
         return $this->hasMany(MaterialOrder::class);
+    }
+
+    public function lettureCasette(): HasMany
+    {
+        return $this->hasMany(LetturaCasetta::class);
+    }
+
+    public function interventiProgrammati(): HasMany
+    {
+        return $this->hasMany(InterventoProgrammato::class);
+    }
+
+    public function noleggi(): HasMany
+    {
+        return $this->hasMany(Noleggio::class);
+    }
+
+    public function agenti(): HasMany
+    {
+        return $this->hasMany(Agente::class);
     }
 
     public function getFilamentName(): string

@@ -36,6 +36,8 @@ class InterventoProgrammatoResource extends Resource
 {
     protected static ?string $model = InterventoProgrammato::class;
 
+    protected static ?string $tenantRelationshipName = 'interventiProgrammati';
+
     protected static ?string $navigationIcon = 'heroicon-o-calendar-days';
 
     protected static ?string $navigationGroup = 'Interventi tecnici';

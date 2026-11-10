@@ -21,6 +21,8 @@ class AgenteResource extends Resource
 {
     protected static ?string $model = Agente::class;
 
+    protected static ?string $tenantRelationshipName = 'agenti';
+
     protected static ?string $navigationIcon = 'heroicon-o-identification';
 
     protected static ?string $navigationGroup = 'Vendite';

@@ -29,6 +29,8 @@ class NoleggioResource extends Resource
 {
     protected static ?string $model = Noleggio::class;
 
+    protected static ?string $tenantRelationshipName = 'noleggi';
+
     protected static ?string $navigationIcon = 'heroicon-o-arrow-path-rounded-square';
 
     // Senza, Filament pluralizza all'inglese e l'indirizzo diventa

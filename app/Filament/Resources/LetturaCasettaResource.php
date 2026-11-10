@@ -42,6 +42,8 @@ class LetturaCasettaResource extends Resource
 {
     protected static ?string $model = LetturaCasetta::class;
 
+    protected static ?string $tenantRelationshipName = 'lettureCasette';
+
     protected static ?string $navigationIcon = 'heroicon-o-beaker';
 
     protected static ?string $navigationGroup = 'Interventi tecnici';
