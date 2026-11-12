@@ -540,6 +540,13 @@ class QuoteGroupResource extends Resource
             'bozza' => 'Bozza',
             'inviato' => 'Inviato',
             'scelto' => 'Scelto',
+            // Il cliente ha detto no a tutte le soluzioni. Senza questo stato
+            // un'offerta rifiutata restava "Inviato" per sempre, in mezzo a
+            // quelle che aspettano ancora una risposta (Laura, 12/11/2026:
+            // Mass Bianchet ha rifiutato tutti e tre i preventivi).
+            // "Scaduto" non e' la stessa cosa -- e infatti non l'ha mai usato
+            // nessuno: dice che e' passato il tempo, non che hanno detto no.
+            'rifiutato' => 'Rifiutato',
             'scaduto' => 'Scaduto',
         ];
     }
@@ -550,7 +557,11 @@ class QuoteGroupResource extends Resource
             'bozza' => 'gray',
             'inviato' => 'warning',
             'scelto' => 'success',
-            'scaduto' => 'danger',
+            // Rifiutato e scaduto sono due modi diversi di finire male, ma
+            // tutti e due finiscono: stesso grigio spento, che non chiama
+            // l'occhio come il rosso di un problema da risolvere.
+            'rifiutato' => 'danger',
+            'scaduto' => 'gray',
         ];
     }
 }

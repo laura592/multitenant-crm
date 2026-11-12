@@ -97,6 +97,33 @@ class Quote extends Model
                     $quote->quoteGroup->update(['status' => 'scelto']);
                 }
             }
+
+            // E il contrario: se il cliente ha detto no a TUTTE le soluzioni,
+            // l'offerta e' chiusa. Senza questo restava "Inviato" in mezzo a
+            // quelle che aspettano ancora una risposta, e per accorgersene
+            // bisognava aprirla e guardare i preventivi uno per uno
+            // (Laura, 12/11/2026).
+            //
+            // Solo quando sono tutti rifiutati: finche' ne resta uno in piedi
+            // la partita e' aperta.
+            if ($quote->wasChanged('status') && $quote->status === 'rifiutato' && $quote->quote_group_id) {
+                // Lo stato dell'offerta si filtra nella query invece di
+                // leggerlo come proprieta': la relazione torna un Model
+                // generico, e PHPStan non ci trova sopra $status.
+                $gruppo = QuoteGroup::query()
+                    ->whereKey($quote->quote_group_id)
+                    ->whereNotIn('status', ['scaduto', 'scelto'])
+                    ->first();
+
+                $neRestaUnoInPiedi = static::query()
+                    ->where('quote_group_id', $quote->quote_group_id)
+                    ->where('status', '!=', 'rifiutato')
+                    ->exists();
+
+                if ($gruppo && ! $neRestaUnoInPiedi) {
+                    $gruppo->update(['status' => 'rifiutato']);
+                }
+            }
         });
 
         // La richiesta informazioni da cui nasce il preventivo ne segue lo
