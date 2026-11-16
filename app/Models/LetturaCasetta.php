@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Una lettura della casetta dell'acqua: il giro che il tecnico fa sul posto
@@ -135,6 +136,12 @@ class LetturaCasetta extends Model
     public function rilevataDa(): BelongsTo
     {
         return $this->belongsTo(User::class, 'rilevata_da');
+    }
+
+    /** Gli invii del rendiconto di questa lettura, dal piu' recente. */
+    public function emails(): HasMany
+    {
+        return $this->hasMany(LetturaCasettaEmail::class)->latest();
     }
 
     /** Le letture di una casetta dalla piu' recente, l'ordine del rendiconto a rovescio. */

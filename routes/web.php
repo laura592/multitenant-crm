@@ -2,16 +2,18 @@
 
 use App\Http\Controllers\ContrattoAssistenzaController;
 use App\Http\Controllers\ContrattoNoleggioController;
+use App\Http\Controllers\CustomerSchedaAnagraficaController;
 use App\Http\Controllers\FatturaEurekaController;
 use App\Http\Controllers\FirmaRapportinoController;
-use App\Http\Controllers\CustomerSchedaAnagraficaController;
 use App\Http\Controllers\PaganteStampaController;
 use App\Http\Controllers\QuoteClientController;
 use App\Http\Controllers\QuoteController;
 use App\Http\Controllers\RapportiniFatturaController;
+use App\Http\Controllers\RendicontoCasettaController;
 use App\Http\Controllers\RiepilogoRapportiniController;
 use App\Http\Controllers\ServiceReportController;
 use App\Http\Controllers\StampaTemporaneaController;
+use App\Http\Middleware\NoIndex;
 use App\Http\Middleware\SetPermissionsTeamId;
 use Illuminate\Support\Facades\Route;
 
@@ -37,7 +39,7 @@ Route::get('/sessione-scaduta', fn () => response()->view('errors.419', [], 419)
 // throttle sulle risposte e' un freno a chi provasse a martellare il form.
 Route::prefix('preventivo/{token}')
     ->where(['token' => '[A-Za-z0-9]{32,64}'])
-    ->middleware(\App\Http\Middleware\NoIndex::class)
+    ->middleware(NoIndex::class)
     ->group(function () {
         Route::get('/', [QuoteClientController::class, 'show'])->name('client.quote.show');
         Route::get('pdf/{quoteId}', [QuoteClientController::class, 'pdf'])->name('client.quote.pdf');
@@ -73,6 +75,8 @@ Route::middleware(['auth', SetPermissionsTeamId::class])->group(function () {
     Route::get('noleggi/{noleggio}/contratto', ContrattoNoleggioController::class)->name('noleggi.contratto');
     Route::get('customers/{customer}/scheda-anagrafica', CustomerSchedaAnagraficaController::class)
         ->name('customers.scheda-anagrafica');
+    Route::get('letture-casette/{letturaCasetta}/rendiconto', RendicontoCasettaController::class)
+        ->name('letture-casette.rendiconto');
 
     // Stampe generate dentro un'azione del pannello, che dipendono dallo
     // stato della pagina (filtri, ricerca, mese scelto) e quindi non hanno un
