@@ -60,6 +60,16 @@ class LetturaCasettaResource extends Resource
 
     protected static ?string $slug = 'casette-acqua';
 
+    /**
+     * Chi riceve il rendiconto di una lettura (16/11/2026).
+     *
+     * E' solo il valore precompilato nel modale di invio, non un vincolo:
+     * nel modale si cambia e si aggiunge. Sta qui, e non in configurazione,
+     * perche' e' un indirizzo solo e cambiarlo e' una riga di codice, non
+     * una funzione da costruire.
+     */
+    public const DESTINATARIO_RENDICONTO = 'amministrazione@prontolatte.it';
+
     /** @var Collection<string, string>|null */
     protected static ?Collection $casetteInCache = null;
 
@@ -219,12 +229,19 @@ class LetturaCasettaResource extends Resource
                 // I due contatori dicono la stessa cosa da due parti: se non
                 // coincidono c'e' qualcosa da spiegare prima di mandare il
                 // rendiconto.
+                // I parametri si DEVONO chiamare $state: Filament risolve le
+                // dipendenze di queste closure per nome (o per tipo, ma solo
+                // per il modello), e con $s l'elenco andava in errore 500
+                // appena c'era una lettura da disegnare -- in locale, con la
+                // tabella vuota, la closure non girava mai e non si vedeva
+                // (produzione, 16/11/2026). Stesso inciampo del filtro
+                // "periodo" piu' sotto.
                 Tables\Columns\TextColumn::make('scarto')
                     ->label('Scarto')
                     ->state(fn (LetturaCasetta $r) => $r->scarto())
-                    ->formatStateUsing(fn (?float $s) => $s === null ? null : number_format($s, 2, ',', '.').' €')
+                    ->formatStateUsing(fn (?float $state) => $state === null ? null : number_format($state, 2, ',', '.').' €')
                     ->badge()
-                    ->color(fn (?float $s) => $s === null || abs($s) < 0.01 ? 'gray' : 'warning')
+                    ->color(fn (?float $state) => $state === null || abs($state) < 0.01 ? 'gray' : 'warning')
                     ->tooltip('Incasso del periodo meno venduto del periodo')
                     ->placeholder('—'),
                 Tables\Columns\TextColumn::make('operazioni')
@@ -247,7 +264,7 @@ class LetturaCasettaResource extends Resource
                     ->color(fn (LetturaCasetta $r) => $r->quanteFoto() ? null : 'warning'),
                 Tables\Columns\TextColumn::make('rilevataDa.name')
                     ->label('Tecnico')
-                    ->formatStateUsing(fn (?string $n) => DisplayName::titleCase($n))
+                    ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state))
                     ->placeholder('—')
                     ->toggleable(),
             ])
