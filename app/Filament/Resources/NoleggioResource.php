@@ -5,22 +5,22 @@ namespace App\Filament\Resources;
 use App\Filament\Forms\Components\AllegatiEmail;
 use App\Mail\NoleggioMail;
 use App\Models\Customer;
-use App\Support\DisplayName;
 use App\Models\MachineUnit;
+use App\Models\Material;
 use App\Models\Noleggio;
 use App\Models\NoleggioFornitura;
-use App\Models\Material;
 use App\Models\ProdottoCaffe;
+use App\Support\DisplayName;
+use App\Support\OutsideLivewireRender;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
-use Filament\Support\RawJs;
 use Filament\Tables;
 use Filament\Tables\Table;
-use App\Support\OutsideLivewireRender;
-use Barryvdh\DomPDF\Facade\Pdf;
-use Filament\Notifications\Notification;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\HtmlString;
@@ -53,306 +53,306 @@ class NoleggioResource extends Resource
         // (Laura, 07/10/2026).
         return $form->columns(3)->schema([
             Forms\Components\Group::make()->columnSpan(['default' => 3, 'lg' => 2])->schema([
-            Forms\Components\Section::make('Chi e cosa')
-                ->columns(2)
-                ->schema([
-                    // L'etichetta passa da DisplayName come nelle altre schede:
-                    // due clienti privati su 2.315 non hanno ragione sociale, e
-                    // con company_name nuda Filament riceve un'etichetta nulla
-                    // e la pagina va in errore 500.
-                    Forms\Components\Select::make('customer_id')
-                        ->label('Cliente')
-                        ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
-                        ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::customerOption($record))
-                        ->searchable(['search_name', 'company_name', 'first_name', 'last_name'])
-                        ->preload()->required(),
-                    Forms\Components\TextInput::make('descrizione')
-                        ->label('Oggetto del noleggio')
-                        ->helperText('Come comparira\' sul contratto, es. "Franke A600 FM Plus con unita\' di raffreddamento".')
-                        ->required()->maxLength(255),
-                    Forms\Components\Select::make('machine_unit_id')
-                        ->label('Macchina (se gia\' individuata)')
-                        ->options(fn (Get $get) => $get('customer_id')
-                            ? MachineUnit::query()->where('current_customer_id', $get('customer_id'))
-                                ->whereNull('deleted_at')
-                                ->get()
-                                ->mapWithKeys(fn (MachineUnit $m) => [
-                                    // Stesso motivo del cliente: mai un'etichetta nulla.
-                                    $m->id => trim(($m->serial_number ?: 'senza matricola').' — '.($m->model_name ?: '')),
-                                ])->all()
-                            : [])
-                        ->searchable(),
-                    Forms\Components\Select::make('quote_id')
-                        ->label('Preventivo di riferimento')
-                        ->relationship('quote', 'number')
-                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->number ?: '—')
-                        ->searchable(),
-                    // Non tutti i noleggi nascono da un preventivo: quello
-                    // dell'Hotel Stalon e' stato fatto direttamente dalla
-                    // richiesta informazioni, e senza questo campo il
-                    // contratto non si vedeva da li' (20/10/2026).
-                    Forms\Components\Select::make('information_request_id')
-                        ->label('Richiesta informazioni')
-                        ->relationship('informationRequest', 'number')
-                        ->getOptionLabelFromRecordUsing(fn ($record) => trim($record->number.' — '.\App\Support\DisplayName::titleCase($record->customer?->company_name ?: $record->customer?->full_name), ' —'))
-                        ->helperText('Da compilare quando il noleggio nasce da una richiesta senza passare per un preventivo.')
-                        ->searchable()
-                        ->preload(),
-                ]),
+                Forms\Components\Section::make('Chi e cosa')
+                    ->columns(2)
+                    ->schema([
+                        // L'etichetta passa da DisplayName come nelle altre schede:
+                        // due clienti privati su 2.315 non hanno ragione sociale, e
+                        // con company_name nuda Filament riceve un'etichetta nulla
+                        // e la pagina va in errore 500.
+                        Forms\Components\Select::make('customer_id')
+                            ->label('Cliente')
+                            ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
+                            ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::customerOption($record))
+                            ->searchable(['search_name', 'company_name', 'first_name', 'last_name'])
+                            ->preload()->required(),
+                        Forms\Components\TextInput::make('descrizione')
+                            ->label('Oggetto del noleggio')
+                            ->helperText('Come comparira\' sul contratto, es. "Franke A600 FM Plus con unita\' di raffreddamento".')
+                            ->required()->maxLength(255),
+                        Forms\Components\Select::make('machine_unit_id')
+                            ->label('Macchina (se gia\' individuata)')
+                            ->options(fn (Get $get) => $get('customer_id')
+                                ? MachineUnit::query()->where('current_customer_id', $get('customer_id'))
+                                    ->whereNull('deleted_at')
+                                    ->get()
+                                    ->mapWithKeys(fn (MachineUnit $m) => [
+                                        // Stesso motivo del cliente: mai un'etichetta nulla.
+                                        $m->id => trim(($m->serial_number ?: 'senza matricola').' — '.($m->model_name ?: '')),
+                                    ])->all()
+                                : [])
+                            ->searchable(),
+                        Forms\Components\Select::make('quote_id')
+                            ->label('Preventivo di riferimento')
+                            ->relationship('quote', 'number')
+                            ->getOptionLabelFromRecordUsing(fn ($record) => $record->number ?: '—')
+                            ->searchable(),
+                        // Non tutti i noleggi nascono da un preventivo: quello
+                        // dell'Hotel Stalon e' stato fatto direttamente dalla
+                        // richiesta informazioni, e senza questo campo il
+                        // contratto non si vedeva da li' (20/10/2026).
+                        Forms\Components\Select::make('information_request_id')
+                            ->label('Richiesta informazioni')
+                            ->relationship('informationRequest', 'number')
+                            ->getOptionLabelFromRecordUsing(fn ($record) => trim($record->number.' — '.DisplayName::titleCase($record->customer?->company_name ?: $record->customer?->full_name), ' —'))
+                            ->helperText('Da compilare quando il noleggio nasce da una richiesta senza passare per un preventivo.')
+                            ->searchable()
+                            ->preload(),
+                    ]),
 
-            // Tre gruppi, non tredici caselle in fila (03/11/2026). Erano
-            // tutte sullo stesso piano in una griglia a tre colonne, ognuna
-            // con la sua frase sotto: tredici numeri senza gerarchia, in cui
-            // non si vedeva che il canone nasce da tre cose diverse -- quanto
-            // costa la macchina, in quanto tempo rientra, quanto consuma al
-            // mese. Le unita' sono uscite dalle etichette (prefisso e
-            // suffisso del campo), cosi' le etichette stanno su una riga sola
-            // e le righe non si sfasano.
-            // Stava in fondo, quinto campo della sezione "Contratto", dopo le
-            // date. Ma e' la scelta da cui dipende tutto il resto della
-            // pagina: con un prezzo qui il canone non si fattura piu', e
-            // cambiano le etichette, il pannello a destra e due articoli del
-            // contratto. Una cosa cosi' si decide prima, non per ultima
-            // (Laura, 10/11/2026).
-            Forms\Components\Section::make('Come si paga')
-                ->description('Due modi, e si sceglie qui: un canone fisso ogni mese, oppure un tanto a erogazione letto dal contatore.')
-                ->columns(2)
-                ->schema([
-                    Forms\Components\TextInput::make('prezzo_battuta')
-                        ->label('Prezzo a erogazione')
-                        ->prefix('€')
-                        ->helperText('Lasciandolo vuoto il contratto e\' a canone fisso.')
-                        ->numeric()->step('0.0001')->live(onBlur: true),
-                    Forms\Components\TextInput::make('minimo_mensile')
-                        ->label('Minimo per periodo')
-                        ->prefix('€')
-                        ->helperText('Senza minimo, una stagione andata male non copre nemmeno la macchina.')
-                        ->numeric()
-                        ->visible(fn (Get $get) => filled($get('prezzo_battuta'))),
-                ]),
+                // Tre gruppi, non tredici caselle in fila (03/11/2026). Erano
+                // tutte sullo stesso piano in una griglia a tre colonne, ognuna
+                // con la sua frase sotto: tredici numeri senza gerarchia, in cui
+                // non si vedeva che il canone nasce da tre cose diverse -- quanto
+                // costa la macchina, in quanto tempo rientra, quanto consuma al
+                // mese. Le unita' sono uscite dalle etichette (prefisso e
+                // suffisso del campo), cosi' le etichette stanno su una riga sola
+                // e le righe non si sfasano.
+                // Stava in fondo, quinto campo della sezione "Contratto", dopo le
+                // date. Ma e' la scelta da cui dipende tutto il resto della
+                // pagina: con un prezzo qui il canone non si fattura piu', e
+                // cambiano le etichette, il pannello a destra e due articoli del
+                // contratto. Una cosa cosi' si decide prima, non per ultima
+                // (Laura, 10/11/2026).
+                Forms\Components\Section::make('Come si paga')
+                    ->description('Due modi, e si sceglie qui: un canone fisso ogni mese, oppure un tanto a erogazione letto dal contatore.')
+                    ->columns(2)
+                    ->schema([
+                        Forms\Components\TextInput::make('prezzo_battuta')
+                            ->label('Prezzo a erogazione')
+                            ->prefix('€')
+                            ->helperText('Lasciandolo vuoto il contratto e\' a canone fisso.')
+                            ->numeric()->step('0.0001')->live(onBlur: true),
+                        Forms\Components\TextInput::make('minimo_mensile')
+                            ->label('Minimo per periodo')
+                            ->prefix('€')
+                            ->helperText('Senza minimo, una stagione andata male non copre nemmeno la macchina.')
+                            ->numeric()
+                            ->visible(fn (Get $get) => filled($get('prezzo_battuta'))),
+                    ]),
 
-            Forms\Components\Section::make(fn (Get $get) => filled($get('prezzo_battuta'))
-                ? 'Quanto costa servirlo'
-                : 'Da cosa nasce il canone')
-                ->description(fn (Get $get) => filled($get('prezzo_battuta'))
-                    ? 'Non si fattura: e\' il costo pieno, e serve a sapere sotto quale cifra non si scende. Si calcola da questi numeri, e resta ricostruibile anche fra due anni.'
-                    : 'Il canone non si scrive: si calcola da questi numeri, e resta ricostruibile anche fra due anni.')
-                ->schema([
-                    Forms\Components\Fieldset::make('La macchina')
-                        ->columns(3)
-                        ->schema([
-                            Forms\Components\TextInput::make('listino')
-                                ->label('Listino')
-                                ->prefix('€')
-                                ->helperText('Base del Full-Service.')
-                                ->numeric()->required()->live(onBlur: true),
-                            Forms\Components\TextInput::make('sconto_acquisto')
-                                ->label('Sconto fornitore')
-                                ->suffix('%')
-                                ->helperText('Compilandolo, il costo si calcola da sé.')
-                                ->numeric()->live(onBlur: true)
-                                ->afterStateUpdated(function (Forms\Set $set, Get $get, $state) {
-                                    if ($state === null || $state === '' || ! (float) $get('listino')) {
-                                        return;
-                                    }
-                                    $set('costo', round((float) $get('listino') * (1 - (float) $state / 100), 2));
-                                }),
-                            Forms\Components\TextInput::make('costo')
-                                ->label("Costo d'acquisto")
-                                ->prefix('€')
-                                ->helperText('Quanto costa a voi: il canone recupera questo, non il listino.')
-                                ->numeric()->required()->live(onBlur: true),
-                            Forms\Components\TextInput::make('margine')
-                                ->label('Maggiorazione')
-                                ->suffix('%')
-                                ->helperText('Margine e costo del denaro immobilizzato.')
-                                ->numeric()->default(15)->live(onBlur: true),
-                            Forms\Components\TextInput::make('valore_residuo')
-                                ->label('Valore residuo')
-                                ->prefix('€')
-                                ->helperText('Se a fine contratto torna a voi e vale ancora qualcosa, il canone scende.')
-                                ->numeric()->default(0)->live(onBlur: true)
-                                ->columnSpan(2),
-                        ]),
+                Forms\Components\Section::make(fn (Get $get) => filled($get('prezzo_battuta'))
+                    ? 'Quanto costa servirlo'
+                    : 'Da cosa nasce il canone')
+                    ->description(fn (Get $get) => filled($get('prezzo_battuta'))
+                        ? 'Non si fattura: e\' il costo pieno, e serve a sapere sotto quale cifra non si scende. Si calcola da questi numeri, e resta ricostruibile anche fra due anni.'
+                        : 'Il canone non si scrive: si calcola da questi numeri, e resta ricostruibile anche fra due anni.')
+                    ->schema([
+                        Forms\Components\Fieldset::make('La macchina')
+                            ->columns(3)
+                            ->schema([
+                                Forms\Components\TextInput::make('listino')
+                                    ->label('Listino')
+                                    ->prefix('€')
+                                    ->helperText('Base del Full-Service.')
+                                    ->numeric()->required()->live(onBlur: true),
+                                Forms\Components\TextInput::make('sconto_acquisto')
+                                    ->label('Sconto fornitore')
+                                    ->suffix('%')
+                                    ->helperText('Compilandolo, il costo si calcola da sé.')
+                                    ->numeric()->live(onBlur: true)
+                                    ->afterStateUpdated(function (Forms\Set $set, Get $get, $state) {
+                                        if ($state === null || $state === '' || ! (float) $get('listino')) {
+                                            return;
+                                        }
+                                        $set('costo', round((float) $get('listino') * (1 - (float) $state / 100), 2));
+                                    }),
+                                Forms\Components\TextInput::make('costo')
+                                    ->label("Costo d'acquisto")
+                                    ->prefix('€')
+                                    ->helperText('Quanto costa a voi: il canone recupera questo, non il listino.')
+                                    ->numeric()->required()->live(onBlur: true),
+                                Forms\Components\TextInput::make('margine')
+                                    ->label('Maggiorazione')
+                                    ->suffix('%')
+                                    ->helperText('Margine e costo del denaro immobilizzato.')
+                                    ->numeric()->default(15)->live(onBlur: true),
+                                Forms\Components\TextInput::make('valore_residuo')
+                                    ->label('Valore residuo')
+                                    ->prefix('€')
+                                    ->helperText('Se a fine contratto torna a voi e vale ancora qualcosa, il canone scende.')
+                                    ->numeric()->default(0)->live(onBlur: true)
+                                    ->columnSpan(2),
+                            ]),
 
-                    Forms\Components\Fieldset::make('In quanto tempo rientra')
-                        ->columns(3)
-                        ->schema([
-                            Forms\Components\TextInput::make('mesi')
-                                ->label('Durata del contratto')
-                                ->suffix('mesi')
-                                ->numeric()->minValue(1)->default(60)->required()->live(onBlur: true),
-                            // Il contratto puo' durare cinque anni e la macchina
-                            // rientrare in tre: da li' in poi quella quota resta nel
-                            // canone ed e' margine. E si puo' ammortizzare il listino
-                            // invece del costo (Laura, 07/10/2026).
-                            Forms\Components\Select::make('ammortamento_base')
-                                ->label('Ammortamento su')
-                                ->options(['costo' => "Costo d'acquisto", 'listino' => 'Prezzo di listino'])
-                                // Di norma il listino: e' il valore che si concede in
-                                // uso. Lo sconto strappato al fornitore e' margine di
-                                // Alex, non uno sconto da girare al cliente.
-                                ->default('listino')->required()->live()
-                                ->helperText(fn (Get $get) => $get('ammortamento_base') === 'costo'
-                                    ? 'Si rientra della spesa e basta: nessun margine sulla macchina.'
-                                    : null),
-                            Forms\Components\TextInput::make('ammortamento_mesi')
-                                ->label('Da recuperare in')
-                                ->suffix('mesi')
-                                ->placeholder('quanto il contratto')
-                                ->helperText('Es. 36 per rientrare in tre anni su un contratto di cinque.')
-                                ->numeric()->minValue(1)->live(onBlur: true),
-                        ]),
+                        Forms\Components\Fieldset::make('In quanto tempo rientra')
+                            ->columns(3)
+                            ->schema([
+                                Forms\Components\TextInput::make('mesi')
+                                    ->label('Durata del contratto')
+                                    ->suffix('mesi')
+                                    ->numeric()->minValue(1)->default(60)->required()->live(onBlur: true),
+                                // Il contratto puo' durare cinque anni e la macchina
+                                // rientrare in tre: da li' in poi quella quota resta nel
+                                // canone ed e' margine. E si puo' ammortizzare il listino
+                                // invece del costo (Laura, 07/10/2026).
+                                Forms\Components\Select::make('ammortamento_base')
+                                    ->label('Ammortamento su')
+                                    ->options(['costo' => "Costo d'acquisto", 'listino' => 'Prezzo di listino'])
+                                    // Di norma il listino: e' il valore che si concede in
+                                    // uso. Lo sconto strappato al fornitore e' margine di
+                                    // Alex, non uno sconto da girare al cliente.
+                                    ->default('listino')->required()->live()
+                                    ->helperText(fn (Get $get) => $get('ammortamento_base') === 'costo'
+                                        ? 'Si rientra della spesa e basta: nessun margine sulla macchina.'
+                                        : null),
+                                Forms\Components\TextInput::make('ammortamento_mesi')
+                                    ->label('Da recuperare in')
+                                    ->suffix('mesi')
+                                    ->placeholder('quanto il contratto')
+                                    ->helperText('Es. 36 per rientrare in tre anni su un contratto di cinque.')
+                                    ->numeric()->minValue(1)->live(onBlur: true),
+                            ]),
 
-                    // Fieldset non ha description(): la frase sul consumo
-                    // stimato sta sul campo del caffè, che è quello a cui si
-                    // riferisce.
-                    // Questi quattro importi sono il vecchio modo di prezzare
-                    // caffe' e detergenti, prima che esistessero le righe. Se
-                    // le righe ci sono, non li legge piu' nessuno -- restavano
-                    // pero' aperti in mezzo alla pagina, quattro caselle a
-                    // 0,00 che sembrano da compilare e non servono a niente.
-                    // Si chiudono da sole, e il titolo dice perche'.
-                    Forms\Components\Section::make(fn (Get $get) => static::ciSonoRighe($get)
-                        ? 'Importi complessivi — non usati, ci sono le righe'
-                        : 'Cosa consuma ogni mese')
-                        ->collapsible()
-                        ->collapsed(fn (Get $get): bool => static::ciSonoRighe($get))
-                        ->columns(4)
-                        ->schema([
-                            Forms\Components\TextInput::make('caffe_mese')
-                                ->label('Caffè')
-                                ->prefix('€')
-                                ->helperText('Stima: se consuma più del previsto la differenza è vostra.')
-                                ->numeric()->default(0)->live(onBlur: true),
-                            Forms\Components\TextInput::make('ricarico_caffe')
-                                ->label('Ricarico')
-                                ->suffix('%')
-                                ->helperText("Zero se l'importo accanto è già un prezzo di vendita.")
-                                ->numeric()->default(0)->live(onBlur: true),
-                            Forms\Components\TextInput::make('detergenti_mese')
-                                ->label('Detergenti')
-                                ->prefix('€')
-                                ->helperText('Non sono nel Full-Service, che copre i ricambi.')
-                                ->numeric()->default(0)->live(onBlur: true),
-                            Forms\Components\TextInput::make('ricarico_detergenti')
-                                ->label('Ricarico')
-                                ->suffix('%')
-                                ->numeric()->default(0)->live(onBlur: true),
-                            // "Caffè compreso (kg/mese)" e "Detergenti compresi"
-                            // stavano qui: due caselle di testo libero per dire cosa
-                            // spettava al cliente. Le ha sostituite la sezione "Cosa
-                            // comprende il canone", che le stesse quantita' le tiene
-                            // voce per voce e le stampa nel contratto. Lasciarle
-                            // sarebbe peggio che inutile: si compilano credendo che
-                            // finiscano nel documento, e invece non le legge piu'
-                            // nessuno (Laura, 07/10/2026). Le colonne restano, con
-                            // quanto c'era scritto.
-                            Forms\Components\TextInput::make('full_service_percentuale')
-                                ->label('Full-Service')
-                                ->suffix('% annuo del listino')
-                                ->numeric()->default(10)->live(onBlur: true)
-                                ->columnSpan(2),
-                        ]),
-                ]),
+                        // Fieldset non ha description(): la frase sul consumo
+                        // stimato sta sul campo del caffè, che è quello a cui si
+                        // riferisce.
+                        // Questi quattro importi sono il vecchio modo di prezzare
+                        // caffe' e detergenti, prima che esistessero le righe. Se
+                        // le righe ci sono, non li legge piu' nessuno -- restavano
+                        // pero' aperti in mezzo alla pagina, quattro caselle a
+                        // 0,00 che sembrano da compilare e non servono a niente.
+                        // Si chiudono da sole, e il titolo dice perche'.
+                        Forms\Components\Section::make(fn (Get $get) => static::ciSonoRighe($get)
+                            ? 'Importi complessivi — non usati, ci sono le righe'
+                            : 'Cosa consuma ogni mese')
+                            ->collapsible()
+                            ->collapsed(fn (Get $get): bool => static::ciSonoRighe($get))
+                            ->columns(4)
+                            ->schema([
+                                Forms\Components\TextInput::make('caffe_mese')
+                                    ->label('Caffè')
+                                    ->prefix('€')
+                                    ->helperText('Stima: se consuma più del previsto la differenza è vostra.')
+                                    ->numeric()->default(0)->live(onBlur: true),
+                                Forms\Components\TextInput::make('ricarico_caffe')
+                                    ->label('Ricarico')
+                                    ->suffix('%')
+                                    ->helperText("Zero se l'importo accanto è già un prezzo di vendita.")
+                                    ->numeric()->default(0)->live(onBlur: true),
+                                Forms\Components\TextInput::make('detergenti_mese')
+                                    ->label('Detergenti')
+                                    ->prefix('€')
+                                    ->helperText('Non sono nel Full-Service, che copre i ricambi.')
+                                    ->numeric()->default(0)->live(onBlur: true),
+                                Forms\Components\TextInput::make('ricarico_detergenti')
+                                    ->label('Ricarico')
+                                    ->suffix('%')
+                                    ->numeric()->default(0)->live(onBlur: true),
+                                // "Caffè compreso (kg/mese)" e "Detergenti compresi"
+                                // stavano qui: due caselle di testo libero per dire cosa
+                                // spettava al cliente. Le ha sostituite la sezione "Cosa
+                                // comprende il canone", che le stesse quantita' le tiene
+                                // voce per voce e le stampa nel contratto. Lasciarle
+                                // sarebbe peggio che inutile: si compilano credendo che
+                                // finiscano nel documento, e invece non le legge piu'
+                                // nessuno (Laura, 07/10/2026). Le colonne restano, con
+                                // quanto c'era scritto.
+                                Forms\Components\TextInput::make('full_service_percentuale')
+                                    ->label('Full-Service')
+                                    ->suffix('% annuo del listino')
+                                    ->numeric()->default(10)->live(onBlur: true)
+                                    ->columnSpan(2),
+                            ]),
+                    ]),
 
-            Forms\Components\Section::make(fn (Get $get) => filled($get('prezzo_battuta'))
-                ? 'Cosa comprende il corrispettivo'
-                : 'Cosa comprende il canone')
-                ->description(fn (Get $get) => 'Le quantità si scrivono ANNUE: il costo mensile lo calcola il programma.'
-                    .(filled($get('prezzo_battuta'))
-                        ? ' Nel contratto a erogazione non vengono stampate: il cliente legge quali prodotti riceve, non quanti.'
-                        : ' Sono quelle che il contratto promette al cliente.'))
-                ->schema([
-                    // Da dove vengono le quantita'. Senza, fra due anni
-                    // nessuno sa piu' perche' erano 890 kg di caffe' e non
-                    // 600, e se il cliente raddoppia il servizio non c'e'
-                    // niente a cui appellarsi per rivedere il canone.
-                    // Vuoto = compresa nel canone, come e' sempre stato.
-                    Forms\Components\TextInput::make('installazione_costo')
-                        ->label('Installazione fatturata a parte (€)')
-                        ->helperText('Vuoto = compresa. Con un importo il contratto la sposta fra le cose escluse.')
-                        ->numeric()
-                        ->columnSpanFull(),
-                    Forms\Components\TextInput::make('spostamento_costo')
-                        ->label('Spostamento fra i locali (€ per spostamento)')
-                        ->helperText('Vuoto = l\'art. 7 vieta di spostarla.')
-                        ->numeric()
-                        ->columnSpanFull(),
-                    Forms\Components\TextInput::make('base_consumo')
-                        ->label('Consumi calcolati su')
-                        ->placeholder('Es. 250 colazioni al giorno')
-                        ->helperText(fn (Get $get) => filled($get('prezzo_battuta'))
-                            ? 'Non finisce nel contratto a erogazione: resta qui, come presupposto dei conti.'
-                            : 'Finisce nel contratto, nell\'articolo del canone: è il presupposto su cui si regge.')
-                        ->maxLength(255)
-                        ->columnSpanFull(),
-                ]),
+                Forms\Components\Section::make(fn (Get $get) => filled($get('prezzo_battuta'))
+                    ? 'Cosa comprende il corrispettivo'
+                    : 'Cosa comprende il canone')
+                    ->description(fn (Get $get) => 'Le quantità si scrivono ANNUE: il costo mensile lo calcola il programma.'
+                        .(filled($get('prezzo_battuta'))
+                            ? ' Nel contratto a erogazione non vengono stampate: il cliente legge quali prodotti riceve, non quanti.'
+                            : ' Sono quelle che il contratto promette al cliente.'))
+                    ->schema([
+                        // Da dove vengono le quantita'. Senza, fra due anni
+                        // nessuno sa piu' perche' erano 890 kg di caffe' e non
+                        // 600, e se il cliente raddoppia il servizio non c'e'
+                        // niente a cui appellarsi per rivedere il canone.
+                        // Vuoto = compresa nel canone, come e' sempre stato.
+                        Forms\Components\TextInput::make('installazione_costo')
+                            ->label('Installazione fatturata a parte (€)')
+                            ->helperText('Vuoto = compresa. Con un importo il contratto la sposta fra le cose escluse.')
+                            ->numeric()
+                            ->columnSpanFull(),
+                        Forms\Components\TextInput::make('spostamento_costo')
+                            ->label('Spostamento fra i locali (€ per spostamento)')
+                            ->helperText('Vuoto = l\'art. 7 vieta di spostarla.')
+                            ->numeric()
+                            ->columnSpanFull(),
+                        Forms\Components\TextInput::make('base_consumo')
+                            ->label('Consumi calcolati su')
+                            ->placeholder('Es. 250 colazioni al giorno')
+                            ->helperText(fn (Get $get) => filled($get('prezzo_battuta'))
+                                ? 'Non finisce nel contratto a erogazione: resta qui, come presupposto dei conti.'
+                                : 'Finisce nel contratto, nell\'articolo del canone: è il presupposto su cui si regge.')
+                            ->maxLength(255)
+                            ->columnSpanFull(),
+                    ]),
 
-            // Tre elenchi invece di uno con la tendina del gruppo su ogni
-            // riga: il caffe' si legge insieme al caffe' e i detergenti
-            // insieme ai detergenti, e ogni sezione sa gia' cosa contiene
-            // (Laura, 07/10/2026). Sono la stessa relazione filtrata: ognuno
-            // vede e cancella solo le proprie righe.
-            Forms\Components\Section::make('Caffè')
-                ->description('Caffè in grani e decaffeinato, dal listino.')
-                ->collapsible()
-                ->schema([static::ripetitoreForniture(NoleggioFornitura::GRUPPO_CAFFE)]),
+                // Tre elenchi invece di uno con la tendina del gruppo su ogni
+                // riga: il caffe' si legge insieme al caffe' e i detergenti
+                // insieme ai detergenti, e ogni sezione sa gia' cosa contiene
+                // (Laura, 07/10/2026). Sono la stessa relazione filtrata: ognuno
+                // vede e cancella solo le proprie righe.
+                Forms\Components\Section::make('Caffè')
+                    ->description('Caffè in grani e decaffeinato, dal listino.')
+                    ->collapsible()
+                    ->schema([static::ripetitoreForniture(NoleggioFornitura::GRUPPO_CAFFE)]),
 
-            Forms\Components\Section::make('Polveri e solubili')
-                ->description('Cioccolato, orzo, latte in polvere: dal listino, fra i liofilizzati.')
-                ->collapsible()
-                ->schema([static::ripetitoreForniture(NoleggioFornitura::GRUPPO_POLVERI)]),
+                Forms\Components\Section::make('Polveri e solubili')
+                    ->description('Cioccolato, orzo, latte in polvere: dal listino, fra i liofilizzati.')
+                    ->collapsible()
+                    ->schema([static::ripetitoreForniture(NoleggioFornitura::GRUPPO_POLVERI)]),
 
-            Forms\Components\Section::make('Detergenti e igiene')
-                ->description('Dal magazzino materiali, oppure scritti a mano se non sono a catalogo.')
-                ->collapsible()
-                ->schema([static::ripetitoreForniture(NoleggioFornitura::GRUPPO_DETERGENTI)]),
+                Forms\Components\Section::make('Detergenti e igiene')
+                    ->description('Dal magazzino materiali, oppure scritti a mano se non sono a catalogo.')
+                    ->collapsible()
+                    ->schema([static::ripetitoreForniture(NoleggioFornitura::GRUPPO_DETERGENTI)]),
 
-            // Se restano vuoti il contratto li esclude per nome, cosi' nessuno
-            // dà per scontato che i bicchieri siano compresi.
-            Forms\Components\Section::make('Consumabili')
-                ->description('Bicchieri, palette, zucchero. Lasciando vuoto, il contratto li dichiara esclusi.')
-                ->collapsible()
-                ->schema([static::ripetitoreForniture(NoleggioFornitura::GRUPPO_CONSUMABILI)]),
+                // Se restano vuoti il contratto li esclude per nome, cosi' nessuno
+                // dà per scontato che i bicchieri siano compresi.
+                Forms\Components\Section::make('Consumabili')
+                    ->description('Bicchieri, palette, zucchero. Lasciando vuoto, il contratto li dichiara esclusi.')
+                    ->collapsible()
+                    ->schema([static::ripetitoreForniture(NoleggioFornitura::GRUPPO_CONSUMABILI)]),
 
-            Forms\Components\Section::make('Contratto')
-                ->columns(3)
-                ->schema([
-                    Forms\Components\DatePicker::make('data_inizio')->label('Decorrenza'),
-                    // Le tre date della stagione. Con una fine il contratto
-                    // scrive "dal X al Y" invece di "N mesi dal X": su un
-                    // hotel che chiude il 14 marzo i mesi tondi scadono
-                    // sempre nel posto sbagliato (Stalon, 12/10/2026).
-                    Forms\Components\DatePicker::make('data_fine')
-                        ->label('Scadenza')
-                        ->helperText('Vuota = la durata la fanno i mesi.')
-                        ->afterOrEqual('data_inizio'),
-                    Forms\Components\DatePicker::make('consegna_dal')
-                        ->label('Montaggio dal')
-                        ->helperText('La finestra concordata per installare, prima dell\'apertura.'),
-                    Forms\Components\DatePicker::make('consegna_al')
-                        ->label('Montaggio entro il')
-                        ->afterOrEqual('consegna_dal'),
-                    // Finiscono nel contratto parola per parola: un noleggio
-                    // senza condizioni di pagamento non si firma, e su
-                    // sessanta canoni la differenza fra "30 giorni data
-                    // fattura" e "60 giorni fine mese" sono due mesi sempre
-                    // scoperti (Laura, 06/10/2026).
-                    Forms\Components\Select::make('periodicita_fatturazione')
-                        ->label('Fatturazione')->options(Noleggio::periodicitaLabels())
-                        ->default('mensile')->required(),
-                    Forms\Components\Select::make('modalita_pagamento')
-                        ->label('Modalità di pagamento')->options(Noleggio::modalitaPagamentoLabels())
-                        ->default('bonifico')->required(),
-                    Forms\Components\Select::make('termini_pagamento')
-                        ->label('Termini di pagamento')->options(Noleggio::terminiPagamentoLabels())
-                        ->default('30_df')->required(),
-                    Forms\Components\Select::make('stato')
-                        ->label('Stato')->options(Noleggio::statiLabels())
-                        ->default(Noleggio::STATO_BOZZA)->required(),
-                    Forms\Components\Textarea::make('note')->label('Note')->rows(3)->columnSpanFull(),
-                ]),
+                Forms\Components\Section::make('Contratto')
+                    ->columns(3)
+                    ->schema([
+                        Forms\Components\DatePicker::make('data_inizio')->label('Decorrenza'),
+                        // Le tre date della stagione. Con una fine il contratto
+                        // scrive "dal X al Y" invece di "N mesi dal X": su un
+                        // hotel che chiude il 14 marzo i mesi tondi scadono
+                        // sempre nel posto sbagliato (Stalon, 12/10/2026).
+                        Forms\Components\DatePicker::make('data_fine')
+                            ->label('Scadenza')
+                            ->helperText('Vuota = la durata la fanno i mesi.')
+                            ->afterOrEqual('data_inizio'),
+                        Forms\Components\DatePicker::make('consegna_dal')
+                            ->label('Montaggio dal')
+                            ->helperText('La finestra concordata per installare, prima dell\'apertura.'),
+                        Forms\Components\DatePicker::make('consegna_al')
+                            ->label('Montaggio entro il')
+                            ->afterOrEqual('consegna_dal'),
+                        // Finiscono nel contratto parola per parola: un noleggio
+                        // senza condizioni di pagamento non si firma, e su
+                        // sessanta canoni la differenza fra "30 giorni data
+                        // fattura" e "60 giorni fine mese" sono due mesi sempre
+                        // scoperti (Laura, 06/10/2026).
+                        Forms\Components\Select::make('periodicita_fatturazione')
+                            ->label('Fatturazione')->options(Noleggio::periodicitaLabels())
+                            ->default('mensile')->required(),
+                        Forms\Components\Select::make('modalita_pagamento')
+                            ->label('Modalità di pagamento')->options(Noleggio::modalitaPagamentoLabels())
+                            ->default('bonifico')->required(),
+                        Forms\Components\Select::make('termini_pagamento')
+                            ->label('Termini di pagamento')->options(Noleggio::terminiPagamentoLabels())
+                            ->default('30_df')->required(),
+                        Forms\Components\Select::make('stato')
+                            ->label('Stato')->options(Noleggio::statiLabels())
+                            ->default(Noleggio::STATO_BOZZA)->required(),
+                        Forms\Components\Textarea::make('note')->label('Note')->rows(3)->columnSpanFull(),
+                    ]),
             ]),
 
             Forms\Components\Group::make()->columnSpan(['default' => 3, 'lg' => 1])->schema([
@@ -706,9 +706,24 @@ class NoleggioResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('number')->label('Numero')
                     ->weight('medium')->searchable()->sortable(),
-                Tables\Columns\TextColumn::make('customer.company_name')->wrap()->label('Cliente')
+                // Niente ->wrap(): in una colonna stretta una ragione sociale
+                // lunga ("NATO Stability Policing Centre of Excellence") si
+                // spezzava su cinque righe e da sola decideva l'altezza di
+                // tutta la riga, con l'elenco che diventava una colonna di
+                // blocchi invece che una tabella (Laura, 16/11/2026). Tagliata
+                // con il nome intero nel tooltip.
+                Tables\Columns\TextColumn::make('customer.company_name')->label('Cliente')
                     ->searchable()->sortable()
-                    ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
+                    ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state))
+                    ->limit(30)
+                    ->tooltip(function (Noleggio $record): ?string {
+                        // Variabile tipizzata e non $record->customer?->company_name:
+                        // la relazione e' dichiarata su Model, e l'analisi statica
+                        // non sa che quel Model e' un Customer.
+                        $cliente = $record->customer;
+
+                        return $cliente instanceof Customer ? DisplayName::titleCase($cliente->company_name) : null;
+                    }),
                 // Come nei preventivi e nelle richieste: la zona e' il primo
                 // filtro mentale quando si scorre un elenco di clienti.
                 Tables\Columns\TextColumn::make('customer.province')->visibleFrom('md')
@@ -732,17 +747,25 @@ class NoleggioResource extends Resource
                 // quello che il cliente paga davvero, se no l'elenco mostra
                 // 580,08 accanto a un contratto da 0,50 a erogazione
                 // (Laura, 10/11/2026).
+                // Durata sulla stessa riga dell'importo e non come
+                // descrizione sotto: due parole non valgono una seconda riga
+                // su ognuna delle righe della tabella.
                 Tables\Columns\TextColumn::make('canone')->label('Corrispettivo')->sortable()
-                    ->state(fn (Noleggio $record): string => filled($record->prezzo_battuta)
+                    ->state(fn (Noleggio $record): string => (filled($record->prezzo_battuta)
                         ? static::importo($record->prezzo_battuta, 4).' a erogazione'
                         : static::importo($record->canone).' al mese')
-                    ->description(fn (Noleggio $record) => $record->mesi.' mesi'),
+                        .' · '.$record->mesi.' mesi'),
                 // La domanda che ci si fa scorrendo l'elenco e' "gliel'ho
                 // mandato?": la risposta stava dentro la scheda, una per una.
+                // L'indirizzo sta nel tooltip e non sotto la data: era la
+                // cosa piu' larga della tabella (37 caratteri senza spazi, che
+                // non vanno a capo) e spingeva il cliente in una colonna da
+                // cinque righe. La domanda a cui serve rispondere scorrendo
+                // l'elenco resta "gliel'ho mandato?", e a quella basta la data.
                 Tables\Columns\TextColumn::make('inviato')->visibleFrom('md')
                     ->label('Inviato')
                     ->state(fn (Noleggio $record) => $record->emails->first()?->created_at?->format('d/m/Y'))
-                    ->description(fn (Noleggio $record) => $record->emails->first()?->recipient_email)
+                    ->tooltip(fn (Noleggio $record): ?string => $record->emails->first()?->recipient_email)
                     ->color(fn (Noleggio $record) => $record->emails->first() ? 'success' : 'gray')
                     ->placeholder('mai'),
                 // Numeri nostri, come "Visto" sui preventivi: utili ma non da
@@ -956,7 +979,7 @@ class NoleggioResource extends Resource
     }
 
     /** Gli invii servono alla colonna "Inviato": caricati insieme, non uno per riga. */
-    public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
+    public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()->with('emails');
     }
