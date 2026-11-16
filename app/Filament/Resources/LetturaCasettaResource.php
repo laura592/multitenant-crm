@@ -104,9 +104,19 @@ class LetturaCasettaResource extends Resource
                                 return;
                             }
 
+                            // Il campo tiene una data CON L'ORA ("2026-11-16
+                            // 11:39:00": ->default(now()) se la porta dietro),
+                            // mentre `data` e' una colonna di sole date:
+                            // whereDate() confrontava DATE(data) con un
+                            // datetime e non trovava mai niente, cosi' il
+                            // controllo non ha mai bloccato una doppia lettura
+                            // (Laura, 16/11/2026: Cessalto letta due volte lo
+                            // stesso giorno). Si normalizza al giorno.
+                            $giorno = Carbon::parse($valore)->toDateString();
+
                             $gia = LetturaCasetta::query()
                                 ->where('machine_unit_id', $casetta)
-                                ->whereDate('data', $valore)
+                                ->whereDate('data', $giorno)
                                 ->when($record, fn (Builder $q) => $q->whereKeyNot($record->getKey()))
                                 ->exists();
 
@@ -419,7 +429,7 @@ class LetturaCasettaResource extends Resource
             // In modifica il confronto non va fatto con se stessa: senza
             // questo, correggere una lettura mostrava sempre "+0".
             ->when($record, fn (Builder $q) => $q->whereKeyNot($record->getKey()))
-            ->when($get('data'), fn (Builder $q, $data) => $q->whereDate('data', '<=', $data))
+            ->when($get('data'), fn (Builder $q, $data) => $q->whereDate('data', '<=', Carbon::parse($data)->toDateString()))
             ->orderByDesc('data')
             ->orderByDesc('created_at')
             ->first();
