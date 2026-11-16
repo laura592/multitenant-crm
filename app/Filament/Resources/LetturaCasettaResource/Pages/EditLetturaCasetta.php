@@ -83,7 +83,7 @@ class EditLetturaCasetta extends EditRecord
         return Actions\Action::make('invia')
             ->label('Invia il rendiconto')
             ->icon('heroicon-o-paper-airplane')
-            ->modalWidth('2xl')
+            ->modalWidth('4xl')
             ->modalHeading('Invia il rendiconto della lettura')
             ->modalSubmitActionLabel('Invia')
             ->form([
@@ -101,12 +101,57 @@ class EditLetturaCasetta extends EditRecord
                     ->label('CC (opzionale)')
                     ->splitKeys([',', ' ', 'Tab', 'Enter'])
                     ->rules([fn () => $this->regolaEmail()]),
+                // Gia' scritto, non vuoto: il testo che parte si legge e si
+                // corregge qui, invece di doverlo immaginare.
                 Forms\Components\RichEditor::make('messaggio')
-                    ->label('Messaggio (opzionale)')
-                    ->helperText('Se lo lasci vuoto parte il testo standard, con le differenze di periodo.')
-                    ->toolbarButtons(['bold', 'italic', 'bulletList', 'link', 'undo', 'redo']),
+                    ->label('Testo della mail (modificabile)')
+                    ->helperText('Questo testo parte davvero. Le differenze di periodo e il PDF si aggiungono da soli.')
+                    ->toolbarButtons(['bold', 'italic', 'bulletList', 'link', 'undo', 'redo'])
+                    ->live(debounce: 500)
+                    ->default(fn () => LetturaCasettaMail::testoStandard($this->lettura())),
+                Forms\Components\Tabs::make('anteprime')
+                    ->tabs([
+                        Forms\Components\Tabs\Tab::make('Come arriva la mail')
+                            ->icon('heroicon-o-envelope')
+                            ->schema([
+                                Forms\Components\Placeholder::make('anteprima_email')
+                                    ->hiddenLabel()
+                                    ->content(fn (Forms\Get $get): HtmlString => $this->anteprimaEmail($get('messaggio'))),
+                            ]),
+                        Forms\Components\Tabs\Tab::make('Il PDF allegato')
+                            ->icon('heroicon-o-document-text')
+                            ->schema([
+                                Forms\Components\Placeholder::make('anteprima_pdf')
+                                    ->hiddenLabel()
+                                    ->content(fn (): HtmlString => new HtmlString(
+                                        '<iframe src="'.e(route('letture-casette.rendiconto', $this->lettura()))
+                                        .'" style="width:100%;height:60vh;border:0;border-radius:0.5rem;background:#fff;"></iframe>'
+                                    )),
+                            ]),
+                    ]),
             ])
             ->action(fn (array $data) => $this->invia($data));
+    }
+
+    /**
+     * La mail come la vedra' chi la riceve, testo compreso.
+     *
+     * Vedi App\Support\OutsideLivewireRender: il Placeholder e' reattivo
+     * (->live() sull'editor qui sopra), quindi questo render parte sempre
+     * mentre Livewire sta ridisegnando il pannello -- senza il fix nel corpo
+     * comparirebbero i commenti <!--[if BLOCK]><![endif]-->.
+     */
+    protected function anteprimaEmail(mixed $messaggio): HtmlString
+    {
+        $html = OutsideLivewireRender::run(fn () => (new LetturaCasettaMail(
+            $this->lettura(),
+            '',
+            is_string($messaggio) ? $messaggio : null,
+        ))->render());
+
+        return new HtmlString(
+            '<iframe srcdoc="'.e($html).'" style="width:100%;height:60vh;border:0;border-radius:0.5rem;background:#fff;"></iframe>'
+        );
     }
 
     /** @param  array<string, mixed>  $data */

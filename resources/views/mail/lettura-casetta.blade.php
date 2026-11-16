@@ -12,24 +12,28 @@
 	:subtitle="$comune ?: null"
 />
 
-<x-mail.box>
-@if ($customMessage)
-{!! \App\Support\HtmlSicuro::filtra($customMessage) !!}
-@else
-<p style="margin:0 0 12px;">Buongiorno,</p>
-<p style="margin:0 0 12px;">in allegato il rendiconto della lettura del {{ $lettura->data->format('d/m/Y') }}@if($casetta) sulla casetta {{ $casetta }}@endif@if($comune) di {{ $comune }}@endif, con le foto dei display.</p>
 @php
+	// Il testo e' sempre quello che arriva dal modale di invio: li' l'editor
+	// parte gia' scritto con testoStandard(). Il fallback serve agli invii
+	// che non passano dal pannello.
+	$prosa = filled($customMessage)
+		? \App\Support\HtmlSicuro::filtra($customMessage)
+		: \App\Mail\LetturaCasettaMail::testoStandard($lettura);
+
+	// Le differenze con la lettura precedente, non i totali dei contatori:
+	// e' quello che si fattura. Senza lettura precedente non c'e' niente da
+	// scrivere e il riquadro sparisce.
 	$righe = array_filter([
 		'Acqua erogata nel periodo' => $numero($lettura->erogato(), $unita),
 		'Incasso del periodo' => $numero($lettura->incassoPeriodo(), '€'),
 		'Venduto del periodo' => $numero($lettura->vendutoPeriodo(), '€'),
 	]);
 @endphp
+
+<x-mail.box>
+{!! $prosa !!}
 @if ($righe !== [])
-{{-- Le differenze con la lettura precedente, non i totali dei contatori:
-     e' quello che si fattura. Se manca la lettura precedente non c'e' niente
-     da scrivere e il riquadro sparisce. --}}
-<table style="width:100%;border-collapse:collapse;margin:0 0 12px;">
+<table style="width:100%;border-collapse:collapse;margin:12px 0 0;">
 @foreach ($righe as $etichetta => $valore)
 	<tr>
 		<td style="padding:3px 0;color:#4b5563;">{{ $etichetta }}</td>
@@ -37,8 +41,6 @@
 	</tr>
 @endforeach
 </table>
-@endif
-<p style="margin:0;">I numeri per esteso e le foto sono nel PDF allegato.</p>
 @endif
 </x-mail.box>
 

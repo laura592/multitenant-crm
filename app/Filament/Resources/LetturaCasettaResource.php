@@ -169,7 +169,7 @@ class LetturaCasettaResource extends Resource
                 ),
 
             Forms\Components\Section::make('Le foto')
-                ->description('Scattate davanti alla casetta. Ognuna sta sotto il numero che documenta: una foto di un display senza sapere quale vale poco.')
+                ->description('Scattate davanti alla casetta. Ognuna sta sotto il numero che documenta: una foto di un display senza sapere quale vale poco. Le icone sopra la foto la aprono a tutta pagina o la scaricano.')
                 ->columns(['default' => 1, 'lg' => 3])
                 ->schema([
                     static::foto('foto_contatore', 'Contatore dell\'acqua'),
@@ -181,7 +181,10 @@ class LetturaCasettaResource extends Resource
                         ->image()
                         ->multiple()
                         ->disk('local')
+                        ->visibility('private')
                         ->directory('letture-casette')
+                        ->openable()
+                        ->downloadable()
                         ->maxSize(20480)
                         ->columnSpanFull(),
                 ]),
@@ -376,13 +379,23 @@ class LetturaCasettaResource extends Resource
     protected static function foto(string $campo, string $etichetta): Forms\Components\FileUpload
     {
         // Disco `local` (storage/app/private): non sono documenti riservati ma
-        // non hanno motivo di stare a un URL indovinabile. Si aprono dal
-        // pannello.
+        // non hanno motivo di stare a un URL indovinabile.
+        //
+        // ->visibility('private') non nasconde niente di piu': dice a Filament
+        // di chiedere al disco una URL FIRMATA (temporaryUrl, che il driver
+        // locale sa fare perche' config/filesystems.php ha 'serve' => true)
+        // invece di /storage/<percorso> nudo. Senza, l'anteprima e il bottone
+        // "apri" puntavano a un indirizzo non firmato e tornavano 403: le
+        // foto si vedevano solo come un rettangolo grigio col nome del file
+        // (Laura, 16/11/2026: "come apro le foto?").
         return Forms\Components\FileUpload::make($campo)
             ->label($etichetta)
             ->image()
             ->disk('local')
+            ->visibility('private')
             ->directory('letture-casette')
+            ->openable()
+            ->downloadable()
             ->maxSize(20480);
     }
 
