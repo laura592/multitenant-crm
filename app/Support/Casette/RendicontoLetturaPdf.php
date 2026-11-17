@@ -29,6 +29,10 @@ final class RendicontoLetturaPdf
      */
     private const LARGHEZZA_MAX = 1200;
 
+    // Nessuna imagedestroy() in giro: dal PHP 8.0 non fa piu' niente (le
+    // GdImage le libera il garbage collector) e dall'8.5 e' deprecata, quindi
+    // stampava un avviso a ogni rendiconto generato.
+
     public static function per(LetturaCasetta $lettura): DomPdf
     {
         $lettura->loadMissing(['machineUnit', 'customer', 'rilevataDa', 'tenant']);
@@ -168,12 +172,10 @@ final class RendicontoLetturaPdf
         imagefill($tela, 0, 0, imagecolorallocate($tela, 255, 255, 255));
         imagealphablending($tela, true);
         imagecopyresampled($tela, $sorgente, 0, 0, 0, 0, $finaleL, $finaleA, $larghezza, $altezza);
-        imagedestroy($sorgente);
 
         ob_start();
         $riuscito = imagejpeg($tela, null, 72);
         $jpeg = ob_get_clean();
-        imagedestroy($tela);
 
         if (! $riuscito || ! $jpeg) {
             return null;
@@ -217,8 +219,6 @@ final class RendicontoLetturaPdf
         if (! $ruotata) {
             return $immagine;
         }
-
-        imagedestroy($immagine);
 
         return $ruotata;
     }
