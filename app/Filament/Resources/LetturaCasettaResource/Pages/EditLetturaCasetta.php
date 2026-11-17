@@ -224,11 +224,26 @@ class EditLetturaCasetta extends EditRecord
                 : $quante.' '.($quante === 1 ? 'foto allegata' : 'foto allegate').' nel PDF',
         ];
 
-        /** @var LetturaCasettaEmail|null $ultimo */
-        $ultimo = $lettura->emails()->first();
+        // Riuscito e fallito vanno guardati separatamente. La riga nasce
+        // 'sent' e diventa 'failed' solo se Mail::send solleva, ma resta
+        // comunque la piu' recente: con un semplice ->first() un invio
+        // fallito si leggeva come "Gia' inviato", e chi riapriva la lettura
+        // il giorno dopo non mandava niente credendo fosse partita. Il PDF
+        // porta fino a tre foto da telefono, quindi il rifiuto del server di
+        // posta non e' un caso di scuola.
+        /** @var LetturaCasettaEmail|null $riuscito */
+        $riuscito = $lettura->emails()->where('status', 'sent')->first();
+        /** @var LetturaCasettaEmail|null $fallito */
+        $fallito = $lettura->emails()->where('status', 'failed')->first();
 
-        if ($ultimo) {
-            $righe[] = 'Già inviato il <strong>'.e($ultimo->created_at?->format('d/m/Y \a\l\l\e H:i') ?? '').'</strong> a '.e($ultimo->recipient_email);
+        if ($riuscito) {
+            $righe[] = 'Già inviato il <strong>'.e($riuscito->created_at?->format('d/m/Y \a\l\l\e H:i') ?? '').'</strong> a '.e($riuscito->recipient_email);
+        }
+
+        if ($fallito && (! $riuscito || $fallito->created_at > $riuscito->created_at)) {
+            $righe[] = '<span style="color:#b91c1c;">Ultimo tentativo <strong>FALLITO</strong> il '
+                .e($fallito->created_at?->format('d/m/Y \a\l\l\e H:i') ?? '').' verso '.e($fallito->recipient_email)
+                .(filled($fallito->error_message) ? ' — '.e(mb_substr($fallito->error_message, 0, 160)) : '').'</span>';
         }
 
         return new HtmlString(implode('<br>', $righe));

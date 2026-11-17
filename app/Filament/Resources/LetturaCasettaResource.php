@@ -294,7 +294,18 @@ class LetturaCasettaResource extends Resource
                     // dipendenze di queste closure per nome, e con $dati
                     // l'elenco andava in errore 500 appena aperto
                     // (30/10/2026, in produzione).
-                    ->query(fn (Builder $q, array $data) => $q
+                    // Il primo parametro si DEVE chiamare $query. Filament passa
+                    // alla closure gli iniettabili 'query', 'data' e 'state': con
+                    // un altro nome non trova niente, ma siccome Builder e' una
+                    // CLASSE il container gliene costruisce uno nuovo e vuoto
+                    // invece di sollevare. Risultato: nessun errore, nessun
+                    // filtro, e l'indicatore in alto che dice "Dal... Al..."
+                    // mentre l'elenco mostra tutto (verificato 17/11/2026: due
+                    // letture, il filtro ne mostrava due invece di una).
+                    //
+                    // Le $q annidate dentro ->when() invece vanno bene: quelle
+                    // le passa Laravel per posizione, non Filament per nome.
+                    ->query(fn (Builder $query, array $data) => $query
                         ->when($data['dal'] ?? null, fn (Builder $q, string $dal) => $q->whereDate('data', '>=', $dal))
                         ->when($data['al'] ?? null, fn (Builder $q, string $al) => $q->whereDate('data', '<=', $al)))
                     ->indicateUsing(function (array $data): ?string {
@@ -310,13 +321,13 @@ class LetturaCasettaResource extends Resource
                     }),
                 Tables\Filters\Filter::make('senza_foto')
                     ->label('Senza foto')
-                    ->query(fn (Builder $q) => $q
+                    ->query(fn (Builder $query) => $query
                         ->whereNull('foto_contatore')
                         ->whereNull('foto_incasso')
                         ->whereNull('foto_vendite')),
                 Tables\Filters\Filter::make('filtro_cambiato')
                     ->label('Con cambio filtro')
-                    ->query(fn (Builder $q) => $q->where('sostituzione_filtro', true)),
+                    ->query(fn (Builder $query) => $query->where('sostituzione_filtro', true)),
             ])
             ->headerActions([
                 // Il rendiconto che va al Comune: un foglio per casetta, con

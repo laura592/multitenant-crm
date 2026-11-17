@@ -106,10 +106,17 @@ class FoglioRendicontoCasetta implements FromCollection, ShouldAutoSize, WithHea
      */
     private function totali(): array
     {
-        $somma = fn (callable $valore) => $this->letture
-            ->map($valore)
-            ->filter(fn (?float $v) => $v !== null)
-            ->sum();
+        // Null e non zero quando non c'e' NESSUN addendo: sum() su una
+        // collezione vuota torna 0, e una casetta al primo rendiconto -- una
+        // lettura sola, nessuna precedente -- usciva con le celle vuote e in
+        // fondo "Totale periodo 0", cioe' l'unico numero del foglio diceva al
+        // Comune che non e' stata erogata acqua. Una casella vuota si chiede,
+        // uno zero si fattura.
+        $somma = function (callable $valore): ?float {
+            $valori = $this->letture->map($valore)->filter(fn (?float $v) => $v !== null);
+
+            return $valori->isEmpty() ? null : round($valori->sum(), 2);
+        };
 
         return [
             'Totale periodo',
@@ -118,12 +125,12 @@ class FoglioRendicontoCasetta implements FromCollection, ShouldAutoSize, WithHea
             $this->letture->where('ricarica_co2', true)->count() ?: '',
             $this->letture->where('sostituzione_filtro', true)->count() ?: '',
             null,
-            round($somma(fn (LetturaCasetta $l) => $l->erogato()), 2),
+            $somma(fn (LetturaCasetta $l) => $l->erogato()),
             null,
-            round($somma(fn (LetturaCasetta $l) => $l->incassoPeriodo()), 2),
+            $somma(fn (LetturaCasetta $l) => $l->incassoPeriodo()),
             null,
-            round($somma(fn (LetturaCasetta $l) => $l->vendutoPeriodo()), 2),
-            round($somma(fn (LetturaCasetta $l) => $l->scarto()), 2),
+            $somma(fn (LetturaCasetta $l) => $l->vendutoPeriodo()),
+            $somma(fn (LetturaCasetta $l) => $l->scarto()),
             null,
             null,
         ];

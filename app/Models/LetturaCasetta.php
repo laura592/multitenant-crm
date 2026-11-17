@@ -168,7 +168,24 @@ class LetturaCasetta extends Model
             return null;
         }
 
-        $this->precedenteRisolta = static::query()
+        /** @var self|null $precedente */
+        $precedente = $this->precedentiQuery()?->first();
+        $this->precedenteRisolta = $precedente;
+
+        return $this->precedenteRisolta;
+    }
+
+    /**
+     * Le letture che vengono PRIMA di questa sulla stessa casetta, dalla piu'
+     * vicina. Null se la casetta non c'e'.
+     */
+    private function precedentiQuery(): ?Builder
+    {
+        if (! $this->machine_unit_id) {
+            return null;
+        }
+
+        return static::query()
             ->where('machine_unit_id', $this->machine_unit_id)
             ->whereKeyNot($this->getKey())
             ->where(function (Builder $q) {
@@ -179,10 +196,7 @@ class LetturaCasetta extends Model
                     });
             })
             ->orderByDesc('data')
-            ->orderByDesc('created_at')
-            ->first();
-
-        return $this->precedenteRisolta;
+            ->orderByDesc('created_at');
     }
 
     /**
@@ -236,7 +250,13 @@ class LetturaCasetta extends Model
     {
         $autonomia = $this->machineUnit?->filtro_ogni;
 
-        if (! $autonomia) {
+        // (float) e non la verita' della variabile: il cast decimal:2 di
+        // MachineUnit restituisce la STRINGA "0.00", che in PHP e' vera.
+        // Con `! $autonomia` chi scriveva 0 nel campo "Cambio filtro ogni"
+        // (valore ammesso dal form, ed e' il modo naturale di dire "nessuna
+        // soglia") si ritrovava la casetta in rosso "da cambiare" su ogni
+        // riga e una notifica persistente a ogni salvataggio.
+        if ((float) $autonomia <= 0) {
             return null;
         }
 
@@ -299,9 +319,21 @@ class LetturaCasetta extends Model
 
     private function differenzaCon(string $colonna): ?float
     {
-        $precedente = $this->precedente();
+        if ($this->{$colonna} === null) {
+            return null;
+        }
 
-        if ($this->{$colonna} === null || $precedente === null || $precedente->{$colonna} === null) {
+        // L'ultima lettura CHE HA QUESTO NUMERO, non l'ultima e basta. Il
+        // contatore e' facoltativo -- un passaggio di sola CO2, o il
+        // quadrante illeggibile -- e con la lettura di mezzo in bianco il
+        // periodo di quella dopo spariva: l'anteprima nel form prometteva
+        // "+30,00 m³ dal 01/10" (lei salta le letture senza il dato) e il
+        // rendiconto che arrivava al Comune mostrava la casella vuota. Quei
+        // 30 m³ non tornavano piu', perche' la lettura successiva si
+        // confronta con questa.
+        $precedente = $this->precedentiQuery()?->whereNotNull($colonna)->first();
+
+        if ($precedente === null) {
             return null;
         }
 
