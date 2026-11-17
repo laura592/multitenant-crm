@@ -1063,12 +1063,6 @@ parameters:
 			path: app/Filament/Resources/QuoteGroupResource.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$tenant\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Filament/Resources/QuoteGroupResource.php
-
-		-
 			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:notificationRecipients\(\)\.$#'
 			identifier: method.notFound
 			count: 1

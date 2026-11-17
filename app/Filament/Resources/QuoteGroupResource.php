@@ -4,9 +4,9 @@ namespace App\Filament\Resources;
 
 use App\Filament\Forms\OffertaCaffeFields;
 use App\Filament\Resources\QuoteGroupResource\Pages;
+use App\Filament\Resources\QuoteGroupResource\RelationManagers\InviiRelationManager;
 use App\Filament\Resources\QuoteGroupResource\RelationManagers\QuotesRelationManager;
 use App\Mail\QuoteGroupMail;
-use App\Filament\Resources\NoleggioResource;
 use App\Models\Noleggio;
 use App\Models\Product;
 use App\Models\Quote;
@@ -24,8 +24,8 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\HtmlString;
 
 /**
@@ -44,7 +44,6 @@ class QuoteGroupResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
 
     protected static ?string $navigationGroup = 'Vendite';
-
 
     protected static ?int $navigationSort = 4;
 
@@ -243,6 +242,7 @@ class QuoteGroupResource extends Resource
     protected static function defaultGroupEmailBody(QuoteGroup $record): string
     {
         $customerName = DisplayName::titleCase($record->customer?->company_name) ?: (DisplayName::titleCase($record->customer?->full_name) ?? 'Cliente');
+
         // Chiusura e firma NON stanno qui: le stampa il modello dopo il
         // riepilogo e gli allegati (resources/views/mail/quote-group.blade.php).
         // Prima erano in coda al testo modificabile, quindi la mail salutava a
@@ -517,6 +517,7 @@ class QuoteGroupResource extends Resource
     {
         return [
             QuotesRelationManager::class,
+            InviiRelationManager::class,
         ];
     }
 
