@@ -20,13 +20,15 @@
 		? \App\Support\HtmlSicuro::filtra($customMessage)
 		: \App\Mail\LetturaCasettaMail::testoStandard($lettura);
 
-	// Le differenze con la lettura precedente, non i totali dei contatori:
+	// La differenza con la lettura precedente, non il totale del contatore:
 	// e' quello che si fattura. Senza lettura precedente non c'e' niente da
 	// scrivere e il riquadro sparisce.
+	//
+	// Nel corpo della mail NON vanno incasso e venduto (Laura, 17/11/2026):
+	// sono i soldi del distributore, e chi riceve il rendiconto ha bisogno
+	// dell'acqua erogata, non di quanto ha incassato la macchina.
 	$righe = array_filter([
 		'Acqua erogata nel periodo' => $numero($lettura->erogato(), $unita),
-		'Incasso del periodo' => $numero($lettura->incassoPeriodo(), '€'),
-		'Venduto del periodo' => $numero($lettura->vendutoPeriodo(), '€'),
 	]);
 @endphp
 

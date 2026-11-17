@@ -12,8 +12,10 @@ use Maatwebsite\Excel\Concerns\WithMultipleSheets;
  *
  * Un foglio per casetta e non un elenco unico perche' il rendiconto si manda
  * a un Comune alla volta, e perche' i contatori non sono confrontabili fra
- * loro: Casale conta metri cubi, Cessalto litri. Un totale che somma le due
- * cose non vorrebbe dire niente.
+ * loro: ogni casetta ha la sua unita' (machine_units.unita_contatore), e un
+ * totale che somma metri cubi e litri non vorrebbe dire niente. Oggi contano
+ * tutte in metri cubi, ma il campo resta per casetta perche' e' una
+ * caratteristica del contatore, non dell'azienda.
  */
 class LettureCasetteExport implements Export, WithMultipleSheets
 {

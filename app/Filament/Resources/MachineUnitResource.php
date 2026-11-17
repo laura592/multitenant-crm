@@ -122,9 +122,16 @@ class MachineUnitResource extends Resource
                         ->live()
                         ->helperText('Solo per impianti bevande: colonna spina (birra/vino/selz) o impianto acqua standalone. Lascia vuoto per le altre macchine (caffe, macinadosatori, ecc.).'),
                     // Le due cose che servono alle letture delle casette
-                    // (LetturaCasetta): in che unita' conta il contatore --
-                    // Casale in metri cubi, Cessalto in litri -- e dopo quanta
-                    // acqua va cambiato il filtro. La soglia stava scritta a
+                    // (LetturaCasetta): in che unita' conta il contatore e
+                    // dopo quanta acqua va cambiato il filtro.
+                    //
+                    // ATTENZIONE: cambiare l'unita' qui NON converte niente.
+                    // Le letture gia' registrate restano il numero che sono e
+                    // cambia solo l'etichetta, ovunque e all'indietro --
+                    // elenco, Excel, PDF, mail. E `filtro_ogni` si somma
+                    // direttamente al contatore, quindi va riletto nella
+                    // nuova unita' (Laura, 17/11/2026: Cessalto era in litri
+                    // per sbaglio, il quadrante dice metri cubi). La soglia stava scritta a
                     // mano in un angolo del foglio di calcolo, cioe' nella
                     // memoria di chi teneva il foglio.
                     Forms\Components\Select::make('unita_contatore')

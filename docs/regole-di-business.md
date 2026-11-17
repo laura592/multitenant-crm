@@ -405,8 +405,18 @@ fotografano i tre display.
 La casetta è una macchina come le altre (`MachineUnit` di tipo
 `impianto_acqua`): ha matricola, Comune che la ospita e storico. Quello che ha
 in più sono due campi che compaiono solo per gli impianti acqua: **in che
-unità conta il contatore** (Casale metri cubi, Cessalto litri) e **ogni quanta
-acqua va cambiato il filtro**.
+unità conta il contatore** e **ogni quanta acqua va cambiato il filtro**.
+
+Oggi contano tutte in **metri cubi**. Cessalto era stata censita in litri per
+errore — il quadrante del contatore dice `m³` — e il 17/11/2026 è stata
+corretta insieme alla sua lettura del 09/11, che portava 1.069.790 invece di
+1.069,79: le stesse cifre con la virgola al posto giusto. Il consumo del
+periodo passava da −1.068.717 a +2,71.
+
+Attenzione quando si cambia quel campo: **non converte niente**. Le letture
+già registrate restano il numero che sono e cambia solo l'etichetta, in tutto
+quello che si ristampa — elenco, Excel, PDF, mail. E `filtro_ogni` si somma
+direttamente al contatore, quindi va riletto nella nuova unità.
 
 **Il rendiconto non chiede i totali, chiede il periodo.** Quello che si manda
 al Comune è l'acqua erogata e l'incasso *dalla volta prima*, cioè una
