@@ -166,16 +166,48 @@ class LeaveRequestResource extends Resource
                 Tables\Filters\SelectFilter::make('type')
                     ->label('Tipo')
                     ->options(static::typeLabels()),
+                // L'elenco si apre sul MESE CORRENTE, non su tutto lo
+                // storico. Erano centinaia di righe con in cima le ultime
+                // per data: per sapere chi e' in ferie adesso bisognava
+                // leggere e scartare a occhio mesi vecchi, e l'export
+                // (che segue i filtri) portava fuori tutto l'archivio
+                // (Laura, 23/11/2026).
+                //
+                // Con i default sui due campi e non con un vincolo fisso
+                // nella query: il periodo resta scritto in chiaro negli
+                // indicatori, si allarga, e si azzera per vedere tutto.
+                // Filament idrata i default al primo mount, quando
+                // $tableFilters e' ancora null (HasFilters::fill(null)),
+                // e da quel momento in poi vince quello che scegli tu.
+                //
+                // Le due condizioni sono incrociate di proposito: una ferie
+                // dal 28/11 al 3/12 appartiene a NOVEMBRE tanto quanto a
+                // dicembre, e va vista da entrambi i mesi. Confrontare
+                // date_from con l'inizio del mese l'avrebbe fatta sparire
+                // da dicembre.
                 Tables\Filters\Filter::make('date_from')
                     ->label('Periodo')
                     ->form([
-                        Forms\Components\DatePicker::make('from')->label('Dal'),
-                        Forms\Components\DatePicker::make('until')->label('Al'),
+                        Forms\Components\DatePicker::make('from')->label('Dal')
+                            ->default(now()->startOfMonth()),
+                        Forms\Components\DatePicker::make('until')->label('Al')
+                            ->default(now()->endOfMonth()),
                     ])
                     ->query(function (Builder $query, array $data): Builder {
                         return $query
                             ->when($data['from'] ?? null, fn (Builder $q, $date) => $q->whereDate('date_to', '>=', $date))
                             ->when($data['until'] ?? null, fn (Builder $q, $date) => $q->whereDate('date_from', '<=', $date));
+                    })
+                    ->indicateUsing(function (array $data): ?string {
+                        $dal = ($data['from'] ?? null) ? Carbon::parse($data['from'])->format('d/m/Y') : null;
+                        $al = ($data['until'] ?? null) ? Carbon::parse($data['until'])->format('d/m/Y') : null;
+
+                        return match (true) {
+                            $dal && $al => "Dal {$dal} al {$al}",
+                            (bool) $dal => "Dal {$dal}",
+                            (bool) $al => "Fino al {$al}",
+                            default => null,
+                        };
                     }),
             ])
             ->actions([
@@ -250,9 +282,16 @@ class LeaveRequestResource extends Resource
                     Tables\Actions\DeleteBulkAction::make(),
                 ]),
             ])
-            ->emptyStateHeading('Nessuna richiesta ancora')
-            ->emptyStateDescription('Crea la prima richiesta di ferie o permesso con "Nuovo".')
-            ->emptyStateIcon('heroicon-o-calendar');
+            // Lo stato vuoto deve dire che c'e' un FILTRO, non che non
+            // esiste niente: l'elenco si apre sul mese corrente, e in un
+            // mese senza richieste il messaggio "Nessuna richiesta ancora"
+            // avrebbe fatto credere che l'archivio fosse vuoto. Al
+            // 23/11/2026 in produzione le richieste erano sei, tutte fra
+            // agosto e ottobre: col filtro sul mese la pagina si apre
+            // vuota, ed e' giusto che lo spieghi da sola.
+            ->emptyStateHeading('Nessuna richiesta in questo periodo')
+            ->emptyStateDescription('L\'elenco si apre sul mese corrente. Allarga o azzera il filtro "Periodo" in alto per vedere gli altri mesi.')
+            ->emptyStateIcon('heroicon-o-calendar-days');
     }
 
     public static function getPages(): array
