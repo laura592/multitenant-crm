@@ -2,16 +2,21 @@
 
 namespace App\Filament\Pages;
 
+use App\Filament\Resources\DeadlineResource;
 use App\Filament\Resources\InformationRequestResource;
 use App\Filament\Resources\InterventoProgrammatoResource;
+use App\Filament\Resources\MaintenanceScheduleResource;
+use App\Models\Deadline;
 use App\Models\InformationRequestAppointment;
 use App\Models\InterventoProgrammato;
+use App\Models\MaintenanceSchedule;
 use App\Support\DisplayName;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Facades\Filament;
 use Filament\Pages\Page;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Gate;
 
 /**
  * Il calendario di quello che e' stato promesso: appuntamenti sulle
@@ -79,7 +84,7 @@ class Agenda extends Page
 
     public function getSubheading(): ?string
     {
-        return 'Appuntamenti presi sulle richieste e lavori in programmazione, sugli stessi giorni.';
+        return 'Appuntamenti, lavori in programmazione, lavaggi, manutenzioni e scadenze, sugli stessi giorni.';
     }
 
     public function mesePrecedente(): void
@@ -199,6 +204,33 @@ class Agenda extends Page
             $voci->push($this->daIntervento($int));
         }
 
+        // Lavaggi e manutenzioni programmate.
+        //
+        // inCorso() e non "status = attivo": i piani in pausa per la
+        // chiusura stagionale restano attivi di proposito per tenere la
+        // loro storia, ma non scadono — e un calendario che mostra la
+        // chiusura di aprile in novembre fa perdere fiducia in tutto il
+        // resto della pagina (stessa ragione di UpcomingMaintenanceWidget).
+        foreach (MaintenanceSchedule::query()
+            ->inCorso()
+            ->whereNotNull('next_due_date')
+            ->whereBetween('next_due_date', [$da->toDateString(), $a->toDateString()])
+            ->with('customer')
+            ->get() as $piano) {
+            $voci->push($this->daPiano($piano));
+        }
+
+        // Le scadenze: solo quelle ancora attive. Una rinnovata o pagata e'
+        // una pratica chiusa, e ripresentarla nel mese in cui cadeva
+        // vorrebbe dire rimettere in agenda lavoro gia' fatto.
+        foreach (Deadline::query()
+            ->where('status', Deadline::STATUS_ATTIVA)
+            ->whereBetween('due_date', [$da->toDateString(), $a->toDateString()])
+            ->with('deadlinable')
+            ->get() as $scadenza) {
+            $voci->push($this->daScadenza($scadenza));
+        }
+
         return $this->voci = $voci
             ->sortBy(fn (array $v) => $v['ordine'])
             ->groupBy('giorno');
@@ -296,6 +328,65 @@ class Agenda extends Page
             'note' => $i->note,
             'url' => InterventoProgrammatoResource::getUrl('edit', ['record' => $i->id], tenant: Filament::getTenant()),
             'scaduto' => $i->inRitardo(),
+        ];
+    }
+
+    /**
+     * Un piano di manutenzione o di lavaggio nel giorno in cui scade.
+     *
+     * Non ha un'ora: il tecnico decide quando passare, e come i lavori in
+     * programmazione senza ora finisce in fondo alla giornata ('zz') invece
+     * di presentarsi a mezzanotte in cima a tutto.
+     *
+     * @return array<string, mixed>
+     */
+    protected function daPiano(MaintenanceSchedule $s): array
+    {
+        /** @var \App\Models\Customer|null $cliente */
+        $cliente = $s->customer;
+
+        $chi = DisplayName::titleCase($cliente?->company_name)
+            ?: trim(($cliente->first_name ?? '').' '.($cliente->last_name ?? ''))
+            ?: 'Piano di manutenzione';
+
+        return [
+            'tipo' => $s->type === MaintenanceSchedule::TYPE_LAVAGGIO ? 'lavaggio' : 'manutenzione',
+            'giorno' => $s->next_due_date->toDateString(),
+            'ordine' => 'zz',
+            'ora' => null,
+            'chi' => $chi,
+            'etichetta' => $s->type === MaintenanceSchedule::TYPE_LAVAGGIO ? 'Lavaggio' : 'Manutenzione',
+            'note' => MaintenanceScheduleResource::impiantoHero($s),
+            'url' => Gate::allows('view', $s)
+                ? MaintenanceScheduleResource::getUrl('view', ['record' => $s->getKey()], tenant: Filament::getTenant())
+                : null,
+            'scaduto' => $s->next_due_date->isPast(),
+        ];
+    }
+
+    /**
+     * Una scadenza nel giorno in cui cade.
+     *
+     * Il link solo a chi la puo' aprire: DeadlineResource non ha una pagina
+     * di sola lettura, quindi per gli altri la voce si vede ma non e'
+     * cliccabile — meglio di un 403 (come in UpcomingDeadlinesWidget).
+     *
+     * @return array<string, mixed>
+     */
+    protected function daScadenza(Deadline $d): array
+    {
+        return [
+            'tipo' => 'scadenza',
+            'giorno' => $d->due_date->toDateString(),
+            'ordine' => 'zz',
+            'ora' => null,
+            'chi' => $d->relatedLabel(),
+            'etichetta' => Deadline::typeLabels()[$d->type] ?? 'Altro',
+            'note' => $d->policy_number,
+            'url' => Gate::allows('update', $d)
+                ? DeadlineResource::getUrl('edit', ['record' => $d->getKey()], tenant: Filament::getTenant())
+                : null,
+            'scaduto' => $d->due_date->isPast(),
         ];
     }
 }

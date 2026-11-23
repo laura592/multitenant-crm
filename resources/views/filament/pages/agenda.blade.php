@@ -18,6 +18,65 @@
     vuole sapere dove deve andare, non contare le caselle vuote
     (Laura, 06/11/2026).
 --}}
+@php
+    // Colori ed etichette delle voci, in un posto solo: li leggono la lista
+    // da telefono, la griglia del mese e la legenda in fondo, e tre elenchi
+    // che si colorano da soli divergono al primo tipo aggiunto.
+    //
+    // Le classi stanno scritte per intero QUI e non calcolate in PHP nella
+    // pagina: Tailwind v4 scansiona resources/**/*.blade.php e i blade
+    // compilati, non app/**. Una classe costruita a runtime ("bg-{$c}-50")
+    // non comparirebbe in nessuno dei due e verrebbe eliminata dal bundle.
+    //
+    // Tavolozza standard (sky/emerald/amber) e non quella semantica di
+    // Filament (info/success/warning): il CSS precompilato del pacchetto
+    // contiene solo le utility che Filament usa per se', e bg-info-50,
+    // bg-success-50 e bg-warning-50 NON ci sono — scritte cosi' le voci
+    // sarebbero uscite senza colore, senza che niente segnalasse l'errore.
+    // Primary e gray invece ci sono, ed e' il motivo per cui le due voci
+    // che c'erano prima funzionavano.
+    $stiliVoce = [
+        'appuntamento' => [
+            'etichetta' => 'Appuntamento su una richiesta',
+            'testo' => 'text-blue-700 dark:text-blue-300',
+            'pillola' => 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
+            'pallino' => 'bg-blue-100 dark:bg-blue-900',
+        ],
+        'intervento' => [
+            'etichetta' => 'Lavoro in programmazione',
+            'testo' => 'text-gray-700 dark:text-gray-300',
+            'pillola' => 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300',
+            'pallino' => 'bg-gray-200 dark:bg-gray-800',
+        ],
+        'lavaggio' => [
+            'etichetta' => 'Lavaggio programmato',
+            'testo' => 'text-sky-700 dark:text-sky-300',
+            'pillola' => 'bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300',
+            'pallino' => 'bg-sky-100 dark:bg-sky-900',
+        ],
+        'manutenzione' => [
+            'etichetta' => 'Manutenzione programmata',
+            'testo' => 'text-emerald-700 dark:text-emerald-300',
+            'pillola' => 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
+            'pallino' => 'bg-emerald-100 dark:bg-emerald-900',
+        ],
+        'scadenza' => [
+            'etichetta' => 'Scadenza',
+            'testo' => 'text-amber-700 dark:text-amber-300',
+            'pillola' => 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+            'pallino' => 'bg-amber-100 dark:bg-amber-900',
+        ],
+    ];
+    $stileScaduto = [
+        'etichetta' => 'Passato e non chiuso',
+        'testo' => 'text-rose-700 dark:text-rose-300',
+        'pillola' => 'bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300',
+        'pallino' => 'bg-rose-100 dark:bg-rose-900',
+    ];
+    $stileVoce = fn (array $v, string $chiave) => $v['scaduto']
+        ? $stileScaduto[$chiave]
+        : ($stiliVoce[$v['tipo']][$chiave] ?? $stiliVoce['intervento'][$chiave]);
+@endphp
 <x-filament-panels::page>
     <div class="space-y-6">
 
@@ -103,7 +162,7 @@
 
                         <ul class="divide-y divide-gray-100 bg-white dark:divide-gray-800 dark:bg-gray-950">
                             @foreach ($g['voci'] as $v)
-                                @php($classi = $v['scaduto'] ? 'text-danger-700 dark:text-danger-300' : ($v['tipo'] === 'appuntamento' ? 'text-primary-700 dark:text-primary-300' : 'text-gray-700 dark:text-gray-300'))
+                                @php($classi = $stileVoce($v, 'testo'))
 
                                 <li>
                                     {{-- Riga alta quanto un dito (min-h-11): su un
@@ -164,7 +223,7 @@
                                 {{-- Gli attributi condizionali si calcolano qui e non
                                      con @if dentro il tag: inline confondono il
                                      compilatore Blade e la pagina esce in 500. --}}
-                                @php($classi = $v['scaduto'] ? 'bg-danger-50 text-danger-700 dark:bg-danger-950 dark:text-danger-300' : ($v['tipo'] === 'appuntamento' ? 'bg-primary-50 text-primary-700 dark:bg-primary-950 dark:text-primary-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300'))
+                                @php($classi = $stileVoce($v, 'pillola'))
 
                                 <a
                                     href="{{ $v['url'] ?? '#' }}"
@@ -182,14 +241,13 @@
 
             <x-slot name="footer">
                 <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    @foreach ($stiliVoce as $stile)
+                        <span class="flex items-center gap-1.5">
+                            <span class="size-3 rounded {{ $stile['pallino'] }}"></span> {{ $stile['etichetta'] }}
+                        </span>
+                    @endforeach
                     <span class="flex items-center gap-1.5">
-                        <span class="size-3 rounded bg-primary-100 dark:bg-primary-900"></span> Appuntamento su una richiesta
-                    </span>
-                    <span class="flex items-center gap-1.5">
-                        <span class="size-3 rounded bg-gray-200 dark:bg-gray-800"></span> Lavoro in programmazione
-                    </span>
-                    <span class="flex items-center gap-1.5">
-                        <span class="size-3 rounded bg-danger-100 dark:bg-danger-900"></span> Passato e non chiuso
+                        <span class="size-3 rounded {{ $stileScaduto['pallino'] }}"></span> {{ $stileScaduto['etichetta'] }}
                     </span>
                 </div>
             </x-slot>
