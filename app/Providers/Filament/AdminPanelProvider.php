@@ -8,6 +8,7 @@ use App\Filament\Widgets\FailedGestionaleServiceReportsWidget;
 use App\Filament\Widgets\IlMioGiroWidget;
 use App\Filament\Widgets\LatestQuotesWidget;
 use App\Filament\Widgets\MagazzinoStatsWidget;
+use App\Filament\Widgets\MezziSenzaScadenzeWidget;
 use App\Filament\Widgets\PrioritaWidget;
 use App\Filament\Widgets\RapportiniBloccatiWidget;
 use App\Filament\Widgets\Sezioni\SezioneAndamento;
@@ -190,6 +191,9 @@ class AdminPanelProvider extends PanelProvider
                 IlMioGiroWidget::class,
                 PrioritaWidget::class,
                 UpcomingDeadlinesWidget::class,
+                // Il rovescio di UpcomingDeadlinesWidget: non le scadenze
+                // in arrivo ma i mezzi per cui non ne esiste nessuna.
+                MezziSenzaScadenzeWidget::class,
                 FailedGestionaleServiceReportsWidget::class,
                 // I rapportini che non si possono nemmeno provare a mandare:
                 // sta accanto agli invii falliti perche' e' la stessa
