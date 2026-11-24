@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Filament\Resources\ServiceReportResource;
+use App\Filament\Widgets\Concerns\SiNascondeSeVuoto;
 use App\Models\ServiceReport;
 use App\Support\DisplayName;
 use Filament\Tables;
@@ -26,6 +27,8 @@ use Illuminate\Support\Facades\Auth;
  */
 class RapportiniBloccatiWidget extends BaseWidget
 {
+    use SiNascondeSeVuoto;
+
     // Accanto agli invii falliti: sono due facce della stessa cosa, uno e'
     // "l'ho mandato e Eureka l'ha respinto", l'altro "non si puo' nemmeno
     // provare".
@@ -41,17 +44,24 @@ class RapportiniBloccatiWidget extends BaseWidget
      */
     public static function canView(): bool
     {
-        return Auth::user()->can('page_GestionaleSyncReview');
+        return Auth::user()->can('page_GestionaleSyncReview') && static::haDati();
     }
 
     /**
      * Il widget sparisce quando non c'e' niente da sbloccare: una tabella
      * vuota in cima alla dashboard e' rumore, e la dashboard ne ha gia'.
+     *
+     * Prima stava in un canDisplay(), che in Filament 3 non esiste e quindi
+     * non veniva mai chiamato: il riquadro "Nessun rapportino bloccato"
+     * restava in pagina. Vedi SiNascondeSeVuoto.
      */
-    public static function canDisplay(): bool
+    protected static function contaDati(): int
     {
-        return static::bloccati()->isNotEmpty();
+        return static::bloccati()->count();
     }
+
+    /** @var Collection<int, ServiceReport>|null */
+    protected static ?Collection $memoBloccati = null;
 
     /**
      * I rapportini completati, mai inviati, che oggi non passerebbero.
@@ -60,11 +70,14 @@ class RapportiniBloccatiWidget extends BaseWidget
      * relazioni diverse (cliente, articolo, sintomo): si guardano solo i
      * completati non inviati degli ultimi mesi, non quattromila.
      *
+     * Memorizzato per richiesta: lo chiedono sia canView() sia table(), e
+     * sono sei mesi di rapportini da rileggere e rivalidare ogni volta.
+     *
      * @return Collection<int, ServiceReport>
      */
     protected static function bloccati(): Collection
     {
-        return ServiceReport::query()
+        return static::$memoBloccati ??= ServiceReport::query()
             ->where('status', 'completato')
             ->whereNull('gestionale_sync_status')
             ->where('intervention_date', '>=', now()->subMonths(6))

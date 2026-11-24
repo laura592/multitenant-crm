@@ -4,7 +4,9 @@ namespace App\Filament\Widgets\Sezioni;
 
 use App\Filament\Widgets\FailedGestionaleServiceReportsWidget;
 use App\Filament\Widgets\IlMioGiroWidget;
+use App\Filament\Widgets\MezziSenzaScadenzeWidget;
 use App\Filament\Widgets\PrioritaWidget;
+use App\Filament\Widgets\RapportiniBloccatiWidget;
 use App\Filament\Widgets\UpcomingDeadlinesWidget;
 use App\Filament\Widgets\UpcomingMaintenanceWidget;
 
@@ -32,13 +34,22 @@ class SezioneDaFare extends SezioneWidget
         return 'heroicon-o-exclamation-triangle';
     }
 
+    /**
+     * Devono esserci TUTTI i widget che la sezione intesta, altrimenti il
+     * titolo decide se restare guardando solo una parte di cio' che ha
+     * sotto: "Mezzi senza documenti" e "Rapportini che non si possono
+     * inviare" erano stati aggiunti alla dashboard ma non qui, e con gli
+     * altri nascosti il titolo spariva lasciandoli orfani.
+     */
     public static function contenuto(): array
     {
         return [
             IlMioGiroWidget::class,
             PrioritaWidget::class,
             UpcomingDeadlinesWidget::class,
+            MezziSenzaScadenzeWidget::class,
             FailedGestionaleServiceReportsWidget::class,
+            RapportiniBloccatiWidget::class,
             UpcomingMaintenanceWidget::class,
         ];
     }

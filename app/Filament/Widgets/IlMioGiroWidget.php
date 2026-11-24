@@ -4,11 +4,13 @@ namespace App\Filament\Widgets;
 
 use App\Filament\Resources\InterventoProgrammatoResource;
 use App\Filament\Resources\ServiceReportResource;
+use App\Filament\Widgets\Concerns\SiNascondeSeVuoto;
 use App\Models\InterventoProgrammato;
 use Filament\Notifications\Notification;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 
@@ -26,6 +28,8 @@ use Illuminate\Support\Facades\Auth;
  */
 class IlMioGiroWidget extends BaseWidget
 {
+    use SiNascondeSeVuoto;
+
     // Sezione "Da fare adesso", accanto alle scadenze.
     protected static ?int $sort = 1;
 
@@ -46,18 +50,31 @@ class IlMioGiroWidget extends BaseWidget
             return false;
         }
 
-        return true;
+        // Giro vuoto, blocco assente: al tecnico non serve un riquadro che
+        // gli dice che non ha niente da fare.
+        return static::haDati();
+    }
+
+    protected static function contaDati(): int
+    {
+        return static::elenco()->count();
+    }
+
+    /** @return Builder<InterventoProgrammato> */
+    protected static function elenco(): Builder
+    {
+        return InterventoProgrammato::query()
+            ->daFare()
+            ->diTecnico((string) Auth::id())
+            // Oggi, piu' quello che e' rimasto indietro: un lavoro di ieri
+            // non fatto non deve sparire dalla vista.
+            ->whereDate('data', '<=', Carbon::today());
     }
 
     public function table(Table $table): Table
     {
         return $table
-            ->query(InterventoProgrammato::query()
-                ->daFare()
-                ->diTecnico((string) Auth::id())
-                // Oggi, piu' quello che e' rimasto indietro: un lavoro di ieri
-                // non fatto non deve sparire dalla vista.
-                ->whereDate('data', '<=', Carbon::today())
+            ->query(static::elenco()
                 ->ordinato()
                 ->limit(10))
             ->columns([

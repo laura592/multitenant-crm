@@ -97,6 +97,45 @@ class VehicleResource extends Resource
                     Forms\Components\TextInput::make('brand')->label('Marca')->maxLength(255),
                     Forms\Components\TextInput::make('model')->label('Modello')->maxLength(255),
                     Forms\Components\TextInput::make('year')->label('Anno')->numeric(),
+                    Forms\Components\DatePicker::make('immatricolato_il')
+                        ->label('Immatricolato il')
+                        ->helperText('Da qui si conta la prima revisione quando non la si ha sotto mano.'),
+                ]),
+            Forms\Components\Section::make('Uscita dalla flotta')
+                ->description('Si compila solo quando il mezzo non e\' piu\' dell\'azienda.')
+                ->collapsed(fn (Forms\Get $get) => blank($get('dismesso_il')))
+                ->schema([
+                    Forms\Components\DatePicker::make('dismesso_il')
+                        ->label('Dismesso il')
+                        ->helperText('Venduto, rottamato o riconsegnato. Il mezzo resta a sistema con tutta la sua storia, ma smette di comparire fra quelli da mettere in regola.'),
+                ]),
+            // Il bollo del Vito e' nel canone di leasing: senza questo
+            // elenco l'unico modo di far smettere l'avviso sarebbe inventare
+            // una scadenza finta. Il motivo e' obbligatorio perche' fra un
+            // anno la domanda non sara' "e' esente?" ma "perche'?".
+            Forms\Components\Section::make('Documenti che questo mezzo non ha')
+                ->description('Non dimenticanze: cose che per questo mezzo non esistono, tipo il bollo compreso nel leasing.')
+                ->collapsed(fn (Forms\Get $get) => blank($get('esenzioniScadenze')))
+                ->schema([
+                    Forms\Components\Repeater::make('esenzioniScadenze')
+                        ->label('')
+                        ->relationship()
+                        ->addActionLabel('Aggiungi un documento che non si applica')
+                        ->columns(2)
+                        ->schema([
+                            Forms\Components\Select::make('type')
+                                ->label('Documento')
+                                ->options(fn () => collect(Vehicle::TIPI_OBBLIGATORI)
+                                    ->mapWithKeys(fn (string $tipo) => [$tipo => Deadline::typeLabels()[$tipo] ?? $tipo])
+                                    ->all())
+                                ->required()
+                                ->native(false),
+                            Forms\Components\TextInput::make('motivo')
+                                ->label('Perche\' non si applica')
+                                ->placeholder('Compreso nel canone di leasing Mercedes-Benz Financial')
+                                ->required()
+                                ->maxLength(255),
+                        ]),
                 ]),
             Forms\Components\Section::make('Assegnazione')
                 ->schema([

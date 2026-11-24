@@ -3,13 +3,17 @@
 namespace App\Filament\Widgets;
 
 use App\Filament\Resources\MaintenanceScheduleResource;
+use App\Filament\Widgets\Concerns\SiNascondeSeVuoto;
 use App\Models\MaintenanceSchedule;
 use Filament\Widgets\Widget;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
 
 class UpcomingMaintenanceWidget extends Widget
 {
+    use SiNascondeSeVuoto;
+
     // A differenza di UpcomingDeadlinesWidget e LatestQuotesWidget (colSpan
     // 1, affiancate sulla dashboard): questa lista tende ad avere piu' righe
     // utili delle altre due, quindi occupa tutta la riga. Niente
@@ -22,7 +26,24 @@ class UpcomingMaintenanceWidget extends Widget
 
     public static function canView(): bool
     {
-        return Auth::user()->can('view_any_maintenance::schedule');
+        return Auth::user()->can('view_any_maintenance::schedule') && static::haDati();
+    }
+
+    protected static function contaDati(): int
+    {
+        return static::elenco()->count();
+    }
+
+    /**
+     * Il criterio dei piani che "aspettano qualcuno", in un posto solo:
+     * lo usa getSchedules() per riempire il blocco e contaDati() per
+     * decidere se il blocco esiste.
+     */
+    protected static function elenco(): Builder
+    {
+        return MaintenanceSchedule::query()
+            ->inCorso()
+            ->whereNotNull('next_due_date');
     }
 
     protected int|string|array $columnSpan = 'full';
@@ -42,9 +63,7 @@ class UpcomingMaintenanceWidget extends Widget
         // erano 62 su 131, e la lista apriva su chiusure di aprile scadute
         // da sette mesi (Market Marina di Venezia, Camping Marina 2000)
         // mentre i piani veri finivano sotto.
-        return MaintenanceSchedule::query()
-            ->inCorso()
-            ->whereNotNull('next_due_date')
+        return static::elenco()
             ->with('customer')
             ->orderBy('next_due_date')
             ->limit($this->perColumn * 2)

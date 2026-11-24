@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Filament\Resources\QuoteResource;
+use App\Filament\Widgets\Concerns\SiNascondeSeVuoto;
 use App\Models\Quote;
 use App\Support\DisplayName;
 use Filament\Tables;
@@ -12,6 +13,8 @@ use Illuminate\Support\Facades\Auth;
 
 class LatestQuotesWidget extends BaseWidget
 {
+    use SiNascondeSeVuoto;
+
     // Chiude la sezione "Andamento commerciale", sotto i suoi numeri.
     protected static ?int $sort = 6;
 
@@ -19,7 +22,12 @@ class LatestQuotesWidget extends BaseWidget
     // vederli nemmeno riassunti qui.
     public static function canView(): bool
     {
-        return Auth::user()->can('view_any_quote');
+        return Auth::user()->can('view_any_quote') && static::haDati();
+    }
+
+    protected static function contaDati(): int
+    {
+        return Quote::query()->count();
     }
 
     // Riga intera: non e' piu' affiancata a Prossime scadenze (finita nella

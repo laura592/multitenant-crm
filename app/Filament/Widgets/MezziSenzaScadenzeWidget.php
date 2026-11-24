@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Filament\Resources\VehicleResource;
+use App\Filament\Widgets\Concerns\SiNascondeSeVuoto;
 use App\Models\Vehicle;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -25,11 +26,18 @@ use Illuminate\Support\Facades\Auth;
  */
 class MezziSenzaScadenzeWidget extends BaseWidget
 {
+    use SiNascondeSeVuoto;
+
     protected static ?int $sort = 2;
 
     public static function canView(): bool
     {
-        return Auth::user()->can('view_any_vehicle');
+        return Auth::user()->can('view_any_vehicle') && static::haDati();
+    }
+
+    protected static function contaDati(): int
+    {
+        return Vehicle::query()->conScadenzeMancanti()->count();
     }
 
     protected int|string|array $columnSpan = 1;
@@ -41,9 +49,9 @@ class MezziSenzaScadenzeWidget extends BaseWidget
         return $table
             ->query(Vehicle::query()
                 ->conScadenzeMancanti()
-                // scadenzeMancanti() legge la relazione mezzo per mezzo:
-                // senza eager load la dashboard fa una query per riga.
-                ->with('deadlines')
+                // scadenzeMancanti() legge due relazioni mezzo per mezzo:
+                // senza eager load la dashboard fa due query per riga.
+                ->with(['deadlines', 'esenzioniScadenze'])
                 ->orderBy('plate'))
             ->columns([
                 Tables\Columns\TextColumn::make('plate')

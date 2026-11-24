@@ -52,13 +52,13 @@ class SendDeadlineReminders extends Command
                 ->get()
                 ->filter->isUrgent();
 
-            // with('deadlines') non e' cosmetico: scadenzeMancanti() legge la
-            // relazione per ogni mezzo, e senza eager load sono tante query
-            // quanti sono i mezzi del parco.
+            // L'eager load non e' cosmetico: scadenzeMancanti() legge due
+            // relazioni per ogni mezzo (scadenze ed esenzioni), e senza sono
+            // due query per ogni mezzo del parco.
             $mezziIncompleti = Vehicle::query()
                 ->where('tenant_id', $tenant->id)
                 ->conScadenzeMancanti()
-                ->with('deadlines')
+                ->with(['deadlines', 'esenzioniScadenze'])
                 ->orderBy('plate')
                 ->get();
 

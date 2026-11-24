@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Vehicle extends Model
@@ -39,8 +40,15 @@ class Vehicle extends Model
         'brand',
         'model',
         'year',
+        'dismesso_il',
+        'immatricolato_il',
         'assigned_user_id',
         'notes',
+    ];
+
+    protected $casts = [
+        'dismesso_il' => 'date',
+        'immatricolato_il' => 'date',
     ];
 
     public function assignedUser(): BelongsTo
@@ -51,6 +59,24 @@ class Vehicle extends Model
     public function deadlines(): MorphMany
     {
         return $this->morphMany(Deadline::class, 'deadlinable');
+    }
+
+    /**
+     * I documenti che per questo mezzo non esistono, con il perche'.
+     *
+     * Il bollo del Vito HG747AP e' compreso nel canone di leasing: non e'
+     * una scadenza dimenticata, e' una scadenza che non c'e'. Chiederla
+     * comunque insegna a chi legge gli avvisi che si possono ignorare, che
+     * e' il modo piu' rapido di rendere inutile tutto lo scadenzario.
+     */
+    public function esenzioniScadenze(): HasMany
+    {
+        return $this->hasMany(VehicleDeadlineExemption::class);
+    }
+
+    public function dismesso(): bool
+    {
+        return $this->dismesso_il !== null;
     }
 
     /**
@@ -84,9 +110,19 @@ class Vehicle extends Model
      */
     public function scadenzeMancanti(): array
     {
+        // Un mezzo uscito dalla flotta non deve mettersi in regola: FC985CF,
+        // venduto il 23/10/2026, compariva fra gli scoperti con tutte e tre
+        // le voci mancanti perche' le sue diciotto scadenze sono storico.
+        if ($this->dismesso()) {
+            return [];
+        }
+
+        $esenti = $this->esenzioniScadenze->pluck('type')->all();
+
         return array_values(array_filter(
             self::TIPI_OBBLIGATORI,
-            fn (string $tipo) => $this->activeDeadline($tipo) === null,
+            fn (string $tipo) => ! in_array($tipo, $esenti, true)
+                && $this->activeDeadline($tipo) === null,
         ));
     }
 
@@ -120,15 +156,42 @@ class Vehicle extends Model
      * stesso parco mezzi dicono numeri diversi sono il modo piu' rapido di
      * far smettere alla gente di fidarsi di entrambi — la stessa ragione
      * per cui Deadline::scopeUrgent() esiste.
+     *
+     * @param  Builder<Vehicle>  $query
+     * @return Builder<Vehicle>
      */
     public function scopeConScadenzeMancanti(Builder $query): Builder
     {
-        return $query->where(function (Builder $q) {
-            foreach (self::TIPI_OBBLIGATORI as $tipo) {
-                $q->orWhereDoesntHave('deadlines', fn (Builder $d) => $d
-                    ->where('type', $tipo)
-                    ->where('status', Deadline::STATUS_ATTIVA));
-            }
-        });
+        return $query
+            ->inFlotta()
+            ->where(function (Builder $q) {
+                foreach (self::TIPI_OBBLIGATORI as $tipo) {
+                    // Manca se non c'e' la scadenza attiva E non c'e'
+                    // un'esenzione: le due condizioni insieme, altrimenti il
+                    // Vito resta fra gli scoperti per il bollo che sta nel
+                    // leasing. Resta tutto in SQL e senza JSON, cosi' vale
+                    // identico su MySQL e su sqlite nei test.
+                    $q->orWhere(fn (Builder $w) => $w
+                        ->whereDoesntHave('deadlines', fn (Builder $d) => $d
+                            ->where('type', $tipo)
+                            ->where('status', Deadline::STATUS_ATTIVA))
+                        ->whereDoesntHave('esenzioniScadenze', fn (Builder $e) => $e
+                            ->where('type', $tipo)));
+                }
+            });
+    }
+
+    /**
+     * I mezzi ancora in uso. Tutto cio' che chiede "e' in regola?", "va
+     * avvisato?", "quanti mezzi abbiamo?" parte da qui: un venduto non e'
+     * cancellato (la sua storia di bolli e revisioni serve), ma non e'
+     * nemmeno piu' un mezzo dell'azienda.
+     *
+     * @param  Builder<Vehicle>  $query
+     * @return Builder<Vehicle>
+     */
+    public function scopeInFlotta(Builder $query): Builder
+    {
+        return $query->whereNull('dismesso_il');
     }
 }

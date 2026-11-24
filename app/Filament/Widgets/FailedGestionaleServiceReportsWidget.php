@@ -3,15 +3,19 @@
 namespace App\Filament\Widgets;
 
 use App\Filament\Resources\ServiceReportResource;
+use App\Filament\Widgets\Concerns\SiNascondeSeVuoto;
 use App\Models\ServiceReport;
 use App\Support\DisplayName;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 
 class FailedGestionaleServiceReportsWidget extends BaseWidget
 {
+    use SiNascondeSeVuoto;
+
     // Sezione "Da fare adesso", affiancato a Prossime scadenze (stesso sort,
     // stesso columnSpan): finora un invio fallito si scopriva solo aprendo il
     // singolo rapportino o notando l'icona rossa scorrendo l'elenco, niente
@@ -28,7 +32,24 @@ class FailedGestionaleServiceReportsWidget extends BaseWidget
     // d'errore su cui non possono fare niente.
     public static function canView(): bool
     {
-        return Auth::user()->can('page_GestionaleSyncReview');
+        return Auth::user()->can('page_GestionaleSyncReview') && static::haDati();
+    }
+
+    protected static function contaDati(): int
+    {
+        return static::elenco()->count();
+    }
+
+    /**
+     * Una sola definizione dell'elenco, usata sia per decidere se il blocco
+     * esiste sia per riempirlo: due query che rispondono alla stessa domanda
+     * prima o poi non sono piu' d'accordo.
+     */
+    protected static function elenco(): Builder
+    {
+        return ServiceReport::query()
+            ->where('gestionale_sync_status', 'failed')
+            ->orderByDesc('gestionale_synced_at');
     }
 
     protected int|string|array $columnSpan = 1;
@@ -38,10 +59,7 @@ class FailedGestionaleServiceReportsWidget extends BaseWidget
     public function table(Table $table): Table
     {
         return $table
-            ->query(ServiceReport::query()
-                ->where('gestionale_sync_status', 'failed')
-                ->orderByDesc('gestionale_synced_at')
-                ->limit(5))
+            ->query(static::elenco()->limit(5))
             ->columns([
                 Tables\Columns\TextColumn::make('number')
                     ->label('Rapportino')

@@ -2,22 +2,38 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Widgets\Concerns\SiNascondeSeVuoto;
 use App\Filament\Resources\DeadlineResource;
 use App\Models\Deadline;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 
 class UpcomingDeadlinesWidget extends BaseWidget
 {
+    use SiNascondeSeVuoto;
+
     // Sezione "Da fare adesso", stesso sort di FailedGestionaleService
     // ReportsWidget: le due tabelle (colSpan 1) stanno sulla stessa riga.
     protected static ?int $sort = 2;
 
     public static function canView(): bool
     {
-        return Auth::user()->can('view_any_deadline');
+        return Auth::user()->can('view_any_deadline') && static::haDati();
+    }
+
+    protected static function contaDati(): int
+    {
+        return static::elenco()->count();
+    }
+
+    protected static function elenco(): Builder
+    {
+        return Deadline::query()
+            ->where('status', Deadline::STATUS_ATTIVA)
+            ->where('due_date', '>=', now()->startOfDay());
     }
 
     protected int|string|array $columnSpan = 1;
@@ -27,9 +43,7 @@ class UpcomingDeadlinesWidget extends BaseWidget
     public function table(Table $table): Table
     {
         return $table
-            ->query(Deadline::query()
-                ->where('status', Deadline::STATUS_ATTIVA)
-                ->where('due_date', '>=', now()->startOfDay())
+            ->query(static::elenco()
                 // La colonna "Collegata a" legge il morph: senza eager load
                 // sono 5 query in piu' ad ogni apertura della dashboard.
                 ->with('deadlinable')
