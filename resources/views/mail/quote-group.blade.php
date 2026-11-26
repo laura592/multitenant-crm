@@ -56,15 +56,19 @@
 	</tbody>
 </table>
 
+@if(($conAllegato ?? true) || ($nomiAllegatiExtra ?? []) !== [])
 <div style="margin-top:10px;font-size:12px;color:#334155;">
 	<strong>Allegati inclusi:</strong>
+	@if($conAllegato ?? true)
 	@foreach($quotes as $quote)
 		@if(!$loop->first), @endif<span style="white-space:nowrap;">preventivo-{{ $quote->number }}.pdf</span>
 	@endforeach
+	@endif
 	@foreach($nomiAllegatiExtra ?? [] as $nome)
-		, <span style="white-space:nowrap;">{{ $nome }}</span>
+		@if(! $loop->first || ($conAllegato ?? true)), @endif<span style="white-space:nowrap;">{{ $nome }}</span>
 	@endforeach
 </div>
+@endif
 
 @endif
 
@@ -90,6 +94,10 @@
 @endif
 
 @if(! empty($clientUrl))
+@if(! ($conAllegato ?? true))
+<x-mail.quote-link :url="$clientUrl" :multiple="$quotes->count() > 1" />
+@endif
+
 <x-mail.client-response-cta :url="$clientUrl" :tenant="$tenant" :multiple="$quotes->count() > 1" />
 @endif
 

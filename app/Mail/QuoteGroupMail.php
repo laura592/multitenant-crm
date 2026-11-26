@@ -66,18 +66,25 @@ class QuoteGroupMail extends Mailable
                 // stampava il PDF intero dentro il corpo della mail
                 // (26/10/2026).
                 'nomiAllegatiExtra' => array_keys($this->allegatiExtra),
+                // Vedi QuoteMail::$pdfContent: a mappa vuota l'offerta parte
+                // col solo link e i PDF si scaricano dalla pagina.
+                'conAllegato' => $this->pdfContents !== [],
             ],
         );
     }
 
     public function attachments(): array
     {
-        $allegati = $this->quotes->map(function (Quote $quote) {
-            return Attachment::fromData(
-                fn () => $this->pdfContents[$quote->id] ?? '',
+        // Si allega solo quello che c'e' davvero: senza questo filtro una
+        // mappa vuota produceva un PDF da zero byte per ogni alternativa.
+        $allegati = $this->quotes
+            ->filter(fn (Quote $quote) => ($this->pdfContents[$quote->id] ?? '') !== '')
+            ->map(fn (Quote $quote) => Attachment::fromData(
+                fn () => $this->pdfContents[$quote->id],
                 "preventivo-{$quote->number}.pdf"
-            )->withMime('application/pdf');
-        })->all();
+            )->withMime('application/pdf'))
+            ->values()
+            ->all();
 
         if ($this->offertaCaffePdf !== null) {
             $allegati[] = Attachment::fromData(fn () => $this->offertaCaffePdf, $this->offertaCaffeNomeFile ?? 'offerta-caffe.pdf')

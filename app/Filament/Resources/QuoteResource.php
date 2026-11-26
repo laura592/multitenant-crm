@@ -2,11 +2,11 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Forms\Components\AllegatiEmail;
 use App\Filament\Forms\CustomerContactFields;
 use App\Filament\Forms\CustomerFiscalFields;
 use App\Filament\Forms\ItalianAddressFields;
 use App\Filament\Forms\MoneyInput;
-use App\Filament\Forms\Components\AllegatiEmail;
 use App\Filament\Forms\OffertaCaffeFields;
 use App\Filament\Resources\QuoteResource\Pages;
 use App\Filament\Resources\QuoteResource\RelationManagers\QuoteProductsRelationManager;
@@ -26,10 +26,11 @@ use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
-use Filament\Infolists\Components\Actions as InfolistActions;
 use Filament\Infolists\Components\Actions\Action as InfolistAction;
-use Filament\Infolists\Components\Section as InfolistSection;
+use Filament\Infolists\Components\Actions as InfolistActions;
+use Filament\Infolists\Components\Grid;
 use Filament\Infolists\Components\RepeatableEntry;
+use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\Tabs as InfolistTabs;
 use Filament\Infolists\Components\Tabs\Tab as InfolistTab;
 use Filament\Infolists\Components\TextEntry;
@@ -40,6 +41,7 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\HtmlString;
@@ -53,7 +55,6 @@ class QuoteResource extends Resource
 
     protected static ?string $navigationGroup = 'Vendite';
 
-
     protected static ?int $navigationSort = 3;
 
     protected static ?string $navigationLabel = 'Preventivi';
@@ -61,7 +62,6 @@ class QuoteResource extends Resource
     protected static ?string $modelLabel = 'Preventivo';
 
     protected static ?string $pluralModelLabel = 'Preventivi';
-
 
     /**
      * Precarica le relazioni che l'elenco legge per ogni riga.
@@ -144,7 +144,7 @@ class QuoteResource extends Resource
                                         ->label('soluzioni alternative')
                                         ->state(fn (Quote $record) => max(0, ($record->quoteGroup?->quotes()->count() ?? 1) - 1)),
                                 ]),
-                            \Filament\Infolists\Components\Grid::make(12)
+                            Grid::make(12)
                                 ->schema([
                                     // Qui resta solo quello che non si legge
                                     // altrove: il pagamento sta nella
@@ -199,7 +199,7 @@ class QuoteResource extends Resource
                                     // la RepeatableEntry sotto NON hanno label (altrimenti
                                     // "Prodotto"/"Qtà"/... si ripeterebbero su ogni riga,
                                     // bug segnalato "non ripetere più volte prodotto qtà").
-                                    \Filament\Infolists\Components\Grid::make(6)
+                                    Grid::make(6)
                                         ->schema([
                                             TextEntry::make('header_product')->hiddenLabel()->state('Prodotto')->weight('bold')->size(TextEntry\TextEntrySize::ExtraSmall)->color('gray')->columnSpan(['default' => 1, 'lg' => 2]),
                                             TextEntry::make('header_quantity')->hiddenLabel()->state('Qtà')->weight('bold')->size(TextEntry\TextEntrySize::ExtraSmall)->color('gray')->alignCenter(),
@@ -331,18 +331,18 @@ class QuoteResource extends Resource
                     Forms\Components\Placeholder::make('summary_date')
                         ->label('Data')
                         ->content(fn (?Quote $record) => $record
-                            ? \Illuminate\Support\Carbon::parse($record->getAttribute('date'))->format('d/m/Y')
+                            ? Carbon::parse($record->getAttribute('date'))->format('d/m/Y')
                             : '—'),
                     Forms\Components\Placeholder::make('summary_status')
                         ->label('Stato')
-                        ->content(fn (?Quote $record) => new \Illuminate\Support\HtmlString(
+                        ->content(fn (?Quote $record) => new HtmlString(
                             '<span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">'
                                 .($record ? ucfirst($record->status) : '—')
                                 .'</span>'
                         )),
                     Forms\Components\Placeholder::make('summary_total')
                         ->label('Totale')
-                        ->content(fn (?Quote $record) => new \Illuminate\Support\HtmlString(
+                        ->content(fn (?Quote $record) => new HtmlString(
                             '<span class="text-lg font-bold text-primary-600 dark:text-primary-400">'
                                 .($record ? number_format((float) $record->total, 2, ',', '.').' €' : '—')
                                 .'</span>'
@@ -549,7 +549,7 @@ class QuoteResource extends Resource
                                 ->content(fn (?Quote $record) => $record ? number_format((float) $record->tax_total, 2, ',', '.').' €' : '—'),
                             Forms\Components\Placeholder::make('total_display')
                                 ->label('Totale')
-                                ->content(fn (?Quote $record) => new \Illuminate\Support\HtmlString(
+                                ->content(fn (?Quote $record) => new HtmlString(
                                     '<span class="text-lg font-bold text-primary-600 dark:text-primary-400">'
                                         .($record ? number_format((float) $record->total, 2, ',', '.').' €' : '—')
                                         .'</span>'
@@ -866,7 +866,7 @@ class QuoteResource extends Resource
                 ->label('CC (opzionale)')
                 ->email()
                 ->helperText('I destinatari fissi impostati in Impostazioni > Notifiche ricevono comunque una copia.'),
-            AllegatiEmail::make(function (?Quote $record, Forms\Get $get) {
+            AllegatiEmail::make(function (?Quote $record, Get $get) {
                 $nomi = $record ? ['preventivo-'.$record->number.'.pdf'] : [];
 
                 // L'offerta caffe' si allega con una spunta nello stesso
@@ -896,9 +896,44 @@ class QuoteResource extends Resource
             // tanti preventivi restavano "Inviato" senza piu' notizie.
             Forms\Components\Toggle::make('client_link')
                 ->label('Includi il link per rispondere online (accetta e firma, rifiuta, domanda, richiamata)')
-                ->default(true),
+                ->default(true)
+                ->live(),
+            // L'allegato spento di default, dal 26/11/2026.
+            //
+            // Finche' il PDF viaggiava in allegato il link non lo apriva
+            // nessuno: client_view_count era 0 su tutti e 84 i preventivi
+            // fermi, cioe' non si sapeva se il cliente avesse almeno
+            // guardato. Col solo link il documento sta sulla sua pagina (e
+            // da li' si scarica lo stesso), e noi sappiamo se e quante
+            // volte l'ha aperto -- che e' un'informazione diversa dal
+            // silenzio, e molto piu' utile al telefono.
+            //
+            // Senza link l'allegato torna obbligatorio: una mail senza
+            // documento e senza pagina non manderebbe niente.
+            Forms\Components\Toggle::make('allega_pdf')
+                ->label('Allega anche il PDF')
+                ->helperText(fn (Get $get) => $get('client_link')
+                    ? 'Spento, il cliente apre il preventivo dalla sua pagina e sappiamo quando lo fa. Acceso, si torna all\'allegato e di aperture non si sa niente.'
+                    : 'Senza il link per rispondere online il PDF va allegato per forza.')
+                ->default(false)
+                ->disabled(fn (Get $get) => ! $get('client_link'))
+                ->dehydrated(),
             ...OffertaCaffeFields::allegatoAllInvio(fn (?Quote $record = null) => $record?->customer, 'custom_message'),
         ];
+    }
+
+    /**
+     * Se l'invio porta con se' la pagina di risposta del cliente.
+     *
+     * Vive in un metodo perche' da questa risposta dipendono due cose: il
+     * link nella mail e il fatto che l'allegato possa essere omesso. Senza
+     * pagina il PDF deve partire per forza.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected static function conLink(array $data): bool
+    {
+        return (bool) ($data['client_link'] ?? true);
     }
 
     /**
@@ -968,11 +1003,11 @@ class QuoteResource extends Resource
                 ->cc(static::ccRecipients($record, $data))
                 ->send(new QuoteMail(
                     $record,
-                    $pdf->output(),
+                    static::conLink($data) && ! ($data['allega_pdf'] ?? false) ? null : $pdf->output(),
                     $data['custom_message'] ?? null,
                     $offertaCaffe ? OffertaCaffePdf::perOfferta($offertaCaffe)->output() : null,
                     $offertaCaffe ? OffertaCaffePdf::nomeFile($offertaCaffe) : null,
-                    ($data['client_link'] ?? true) ? $record->clientUrl() : null,
+                    static::conLink($data) ? $record->clientUrl() : null,
                 ));
 
             if ($offertaCaffe) {

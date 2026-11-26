@@ -29,13 +29,17 @@ RIEPILOGO SOLUZIONI
 @endif
 @endforeach
 
+@if(($conAllegato ?? true) || ($nomiAllegatiExtra ?? []) !== [])
 ALLEGATI
+@if($conAllegato ?? true)
 @foreach($quotes as $quote)
 - preventivo-{{ $quote->number }}.pdf
 @endforeach
+@endif
 @foreach($nomiAllegatiExtra ?? [] as $nomeAllegato)
 - {!! $nomeAllegato !!}
 @endforeach
+@endif
 @endif
 @php
     $scadenzaOfferta = $quotes

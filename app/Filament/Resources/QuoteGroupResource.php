@@ -225,7 +225,28 @@ class QuoteGroupResource extends Resource
                 ->visible(fn (QuoteGroup $record) => static::contrattiDisponibili($record) !== []),
             Forms\Components\Toggle::make('client_link')
                 ->label('Includi il link per rispondere online (accetta e firma, rifiuta, domanda, richiamata)')
-                ->default(true),
+                ->default(true)
+                ->live(),
+            // L'allegato spento di default, dal 26/11/2026.
+            //
+            // Finche' il PDF viaggiava in allegato il link non lo apriva
+            // nessuno: client_view_count era 0 su tutti e 84 i preventivi
+            // fermi, cioe' non si sapeva se il cliente avesse almeno
+            // guardato. Col solo link il documento sta sulla sua pagina (e
+            // da li' si scarica lo stesso), e noi sappiamo se e quante
+            // volte l'ha aperto -- che e' un'informazione diversa dal
+            // silenzio, e molto piu' utile al telefono.
+            //
+            // Senza link l'allegato torna obbligatorio: una mail senza
+            // documento e senza pagina non manderebbe niente.
+            Forms\Components\Toggle::make('allega_pdf')
+                ->label('Allega anche i PDF delle soluzioni')
+                ->helperText(fn (Get $get) => $get('client_link')
+                    ? 'Spento, il cliente apre le soluzioni dalla sua pagina e sappiamo quando lo fa. Acceso, si torna all\'allegato e di aperture non si sa niente.'
+                    : 'Senza il link per rispondere online i PDF vanno allegati per forza.')
+                ->default(false)
+                ->disabled(fn (Get $get) => ! $get('client_link'))
+                ->dehydrated(),
             ...OffertaCaffeFields::allegatoAllInvio(fn (?QuoteGroup $record = null) => $record?->customer, 'email_body'),
         ];
     }
@@ -395,9 +416,17 @@ class QuoteGroupResource extends Resource
         try {
             $offertaCaffe = OffertaCaffeFields::daAllegare($data);
 
-            $pdfContents = $quotes->mapWithKeys(fn ($quote) => [
-                $quote->id => QuoteResource::buildPdf($quote)->output(),
-            ])->all();
+            $conLink = (bool) ($data['client_link'] ?? true);
+
+            // I PDF si generano solo se partono davvero: senza link vanno
+            // allegati per forza, col link solo se l'utente lo chiede. Su
+            // un'offerta da sei alternative sono sei render di dompdf in
+            // meno, che e' anche il pezzo piu' lento dell'invio.
+            $pdfContents = ($conLink && ! ($data['allega_pdf'] ?? false))
+                ? []
+                : $quotes->mapWithKeys(fn ($quote) => [
+                    $quote->id => QuoteResource::buildPdf($quote)->output(),
+                ])->all();
 
             Mail::to($data['recipient_email'])
                 ->cc(static::ccRecipients($record, $data))
@@ -410,7 +439,7 @@ class QuoteGroupResource extends Resource
                         $data['subject'] ?? static::defaultGroupEmailSubject($record),
                         $offertaCaffe ? OffertaCaffePdf::perOfferta($offertaCaffe)->output() : null,
                         $offertaCaffe ? OffertaCaffePdf::nomeFile($offertaCaffe) : null,
-                        ($data['client_link'] ?? true) ? $record->clientUrl() : null,
+                        $conLink ? $record->clientUrl() : null,
                         static::contrattoDaAllegare($data, $record),
                     ))->subject($data['subject'] ?? static::defaultGroupEmailSubject($record))
                 );

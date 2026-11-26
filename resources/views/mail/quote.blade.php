@@ -22,6 +22,14 @@ Il preventivo è valido fino al **{{ $quote->scadeIl()->format('d/m/Y') }}**. Se
 @endif
 
 @if(! empty($clientUrl))
+{{-- Senza allegato il preventivo E' la pagina, quindi va annunciata prima
+     di chiedere una risposta: i tre pulsanti qui sotto portano dritti ai
+     moduli, e chiedere "accetta o rifiuta" a chi non ha ancora visto il
+     documento non ha senso. --}}
+@if(! ($conAllegato ?? true))
+<x-mail.quote-link :url="$clientUrl" :numero="$quote->number" />
+@endif
+
 <x-mail.client-response-cta :url="$clientUrl" :tenant="$tenant" />
 @endif
 

@@ -16,7 +16,15 @@ class QuoteMail extends Mailable
 
     public function __construct(
         public Quote $quote,
-        public string $pdfContent,
+        /**
+         * Il PDF del preventivo, se si allega.
+         *
+         * Null vuol dire mail col solo link: il documento sta sulla pagina
+         * del cliente, che lo puo' scaricare da li'. E' l'unico modo per
+         * sapere se l'ha aperto — con l'allegato il link non lo apriva
+         * nessuno e client_view_count restava a zero su tutti i preventivi.
+         */
+        public ?string $pdfContent,
         public ?string $customMessage = null,
         // L'offerta caffe' allegata allo stesso invio, se richiesta.
         public ?string $offertaCaffePdf = null,
@@ -41,6 +49,7 @@ class QuoteMail extends Mailable
                 'quote' => $this->quote,
                 'customMessage' => $this->customMessage,
                 'clientUrl' => $this->clientUrl,
+                'conAllegato' => $this->pdfContent !== null,
             ],
         );
     }
@@ -48,8 +57,10 @@ class QuoteMail extends Mailable
     public function attachments(): array
     {
         return array_values(array_filter([
-            Attachment::fromData(fn () => $this->pdfContent, "preventivo-{$this->quote->number}.pdf")
-                ->withMime('application/pdf'),
+            $this->pdfContent !== null
+                ? Attachment::fromData(fn () => $this->pdfContent, "preventivo-{$this->quote->number}.pdf")
+                    ->withMime('application/pdf')
+                : null,
             $this->offertaCaffePdf !== null
                 ? Attachment::fromData(fn () => $this->offertaCaffePdf, $this->offertaCaffeNomeFile ?? 'offerta-caffe.pdf')->withMime('application/pdf')
                 : null,
