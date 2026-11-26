@@ -79,43 +79,39 @@
         .section-title { background: var(--navy); color: #fff; padding: 6px 12px; font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: .04em; margin: 22px 0 0; }
         .info-box { background: var(--soft); border: 1px solid var(--line); border-top: none; padding: 12px 14px; }
 
-        /* Il confronto fra le alternative, in cima.
-           Chi riceve un'offerta con piu' soluzioni ha tre domande, in
-           quest'ordine: che cos'e', che cosa cambia, quanto costa in piu'.
-           Prima la pagina partiva con "SOLUZIONE 1 / PRV-2026-0123" e non
-           rispondeva a nessuna delle tre. */
-        table.confronto { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--line); border-top: none; }
-        table.confronto td { border-bottom: 1px solid var(--line); padding: 12px 14px; vertical-align: top; }
-        table.confronto tr:last-child td { border-bottom: none; }
-        .confronto-nome { font-size: 15px; font-weight: bold; color: var(--navy); margin-top: 2px; }
-        .confronto-diff { font-size: 13px; color: #334155; margin-top: 4px; }
-        .confronto-codice { font-size: 11px; color: #94a3b8; margin-top: 4px; }
-        .confronto-prezzo { font-size: 17px; font-weight: bold; color: var(--navy); white-space: nowrap; }
-        .confronto-nota { font-size: 11px; color: var(--muted); margin-top: 3px; }
-        .confronto-piu { font-size: 12px; color: #9a3412; margin-top: 4px; font-weight: bold; }
-        .confronto-meno { font-size: 12px; color: var(--ok); margin-top: 4px; font-weight: bold; }
-        .confronto-vai { display: inline-block; margin-top: 8px; font-size: 12px; color: var(--navy); text-decoration: underline; cursor: pointer; }
+        /* Le soluzioni a confronto: la riga e' anche il selettore.
+           Chi riceve un'offerta ha tre domande, in quest'ordine: che cos'e',
+           che cosa cambia, quanto costa in piu'. La pagina partiva con
+           "SOLUZIONE 1 / PRV-2026-0123" e non rispondeva a nessuna. */
+        .confronto { border: 1px solid var(--line); border-top: none; background: #fff; }
+        .confronto-riga {
+            display: flex; justify-content: space-between; gap: 16px;
+            padding: 14px; cursor: pointer; border-bottom: 1px solid var(--line);
+            border-left: 4px solid transparent;
+        }
+        .confronto-riga:last-child { border-bottom: none; }
+        .confronto-riga:hover { background: var(--soft); }
+        .confronto-sx { display: block; }
+        .confronto-dx { display: block; text-align: right; white-space: nowrap; }
+        .confronto-nome { display: block; font-size: 15px; font-weight: bold; color: var(--navy); margin-top: 2px; }
+        .confronto-diff { display: block; font-size: 13px; color: #334155; margin-top: 4px; }
+        .confronto-prezzo { display: block; font-size: 17px; font-weight: bold; color: var(--navy); }
+        .confronto-mese { font-size: 12px; font-weight: normal; }
+        .confronto-nota { display: block; font-size: 11px; color: var(--muted); margin-top: 3px; }
+        .confronto-piu { display: block; font-size: 12px; color: #9a3412; margin-top: 4px; font-weight: bold; }
+        .confronto-meno { display: block; font-size: 12px; color: var(--ok); margin-top: 4px; font-weight: bold; }
+        .confronto-vai { display: inline-block; margin-top: 8px; font-size: 12px; color: var(--navy); text-decoration: underline; }
 
-        /* I tab delle soluzioni, senza JavaScript.
-           Le radio stanno fuori dallo schermo e non display:none, che le
+        /* Il dettaglio compare solo quando lo si chiede.
+           Le radio stanno fuori schermo e non display:none, che le
            toglierebbe dalla navigazione da tastiera: cosi' si passa da una
            soluzione all'altra anche con le frecce. */
         .vista-radio { position: absolute; left: -9999px; width: 1px; height: 1px; }
-        .vista-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 18px; }
-        .vista-tab {
-            flex: 1 1 160px; cursor: pointer; padding: 9px 12px;
-            background: var(--soft); border: 1px solid var(--line);
-            border-bottom: 3px solid var(--line);
-        }
-        .vista-tab-n { display: block; text-transform: uppercase; letter-spacing: .04em; font-size: 10px; color: var(--muted); }
-        .vista-tab-nome { display: block; font-size: 13px; font-weight: bold; color: var(--navy); margin-top: 2px; }
-        .vista-tab:hover { background: #fff; }
         .vista-pannello { display: none; }
 
-        /* Un selettore per alternativa: le radio sono tutte sorelle dei
-           pannelli e precedono la striscia dei tab, quindi ~ le raggiunge.
-           Sei e' il massimo che un'offerta abbia mai avuto; la settima non
-           sparirebbe, resterebbe solo sempre visibile. */
+        /* Un selettore per alternativa. Sei e' il massimo che un'offerta
+           abbia mai avuto; la settima non sparirebbe, resterebbe solo
+           sempre visibile. */
         #vista-1:checked ~ .vista-pannello-1,
         #vista-2:checked ~ .vista-pannello-2,
         #vista-3:checked ~ .vista-pannello-3,
@@ -123,18 +119,22 @@
         #vista-5:checked ~ .vista-pannello-5,
         #vista-6:checked ~ .vista-pannello-6 { display: block; }
 
-        #vista-1:checked ~ .vista-tabs .vista-tab:nth-child(1),
-        #vista-2:checked ~ .vista-tabs .vista-tab:nth-child(2),
-        #vista-3:checked ~ .vista-tabs .vista-tab:nth-child(3),
-        #vista-4:checked ~ .vista-tabs .vista-tab:nth-child(4),
-        #vista-5:checked ~ .vista-tabs .vista-tab:nth-child(5),
-        #vista-6:checked ~ .vista-tabs .vista-tab:nth-child(6) {
-            background: #fff; border-bottom-color: var(--navy);
+        #vista-1:checked ~ .confronto .confronto-riga:nth-child(1),
+        #vista-2:checked ~ .confronto .confronto-riga:nth-child(2),
+        #vista-3:checked ~ .confronto .confronto-riga:nth-child(3),
+        #vista-4:checked ~ .confronto .confronto-riga:nth-child(4),
+        #vista-5:checked ~ .confronto .confronto-riga:nth-child(5),
+        #vista-6:checked ~ .confronto .confronto-riga:nth-child(6) {
+            background: var(--soft); border-left-color: var(--navy);
         }
+        #vista-1:checked ~ .confronto .confronto-riga:nth-child(1) .confronto-vai,
+        #vista-2:checked ~ .confronto .confronto-riga:nth-child(2) .confronto-vai,
+        #vista-3:checked ~ .confronto .confronto-riga:nth-child(3) .confronto-vai,
+        #vista-4:checked ~ .confronto .confronto-riga:nth-child(4) .confronto-vai,
+        #vista-5:checked ~ .confronto .confronto-riga:nth-child(5) .confronto-vai,
+        #vista-6:checked ~ .confronto .confronto-riga:nth-child(6) .confronto-vai { display: none; }
 
-        /* La tastiera deve vedersi: senza questo il focus sulle radio fuori
-           schermo non si capirebbe dove sia. */
-        .vista-radio:focus-visible ~ .vista-tabs .vista-tab { outline: 1px dotted var(--muted); }
+        .vista-radio:focus-visible ~ .confronto { outline: 2px solid var(--navy); }
         .customer-name { font-size: 15px; font-weight: bold; color: var(--navy); }
 
         table.items { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 14px; }
@@ -254,7 +254,7 @@
            soluzioni -- e la pagina non aveva ancora nessuna regola di
            stampa. */
         @media print {
-            .vista-tabs, .confronto-vai { display: none !important; }
+            .confronto-vai { display: none !important; }
             .vista-pannello { display: block !important; }
             .quote-block + .quote-block { page-break-before: always; }
             .pdf-link, .pdf-nota { display: none !important; }
@@ -302,9 +302,30 @@
         $confronto = \App\Support\Preventivi\ConfrontoSoluzioni::per($quotes);
     @endphp
 
-    @if($multiple && ! $accepted)
-        <div class="section-title">Le sue soluzioni a confronto</div>
-        <table class="confronto">
+    @if($multiple)
+        {{-- Le radio stanno qui, prima di tutto il resto, perche' i
+             selettori :checked ~ raggiungono solo i fratelli che vengono
+             dopo: devono precedere sia le righe del confronto sia i
+             pannelli.
+
+             Nessuna e' selezionata di partenza. Con la prima soluzione gia'
+             aperta la pagina partiva con confronto, elenco e dettaglio tutti
+             attaccati -- "troppe info tutte attaccate" (Laura, 26/11/2026).
+             Cosi' invece si apre sulla scelta, e il dettaglio arriva quando
+             il cliente lo chiede. Se una soluzione e' gia' stata accettata
+             si parte da quella: li' la scelta e' fatta.
+
+             Il name non e' quote_id: quelle sono le radio del modulo di
+             accettazione in fondo, e due gruppi omonimi si annullerebbero. --}}
+        @foreach($quotes as $quote)
+            <input class="vista-radio" type="radio" name="vista-soluzione" id="vista-{{ $loop->iteration }}"
+                @checked($accepted && $accepted->is($quote))>
+        @endforeach
+    @endif
+
+    @if($multiple)
+        <div class="section-title">{{ $accepted ? 'Le soluzioni proposte' : 'Scelga la soluzione da vedere' }}</div>
+        <div class="confronto">
             @foreach($quotes as $quote)
                 @php
                     $differenza = $confronto->differenza($quote);
@@ -312,64 +333,34 @@
                     $eLaPiuEconomica = $confronto->piuEconomica()?->is($quote);
                     $aCanone = $quote->payment_method === 'noleggio-operativo' && $quote->rental_monthly_fee;
                 @endphp
-                <tr>
-                    <td>
+                {{-- La riga E' il selettore: prima c'erano due elenchi delle
+                     stesse soluzioni, le righe del confronto e sopra i
+                     pannelli una striscia di tab che ne ripeteva i nomi. --}}
+                <label class="confronto-riga" for="vista-{{ $loop->iteration }}">
+                    <span class="confronto-sx">
                         <span class="label">Soluzione {{ $loop->iteration }} di {{ $quotes->count() }}</span>
-                        <div class="confronto-nome">{{ $confronto->titolo($quote) }}</div>
+                        <span class="confronto-nome">{{ $confronto->titolo($quote) }}</span>
                         @if($differenza->isNotEmpty())
-                            <div class="confronto-diff">con {{ $differenza->implode(', ') }}</div>
+                            <span class="confronto-diff">con {{ $differenza->implode(', ') }}</span>
                         @endif
-                        <div class="confronto-codice">{{ $quote->number }}</div>
-                        {{-- Una label e non un'ancora: il pannello di quella
-                             soluzione e' nascosto finche' non si sceglie il
-                             suo tab, e un link a un'ancora invisibile non
-                             porterebbe da nessuna parte. --}}
-                        <label class="confronto-vai" for="vista-{{ $loop->iteration }}">Vedi il dettaglio di questa soluzione</label>
-                    </td>
-                    <td class="to-right" width="34%">
+                        <span class="confronto-vai">Vedi il dettaglio</span>
+                    </span>
+                    <span class="confronto-dx">
                         @if($aCanone)
-                            <div class="confronto-prezzo">€ {{ number_format((float) $quote->rental_monthly_fee, 2, ',', '.') }}<span style="font-size:12px;font-weight:normal;">/mese</span></div>
-                            <div class="confronto-nota">noleggio per {{ max(1, (int) ($quote->rental_months ?? 1)) }} mesi · + IVA</div>
+                            <span class="confronto-prezzo">€ {{ number_format((float) $quote->rental_monthly_fee, 2, ',', '.') }}<span class="confronto-mese">/mese</span></span>
+                            <span class="confronto-nota">noleggio per {{ max(1, (int) ($quote->rental_months ?? 1)) }} mesi · + IVA</span>
                         @else
-                            <div class="confronto-prezzo">€ {{ number_format((float) $quote->subtotal, 2, ',', '.') }}</div>
-                            <div class="confronto-nota">+ IVA</div>
+                            <span class="confronto-prezzo">€ {{ number_format((float) $quote->subtotal, 2, ',', '.') }}</span>
+                            <span class="confronto-nota">+ IVA</span>
                         @endif
-                        {{-- Il confronto col prezzo piu' basso e' la domanda
-                             vera davanti a due alternative: non "quanto
-                             costa", ma "quanto costa in piu'". --}}
+                        {{-- Davanti a due alternative la domanda non e' quanto
+                             costa, ma quanto costa in piu'. --}}
                         @if($piu)
-                            <div class="confronto-piu">+ € {{ number_format($piu, 2, ',', '.') }}{{ $aCanone ? '/mese' : '' }}</div>
-                        @elseif($eLaPiuEconomica && $quotes->count() > 1)
-                            <div class="confronto-meno">la più economica</div>
+                            <span class="confronto-piu">+ € {{ number_format($piu, 2, ',', '.') }}{{ $aCanone ? '/mese' : '' }}</span>
+                        @elseif($eLaPiuEconomica)
+                            <span class="confronto-meno">la più economica</span>
                         @endif
-                    </td>
-                </tr>
-            @endforeach
-        </table>
-    @endif
-
-    @if($multiple)
-        {{-- Tab senza JavaScript: radio nascoste piu' i selettori :checked ~.
-             Le offerte arrivano a sei alternative, e impilate per intero
-             facevano una pagina da diecimila pixel in cui il cliente non
-             sapeva piu' quale preventivo stesse leggendo (Laura,
-             26/11/2026). Niente script perche' questa pagina e' un
-             documento: se il CSS non arriva si vedono tutte, che e' il
-             peggio accettabile. In stampa escono comunque tutte.
-
-             Il name non e' quote_id: quelle sono le radio del modulo di
-             accettazione in fondo, e due gruppi con lo stesso nome si
-             annullerebbero a vicenda. --}}
-        @foreach($quotes as $quote)
-            <input class="vista-radio" type="radio" name="vista-soluzione" id="vista-{{ $loop->iteration }}"
-                @checked($accepted ? $accepted->is($quote) : $loop->first)>
-        @endforeach
-
-        <div class="vista-tabs">
-            @foreach($quotes as $quote)
-                <label class="vista-tab" for="vista-{{ $loop->iteration }}">
-                    <span class="vista-tab-n">Soluzione {{ $loop->iteration }}</span>
-                    <span class="vista-tab-nome">{{ $confronto->titolo($quote) }}</span>
+                    </span>
                 </label>
             @endforeach
         </div>
