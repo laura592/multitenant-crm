@@ -101,13 +101,17 @@
             background: #fff; padding: 6px 0;
         }
         .scelta {
-            flex: 1 1 130px; cursor: pointer; text-align: center; padding: 9px 10px;
-            background: var(--soft); border: 1px solid var(--line); border-bottom: 3px solid var(--line);
+            flex: 1 1 190px; cursor: pointer; padding: 11px 13px;
+            background: var(--soft); border: 1px solid var(--line); border-top: 3px solid var(--line);
         }
         .scelta:hover { background: #fff; }
-        .scelta-n { display: block; text-transform: uppercase; letter-spacing: .04em; font-size: 10px; color: var(--muted); }
-        .scelta-prezzo { display: block; font-size: 16px; font-weight: bold; color: var(--navy); margin-top: 2px; }
-        .scelta-mese { font-size: 11px; font-weight: normal; }
+        /* "Scelta 1" si leggeva appena: era 10px grigio maiuscolo, e il
+           prezzo si mangiava tutta l'attenzione. Adesso dice chiaro quale
+           scelta e', che cos'e' e quanto costa -- tre righe corte. */
+        .scelta-n { display: block; font-size: 13px; font-weight: bold; color: var(--navy); }
+        .scelta-nome { display: block; font-size: 13px; color: #334155; margin-top: 3px; }
+        .scelta-prezzo { display: block; font-size: 19px; font-weight: bold; color: var(--navy); margin-top: 6px; }
+        .scelta-mese { font-size: 12px; font-weight: normal; }
 
         .scarica-tutte {
             display: inline-block; margin-top: 10px; padding: 9px 14px;
@@ -152,7 +156,8 @@
         #vista-4:checked ~ .scelte .scelta-4,
         #vista-5:checked ~ .scelte .scelta-5,
         #vista-6:checked ~ .scelte .scelta-6 {
-            background: #fff; border-bottom-color: var(--navy);
+            background: #fff; border-top-color: var(--navy);
+            box-shadow: 0 1px 0 #fff;
         }
 
 
@@ -361,9 +366,9 @@
             <span class="passo-t">{{ $accepted ? 'La proposta scelta' : 'Le nostre proposte' }}</span>
         </div>
 
-        @unless($accepted)
-            <p class="passo-nota">Ne abbiamo preparate {{ $quante }}. Apra quella che le interessa: dentro trova tutte le voci e il PDF.</p>
-        @endunless
+        {{-- Nessuna istruzione per l'uso: un preventivo non spiega la
+             propria interfaccia al cliente. Se le schede si leggono non
+             serve dirgli di aprirle. --}}
 
         {{-- Schede corte e in una riga sola.
              Le card affiancate con nome, differenza, prezzo e pulsanti
@@ -384,6 +389,7 @@
                 @endphp
                 <label class="scelta scelta-{{ $loop->iteration }}" for="vista-{{ $loop->iteration }}">
                     <span class="scelta-n">Scelta {{ $loop->iteration }}</span>
+                    <span class="scelta-nome">{{ $confronto->titolo($quote) }}</span>
                     <span class="scelta-prezzo">
                         @if($aCanone)
                             {{ $money($quote->rental_monthly_fee) }}<span class="scelta-mese">/mese</span>

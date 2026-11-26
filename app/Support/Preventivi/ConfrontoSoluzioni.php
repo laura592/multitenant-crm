@@ -77,10 +77,46 @@ class ConfrontoSoluzioni
         $macchine = $this->macchine($quote);
 
         if ($macchine->isNotEmpty()) {
-            return $macchine->implode(' + ');
+            return self::senzaCodaComune($macchine->implode(' + '), $this->codaComune());
         }
 
-        return $this->vocePrincipale($quote) ?? (string) $quote->number;
+        return self::senzaCodaComune(
+            $this->vocePrincipale($quote) ?? (string) $quote->number,
+            $this->codaComune()
+        );
+    }
+
+    /**
+     * La parentesi finale che tutte le proposte hanno uguale, se c'e'.
+     *
+     * A catalogo le macchine si chiamano "A600 FM Plus 1G H1 (New A Line)":
+     * quando l'intera offerta e' della stessa linea, quel pezzo e' identico
+     * su ogni riga e allunga il nome senza distinguere niente -- e su una
+     * scheda stretta e' proprio quello che si legge peggio. Se invece le
+     * linee sono diverse la parentesi resta: li' e' una differenza.
+     */
+    private function codaComune(): ?string
+    {
+        if ($this->soluzioni->count() < 2) {
+            return null;
+        }
+
+        $code = $this->soluzioni
+            ->map(fn (Quote $q) => $this->macchine($q)->implode(' + '))
+            ->map(fn (string $nome) => preg_match('/\s(\([^()]+\))$/', $nome, $m) ? $m[1] : null);
+
+        return $code->filter()->count() === $this->soluzioni->count() && $code->unique()->count() === 1
+            ? $code->first()
+            : null;
+    }
+
+    private static function senzaCodaComune(string $nome, ?string $coda): string
+    {
+        if ($coda === null || ! str_ends_with($nome, ' '.$coda)) {
+            return $nome;
+        }
+
+        return trim(substr($nome, 0, -strlen($coda)));
     }
 
     /** La riga di primo livello piu' cara: che cosa si sta comprando. */
