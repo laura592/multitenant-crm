@@ -79,39 +79,66 @@
         .section-title { background: var(--navy); color: #fff; padding: 6px 12px; font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: .04em; margin: 22px 0 0; }
         .info-box { background: var(--soft); border: 1px solid var(--line); border-top: none; padding: 12px 14px; }
 
-        /* Le soluzioni a confronto: la riga e' anche il selettore.
-           Chi riceve un'offerta ha tre domande, in quest'ordine: che cos'e',
-           che cosa cambia, quanto costa in piu'. La pagina partiva con
-           "SOLUZIONE 1 / PRV-2026-0123" e non rispondeva a nessuna. */
-        .confronto { border: 1px solid var(--line); border-top: none; background: #fff; }
-        .confronto-riga {
-            display: flex; justify-content: space-between; gap: 16px;
-            padding: 14px; cursor: pointer; border-bottom: 1px solid var(--line);
-            border-left: 4px solid transparent;
+        /* I passi: dicono che la pagina e' corta e dove si e' arrivati.
+           Senza, era un unico muro in cui non si capiva quante cose ci
+           fossero da fare. */
+        .passo { display: flex; align-items: center; gap: 10px; margin: 26px 0 10px; }
+        .passo-n {
+            flex: 0 0 auto; width: 24px; height: 24px; border-radius: 50%;
+            background: var(--navy); color: #fff; font-size: 13px; font-weight: bold;
+            display: flex; align-items: center; justify-content: center;
         }
-        .confronto-riga:last-child { border-bottom: none; }
-        .confronto-riga:hover { background: var(--soft); }
-        .confronto-sx { display: block; }
-        .confronto-dx { display: block; text-align: right; white-space: nowrap; }
-        .confronto-nome { display: block; font-size: 15px; font-weight: bold; color: var(--navy); margin-top: 2px; }
-        .confronto-diff { display: block; font-size: 13px; color: #334155; margin-top: 4px; }
-        .confronto-prezzo { display: block; font-size: 17px; font-weight: bold; color: var(--navy); }
-        .confronto-mese { font-size: 12px; font-weight: normal; }
-        .confronto-nota { display: block; font-size: 11px; color: var(--muted); margin-top: 3px; }
-        .confronto-piu { display: block; font-size: 12px; color: #9a3412; margin-top: 4px; font-weight: bold; }
-        .confronto-meno { display: block; font-size: 12px; color: var(--ok); margin-top: 4px; font-weight: bold; }
-        .confronto-vai { display: inline-block; margin-top: 8px; font-size: 12px; color: var(--navy); text-decoration: underline; }
+        .passo-t { font-size: 13px; font-weight: bold; color: var(--navy); text-transform: uppercase; letter-spacing: .04em; }
 
-        /* Il dettaglio compare solo quando lo si chiede.
+        /* Le schede: navigazione e basta, etichette corte. */
+        .scelte { display: flex; flex-wrap: wrap; gap: 6px; }
+        .scelta {
+            cursor: pointer; padding: 10px 20px; font-size: 14px; font-weight: bold;
+            color: var(--muted); background: var(--soft);
+            border: 1px solid var(--line); border-bottom: 3px solid var(--line);
+        }
+        .scelta:hover { color: var(--navy); background: #fff; }
+
+        /* Il riepilogo della scelta: etichetta a sinistra, prezzo a destra. */
+        .scelta-capo {
+            display: flex; justify-content: space-between; gap: 16px;
+            background: var(--meta); padding: 14px; margin-bottom: 4px;
+        }
+        .scelta-nome { font-size: 17px; font-weight: bold; color: var(--navy); }
+        .scelta-diff { font-size: 13px; color: #334155; margin-top: 4px; }
+        .scelta-codice { font-size: 11px; color: var(--muted); margin-top: 6px; }
+        .scelta-prezzo-box { text-align: right; white-space: nowrap; }
+        .scelta-prezzo { font-size: 22px; font-weight: bold; color: var(--navy); }
+        .scelta-mese { font-size: 13px; font-weight: normal; }
+        .scelta-nota { font-size: 11px; color: var(--muted); margin-top: 2px; }
+        .scelta-scelta { margin-top: 6px; }
+        .confronto-piu { font-size: 12px; color: #9a3412; margin-top: 6px; font-weight: bold; white-space: normal; }
+        .confronto-meno { font-size: 12px; color: var(--ok); margin-top: 6px; font-weight: bold; }
+
+        /* La descrizione tecnica, chiusa finche' non serve. */
+        .descrizione { border: 1px solid var(--line); border-top: none; }
+        .desc-toggle { position: absolute; left: -9999px; width: 1px; height: 1px; }
+        .desc-apri {
+            display: block; cursor: pointer; padding: 10px 14px;
+            font-size: 13px; font-weight: bold; color: var(--navy); background: var(--soft);
+        }
+        .desc-apri:hover { background: #fff; }
+        .desc-apri::before { content: '+  '; }
+        .desc-toggle:checked ~ .desc-apri::before { content: '\2212  '; }
+        .desc-toggle:focus-visible ~ .desc-apri { outline: 2px solid var(--navy); }
+        .desc-corpo { display: none; border: none; }
+        .desc-toggle:checked ~ .desc-corpo { display: block; }
+
+        /* Una scheda per volta.
            Le radio stanno fuori schermo e non display:none, che le
            toglierebbe dalla navigazione da tastiera: cosi' si passa da una
-           soluzione all'altra anche con le frecce. */
+           scelta all'altra anche con le frecce. */
         .vista-radio { position: absolute; left: -9999px; width: 1px; height: 1px; }
         .vista-pannello { display: none; }
 
-        /* Un selettore per alternativa. Sei e' il massimo che un'offerta
-           abbia mai avuto; la settima non sparirebbe, resterebbe solo
-           sempre visibile. */
+        /* Un selettore per scelta. Sei e' il massimo che un'offerta abbia
+           mai avuto; la settima non sparirebbe, resterebbe solo sempre
+           visibile. */
         #vista-1:checked ~ .vista-pannello-1,
         #vista-2:checked ~ .vista-pannello-2,
         #vista-3:checked ~ .vista-pannello-3,
@@ -119,22 +146,16 @@
         #vista-5:checked ~ .vista-pannello-5,
         #vista-6:checked ~ .vista-pannello-6 { display: block; }
 
-        #vista-1:checked ~ .confronto .confronto-riga:nth-child(1),
-        #vista-2:checked ~ .confronto .confronto-riga:nth-child(2),
-        #vista-3:checked ~ .confronto .confronto-riga:nth-child(3),
-        #vista-4:checked ~ .confronto .confronto-riga:nth-child(4),
-        #vista-5:checked ~ .confronto .confronto-riga:nth-child(5),
-        #vista-6:checked ~ .confronto .confronto-riga:nth-child(6) {
-            background: var(--soft); border-left-color: var(--navy);
+        #vista-1:checked ~ .scelte .scelta:nth-child(1),
+        #vista-2:checked ~ .scelte .scelta:nth-child(2),
+        #vista-3:checked ~ .scelte .scelta:nth-child(3),
+        #vista-4:checked ~ .scelte .scelta:nth-child(4),
+        #vista-5:checked ~ .scelte .scelta:nth-child(5),
+        #vista-6:checked ~ .scelte .scelta:nth-child(6) {
+            color: var(--navy); background: #fff; border-bottom-color: var(--navy);
         }
-        #vista-1:checked ~ .confronto .confronto-riga:nth-child(1) .confronto-vai,
-        #vista-2:checked ~ .confronto .confronto-riga:nth-child(2) .confronto-vai,
-        #vista-3:checked ~ .confronto .confronto-riga:nth-child(3) .confronto-vai,
-        #vista-4:checked ~ .confronto .confronto-riga:nth-child(4) .confronto-vai,
-        #vista-5:checked ~ .confronto .confronto-riga:nth-child(5) .confronto-vai,
-        #vista-6:checked ~ .confronto .confronto-riga:nth-child(6) .confronto-vai { display: none; }
 
-        .vista-radio:focus-visible ~ .confronto { outline: 2px solid var(--navy); }
+        .vista-radio:focus-visible ~ .scelte { outline: 2px solid var(--navy); }
         .customer-name { font-size: 15px; font-weight: bold; color: var(--navy); }
 
         table.items { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 14px; }
@@ -254,8 +275,12 @@
            soluzioni -- e la pagina non aveva ancora nessuna regola di
            stampa. */
         @media print {
-            .confronto-vai { display: none !important; }
+            .scelte { display: none !important; }
             .vista-pannello { display: block !important; }
+            /* Su carta la descrizione dell'attrezzatura ci deve essere,
+               aperta o chiusa che fosse a schermo. */
+            .desc-corpo { display: block !important; }
+            .desc-apri { display: none !important; }
             .quote-block + .quote-block { page-break-before: always; }
             .pdf-link, .pdf-nota { display: none !important; }
         }
@@ -319,49 +344,25 @@
              accettazione in fondo, e due gruppi omonimi si annullerebbero. --}}
         @foreach($quotes as $quote)
             <input class="vista-radio" type="radio" name="vista-soluzione" id="vista-{{ $loop->iteration }}"
-                @checked($accepted && $accepted->is($quote))>
+                @checked($accepted ? $accepted->is($quote) : $loop->first)>
         @endforeach
     @endif
 
     @if($multiple)
-        <div class="section-title">{{ $accepted ? 'Le soluzioni proposte' : 'Scelga la soluzione da vedere' }}</div>
-        <div class="confronto">
+        {{-- Passo 1: la navigazione, e basta.
+             Prima qui c'era il confronto per esteso -- nome, differenza,
+             prezzo, maggiorazione, "vedi il dettaglio" -- e sotto il
+             dettaglio completo: una schermata davanti a cui uno si stanca e
+             se ne va (Laura, 26/11/2026). Adesso e' una fila di schede
+             corte: "Scelta 1", "Scelta 2". Che cosa sia ciascuna si legge
+             appena sotto, una per volta. --}}
+        <div class="passo">
+            <span class="passo-n">1</span>
+            <span class="passo-t">{{ $accepted ? 'Le soluzioni proposte' : 'Scelga la soluzione' }}</span>
+        </div>
+        <div class="scelte">
             @foreach($quotes as $quote)
-                @php
-                    $differenza = $confronto->differenza($quote);
-                    $piu = $confronto->maggiorazione($quote);
-                    $eLaPiuEconomica = $confronto->piuEconomica()?->is($quote);
-                    $aCanone = $quote->payment_method === 'noleggio-operativo' && $quote->rental_monthly_fee;
-                @endphp
-                {{-- La riga E' il selettore: prima c'erano due elenchi delle
-                     stesse soluzioni, le righe del confronto e sopra i
-                     pannelli una striscia di tab che ne ripeteva i nomi. --}}
-                <label class="confronto-riga" for="vista-{{ $loop->iteration }}">
-                    <span class="confronto-sx">
-                        <span class="label">Soluzione {{ $loop->iteration }} di {{ $quotes->count() }}</span>
-                        <span class="confronto-nome">{{ $confronto->titolo($quote) }}</span>
-                        @if($differenza->isNotEmpty())
-                            <span class="confronto-diff">con {{ $differenza->implode(', ') }}</span>
-                        @endif
-                        <span class="confronto-vai">Vedi il dettaglio</span>
-                    </span>
-                    <span class="confronto-dx">
-                        @if($aCanone)
-                            <span class="confronto-prezzo">€ {{ number_format((float) $quote->rental_monthly_fee, 2, ',', '.') }}<span class="confronto-mese">/mese</span></span>
-                            <span class="confronto-nota">noleggio per {{ max(1, (int) ($quote->rental_months ?? 1)) }} mesi · + IVA</span>
-                        @else
-                            <span class="confronto-prezzo">€ {{ number_format((float) $quote->subtotal, 2, ',', '.') }}</span>
-                            <span class="confronto-nota">+ IVA</span>
-                        @endif
-                        {{-- Davanti a due alternative la domanda non e' quanto
-                             costa, ma quanto costa in piu'. --}}
-                        @if($piu)
-                            <span class="confronto-piu">+ € {{ number_format($piu, 2, ',', '.') }}{{ $aCanone ? '/mese' : '' }}</span>
-                        @elseif($eLaPiuEconomica)
-                            <span class="confronto-meno">la più economica</span>
-                        @endif
-                    </span>
-                </label>
+                <label class="scelta" for="vista-{{ $loop->iteration }}">Scelta {{ $loop->iteration }}</label>
             @endforeach
         </div>
     @endif
@@ -376,31 +377,75 @@
             $scontoGenerale = $net * ((float) $quote->discount / 100);
             $scontoExtra = ($net - $scontoGenerale) * ((float) ($quote->extra_discount ?? 0) / 100);
         @endphp
-        <section id="soluzione-{{ $loop->iteration }}" class="quote-block {{ $multiple ? 'vista-pannello vista-pannello-'.$loop->iteration : '' }} {{ $accepted && ! $isChosen ? 'dimmed' : '' }}" style="margin-top:18px;">
-            <div class="doc-meta">
-                <div>
-                    {{-- Il titolo e' la macchina, non il numero d'ordine:
-                         "Soluzione 2" non dice al cliente ne' che cos'e' ne'
-                         in che cosa differisce dalla prima. Il numero di
-                         preventivo resta, piu' piccolo: serve quando ci
-                         telefona per citarlo. --}}
-                    <span class="label">{{ $multiple ? 'Soluzione '.$loop->iteration.' di '.$quotes->count() : 'Preventivo' }}</span>
-                    <span class="value">{{ $multiple ? $confronto->titolo($quote) : $quote->number }}</span>
-                    @if($multiple)
-                        <span class="confronto-codice">{{ $quote->number }}</span>
-                    @endif
+        <section id="soluzione-{{ $loop->iteration }}" class="quote-block {{ $multiple ? 'vista-pannello vista-pannello-'.$loop->iteration : '' }}">
+            @if($multiple)
+                {{-- Il riepilogo della scelta: due colonne, etichetta a
+                     sinistra e prezzo a destra. Qui dentro c'e' tutto quello
+                     che serve per decidere -- che cos'e', che cosa cambia,
+                     quanto costa, quanto costa in piu' -- e il PDF, che
+                     prima stava in fondo al dettaglio: chi vuole il
+                     documento lo vuole subito, non dopo due tabelle. --}}
+                <div class="scelta-capo">
+                    <div>
+                        <div class="scelta-nome">{{ $confronto->titolo($quote) }}</div>
+                        @if($confronto->differenza($quote)->isNotEmpty())
+                            <div class="scelta-diff">con {{ $confronto->differenza($quote)->implode(', ') }}</div>
+                        @endif
+                        <div class="scelta-codice">
+                            Preventivo {{ $quote->number }} del {{ $quote->date?->format('d/m/Y') }}
+                            @if($isRental)
+                                · pagamento rateale Grenke per {{ $quote->rental_months }} mesi
+                            @elseif($quote->paymentMethodRelation?->name)
+                                · {{ $quote->paymentMethodRelation->name }}
+                            @endif
+                        </div>
+                    </div>
+                    <div class="scelta-prezzo-box">
+                        @if($isRental)
+                            <div class="scelta-prezzo">{{ $money($quote->rental_monthly_fee) }}<span class="scelta-mese">/mese</span></div>
+                            <div class="scelta-nota">+ IVA</div>
+                        @else
+                            <div class="scelta-prezzo">{{ $money($quote->subtotal) }}</div>
+                            <div class="scelta-nota">+ IVA</div>
+                        @endif
+                        @if($isChosen)
+                            <div class="scelta-scelta"><span class="stamp">Accettato</span></div>
+                        @elseif($confronto->maggiorazione($quote))
+                            <div class="confronto-piu">+ {{ $money($confronto->maggiorazione($quote)) }}{{ $confronto->aCanone() ? '/mese' : '' }} sulla più economica</div>
+                        @elseif($confronto->piuEconomica()?->is($quote))
+                            <div class="confronto-meno">la più economica</div>
+                        @endif
+                    </div>
                 </div>
-                <div class="to-right">
-                    @if($isChosen)
-                        <span class="stamp">Accettato</span>
-                    @else
-                        <span class="label">Data</span>
-                        <span class="value">{{ $quote->date?->format('d/m/Y') }}</span>
-                    @endif
-                </div>
-            </div>
 
-            @if($quote->paymentMethodRelation?->name || $isRental)
+                <a class="pdf-link" href="{{ route('client.quote.pdf', ['token' => $token, 'quoteId' => $quote->id]) }}" target="_blank" rel="noopener">↓&nbsp; Scarica il PDF{{ $isChosen ? ' firmato' : '' }}</a>
+                <span class="pdf-nota">Da stampare o da inoltrare a chi deve valutarlo con lei.</span>
+
+                <div class="passo">
+                    <span class="passo-n">2</span>
+                    <span class="passo-t">Il dettaglio di questa soluzione</span>
+                </div>
+            @else
+                <div class="doc-meta">
+                    <div>
+                        <span class="label">Preventivo</span>
+                        <span class="value">{{ $quote->number }}</span>
+                    </div>
+                    <div class="to-right">
+                        @if($isChosen)
+                            <span class="stamp">Accettato</span>
+                        @else
+                            <span class="label">Data</span>
+                            <span class="value">{{ $quote->date?->format('d/m/Y') }}</span>
+                        @endif
+                    </div>
+                </div>
+            @endif
+
+            {{-- Con piu' soluzioni le condizioni stanno gia' nel riepilogo
+                 della scelta: ridirle qui sotto era lo stesso dato due volte
+                 a tre centimetri di distanza. --}}
+            @if(! $multiple && ($quote->paymentMethodRelation?->name || $isRental))
                 <div class="section-title" style="margin-top:0;">Condizioni di pagamento</div>
                 <div class="info-box">
                     @if($quote->paymentMethodRelation?->name)<div>{{ $quote->paymentMethodRelation->name }}</div>@endif
@@ -460,15 +505,41 @@
             </table>
 
             @if($quote->notes)
-                <div class="notes"><h2>Descrizione attrezzatura</h2>{!! \App\Support\HtmlSicuro::filtra($quote->notes) !!}</div>
+                {{-- Tre paragrafi di descrizione tecnica aperti di default
+                     allungavano la schermata piu' di tutto il resto. <details>
+                     e' HTML, non JavaScript: funziona ovunque, e in stampa lo
+                     riapriamo noi. --}}
+                {{-- Tre paragrafi di descrizione tecnica aperti di default
+                     allungavano la schermata piu' di tutto il resto.
+                     Casella piu' CSS e non <details>: su carta la
+                     descrizione ci deve essere, e un <details> chiuso non
+                     si lascia riaprire dal CSS di stampa in modo
+                     affidabile -- provato, restava chiuso. Qui la riga di
+                     stampa e' una sola e funziona. --}}
+                <div class="descrizione">
+                    <input class="desc-toggle" type="checkbox" id="desc-{{ $loop->iteration }}">
+                    <label class="desc-apri" for="desc-{{ $loop->iteration }}">Che cos'è questa attrezzatura</label>
+                    <div class="desc-corpo notes">{!! \App\Support\HtmlSicuro::filtra($quote->notes) !!}</div>
+                </div>
             @endif
 
-            <a class="pdf-link" href="{{ route('client.quote.pdf', ['token' => $token, 'quoteId' => $quote->id]) }}" target="_blank" rel="noopener">↓&nbsp; Scarica il PDF{{ $isChosen ? ' firmato' : '' }}</a>
-            <span class="pdf-nota">Da stampare o da inoltrare a chi deve valutarlo con lei.</span>
+            @unless($multiple)
+                {{-- Con piu' soluzioni il pulsante sta gia' in cima alla
+                     scelta: chi vuole il documento lo vuole subito. --}}
+                <a class="pdf-link" href="{{ route('client.quote.pdf', ['token' => $token, 'quoteId' => $quote->id]) }}" target="_blank" rel="noopener">↓&nbsp; Scarica il PDF{{ $isChosen ? ' firmato' : '' }}</a>
+                <span class="pdf-nota">Da stampare o da inoltrare a chi deve valutarlo con lei.</span>
+            @endunless
         </section>
     @endforeach
 
-    <div class="section-title" id="rispondi" style="margin-top:30px;">La sua risposta</div>
+    @if($multiple)
+        <div class="passo" id="rispondi">
+            <span class="passo-n">3</span>
+            <span class="passo-t">La sua risposta</span>
+        </div>
+    @else
+        <div class="section-title" id="rispondi" style="margin-top:30px;">La sua risposta</div>
+    @endif
     <div class="answer">
         @if($accepted)
             <p><strong>Preventivo{{ $multiple ? ' '.$accepted->number : '' }} accettato</strong>@if($acceptance) da {{ $acceptance->signer_name }} il {{ $acceptance->created_at->timezone(config('app.timezone'))->format('d/m/Y') }}@endif. Grazie! Per qualsiasi domanda può scriverci qui.</p>
