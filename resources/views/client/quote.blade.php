@@ -100,7 +100,18 @@
 
         .notes { margin-top: 18px; padding: 12px 14px; background: #fffbeb; border: 1px solid #fcd34d; border-left: 3px solid #f59e0b; font-size: 14px; }
         .notes h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .03em; color: #92400e; margin: 0 0 4px; }
-        .pdf-link { display: inline-block; margin-top: 12px; font-size: 14px; color: var(--navy); }
+        /* Un pulsante, non un link di testo: scritto piccolo e sottolineato
+           in fondo al preventivo non lo trovava nessuno, e dalla mail senza
+           allegato questo e' l'unico modo che il cliente ha di avere il PDF
+           (Laura, 26/11/2026). Resta in secondo piano rispetto a "Scelgo e
+           firmo": scaricare non e' la risposta che aspettiamo. */
+        .pdf-link {
+            display: inline-block; margin-top: 16px; padding: 10px 16px;
+            font-size: 14px; font-weight: bold; color: var(--navy);
+            border: 1px solid var(--navy); text-decoration: none;
+        }
+        .pdf-link:hover { background: var(--navy); color: #fff; }
+        .pdf-nota { display: block; margin-top: 6px; font-size: 12px; color: #64748b; }
 
         .quote-block + .quote-block { margin-top: 36px; padding-top: 24px; border-top: 1px dashed #cbd5e1; }
         .quote-block.dimmed { opacity: .5; }
@@ -305,7 +316,8 @@
                 <div class="notes"><h2>Descrizione attrezzatura</h2>{!! \App\Support\HtmlSicuro::filtra($quote->notes) !!}</div>
             @endif
 
-            <a class="pdf-link" href="{{ route('client.quote.pdf', ['token' => $token, 'quoteId' => $quote->id]) }}" target="_blank" rel="noopener">Scarica il PDF{{ $isChosen ? ' firmato' : '' }}</a>
+            <a class="pdf-link" href="{{ route('client.quote.pdf', ['token' => $token, 'quoteId' => $quote->id]) }}" target="_blank" rel="noopener">↓&nbsp; Scarica il PDF{{ $isChosen ? ' firmato' : '' }}</a>
+            <span class="pdf-nota">Da stampare o da inoltrare a chi deve valutarlo con lei.</span>
         </section>
     @endforeach
 
