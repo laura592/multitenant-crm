@@ -46,45 +46,15 @@
 	// riga di soli spazi, e per CommonMark una riga vuota chiude il blocco
 	// HTML grezzo: il resto della tabella finisce stampato come codice
 	// dentro la mail.
-	$vociDi = fn ($quote) => $quote->quoteProducts
-		->map(fn ($riga) => $riga->product?->name)
-		->filter()
-		->unique()
-		->values()
-		->all();
-
-	// Le voci che ci sono in TUTTE le alternative non distinguono niente:
-	// su due configurazioni dello stesso modello sono sette righe uguali
-	// (macinacaffe', dosatori, PrecisionTemp, installazione...) e ripeterle
-	// nasconderebbe le due che cambiano davvero.
-	$comuni = $quotes->count() > 1
-		? array_intersect(...array_map($vociDi, $quotes->all()))
-		: [];
-
-	// Il titolo: la macchina, che e' sempre la voce principale.
-	$macchineDi = fn ($quote) => $quote->quoteProducts
-		->filter(fn ($riga) => $riga->product?->type === \App\Models\Product::TYPE_MACHINE)
-		->map(fn ($riga) => $riga->product?->name)
-		->filter()
-		->unique()
-		->values();
-
-	$titoloSoluzione = function ($quote) use ($macchineDi) {
-		$nomi = $macchineDi($quote);
-
-		return $nomi->isNotEmpty() ? $nomi->implode(' + ') : $quote->number;
-	};
-
-	// E sotto, solo cio' che differenzia questa alternativa dalle altre:
-	// l'unita' di raffreddamento, il secondo gruppo, quello che e' stato
-	// cambiato per fare il confronto.
-	$differenzaDi = function ($quote) use ($vociDi, $comuni, $macchineDi) {
-		$macchine = $macchineDi($quote)->all();
-
-		return collect($vociDi($quote))
-			->reject(fn ($nome) => in_array($nome, $comuni, true) || in_array($nome, $macchine, true))
-			->values();
-	};
+	// Come si chiamano le soluzioni, e che cosa le distingue: la regola
+	// sta in App\Support\Preventivi\ConfrontoSoluzioni, perche' la pagina
+	// del cliente deve dire esattamente le stesse parole.
+	//
+	// NB: dentro la tabella qui sotto non si scrivono commenti Blade.
+	// Lasciano una riga di soli spazi, e per CommonMark una riga vuota
+	// chiude il blocco HTML grezzo: il resto della tabella finirebbe
+	// stampato come codice dentro la mail.
+	$confronto = \App\Support\Preventivi\ConfrontoSoluzioni::per($quotes);
 @endphp
 
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:22px;border-collapse:collapse;">
@@ -99,9 +69,9 @@
 			@if($quotes->count() > 1)
 				<div style="font-size:11px;color:#64748b;letter-spacing:.04em;text-transform:uppercase;">Soluzione {{ $loop->iteration }}</div>
 			@endif
-			<div style="font-size:14px;font-weight:700;color:#0f172a;margin-top:2px;">{{ $titoloSoluzione($quote) }}</div>
-			@if($differenzaDi($quote)->isNotEmpty())
-				<div style="font-size:12px;color:#334155;margin-top:3px;">con {{ $differenzaDi($quote)->implode(', ') }}</div>
+			<div style="font-size:14px;font-weight:700;color:#0f172a;margin-top:2px;">{{ $confronto->titolo($quote) }}</div>
+			@if($confronto->differenza($quote)->isNotEmpty())
+				<div style="font-size:12px;color:#334155;margin-top:3px;">con {{ $confronto->differenza($quote)->implode(', ') }}</div>
 			@endif
 			<div style="font-size:11px;color:#94a3b8;margin-top:3px;">{{ $quote->number }}</div>
 		</td>
@@ -114,9 +84,15 @@
 				<div style="font-size:15px;font-weight:700;color:#0f172a;">€ {{ number_format($monthlyFee, 2, ',', '.') }}<span style="font-size:12px;font-weight:400;">/mese</span></div>
 				<div style="font-size:11px;color:#64748b;margin-top:3px;">noleggio per {{ $months }} mesi</div>
 				<div style="font-size:11px;color:#64748b;margin-top:3px;">valore € {{ number_format((float) $quote->subtotal, 2, ',', '.') }} + IVA</div>
+				@if($confronto->maggiorazione($quote))
+					<div style="font-size:11px;color:#9a3412;margin-top:3px;">+ € {{ number_format($confronto->maggiorazione($quote), 2, ',', '.') }}/mese sulla prima</div>
+				@endif
 			@else
 				<div style="font-size:15px;font-weight:700;color:#0f172a;">€ {{ number_format((float) $quote->subtotal, 2, ',', '.') }}</div>
 				<div style="font-size:11px;color:#64748b;margin-top:3px;">+ IVA</div>
+				@if($confronto->maggiorazione($quote))
+					<div style="font-size:11px;color:#9a3412;margin-top:3px;">+ € {{ number_format($confronto->maggiorazione($quote), 2, ',', '.') }} sulla prima</div>
+				@endif
 			@endif
 		</td>
 	</tr>

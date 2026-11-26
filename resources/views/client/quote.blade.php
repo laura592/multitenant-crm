@@ -78,6 +78,23 @@
 
         .section-title { background: var(--navy); color: #fff; padding: 6px 12px; font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: .04em; margin: 22px 0 0; }
         .info-box { background: var(--soft); border: 1px solid var(--line); border-top: none; padding: 12px 14px; }
+
+        /* Il confronto fra le alternative, in cima.
+           Chi riceve un'offerta con piu' soluzioni ha tre domande, in
+           quest'ordine: che cos'e', che cosa cambia, quanto costa in piu'.
+           Prima la pagina partiva con "SOLUZIONE 1 / PRV-2026-0123" e non
+           rispondeva a nessuna delle tre. */
+        table.confronto { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--line); border-top: none; }
+        table.confronto td { border-bottom: 1px solid var(--line); padding: 12px 14px; vertical-align: top; }
+        table.confronto tr:last-child td { border-bottom: none; }
+        .confronto-nome { font-size: 15px; font-weight: bold; color: var(--navy); margin-top: 2px; }
+        .confronto-diff { font-size: 13px; color: #334155; margin-top: 4px; }
+        .confronto-codice { font-size: 11px; color: #94a3b8; margin-top: 4px; }
+        .confronto-prezzo { font-size: 17px; font-weight: bold; color: var(--navy); white-space: nowrap; }
+        .confronto-nota { font-size: 11px; color: var(--muted); margin-top: 3px; }
+        .confronto-piu { font-size: 12px; color: #9a3412; margin-top: 4px; font-weight: bold; }
+        .confronto-meno { font-size: 12px; color: var(--ok); margin-top: 4px; font-weight: bold; }
+        .confronto-vai { display: inline-block; margin-top: 8px; font-size: 12px; color: var(--navy); }
         .customer-name { font-size: 15px; font-weight: bold; color: var(--navy); }
 
         table.items { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 14px; }
@@ -227,6 +244,54 @@
         <div class="info-box"><div class="customer-name">{{ $customerName }}</div></div>
     @endif
 
+    @php
+        // Le stesse parole della mail dell'offerta: la regola sta in un
+        // posto solo (App\Support\Preventivi\ConfrontoSoluzioni).
+        $confronto = \App\Support\Preventivi\ConfrontoSoluzioni::per($quotes);
+    @endphp
+
+    @if($multiple && ! $accepted)
+        <div class="section-title">Le sue soluzioni a confronto</div>
+        <table class="confronto">
+            @foreach($quotes as $quote)
+                @php
+                    $differenza = $confronto->differenza($quote);
+                    $piu = $confronto->maggiorazione($quote);
+                    $eLaPiuEconomica = $confronto->piuEconomica()?->is($quote);
+                    $aCanone = $quote->payment_method === 'noleggio-operativo' && $quote->rental_monthly_fee;
+                @endphp
+                <tr>
+                    <td>
+                        <span class="label">Soluzione {{ $loop->iteration }} di {{ $quotes->count() }}</span>
+                        <div class="confronto-nome">{{ $confronto->titolo($quote) }}</div>
+                        @if($differenza->isNotEmpty())
+                            <div class="confronto-diff">con {{ $differenza->implode(', ') }}</div>
+                        @endif
+                        <div class="confronto-codice">{{ $quote->number }}</div>
+                        <a class="confronto-vai" href="#soluzione-{{ $loop->iteration }}">Vedi il dettaglio di questa soluzione ↓</a>
+                    </td>
+                    <td class="to-right" width="34%">
+                        @if($aCanone)
+                            <div class="confronto-prezzo">€ {{ number_format((float) $quote->rental_monthly_fee, 2, ',', '.') }}<span style="font-size:12px;font-weight:normal;">/mese</span></div>
+                            <div class="confronto-nota">noleggio per {{ max(1, (int) ($quote->rental_months ?? 1)) }} mesi · + IVA</div>
+                        @else
+                            <div class="confronto-prezzo">€ {{ number_format((float) $quote->subtotal, 2, ',', '.') }}</div>
+                            <div class="confronto-nota">+ IVA</div>
+                        @endif
+                        {{-- Il confronto col prezzo piu' basso e' la domanda
+                             vera davanti a due alternative: non "quanto
+                             costa", ma "quanto costa in piu'". --}}
+                        @if($piu)
+                            <div class="confronto-piu">+ € {{ number_format($piu, 2, ',', '.') }}{{ $aCanone ? '/mese' : '' }}</div>
+                        @elseif($eLaPiuEconomica && $quotes->count() > 1)
+                            <div class="confronto-meno">la più economica</div>
+                        @endif
+                    </td>
+                </tr>
+            @endforeach
+        </table>
+    @endif
+
     @foreach($quotes as $quote)
         @php
             $rows = $quote->quoteProducts->whereNull('parent_quote_product_id');
@@ -237,11 +302,19 @@
             $scontoGenerale = $net * ((float) $quote->discount / 100);
             $scontoExtra = ($net - $scontoGenerale) * ((float) ($quote->extra_discount ?? 0) / 100);
         @endphp
-        <section class="quote-block {{ $accepted && ! $isChosen ? 'dimmed' : '' }}" style="margin-top:18px;">
+        <section id="soluzione-{{ $loop->iteration }}" class="quote-block {{ $accepted && ! $isChosen ? 'dimmed' : '' }}" style="margin-top:18px;">
             <div class="doc-meta">
                 <div>
-                    <span class="label">{{ $multiple ? 'Soluzione '.$loop->iteration : 'Preventivo' }}</span>
-                    <span class="value">{{ $quote->number }}</span>
+                    {{-- Il titolo e' la macchina, non il numero d'ordine:
+                         "Soluzione 2" non dice al cliente ne' che cos'e' ne'
+                         in che cosa differisce dalla prima. Il numero di
+                         preventivo resta, piu' piccolo: serve quando ci
+                         telefona per citarlo. --}}
+                    <span class="label">{{ $multiple ? 'Soluzione '.$loop->iteration.' di '.$quotes->count() : 'Preventivo' }}</span>
+                    <span class="value">{{ $multiple ? $confronto->titolo($quote) : $quote->number }}</span>
+                    @if($multiple)
+                        <span class="confronto-codice">{{ $quote->number }}</span>
+                    @endif
                 </div>
                 <div class="to-right">
                     @if($isChosen)
