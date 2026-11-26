@@ -9,6 +9,8 @@ use App\Models\Quote;
 use App\Models\QuoteGroup;
 use App\Models\QuoteResponse;
 use App\Models\User;
+use App\Support\DisplayName;
+use App\Support\Pdf\PreventiviUniti;
 use Filament\Notifications\Actions\Action as NotificationAction;
 use Filament\Notifications\Notification;
 use Illuminate\Http\RedirectResponse;
@@ -72,6 +74,32 @@ class QuoteClientController extends Controller
                 ->oldest()
                 ->get(),
             'initialAction' => in_array($request->query('azione'), ['accetta', 'rifiuta', 'domanda', 'richiamata'], true) ? $request->query('azione') : null,
+        ]);
+    }
+
+    /**
+     * Tutte le proposte dell'offerta in un file solo.
+     *
+     * Serve a chi deve girarle a qualcun altro: scaricarle una per una e
+     * allegarle una per una era il modo piu' sicuro di dimenticarne una.
+     * Su un preventivo singolo non c'e' niente da unire e si rimanda al
+     * suo PDF.
+     */
+    public function pdfTutti(string $token)
+    {
+        $documento = $this->resolve($token);
+        $preventivi = $this->quotesOf($documento);
+
+        abort_if($preventivi->isEmpty(), 404);
+
+        if ($preventivi->count() === 1) {
+            return $this->pdf($token, (string) $preventivi->first()->id);
+        }
+
+        return response(PreventiviUniti::perOfferta($preventivi), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'
+                .PreventiviUniti::nomeFile($documento->number).'"',
         ]);
     }
 
@@ -314,7 +342,7 @@ class QuoteClientController extends Controller
 
         $quote = $response->quote ?? ($document instanceof Quote ? $document : $document->quotes()->withoutGlobalScope('tenant')->orderBy('number')->first());
         $label = QuoteResponse::typeLabels()[$response->type];
-        $customer = \App\Support\DisplayName::titleCase($document->customer?->company_name) ?: \App\Support\DisplayName::titleCase($document->customer?->full_name);
+        $customer = DisplayName::titleCase($document->customer?->company_name) ?: DisplayName::titleCase($document->customer?->full_name);
 
         foreach ($this->senders($document) as $user) {
             $notification = Notification::make()

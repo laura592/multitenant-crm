@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\CalendarioIcsController;
 use App\Http\Controllers\ContrattoAssistenzaController;
 use App\Http\Controllers\ContrattoNoleggioController;
 use App\Http\Controllers\CustomerSchedaAnagraficaController;
@@ -25,6 +26,16 @@ Route::get('/', function () {
 // (nessun form di login "generico" a livello Laravel): senza questa route
 // il middleware 'auth' di default, non potendo risolvere route('login'),
 // restituisce 500 invece di reindirizzare un ospite al login corretto.
+// Il calendario del CRM da sottoscrivere in Outlook. Fuori dal login di
+// proposito: Outlook lo scarica da solo, in background, e non c'e' nessuno
+// che possa autenticarsi. La chiave e' il gettone nell'indirizzo, che va
+// trattato come una password (vedi CalendarioIcsController).
+Route::get('calendario/{tenant}/{token}.ics', CalendarioIcsController::class)
+    ->middleware(NoIndex::class)
+    ->where('tenant', '[a-z0-9-]+')
+    ->where('token', '[A-Za-z0-9]{32,64}')
+    ->name('calendario.ics');
+
 Route::get('/login', fn () => redirect()->route('filament.admin.auth.login'))->name('login');
 
 // Pagina dedicata per la sessione scaduta: sia il 419 "pieno" (submit di un
@@ -43,6 +54,10 @@ Route::prefix('preventivo/{token}')
     ->group(function () {
         Route::get('/', [QuoteClientController::class, 'show'])->name('client.quote.show');
         Route::get('pdf/{quoteId}', [QuoteClientController::class, 'pdf'])->name('client.quote.pdf');
+        // Tutte le proposte dell'offerta in un file solo. Sta PRIMA di
+        // nessun'altra perche' 'tutti' non e' un uuid e non collide con
+        // {quoteId}, ma tenerle vicine aiuta a non perderle di vista.
+        Route::get('proposte', [QuoteClientController::class, 'pdfTutti'])->name('client.quote.pdf.tutti');
         Route::post('/', [QuoteClientController::class, 'store'])
             ->middleware('throttle:10,1')
             ->name('client.quote.respond');

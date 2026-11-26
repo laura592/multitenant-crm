@@ -92,54 +92,40 @@
 
         .passo-nota { font-size: 13px; color: #334155; margin: 0 0 12px; }
 
-        /* Le scelte: due card affiancate.
-           Impilate a tutta larghezza si leggevano come un elenco da
-           studiare; affiancate si leggono come una scelta da fare. */
-        .scelte { display: flex; flex-wrap: wrap; gap: 10px; }
+        /* Le schede delle proposte: corte, in una riga, e appiccicate in
+           alto mentre si scorre il dettaglio. Con cinque proposte le card
+           larghe diventavano un muro; qui cinque schede stanno comode. */
+        .scelte {
+            display: flex; flex-wrap: wrap; gap: 6px;
+            position: sticky; top: 0; z-index: 5;
+            background: #fff; padding: 6px 0;
+        }
         .scelta {
-            flex: 1 1 220px; display: flex; flex-direction: column;
-            background: #fff; border: 1px solid var(--line);
-            border-top: 3px solid var(--line); padding: 14px;
+            flex: 1 1 130px; cursor: pointer; text-align: center; padding: 9px 10px;
+            background: var(--soft); border: 1px solid var(--line); border-bottom: 3px solid var(--line);
         }
-        .scelta-n { text-transform: uppercase; letter-spacing: .04em; font-size: 10px; color: var(--muted); }
-        .scelta-nome { font-size: 16px; font-weight: bold; color: var(--navy); margin-top: 3px; }
-        .scelta-diff { font-size: 12px; color: #334155; margin-top: 4px; }
-        .scelta-prezzo { font-size: 24px; font-weight: bold; color: var(--navy); margin-top: 10px; }
-        .scelta-mese { font-size: 13px; font-weight: normal; }
-        .scelta-nota { font-size: 11px; color: var(--muted); margin-top: 2px; }
-        .confronto-piu { font-size: 12px; color: #9a3412; margin-top: 6px; font-weight: bold; }
-        .confronto-meno { font-size: 12px; color: var(--ok); margin-top: 6px; font-weight: bold; }
+        .scelta:hover { background: #fff; }
+        .scelta-n { display: block; text-transform: uppercase; letter-spacing: .04em; font-size: 10px; color: var(--muted); }
+        .scelta-prezzo { display: block; font-size: 16px; font-weight: bold; color: var(--navy); margin-top: 2px; }
+        .scelta-mese { font-size: 11px; font-weight: normal; }
 
-        /* Le azioni in fondo alla card, allineate fra card di altezza
-           diversa: margin-top auto le spinge giu'. */
-        .scelta-azioni { display: flex; gap: 8px; margin-top: auto; padding-top: 14px; }
-        .scelta-apri {
-            flex: 1 1 auto; cursor: pointer; text-align: center; padding: 9px 12px;
-            font-size: 13px; font-weight: bold; color: #fff; background: var(--navy);
-            border: 1px solid var(--navy);
+        .scarica-tutte {
+            display: inline-block; margin-top: 10px; padding: 9px 14px;
+            font-size: 13px; font-weight: bold; color: var(--navy);
+            border: 1px solid var(--line); text-decoration: none;
         }
-        .scelta-pdf {
-            flex: 0 0 auto; padding: 9px 12px; font-size: 13px; font-weight: bold;
-            color: var(--navy); border: 1px solid var(--navy); text-decoration: none;
-            white-space: nowrap;
-        }
-        .scelta-pdf:hover { background: var(--navy); color: #fff; }
+        .scarica-tutte:hover { border-color: var(--navy); background: var(--soft); }
 
-        .scelta-codice-riga { font-size: 11px; color: var(--muted); background: var(--soft); border: 1px solid var(--line); border-top: none; padding: 8px 12px; margin-bottom: 12px; }
-
-        /* La descrizione tecnica, chiusa finche' non serve. */
-        .descrizione { border: 1px solid var(--line); border-top: none; }
-        .desc-toggle { position: absolute; left: -9999px; width: 1px; height: 1px; }
-        .desc-apri {
-            display: block; cursor: pointer; padding: 10px 14px;
-            font-size: 13px; font-weight: bold; color: var(--navy); background: var(--soft);
+        /* Sotto il titolo della proposta aperta: che cosa cambia, il numero
+           di preventivo e il suo PDF. */
+        .scelta-capo {
+            display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
+            background: var(--soft); border: 1px solid var(--line); border-top: none;
+            padding: 12px 14px; margin-bottom: 12px;
         }
-        .desc-apri:hover { background: #fff; }
-        .desc-apri::before { content: '+  '; }
-        .desc-toggle:checked ~ .desc-apri::before { content: '\2212  '; }
-        .desc-toggle:focus-visible ~ .desc-apri { outline: 2px solid var(--navy); }
-        .desc-corpo { display: none; border: none; }
-        .desc-toggle:checked ~ .desc-corpo { display: block; }
+        .scelta-diff { font-size: 13px; color: #334155; }
+        .scelta-codice { font-size: 11px; color: var(--muted); margin-top: 5px; }
+        .scelta-capo .pdf-link { margin-top: 0; flex: 0 0 auto; }
 
         /* Una scheda per volta.
            Le radio stanno fuori schermo e non display:none, che le
@@ -166,16 +152,9 @@
         #vista-4:checked ~ .scelte .scelta-4,
         #vista-5:checked ~ .scelte .scelta-5,
         #vista-6:checked ~ .scelte .scelta-6 {
-            border-top-color: var(--navy); background: var(--meta);
+            background: #fff; border-bottom-color: var(--navy);
         }
-        #vista-1:checked ~ .scelte .scelta-1 .scelta-apri,
-        #vista-2:checked ~ .scelte .scelta-2 .scelta-apri,
-        #vista-3:checked ~ .scelte .scelta-3 .scelta-apri,
-        #vista-4:checked ~ .scelte .scelta-4 .scelta-apri,
-        #vista-5:checked ~ .scelte .scelta-5 .scelta-apri,
-        #vista-6:checked ~ .scelte .scelta-6 .scelta-apri {
-            background: #fff; color: var(--navy);
-        }
+
 
         .vista-radio:focus-visible ~ .scelte { outline: 2px solid var(--navy); }
         .customer-name { font-size: 15px; font-weight: bold; color: var(--navy); }
@@ -301,12 +280,11 @@
            soluzioni -- e la pagina non aveva ancora nessuna regola di
            stampa. */
         @media print {
-            .scelte, .passo-nota { display: none !important; }
+            .scelte, .passo-nota, .scarica-tutte { display: none !important; }
             .vista-pannello { display: block !important; }
             /* Su carta la descrizione dell'attrezzatura ci deve essere,
                aperta o chiusa che fosse a schermo. */
-            .desc-corpo { display: block !important; }
-            .desc-apri { display: none !important; }
+            .scarica-tutte { display: none !important; }
             .quote-block + .quote-block { page-break-before: always; }
             .pdf-link, .pdf-nota { display: none !important; }
         }
@@ -380,57 +358,46 @@
         @endphp
         <div class="passo">
             <span class="passo-n">1</span>
-            <span class="passo-t">{{ $accepted ? 'La soluzione scelta' : 'Le sue '.$quante.' soluzioni' }}</span>
+            <span class="passo-t">{{ $accepted ? 'La proposta scelta' : 'Le nostre proposte' }}</span>
         </div>
 
-        {{-- "Scelga la soluzione" era un ordine, e suonava antipatico
-             (Laura, 26/11/2026). Qui si dice quello che abbiamo fatto noi,
-             non quello che deve fare lei. --}}
         @unless($accepted)
-            <p class="passo-nota">Le abbiamo preparato {{ $quante }} soluzioni. Apra quella che le interessa: dentro trova tutte le voci e il PDF.</p>
+            <p class="passo-nota">Ne abbiamo preparate {{ $quante }}. Apra quella che le interessa: dentro trova tutte le voci e il PDF.</p>
         @endunless
 
+        {{-- Schede corte e in una riga sola.
+             Le card affiancate con nome, differenza, prezzo e pulsanti
+             funzionavano con due proposte e diventavano un muro con cinque
+             (Laura, 26/11/2026: "se le soluzioni sono 5 diventa una cosa
+             enorme"). Qui ogni scheda porta due righe -- quale scelta e
+             quanto costa -- e cinque stanno comode su una riga: il nome e
+             il resto si leggono nel dettaglio, una per volta.
+
+             Appiccicata in alto (sticky) perche' scorrendo dentro il
+             dettaglio la scelta "si perdeva la sotto": cosi' resta a
+             portata di pollice e si passa da una proposta all'altra senza
+             risalire. --}}
         <div class="scelte">
             @foreach($quotes as $quote)
                 @php
-                    $differenza = $confronto->differenza($quote);
-                    $piu = $confronto->maggiorazione($quote);
                     $aCanone = $quote->payment_method === 'noleggio-operativo' && $quote->rental_monthly_fee;
                 @endphp
-                {{-- Affiancate e non impilate: due righe a tutta larghezza si
-                     leggono come un elenco da studiare, due colonne come una
-                     scelta da fare. Niente <label> attorno a tutta la card:
-                     dentro c'e' anche il link del PDF, e un link dentro una
-                     label si pestano i piedi. --}}
-                <div class="scelta scelta-{{ $loop->iteration }}">
-                    <div class="scelta-n">Scelta {{ $loop->iteration }}</div>
-                    <div class="scelta-nome">{{ $confronto->titolo($quote) }}</div>
-                    @if($differenza->isNotEmpty())
-                        <div class="scelta-diff">con {{ $differenza->implode(', ') }}</div>
-                    @endif
-                    <div class="scelta-prezzo">
+                <label class="scelta scelta-{{ $loop->iteration }}" for="vista-{{ $loop->iteration }}">
+                    <span class="scelta-n">Scelta {{ $loop->iteration }}</span>
+                    <span class="scelta-prezzo">
                         @if($aCanone)
                             {{ $money($quote->rental_monthly_fee) }}<span class="scelta-mese">/mese</span>
                         @else
                             {{ $money($quote->subtotal) }}
                         @endif
-                    </div>
-                    <div class="scelta-nota">
-                        + IVA
-                        @if($aCanone) · noleggio per {{ $quote->rental_months }} mesi @endif
-                    </div>
-                    @if($piu)
-                        <div class="confronto-piu">+ {{ $money($piu) }}{{ $confronto->aCanone() ? '/mese' : '' }} sulla più economica</div>
-                    @elseif($confronto->piuEconomica()?->is($quote))
-                        <div class="confronto-meno">la più economica</div>
-                    @endif
-                    <div class="scelta-azioni">
-                        <label class="scelta-apri" for="vista-{{ $loop->iteration }}">Vedi il dettaglio</label>
-                        <a class="scelta-pdf" href="{{ route('client.quote.pdf', ['token' => $token, 'quoteId' => $quote->id]) }}" target="_blank" rel="noopener">↓&nbsp;PDF</a>
-                    </div>
-                </div>
+                    </span>
+                </label>
             @endforeach
         </div>
+
+        {{-- Un file solo con tutte le proposte: chi deve girarle al socio o
+             al commercialista scaricava quattro file e ne allegava tre. --}}
+        <a class="scarica-tutte" href="{{ route('client.quote.pdf.tutti', ['token' => $token]) }}" target="_blank" rel="noopener">↓&nbsp; Scarica tutte le proposte in un PDF</a>
     @endif
 
     @foreach($quotes as $quote)
@@ -445,19 +412,23 @@
         @endphp
         <section id="soluzione-{{ $loop->iteration }}" class="quote-block {{ $multiple ? 'vista-pannello vista-pannello-'.$loop->iteration : '' }}">
             @if($multiple)
-                {{-- Niente riepilogo qui: nome, prezzo e differenza stanno
-                     gia' sulla card, che resta visibile ed evidenziata
-                     mentre si legge il dettaglio. Ripeterli sarebbe la
-                     stessa cosa due volte a due centimetri di distanza. --}}
                 <div class="section-title">Scelta {{ $loop->iteration }} · {{ $confronto->titolo($quote) }}</div>
-                <div class="scelta-codice-riga">
-                    Preventivo {{ $quote->number }} del {{ $quote->date?->format('d/m/Y') }}
-                    @if($isRental)
-                        · pagamento rateale Grenke
-                    @elseif($quote->paymentMethodRelation?->name)
-                        · {{ $quote->paymentMethodRelation->name }}
-                    @endif
-                    @if($isChosen) · <span class="stamp">Accettato</span> @endif
+                <div class="scelta-capo">
+                    <div class="scelta-capo-sx">
+                        @if($confronto->differenza($quote)->isNotEmpty())
+                            <div class="scelta-diff">con {{ $confronto->differenza($quote)->implode(', ') }}</div>
+                        @endif
+                        <div class="scelta-codice">
+                            Preventivo {{ $quote->number }} del {{ $quote->date?->format('d/m/Y') }}
+                            @if($isRental)
+                                · pagamento rateale Grenke per {{ $quote->rental_months }} mesi
+                            @elseif($quote->paymentMethodRelation?->name)
+                                · {{ $quote->paymentMethodRelation->name }}
+                            @endif
+                            @if($isChosen) · <span class="stamp">Accettato</span> @endif
+                        </div>
+                    </div>
+                    <a class="pdf-link" href="{{ route('client.quote.pdf', ['token' => $token, 'quoteId' => $quote->id]) }}" target="_blank" rel="noopener">↓&nbsp; Scarica il PDF{{ $isChosen ? ' firmato' : '' }}</a>
                 </div>
             @else
                 <div class="doc-meta">
@@ -539,22 +510,11 @@
             </table>
 
             @if($quote->notes)
-                {{-- Tre paragrafi di descrizione tecnica aperti di default
-                     allungavano la schermata piu' di tutto il resto. <details>
-                     e' HTML, non JavaScript: funziona ovunque, e in stampa lo
-                     riapriamo noi. --}}
-                {{-- Tre paragrafi di descrizione tecnica aperti di default
-                     allungavano la schermata piu' di tutto il resto.
-                     Casella piu' CSS e non <details>: su carta la
-                     descrizione ci deve essere, e un <details> chiuso non
-                     si lascia riaprire dal CSS di stampa in modo
-                     affidabile -- provato, restava chiuso. Qui la riga di
-                     stampa e' una sola e funziona. --}}
-                <div class="descrizione">
-                    <input class="desc-toggle" type="checkbox" id="desc-{{ $loop->iteration }}">
-                    <label class="desc-apri" for="desc-{{ $loop->iteration }}">Che cos'è questa attrezzatura</label>
-                    <div class="desc-corpo notes">{!! \App\Support\HtmlSicuro::filtra($quote->notes) !!}</div>
-                </div>
+                {{-- Aperta, non dietro un "+": e' la parte che spiega la
+                     macchina in italiano, cioe' l'unico pezzo che si legge
+                     davvero (Laura, 26/11/2026). Chiuderla faceva
+                     risparmiare spazio nascondendo la cosa piu' utile. --}}
+                <div class="notes"><h2>Che cos'è questa attrezzatura</h2>{!! \App\Support\HtmlSicuro::filtra($quote->notes) !!}</div>
             @endif
 
             @unless($multiple)
