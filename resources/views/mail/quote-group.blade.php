@@ -68,6 +68,27 @@
 
 @endif
 
+@php
+	// La validita' dell'offerta: la data piu' lontana fra le alternative
+	// ancora in attesa. Sulle soluzioni gia' decise non si scrive niente,
+	// che non vorrebbe dire nulla.
+	$scadenzaOfferta = $quotes
+		->reject(fn ($q) => $q->isDecided())
+		->map(fn ($q) => $q->scadeIl())
+		->filter()
+		->max();
+@endphp
+
+@if($scadenzaOfferta)
+{{-- Detta in una riga sola e senza enfasi: serve a dare una data entro cui
+     rispondere, non a mettere fretta. Stessa frase della mail del preventivo
+     singolo (mail.quote), al plurale perche' qui le soluzioni sono piu' di
+     una. --}}
+<div style="margin-top:14px;color:#334155;font-size:13px;">
+	L'offerta è valida fino al <strong>{{ $scadenzaOfferta->format('d/m/Y') }}</strong>. Se nel frattempo Le servisse più tempo o una proposta diversa, ce lo faccia sapere: la aggiorniamo volentieri.
+</div>
+@endif
+
 @if(! empty($clientUrl))
 <x-mail.client-response-cta :url="$clientUrl" :tenant="$tenant" :multiple="$quotes->count() > 1" />
 @endif

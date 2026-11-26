@@ -289,6 +289,11 @@ class RolePermissions
                 'page_ScadutoClienti',
                 'page_AnalisiContabili',
                 'page_CashFlow',
+                // I preventivi mandati e mai risposti. Non e' una pagina
+                // contabile: e' l'elenco delle telefonate commerciali, e
+                // percio' la vede anche "amministratore" (il titolare, che
+                // quei preventivi li ha firmati lui).
+                'page_PreventiviDaSollecitare',
             ],
             // Specchio di "admin" sopra, risorsa per risorsa: stesso
             // perimetro, solo MANAGE_NO_DELETE al posto di MANAGE/FULL_MANAGE.
@@ -338,6 +343,7 @@ class RolePermissions
                 'page_RichiesteSullaMappa',
                 'page_NotificationSettings',
                 'page_GestionaleSyncReview',
+                'page_PreventiviDaSollecitare',
             ],
             default => throw new \InvalidArgumentException("Ruolo sconosciuto: {$role}"),
         };

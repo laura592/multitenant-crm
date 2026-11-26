@@ -37,6 +37,17 @@ ALLEGATI
 - {!! $nomeAllegato !!}
 @endforeach
 @endif
+@php
+    $scadenzaOfferta = $quotes
+        ->reject(fn ($q) => $q->isDecided())
+        ->map(fn ($q) => $q->scadeIl())
+        ->filter()
+        ->max();
+@endphp
+@if($scadenzaOfferta)
+
+L'offerta e' valida fino al {{ $scadenzaOfferta->format('d/m/Y') }}. Se nel frattempo Le servisse piu' tempo o una proposta diversa, ce lo faccia sapere: la aggiorniamo volentieri.
+@endif
 @if(! empty($clientUrl))
 
 Vedi e scegli la soluzione online:

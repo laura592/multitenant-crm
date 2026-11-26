@@ -197,3 +197,24 @@ Schedule::command('brevo:sincronizza-consensi', ['--tenant' => 'alex'])
     ->hourlyAt(20)
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/brevo-sync.log'));
+
+// I preventivi inviati e mai risposti smettono di contare come trattative
+// aperte quando passa la loro validita'.
+//
+// Senza questo, un preventivo resta "inviato" per sempre: al 26/11/2026 ne
+// risultavano 84 fermi, di cui 24 trattative da oltre novanta giorni per
+// 310.000 EUR che nei conti sembravano pipeline e non lo erano. Un numero
+// di venduto atteso che comprende offerte di febbraio non serve a decidere
+// niente.
+//
+// NON manda mail: cambia solo lo stato. Avvisare il cliente che l'offerta
+// e' decaduta e' una scelta commerciale, e le mail ai clienti qui le manda
+// una persona.
+//
+// Alle 06:30 sta dopo gli import contabili (05:45 e 06:15) e prima che
+// qualcuno apra il pannello: chi arriva la mattina trova l'elenco gia'
+// pulito.
+Schedule::command('preventivi:scadi')
+    ->dailyAt('06:30')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/preventivi-scaduti.log'));

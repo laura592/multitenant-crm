@@ -48,7 +48,16 @@
     <table class="doc-meta">
         <tr>
             <td><span class="label">Preventivo</span><br><span class="value">{{ $quote->number }}</span></td>
-            <td class="to-right"><span class="label">Data</span><br><span class="value">{{ $quote->date->format('d/m/Y') }}</span></td>
+            <td><span class="label">Data</span><br><span class="value">{{ $quote->date->format('d/m/Y') }}</span></td>
+            {{-- La validita' non e' burocrazia: e' quello che da' al
+                 cliente un motivo per rispondere, e a noi il diritto di
+                 richiamare senza sembrare insistenti. Sui preventivi gia'
+                 decisi non si stampa, non vuol dire piu' niente. --}}
+            @if(! $quote->isDecided() && $quote->scadeIl())
+                <td class="to-right"><span class="label">Valido fino al</span><br><span class="value">{{ $quote->scadeIl()->format('d/m/Y') }}</span></td>
+            @else
+                <td class="to-right"></td>
+            @endif
         </tr>
     </table>
 

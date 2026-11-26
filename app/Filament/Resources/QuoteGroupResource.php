@@ -419,14 +419,25 @@ class QuoteGroupResource extends Resource
                 OffertaCaffeResource::registraInvio($offertaCaffe, $data['recipient_email'], $data['cc_email'] ?? null, $data['subject'] ?? null, $data['email_body'] ?? null, inviataCon: "Offerta {$record->number}");
             }
 
-            if ($record->status === 'bozza') {
+            // Un'offerta scaduta che si rimanda torna in attesa, come un
+            // preventivo singolo (vedi QuoteResource): se la rimandi, il
+            // cliente ha di nuovo una proposta valida davanti.
+            if (in_array($record->status, ['bozza', 'scaduto'], true)) {
                 $record->update(['status' => 'inviato', 'sent_at' => now()]);
             }
 
+            // La validita' si scrive su TUTTE le alternative a ogni invio, non
+            // solo su quelle in bozza: l'offerta che parte oggi vale da oggi,
+            // e senza questa riga le offerte di gruppo restavano senza data
+            // di scadenza — invisibili a preventivi:scadi e senza il "valido
+            // fino al" sul PDF.
             $quotes->each(function (Quote $quote): void {
-                if ($quote->status === 'bozza') {
-                    $quote->update(['status' => 'inviato']);
-                }
+                $quote->update([
+                    'status' => in_array($quote->status, [Quote::STATUS_BOZZA, Quote::STATUS_SCADUTO], true)
+                        ? Quote::STATUS_INVIATO
+                        : $quote->status,
+                    'valid_until' => now()->addDays(Quote::GIORNI_VALIDITA)->toDateString(),
+                ]);
             });
 
             Notification::make()->title('Offerta globale inviata')->success()->send();

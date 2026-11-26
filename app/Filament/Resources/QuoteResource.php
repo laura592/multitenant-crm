@@ -979,9 +979,18 @@ class QuoteResource extends Resource
                 OffertaCaffeResource::registraInvio($offertaCaffe, $data['recipient_email'], $data['cc_email'] ?? null, "Preventivo {$record->number}", $data['custom_message'] ?? null, inviataCon: "Preventivo {$record->number}");
             }
 
-            if ($record->status === 'bozza') {
-                $record->update(['status' => 'inviato']);
-            }
+            // L'invio fa ripartire la validita', anche quando il
+            // preventivo era gia' partito una volta: rimandarlo vuol dire
+            // rimetterlo sul tavolo, e un preventivo gia' scaduto torna
+            // in attesa invece di restare archiviato.
+            $nuovoStato = in_array($record->status, [Quote::STATUS_BOZZA, Quote::STATUS_SCADUTO], true)
+                ? Quote::STATUS_INVIATO
+                : $record->status;
+
+            $record->update([
+                'status' => $nuovoStato,
+                'valid_until' => now()->addDays(Quote::GIORNI_VALIDITA)->toDateString(),
+            ]);
 
             Notification::make()->title('Preventivo inviato')->success()->send();
         } catch (\Throwable $e) {
@@ -1044,6 +1053,7 @@ class QuoteResource extends Resource
             'inviato' => 'Inviato',
             'accettato' => 'Accettato',
             'rifiutato' => 'Rifiutato',
+            'scaduto' => 'Scaduto',
         ];
     }
 
@@ -1054,6 +1064,10 @@ class QuoteResource extends Resource
             'inviato' => 'warning',
             'accettato' => 'success',
             'rifiutato' => 'danger',
+            // Grigio come la bozza e non rosso come il rifiuto: scaduto
+            // non vuol dire che il cliente ha detto di no, vuol dire che
+            // non lo contiamo piu' fra le trattative aperte.
+            'scaduto' => 'gray',
         ];
     }
 }

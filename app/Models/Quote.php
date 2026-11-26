@@ -18,8 +18,33 @@ class Quote extends Model
 {
     use BelongsToTenant, HasClientLink, HasUuids, LogsAuditTrail, SoftDeletes;
 
+    /**
+     * Giorni di validita' di un preventivo appena inviato.
+     *
+     * Non e' una cifra tonda: sui preventivi che una risposta l'hanno
+     * avuta i si' arrivano con mediana 5 giorni, il 67% entro una
+     * settimana, il 93% entro 45 giorni, e nessuno dopo 69. Oltre il mese
+     * e mezzo il silenzio, storicamente, e' un no.
+     */
+    public const GIORNI_VALIDITA = 45;
+
+    public const STATUS_BOZZA = 'bozza';
+
+    public const STATUS_INVIATO = 'inviato';
+
+    public const STATUS_ACCETTATO = 'accettato';
+
+    public const STATUS_RIFIUTATO = 'rifiutato';
+
+    /**
+     * Inviato e mai risposto oltre la data di validita'. Non e' un no del
+     * cliente: e' il nostro smettere di contarlo fra le trattative aperte.
+     */
+    public const STATUS_SCADUTO = 'scaduto';
+
     protected $casts = [
         'date' => 'date',
+        'valid_until' => 'date',
         'discount' => 'decimal:2',
         'extra_discount' => 'decimal:2',
         'subtotal' => 'decimal:2',
@@ -38,6 +63,7 @@ class Quote extends Model
         'billing_customer_id',
         'number',
         'date',
+        'valid_until',
         'status',
         'discount',
         'extra_discount',
@@ -305,6 +331,62 @@ class Quote extends Model
     public function isDecided(): bool
     {
         return in_array($this->status, ['accettato', 'rifiutato'], true);
+    }
+
+    /**
+     * In attesa di una risposta: inviato e non ancora deciso.
+     *
+     * Lo scaduto NON e' in attesa -- l'abbiamo tolto noi dalle trattative
+     * aperte -- ma resta comunque accettabile dal link del cliente, che
+     * infatti `isDecided()` continua a dire "non deciso". Un si' in
+     * ritardo e' pur sempre un si': si incassa, non si rimanda al
+     * mittente.
+     */
+    public function inAttesa(): bool
+    {
+        return $this->status === self::STATUS_INVIATO;
+    }
+
+    /**
+     * La data entro cui questo preventivo vale, anche se in tabella non
+     * c'e': per i preventivi inviati prima del 26/11/2026 la colonna e'
+     * stata riempita all'indietro, ma una bozza salvata e mai inviata non
+     * ce l'ha e la si calcola al volo.
+     */
+    public function scadeIl(): ?\Illuminate\Support\Carbon
+    {
+        if ($this->valid_until) {
+            return $this->valid_until;
+        }
+
+        return $this->date?->copy()->addDays(self::GIORNI_VALIDITA);
+    }
+
+    /**
+     * Scaduto nei fatti: la data e' passata, a prescindere da come sia
+     * scritto lo stato. Serve per intercettare i preventivi che il comando
+     * notturno non ha ancora marcato.
+     */
+    public function oltreLaValidita(): bool
+    {
+        $scadenza = $this->scadeIl();
+
+        return $scadenza !== null && $scadenza->isPast();
+    }
+
+    /**
+     * Da quanti giorni aspettiamo una risposta. Si conta dalla data del
+     * preventivo, non da `created_at`: i preventivi caricati a mano nel
+     * luglio 2026 sono stati creati tutti nello stesso istante, e
+     * `created_at` direbbe che hanno tutti la stessa eta'.
+     */
+    public function giorniDiSilenzio(): ?int
+    {
+        if (! $this->inAttesa() || $this->date === null) {
+            return null;
+        }
+
+        return (int) $this->date->diffInDays(now());
     }
 
     /**
