@@ -60,17 +60,51 @@ class ConfrontoSoluzioni
     }
 
     /**
-     * Il titolo: la macchina. Se non ce n'e' una a catalogo (preventivi di
-     * soli materiali, o righe scritte a mano) resta il numero, che e'
-     * sempre meglio di niente.
+     * Il titolo: la macchina da caffe', se c'e'.
+     *
+     * Non tutte le offerte ne hanno una. OFF-2026-0011 (Mariver) mette a
+     * confronto quattro fabbricatori di ghiaccio, che a catalogo sono
+     * "accessory": i tab dicevano "PRV-2026-0052" e "PRV-2026-0053", cioe'
+     * di nuovo niente. Allora vale la voce principale, che e' la piu' cara
+     * fra quelle di primo livello -- le righe figlie sono optional di
+     * un'altra riga, non la cosa che si sta comprando.
+     *
+     * Il numero di preventivo resta l'ultima spiaggia: un'offerta senza
+     * nemmeno una riga non si sa come chiamarla.
      */
     public function titolo(Quote $quote): string
     {
         $macchine = $this->macchine($quote);
 
-        return $macchine->isNotEmpty()
-            ? $macchine->implode(' + ')
-            : (string) $quote->number;
+        if ($macchine->isNotEmpty()) {
+            return $macchine->implode(' + ');
+        }
+
+        return $this->vocePrincipale($quote) ?? (string) $quote->number;
+    }
+
+    /** La riga di primo livello piu' cara: che cosa si sta comprando. */
+    private function vocePrincipale(Quote $quote): ?string
+    {
+        $migliore = null;
+        $valore = null;
+
+        foreach (self::righe($quote) as $riga) {
+            $prodotto = $riga->product;
+
+            if ($riga->parent_quote_product_id !== null || ! $prodotto instanceof Product || ! $prodotto->name) {
+                continue;
+            }
+
+            $totale = (float) $riga->total;
+
+            if ($valore === null || $totale > $valore) {
+                $valore = $totale;
+                $migliore = $prodotto->name;
+            }
+        }
+
+        return $migliore;
     }
 
     /**

@@ -94,7 +94,47 @@
         .confronto-nota { font-size: 11px; color: var(--muted); margin-top: 3px; }
         .confronto-piu { font-size: 12px; color: #9a3412; margin-top: 4px; font-weight: bold; }
         .confronto-meno { font-size: 12px; color: var(--ok); margin-top: 4px; font-weight: bold; }
-        .confronto-vai { display: inline-block; margin-top: 8px; font-size: 12px; color: var(--navy); }
+        .confronto-vai { display: inline-block; margin-top: 8px; font-size: 12px; color: var(--navy); text-decoration: underline; cursor: pointer; }
+
+        /* I tab delle soluzioni, senza JavaScript.
+           Le radio stanno fuori dallo schermo e non display:none, che le
+           toglierebbe dalla navigazione da tastiera: cosi' si passa da una
+           soluzione all'altra anche con le frecce. */
+        .vista-radio { position: absolute; left: -9999px; width: 1px; height: 1px; }
+        .vista-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 18px; }
+        .vista-tab {
+            flex: 1 1 160px; cursor: pointer; padding: 9px 12px;
+            background: var(--soft); border: 1px solid var(--line);
+            border-bottom: 3px solid var(--line);
+        }
+        .vista-tab-n { display: block; text-transform: uppercase; letter-spacing: .04em; font-size: 10px; color: var(--muted); }
+        .vista-tab-nome { display: block; font-size: 13px; font-weight: bold; color: var(--navy); margin-top: 2px; }
+        .vista-tab:hover { background: #fff; }
+        .vista-pannello { display: none; }
+
+        /* Un selettore per alternativa: le radio sono tutte sorelle dei
+           pannelli e precedono la striscia dei tab, quindi ~ le raggiunge.
+           Sei e' il massimo che un'offerta abbia mai avuto; la settima non
+           sparirebbe, resterebbe solo sempre visibile. */
+        #vista-1:checked ~ .vista-pannello-1,
+        #vista-2:checked ~ .vista-pannello-2,
+        #vista-3:checked ~ .vista-pannello-3,
+        #vista-4:checked ~ .vista-pannello-4,
+        #vista-5:checked ~ .vista-pannello-5,
+        #vista-6:checked ~ .vista-pannello-6 { display: block; }
+
+        #vista-1:checked ~ .vista-tabs .vista-tab:nth-child(1),
+        #vista-2:checked ~ .vista-tabs .vista-tab:nth-child(2),
+        #vista-3:checked ~ .vista-tabs .vista-tab:nth-child(3),
+        #vista-4:checked ~ .vista-tabs .vista-tab:nth-child(4),
+        #vista-5:checked ~ .vista-tabs .vista-tab:nth-child(5),
+        #vista-6:checked ~ .vista-tabs .vista-tab:nth-child(6) {
+            background: #fff; border-bottom-color: var(--navy);
+        }
+
+        /* La tastiera deve vedersi: senza questo il focus sulle radio fuori
+           schermo non si capirebbe dove sia. */
+        .vista-radio:focus-visible ~ .vista-tabs .vista-tab { outline: 1px dotted var(--muted); }
         .customer-name { font-size: 15px; font-weight: bold; color: var(--navy); }
 
         table.items { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 14px; }
@@ -207,6 +247,18 @@
             .totals { width: 100%; }
             table.items { font-size: 13px; }
         }
+
+        /* In stampa il documento torna uno solo e completo: i tab sono un
+           modo di guardarlo a schermo, non un modo di accorciarlo. Chi lo
+           stampa, o lo salva in PDF dal browser, deve avere tutte le
+           soluzioni -- e la pagina non aveva ancora nessuna regola di
+           stampa. */
+        @media print {
+            .vista-tabs, .confronto-vai { display: none !important; }
+            .vista-pannello { display: block !important; }
+            .quote-block + .quote-block { page-break-before: always; }
+            .pdf-link, .pdf-nota { display: none !important; }
+        }
     </style>
 </head>
 <body>
@@ -268,7 +320,11 @@
                             <div class="confronto-diff">con {{ $differenza->implode(', ') }}</div>
                         @endif
                         <div class="confronto-codice">{{ $quote->number }}</div>
-                        <a class="confronto-vai" href="#soluzione-{{ $loop->iteration }}">Vedi il dettaglio di questa soluzione ↓</a>
+                        {{-- Una label e non un'ancora: il pannello di quella
+                             soluzione e' nascosto finche' non si sceglie il
+                             suo tab, e un link a un'ancora invisibile non
+                             porterebbe da nessuna parte. --}}
+                        <label class="confronto-vai" for="vista-{{ $loop->iteration }}">Vedi il dettaglio di questa soluzione</label>
                     </td>
                     <td class="to-right" width="34%">
                         @if($aCanone)
@@ -292,6 +348,33 @@
         </table>
     @endif
 
+    @if($multiple)
+        {{-- Tab senza JavaScript: radio nascoste piu' i selettori :checked ~.
+             Le offerte arrivano a sei alternative, e impilate per intero
+             facevano una pagina da diecimila pixel in cui il cliente non
+             sapeva piu' quale preventivo stesse leggendo (Laura,
+             26/11/2026). Niente script perche' questa pagina e' un
+             documento: se il CSS non arriva si vedono tutte, che e' il
+             peggio accettabile. In stampa escono comunque tutte.
+
+             Il name non e' quote_id: quelle sono le radio del modulo di
+             accettazione in fondo, e due gruppi con lo stesso nome si
+             annullerebbero a vicenda. --}}
+        @foreach($quotes as $quote)
+            <input class="vista-radio" type="radio" name="vista-soluzione" id="vista-{{ $loop->iteration }}"
+                @checked($accepted ? $accepted->is($quote) : $loop->first)>
+        @endforeach
+
+        <div class="vista-tabs">
+            @foreach($quotes as $quote)
+                <label class="vista-tab" for="vista-{{ $loop->iteration }}">
+                    <span class="vista-tab-n">Soluzione {{ $loop->iteration }}</span>
+                    <span class="vista-tab-nome">{{ $confronto->titolo($quote) }}</span>
+                </label>
+            @endforeach
+        </div>
+    @endif
+
     @foreach($quotes as $quote)
         @php
             $rows = $quote->quoteProducts->whereNull('parent_quote_product_id');
@@ -302,7 +385,7 @@
             $scontoGenerale = $net * ((float) $quote->discount / 100);
             $scontoExtra = ($net - $scontoGenerale) * ((float) ($quote->extra_discount ?? 0) / 100);
         @endphp
-        <section id="soluzione-{{ $loop->iteration }}" class="quote-block {{ $accepted && ! $isChosen ? 'dimmed' : '' }}" style="margin-top:18px;">
+        <section id="soluzione-{{ $loop->iteration }}" class="quote-block {{ $multiple ? 'vista-pannello vista-pannello-'.$loop->iteration : '' }} {{ $accepted && ! $isChosen ? 'dimmed' : '' }}" style="margin-top:18px;">
             <div class="doc-meta">
                 <div>
                     {{-- Il titolo e' la macchina, non il numero d'ordine:
