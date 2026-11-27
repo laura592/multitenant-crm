@@ -53,7 +53,7 @@ class Noleggio extends Model
         'quota_macchina', 'quota_servizio', 'quota_detergenti', 'quota_caffe', 'quota_consumabili', 'canone', 'mese_pareggio',
         'prezzo_battuta', 'minimo_mensile',
         'data_inizio', 'data_fine', 'consegna_dal', 'consegna_al',
-        'stato', 'note', 'installazione_costo', 'spostamento_costo',
+        'stato', 'installazione_costo', 'spostamento_costo',
         'periodicita_fatturazione', 'modalita_pagamento', 'termini_pagamento',
     ];
 

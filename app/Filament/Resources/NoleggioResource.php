@@ -5,11 +5,12 @@ namespace App\Filament\Resources;
 use App\Filament\Forms\Components\AllegatiEmail;
 use App\Mail\NoleggioMail;
 use App\Models\Customer;
-use App\Models\MachineUnit;
+use App\Models\InformationRequest;
 use App\Models\Material;
 use App\Models\Noleggio;
 use App\Models\NoleggioFornitura;
 use App\Models\ProdottoCaffe;
+use App\Models\Quote;
 use App\Support\DisplayName;
 use App\Support\OutsideLivewireRender;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -83,39 +84,69 @@ class NoleggioResource extends Resource
                                             ->relationship('customer', 'company_name', modifyQueryUsing: fn ($query) => $query->orderBy('company_name'))
                                             ->getOptionLabelFromRecordUsing(fn ($record) => DisplayName::customerOption($record))
                                             ->searchable(['search_name', 'company_name', 'first_name', 'last_name'])
-                                            ->preload()->required(),
+                                            ->preload()->required()
+                                            // live: preventivo e richiesta qui sotto si filtrano
+                                            // su di lui, e devono cambiare quando cambia.
+                                            ->live(),
                                         Forms\Components\TextInput::make('descrizione')
                                             ->label('Oggetto del noleggio')
                                             ->helperText('Come comparira\' sul contratto, es. "Franke A600 FM Plus con unita\' di raffreddamento".')
                                             ->required()->maxLength(255),
-                                        Forms\Components\Select::make('machine_unit_id')
-                                            ->label('Macchina (se gia\' individuata)')
-                                            ->options(fn (Get $get) => $get('customer_id')
-                                                ? MachineUnit::query()->where('current_customer_id', $get('customer_id'))
-                                                    ->whereNull('deleted_at')
-                                                    ->get()
-                                                    ->mapWithKeys(fn (MachineUnit $m) => [
-                                                        // Stesso motivo del cliente: mai un'etichetta nulla.
-                                                        $m->id => trim(($m->serial_number ?: 'senza matricola').' — '.($m->model_name ?: '')),
-                                                    ])->all()
-                                                : [])
-                                            ->searchable(),
+                                        // "Macchina (se gia' individuata)" non c'e' piu':
+                                        // su sette noleggi non e' stata compilata mai, e la
+                                        // matricola si lega al contratto dopo, quando la
+                                        // macchina parte davvero.
+                                        // Filtrato sul cliente. Senza, la tendina mostrava
+                                        // tutti i preventivi del sistema -- settantacinque --
+                                        // e non si capiva quale fosse il suo (Laura,
+                                        // 27/11/2026: "non so, sono offerte diverse").
                                         Forms\Components\Select::make('quote_id')
                                             ->label('Preventivo di riferimento')
-                                            ->relationship('quote', 'number')
-                                            ->getOptionLabelFromRecordUsing(fn ($record) => $record->number ?: '—')
-                                            ->searchable(),
+                                            ->options(fn (Get $get) => $get('customer_id')
+                                                ? Quote::withoutGlobalScopes()
+                                                    ->where('customer_id', $get('customer_id'))
+                                                    ->whereNull('deleted_at')
+                                                    ->orderByDesc('date')
+                                                    ->get()
+                                                    ->mapWithKeys(fn (Quote $q) => [
+                                                        $q->id => $q->number.' — '.$q->date?->format('d/m/Y')
+                                                            .' — € '.number_format((float) $q->total, 2, ',', '.'),
+                                                    ])->all()
+                                                : [])
+                                            ->live()
+                                            ->searchable()
+                                            ->placeholder('Nessuno: il noleggio nasce dalla richiesta'),
                                         // Non tutti i noleggi nascono da un preventivo: quello
                                         // dell'Hotel Stalon e' stato fatto direttamente dalla
                                         // richiesta informazioni, e senza questo campo il
                                         // contratto non si vedeva da li' (20/10/2026).
+                                        // Si vede solo quando il preventivo NON c'e'. Con un
+                                        // preventivo la richiesta si eredita da li' da sola
+                                        // (vedi Noleggio::saving), quindi chiederla era
+                                        // chiedere due volte la stessa cosa.
+                                        //
+                                        // Anche questa filtrata sul cliente, e se di richieste
+                                        // aperte ne ha una sola la si sceglie gia'.
                                         Forms\Components\Select::make('information_request_id')
-                                            ->label('Richiesta informazioni')
-                                            ->relationship('informationRequest', 'number')
-                                            ->getOptionLabelFromRecordUsing(fn ($record) => trim($record->number.' — '.DisplayName::titleCase($record->customer?->company_name ?: $record->customer?->full_name), ' —'))
-                                            ->helperText('Da compilare quando il noleggio nasce da una richiesta senza passare per un preventivo.')
-                                            ->searchable()
-                                            ->preload(),
+                                            ->label('Nasce dalla richiesta')
+                                            ->options(fn (Get $get) => $get('customer_id')
+                                                ? InformationRequest::withoutGlobalScopes()
+                                                    ->where('customer_id', $get('customer_id'))
+                                                    ->orderByDesc('created_at')
+                                                    ->get()
+                                                    ->mapWithKeys(fn (InformationRequest $r) => [
+                                                        $r->id => trim($r->number.' — '.($r->status ?? '')),
+                                                    ])->all()
+                                                : [])
+                                            ->default(fn (Get $get) => $get('customer_id')
+                                                ? InformationRequest::withoutGlobalScopes()
+                                                    ->where('customer_id', $get('customer_id'))
+                                                    ->whereIn('status', ['nuova', 'in_lavorazione'])
+                                                    ->pluck('id')
+                                                    ->whenCount(1, fn ($c) => $c->first())
+                                                : null)
+                                            ->hidden(fn (Get $get): bool => filled($get('quote_id')))
+                                            ->searchable(),
                                     ]),
 
                                 // Tre gruppi, non tredici caselle in fila (03/11/2026). Erano
@@ -184,7 +215,6 @@ class NoleggioResource extends Resource
                                         Forms\Components\Select::make('stato')
                                             ->label('Stato')->options(Noleggio::statiLabels())
                                             ->default(Noleggio::STATO_BOZZA)->required(),
-                                        Forms\Components\Textarea::make('note')->label('Note')->rows(3)->columnSpanFull(),
                                     ]),
                             ]),
                         Forms\Components\Tabs\Tab::make('Come nasce il canone')

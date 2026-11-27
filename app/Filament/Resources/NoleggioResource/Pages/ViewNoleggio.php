@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\NoleggioResource\Pages;
 
 use App\Filament\Resources\NoleggioResource;
+use App\Models\Noleggio;
 use App\Models\NoleggioFornitura;
 use App\Support\DisplayName;
 use Filament\Actions;
@@ -76,7 +77,7 @@ class ViewNoleggio extends ViewRecord
                         // Il parametro si deve chiamare $state: Filament
                         // risolve le closure per NOME, non per posizione, e
                         // con un nome inventato la pagina va in errore.
-                        ->formatStateUsing(fn (string $state) => \App\Models\Noleggio::statiLabels()[$state] ?? $state)
+                        ->formatStateUsing(fn (string $state) => Noleggio::statiLabels()[$state] ?? $state)
                         ->columnSpan(['default' => 1, 'lg' => 2]),
                     TextEntry::make('attrezzatura')->label('Attrezzatura')
                         ->state(fn ($record) => $record->descrizione
@@ -87,9 +88,9 @@ class ViewNoleggio extends ViewRecord
                     // PDF.
                     TextEntry::make('pagamento')->label('Fatturazione e pagamento')
                         ->state(fn ($record) => implode(', ', array_filter([
-                            \App\Models\Noleggio::periodicitaLabels()[$record->periodicita_fatturazione] ?? null,
-                            \App\Models\Noleggio::modalitaPagamentoLabels()[$record->modalita_pagamento] ?? null,
-                            \App\Models\Noleggio::terminiPagamentoLabels()[$record->termini_pagamento] ?? null,
+                            Noleggio::periodicitaLabels()[$record->periodicita_fatturazione] ?? null,
+                            Noleggio::modalitaPagamentoLabels()[$record->modalita_pagamento] ?? null,
+                            Noleggio::terminiPagamentoLabels()[$record->termini_pagamento] ?? null,
                         ])) ?: '—')
                         ->columnSpan(['default' => 1, 'lg' => 5]),
                 ]),
@@ -259,7 +260,7 @@ class ViewNoleggio extends ViewRecord
                                     // lo dice il catalogo, e l'importo a
                                     // destra e' quello che serve a questa
                                     // pagina (Laura, 10/11/2026).
-                                    $conto .= ' all\'anno'.(filled($v->note) ? ' · '.e($v->note) : '');
+                                    $conto .= ' all\'anno';
 
                                     $out .= static::riga(
                                         e($v->voce),
@@ -275,11 +276,6 @@ class ViewNoleggio extends ViewRecord
                         }),
                 ]),
 
-            Section::make('Note')
-                ->columnSpanFull()
-                ->collapsed()
-                ->visible(fn ($record) => filled($record->note))
-                ->schema([TextEntry::make('note')->label('')]),
         ]);
     }
 
