@@ -22,6 +22,7 @@ use Filament\Forms\Form;
 use Filament\Forms\Get;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Support\Enums\IconPosition;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Auth;
@@ -122,6 +123,22 @@ class QuoteGroupResource extends Resource
                     ->formatStateUsing(fn (string $state) => static::statusLabels()[$state] ?? ucfirst($state))
                     ->color(fn (string $state) => static::statusColors()[$state] ?? 'gray'),
                 Tables\Columns\TextColumn::make('quotes_count')->visibleFrom('md')->counts('quotes')->label('Soluzioni'),
+                // Il telefono accanto al cliente: la pagina serve a decidere
+                // chi chiamare, e il numero stava solo dentro l'anagrafica.
+                // Cliccabile perche' dal telefono o da un portatile con
+                // softphone si chiama da qui, e copiabile per tutto il resto.
+                Tables\Columns\TextColumn::make('telefono')
+                    ->label('Telefono')
+                    ->state(fn ($record) => $record->customer?->primaryPhone())
+                    ->url(fn ($record) => ($n = $record->customer?->primaryPhone())
+                        ? 'tel:'.preg_replace('/[^0-9+]/', '', $n)
+                        : null)
+                    ->copyable()
+                    ->copyMessage('Numero copiato')
+                    ->icon('heroicon-m-phone')
+                    ->iconPosition(IconPosition::Before)
+                    ->color('gray')
+                    ->placeholder('—'),
                 // Le stesse colonne dell'elenco dei preventivi: chi passa
                 // dall'uno all'altro deve trovare le stesse informazioni,
                 // non doverle cercare in due posti diversi.

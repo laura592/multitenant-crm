@@ -38,6 +38,7 @@ use Filament\Infolists\Components\ViewEntry;
 use Filament\Infolists\Infolist;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Support\Enums\IconPosition;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -584,6 +585,22 @@ class QuoteResource extends Resource
                     ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
                 // Come in Richieste Informazioni: la zona e' il primo filtro
                 // mentale quando si scorre un elenco di clienti.
+                // Il telefono accanto al cliente: la pagina serve a decidere
+                // chi chiamare, e il numero stava solo dentro l'anagrafica.
+                // Cliccabile perche' dal telefono o da un portatile con
+                // softphone si chiama da qui, e copiabile per tutto il resto.
+                Tables\Columns\TextColumn::make('telefono')
+                    ->label('Telefono')
+                    ->state(fn ($record) => $record->customer?->primaryPhone())
+                    ->url(fn ($record) => ($n = $record->customer?->primaryPhone())
+                        ? 'tel:'.preg_replace('/[^0-9+]/', '', $n)
+                        : null)
+                    ->copyable()
+                    ->copyMessage('Numero copiato')
+                    ->icon('heroicon-m-phone')
+                    ->iconPosition(IconPosition::Before)
+                    ->color('gray')
+                    ->placeholder('—'),
                 Tables\Columns\TextColumn::make('customer.province')->visibleFrom('md')
                     ->label('Prov.')
                     ->badge()
