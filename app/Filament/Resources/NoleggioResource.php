@@ -164,20 +164,59 @@ class NoleggioResource extends Resource
                                 // contratto. Una cosa cosi' si decide prima, non per ultima
                                 // (Laura, 10/11/2026).
                                 Forms\Components\Section::make('Come si paga')
-                                    ->description('Due modi, e si sceglie qui: un canone fisso ogni mese, oppure un tanto a erogazione letto dal contatore.')
                                     ->columns(2)
                                     ->schema([
+                                        // La scelta era implicita: si riempiva il prezzo a
+                                        // erogazione e il contratto cambiava natura, si
+                                        // lasciava vuoto e restava a canone. La descrizione
+                                        // diceva "due modi, e si sceglie qui" e di modi se ne
+                                        // vedeva uno (Laura, 27/11/2026). Adesso si sceglie
+                                        // davvero.
+                                        //
+                                        // Non si salva: il modo E' prezzo_battuta -- pieno
+                                        // vuol dire a erogazione, vuoto vuol dire canone --
+                                        // e da quel campo dipendono gia' il pannello del
+                                        // canone, due titoli di sezione e due articoli del
+                                        // contratto. Un secondo campo in tabella sarebbe la
+                                        // stessa cosa scritta due volte, pronta a
+                                        // contraddirsi.
+                                        Forms\Components\Radio::make('modo_pagamento')
+                                            ->label('')
+                                            ->options([
+                                                'canone' => 'Canone fisso ogni mese',
+                                                'battuta' => 'Un tanto a erogazione, letto dal contatore',
+                                            ])
+                                            ->descriptions([
+                                                'canone' => 'Il cliente paga sempre la stessa cifra, qualunque sia il consumo.',
+                                                'battuta' => 'Si fattura quello che la macchina ha erogato. Il canone resta solo un conto interno: serve a sapere sotto quale cifra non si scende.',
+                                            ])
+                                            ->default(fn (?Noleggio $record): string => $record?->prezzo_battuta ? 'battuta' : 'canone')
+                                            ->afterStateHydrated(fn (Forms\Components\Radio $campo, ?Noleggio $record) => $campo->state($record?->prezzo_battuta ? 'battuta' : 'canone'))
+                                            ->dehydrated(false)
+                                            ->live()
+                                            ->afterStateUpdated(function (Forms\Set $set, $state): void {
+                                                // Tornando al canone fisso il prezzo si
+                                                // azzera: lasciarlo scritto terrebbe il
+                                                // contratto a erogazione senza dirlo.
+                                                if ($state === 'canone') {
+                                                    $set('prezzo_battuta', null);
+                                                    $set('minimo_mensile', null);
+                                                }
+                                            })
+                                            ->columnSpanFull(),
                                         Forms\Components\TextInput::make('prezzo_battuta')
                                             ->label('Prezzo a erogazione')
                                             ->prefix('€')
-                                            ->helperText('Lasciandolo vuoto il contratto e\' a canone fisso.')
-                                            ->numeric()->step('0.0001')->live(onBlur: true),
+                                            ->helperText('Quanto costa al cliente ogni singola erogazione.')
+                                            ->numeric()->step('0.0001')->live(onBlur: true)
+                                            ->required(fn (Get $get): bool => $get('modo_pagamento') === 'battuta')
+                                            ->visible(fn (Get $get): bool => $get('modo_pagamento') === 'battuta'),
                                         Forms\Components\TextInput::make('minimo_mensile')
                                             ->label('Minimo per periodo')
                                             ->prefix('€')
                                             ->helperText('Senza minimo, una stagione andata male non copre nemmeno la macchina.')
                                             ->numeric()
-                                            ->visible(fn (Get $get) => filled($get('prezzo_battuta'))),
+                                            ->visible(fn (Get $get): bool => $get('modo_pagamento') === 'battuta'),
                                     ]),
 
                                 Forms\Components\Section::make('Contratto')
