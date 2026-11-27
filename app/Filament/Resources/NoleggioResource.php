@@ -519,11 +519,20 @@ class NoleggioResource extends Resource
                 // database: e' quello che il contratto stampa.
                 //
                 // Stesso trattamento che l'unita' ha gia' dal 10/11/2026.
+                // Nascosto quando l'articolo c'e' -- lo da' lui -- ma VISIBILE
+                // quando non c'e': 22 righe su 40 sono state scritte a mano
+                // prima che il catalogo le coprisse, e nasconderlo sempre le
+                // rendeva anonime, con una tendina vuota e nient'altro
+                // (Laura, 27/11/2026: "non vedo gli articoli collegati").
                 Forms\Components\TextInput::make('voce')
+                    ->label('Nome del prodotto')
+                    ->helperText('Scritto a mano: questo articolo non è a catalogo.')
                     ->maxLength(255)
-                    ->hidden()
+                    ->required(fn (Get $get): bool => blank($get('prodotto_caffe_id')) && blank($get('material_id')))
+                    ->hidden(fn (Get $get): bool => filled($get('prodotto_caffe_id')) || filled($get('material_id')))
                     ->dehydrated()
-                    ->dehydratedWhenHidden(),
+                    ->dehydratedWhenHidden()
+                    ->columnSpan(3),
                 // Si scrive quello che il contratto promette -- "890 kg di
                 // caffe' all'anno" -- e il mensile lo calcola il programma.
                 Forms\Components\TextInput::make('quantita')
@@ -546,12 +555,10 @@ class NoleggioResource extends Resource
                     // solo un'altra cosa da guardare (Laura, 10/11/2026).
                     // dehydratedWhenHidden: nascosta si salva lo stesso, se
                     // no la pezzatura sparirebbe dal database.
-                    // Sempre nascosta, non piu' solo quando l'articolo c'e':
-                    // adesso l'articolo e' obbligatorio, quindi la pezzatura
-                    // la sa sempre il catalogo. Scrivendola a mano si poteva
-                    // contraddirlo, ed e' successo -- il cioccolato e' a
-                    // catalogo da 1 kg e in due noleggi c'e' scritto 500 g.
-                    ->hidden()
+                    // Nascosta quando l'articolo c'e': la pezzatura la dice il
+                    // catalogo. Senza articolo si scrive, come il nome qui
+                    // sopra.
+                    ->hidden(fn (Get $get): bool => filled($get('prodotto_caffe_id')) || filled($get('material_id')))
                     ->dehydrated()
                     ->dehydratedWhenHidden()
                     ->afterStateHydrated(function (Forms\Components\TextInput $campo, Get $get): void {
@@ -632,7 +639,6 @@ class NoleggioResource extends Resource
                         $set('prezzo_unitario', (float) $m->list_price);
                     }
                 })
-                ->required()
                 ->columnSpan(3);
         }
 
@@ -667,7 +673,6 @@ class NoleggioResource extends Resource
                 $set('unita', $p->formato);
                 $set('prezzo_unitario', (float) $p->prezzo);
             })
-            ->required()
             ->columnSpan(3);
     }
 
