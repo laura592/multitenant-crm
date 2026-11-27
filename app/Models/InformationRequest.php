@@ -62,7 +62,7 @@ class InformationRequest extends Model
             ->where('tenant_id', $tenantId)
             ->whereYear('created_at', $year)
             ->where('number', 'like', "{$prefix}%")
-            ->orderByRaw("CAST(SUBSTRING(number, -4) AS UNSIGNED) DESC")
+            ->orderByRaw('CAST(SUBSTRING(number, -4) AS UNSIGNED) DESC')
             ->first();
 
         $next = 1;
@@ -131,10 +131,24 @@ class InformationRequest extends Model
             return str_starts_with($this->status, 'preventivo_') ? 'in_lavorazione' : null;
         }
 
+        // Un si' o un no CHIUDONO la richiesta (Laura, 27/11/2026: "quando
+        // concretizzo un si' o un no viene chiusa"). Il risultato resta
+        // scritto sul preventivo, che e' il posto giusto: la richiesta dice
+        // solo se c'e' ancora qualcosa da fare, e quando la risposta e'
+        // arrivata non c'e' piu'.
+        //
+        // "Scaduto" conta come un no: dopo la validita' il cliente non ha
+        // detto niente, e per l'azienda e' un no (vedi ScadiPreventivi).
+        // Senza questo una trattativa scaduta lasciava la richiesta su
+        // "preventivo inviato" per sempre.
+        //
+        // 'chiusa' non e' fra gli AUTO_STATUSES: una volta chiusa nessun
+        // ricalcolo la riapre. Se il cliente ci ripensa, si riapre a mano.
+        $decisa = fn (string $status): bool => in_array($status, ['accettato', 'rifiutato', 'scaduto'], true);
+
         return match (true) {
-            $statuses->contains('accettato') => 'preventivo_accettato',
             $statuses->contains('inviato') => 'preventivo_inviato',
-            $statuses->every(fn ($status) => $status === 'rifiutato') => 'preventivo_rifiutato',
+            $statuses->every($decisa) => 'chiusa',
             default => 'in_lavorazione',
         };
     }
