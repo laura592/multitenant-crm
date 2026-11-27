@@ -32,7 +32,7 @@ class NoleggioFornitura extends Model
     protected $fillable = [
         'noleggio_id', 'voce', 'prodotto_caffe_id', 'material_id', 'gruppo',
         'quantita', 'unita', 'prezzo_unitario', 'prezzo_acquisto', 'ricarico', 'costo_mensile',
-        'note', 'ordine',
+        'ordine',
     ];
 
     protected $casts = [
