@@ -58,10 +58,28 @@ return [
             'ignore_exceptions' => false,
         ],
 
+        /*
+         * I file di log li scrivono DUE utenti: php-fpm (www-data) quando
+         * serve il sito, e deploy quando gira artisan -- il rilascio, il
+         * cron, un comando a mano. Chi arriva per primo in giornata crea il
+         * file, e con lo 0644 di Monolog l'altro non ci scrive piu'.
+         *
+         * E' successo il 27/11/2026: il rilascio delle 14:50 ha creato
+         * laravel-2026-11-27.log come deploy, e da li' in poi php-fpm non ha
+         * potuto scrivere una riga. Non e' solo un log perso: Monolog alza
+         * un'eccezione quando non riesce ad aprire il file, quindi l'errore
+         * che stava registrando diventa un 500 bianco -- e la cartella in
+         * cui cercarlo resta muta proprio nel momento in cui serve.
+         *
+         * Lo 0664 basta perche' storage/logs e' setgid di gruppo www-data e
+         * deploy e' in quel gruppo: il file nasce del gruppo giusto, e il
+         * permesso di scrittura al gruppo lo rende scrivibile a tutti e due.
+         */
         'single' => [
             'driver' => 'single',
             'path' => storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', 'debug'),
+            'permission' => 0664,
             'replace_placeholders' => true,
         ],
 
@@ -70,6 +88,7 @@ return [
             'path' => storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', 'debug'),
             'days' => env('LOG_DAILY_DAYS', 14),
+            'permission' => 0664,
             'replace_placeholders' => true,
         ],
 
@@ -84,6 +103,7 @@ return [
             'path' => storage_path('logs/gestionale.log'),
             'level' => 'info',
             'days' => env('LOG_GESTIONALE_DAYS', 90),
+            'permission' => 0664,
             'replace_placeholders' => true,
         ],
 

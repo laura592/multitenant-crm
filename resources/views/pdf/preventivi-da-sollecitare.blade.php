@@ -39,7 +39,7 @@
 <div class="sottotitolo">
     {{ $tenant?->name }} — situazione al {{ $data }}
     @if($ricerca) · filtrato per “{{ $ricerca }}” @endif
-    · una riga per trattativa, importo dell'alternativa più cara
+    · una riga per trattativa, imponibile dell'alternativa più cara
 </div>
 
 <table class="riepilogo">
@@ -49,7 +49,7 @@
             <div class="valore">{{ count($righe) }}</div>
         </td>
         <td width="33%">
-            <div class="etichetta">Valore in ballo</div>
+            <div class="etichetta">Imponibile in ballo</div>
             <div class="valore">€ {{ number_format($totale, 2, ',', '.') }}</div>
         </td>
         <td>
@@ -65,7 +65,7 @@
             <th width="4%">#</th>
             <th>Cliente</th>
             <th width="13%" class="centro">Silenzio</th>
-            <th width="16%" class="destra">In ballo</th>
+            <th width="16%" class="destra">In ballo<br><span style="font-weight:normal;text-transform:none;">imponibile</span></th>
             <th class="esito">Sì / No / Richiamare</th>
         </tr>
     </thead>
@@ -82,6 +82,9 @@
                         @if($riga['dove'])
                             · a {{ $riga['dove'] }}
                         @endif
+                        @if($riga['chiesto'])
+                            · <span class="ambra">{{ $riga['chiesto'] }}</span>
+                        @endif
                     </div>
                 </td>
                 <td class="centro @if($riga['giorni'] !== null && $riga['giorni'] > 90) rosso @elseif($riga['giorni'] !== null && $riga['giorni'] > 30) ambra @endif">
@@ -96,7 +99,7 @@
 
 <div class="pie">
     Stampato il {{ $data }} · l'elenco segue l'ordine e la ricerca impostati a schermo ·
-    il silenzio si conta dall'ultimo invio registrato, o dalla data del preventivo se non ce n'è
+    il silenzio si conta dall'ultima volta che li abbiamo sentiti — mail o telefonata — o dalla data del preventivo se non ce n'è
 </div>
 
 </body>

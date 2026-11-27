@@ -11,6 +11,15 @@ class QuoteEmail extends Model
 {
     use HasUuids, SoftDeletes;
 
+    /** L'invio vero e proprio del preventivo o dell'offerta. */
+    public const TIPO_PREVENTIVO = 'preventivo';
+
+    /**
+     * La mail che chiede un si' o un no su qualcosa di gia' mandato. Non
+     * conta come "ultimo invio": vedi la migrazione 2026_11_27_190000.
+     */
+    public const TIPO_SOLLECITO = 'sollecito';
+
     protected $fillable = [
         'quote_id',
         'user_id',
@@ -19,6 +28,7 @@ class QuoteEmail extends Model
         'subject',
         'message',
         'status',
+        'tipo',
         'error_message',
     ];
 

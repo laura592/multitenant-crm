@@ -11,10 +11,12 @@ use App\Filament\Forms\OffertaCaffeFields;
 use App\Filament\Resources\QuoteResource\Pages;
 use App\Filament\Resources\QuoteResource\RelationManagers\QuoteProductsRelationManager;
 use App\Mail\QuoteMail;
+use App\Mail\SollecitoPreventivoMail;
 use App\Models\Customer;
 use App\Models\InformationRequest;
 use App\Models\PaymentMethod;
 use App\Models\Quote;
+use App\Models\QuoteEmail;
 use App\Models\QuoteGroup;
 use App\Models\QuoteResponse;
 use App\Support\DisplayName;
@@ -271,7 +273,20 @@ class QuoteResource extends Resource
                         ->contained(false)
                         ->schema([
                             TextEntry::make('recipient_email')->label('Destinatario'),
-                            TextEntry::make('created_at')->label('Inviato il')->dateTime('d/m/Y H:i'),
+                            // Dal 27/11/2026 qui dentro non c'e' solo
+                            // l'invio del preventivo: c'e' anche il
+                            // sollecito, che e' un'altra mail con un altro
+                            // testo e altri pulsanti. Senza questa riga le
+                            // due si leggevano uguali, ed era il posto in
+                            // cui si va a controllare cosa e' partito.
+                            TextEntry::make('tipo')
+                                ->label('Che cosa')
+                                ->badge()
+                                ->formatStateUsing(fn (?string $state) => $state === QuoteEmail::TIPO_SOLLECITO ? 'Sollecito' : 'Preventivo')
+                                ->color(fn (?string $state) => $state === QuoteEmail::TIPO_SOLLECITO ? 'warning' : 'gray'),
+                            TextEntry::make('created_at')
+                                ->label(fn ($record) => $record->tipo === QuoteEmail::TIPO_SOLLECITO ? 'Sollecitato il' : 'Inviato il')
+                                ->dateTime('d/m/Y H:i'),
                             TextEntry::make('status')
                                 ->label('Esito')
                                 ->badge()
@@ -297,15 +312,23 @@ class QuoteResource extends Resource
                                     // (Laura, 10/11/2026 — sul preventivo
                                     // all'Hotel Alemagna). L'email spedita era
                                     // ed e' pulita: il difetto sta solo qui.
+                                    // Il sollecito va reso con il SUO
+                                    // template: dentro quello del
+                                    // preventivo si vedeva il testo giusto
+                                    // con i pulsanti sbagliati, cioe'
+                                    // un'anteprima di una mail che al
+                                    // cliente non e' mai arrivata.
                                     ->modalContent(fn ($record) => new HtmlString(
-                                        '<iframe srcdoc="'.e(OutsideLivewireRender::run(fn () => (new QuoteMail($record->quote, '', $record->message, clientUrl: $record->quote->public_token ? $record->quote->clientUrl() : null))->render())).'" style="width:100%;height:70vh;border:0;border-radius:0.5rem;background:#fff;"></iframe>'
+                                        '<iframe srcdoc="'.e(OutsideLivewireRender::run(fn () => ($record->tipo === QuoteEmail::TIPO_SOLLECITO
+                                            ? new SollecitoPreventivoMail($record->quote, collect([$record->quote]), $record->quote->clientUrl(), $record->message, $record->subject)
+                                            : new QuoteMail($record->quote, '', $record->message, clientUrl: $record->quote->public_token ? $record->quote->clientUrl() : null))->render())).'" style="width:100%;height:70vh;border:0;border-radius:0.5rem;background:#fff;"></iframe>'
                                     ))
                                     ->modalSubmitAction(false)
                                     ->modalCancelActionLabel('Chiudi')
                                     ->modalWidth('4xl'),
                             ]),
                         ])
-                        ->columns(3),
+                        ->columns(4),
                 ]),
         ]);
     }

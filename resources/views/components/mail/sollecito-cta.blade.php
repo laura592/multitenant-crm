@@ -3,9 +3,13 @@
 	$contactName = $tenant?->client_contact_name;
 	$phone = $tenant?->client_contact_phone ?: $tenant?->phone;
 	$link = fn (string $azione) => $url.(str_contains($url, '?') ? '&' : '?').'azione='.$azione;
-	// 13px e non 14: "Per ora non procedo" a 14 andava a capo
-	// spezzando la parola a meta' ("proced o").
-	$cell = 'display:block;padding:12px 6px;font-size:13px;font-weight:700;text-decoration:none;text-align:center;';
+	// word-break:normal NON si tocca. Il tema di Laravel
+	// (vendor/mail/html/themes/default.css) mette "word-break: break-all"
+	// su TUTTI gli <a>, e l'inliner se lo porta dentro ogni pulsante: sul
+	// telefono "Vorrei parlarne" diventava "Vorrei p / arlarne". Non era
+	// questione di corpo del testo -- rimpicciolirlo sposta solo il punto
+	// in cui la parola si spezza. Qui le parole vanno a capo intere.
+	$cell = 'display:block;padding:12px 6px;font-size:14px;font-weight:700;line-height:1.3;word-break:normal;overflow-wrap:normal;text-decoration:none;text-align:center;';
 @endphp
 {{-- I pulsanti del SOLLECITO, diversi da quelli dell'invio (vedi
      client-response-cta). Diciture scelte da Laura, 27/11/2026.
@@ -26,15 +30,15 @@
 		<td style="background:#f9fafb;border:1px solid #e5e7eb;border-top:none;padding:14px 12px 16px;">
 			<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;border-spacing:0;">
 				<tr>
-					<td width="38%" style="background:#047857;border:1px solid #047857;">
+					<td width="34%" style="background:#047857;border:1px solid #047857;">
 						<a href="{{ $link('accetta') }}" target="_blank" style="{{ $cell }}color:#ffffff;">{{ $multiple ? 'Una proposta mi interessa' : 'La proposta mi interessa' }}</a>
 					</td>
 					<td width="2%" style="font-size:0;">&nbsp;</td>
-					<td width="24%" style="background:#ffffff;border:1px solid #020F30;">
+					<td width="30%" style="background:#ffffff;border:1px solid #020F30;">
 						<a href="{{ $link('richiamata') }}" target="_blank" style="{{ $cell }}color:#020F30;">Vorrei parlarne</a>
 					</td>
 					<td width="2%" style="font-size:0;">&nbsp;</td>
-					<td width="34%" style="background:#ffffff;border:1px solid #9ca3af;">
+					<td width="32%" style="background:#ffffff;border:1px solid #9ca3af;">
 						<a href="{{ $link('rifiuta') }}" target="_blank" style="{{ $cell }}color:#4b5563;">Per ora non procedo</a>
 					</td>
 				</tr>

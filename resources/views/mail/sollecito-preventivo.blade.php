@@ -1,11 +1,22 @@
 <x-mail::message>
 @php
 	$piuDiUno = $preventivi->count() > 1;
+	// Il kicker segue il DOCUMENTO, non il numero di alternative rimaste:
+	// un numero OFF- si chiama "Offerta" anche quando di soluzioni ne e'
+	// rimasta una sola. Vedi SollecitoPreventivoMail::corpoPredefinito().
+	$etichetta = $documento instanceof \App\Models\QuoteGroup ? 'Offerta ' : 'Preventivo ';
+	// Si nomina il cliente, non chi paga (stessa regola di QuoteResource).
+	// Serve perche' questa mail finisce spesso su un indirizzo di ufficio
+	// condiviso, dove "Ci aggiorna?" da solo non dice su che cosa.
+	$destinatario = $documento->customer;
+	$nome = \App\Support\DisplayName::titleCase($destinatario?->company_name)
+		?: \App\Support\DisplayName::titleCase($destinatario?->full_name);
 @endphp
 
 <x-mail.hero
-	:kicker="($piuDiUno ? 'Offerta ' : 'Preventivo ').$documento->number"
+	:kicker="$etichetta.$documento->number"
 	title="Ci aggiorna?"
+	:subtitle="$nome ? 'Destinatario: '.$nome : null"
 />
 
 <x-mail.box>

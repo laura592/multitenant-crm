@@ -6,20 +6,26 @@ use App\Filament\Concerns\ApreStampeInNuovaScheda;
 use App\Filament\Resources\QuoteGroupResource;
 use App\Filament\Resources\QuoteResource;
 use App\Models\Quote;
+use App\Models\QuoteContatto;
+use App\Models\QuoteEmail;
 use App\Models\Tenant;
 use App\Support\DisplayName;
 use App\Support\OutsideLivewireRender;
 use App\Support\Pdf\StampaTemporanea;
+use App\Support\Preventivi\Solleciti;
 use Barryvdh\DomPDF\Facade\Pdf;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Actions;
 use Filament\Facades\Filament;
+use Filament\Forms;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Tables;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
 /**
@@ -49,11 +55,19 @@ use Illuminate\Support\Carbon;
  * mandati la settimana scorsa, perche' e' la telefonata piu' urgente. Il
  * preventivo di ieri non va richiamato, va aspettato.
  *
- * I giorni di silenzio si contano dall'ULTIMO INVIO, non dalla data del
- * preventivo: se un'offerta di marzo e' stata rimandata a ottobre, il
- * cliente tace da ottobre. Gli invii stanno in quote_emails (il singolo
- * preventivo) e quote_group_emails (l'offerta con alternative), e valgono
- * solo quelli andati a buon fine: una mail "failed" non e' un contatto.
+ * I giorni di silenzio si contano dall'ULTIMA VOLTA CHE LI ABBIAMO
+ * SENTITI, non dalla data del preventivo: se un'offerta di marzo e' stata
+ * rimandata a ottobre, il cliente tace da ottobre. Valgono tre cose, la
+ * piu' recente delle tre: l'invio del preventivo (quote_emails e
+ * quote_group_emails, solo quelli andati a buon fine — una mail "failed"
+ * non e' un contatto), la mail di sollecito e la telefonata
+ * (quote_contatti). Le telefonate contano quanto le mail: una trattativa
+ * sentita ieri a voce non va richiamata oggi.
+ *
+ * Dopo due solleciti senza risposta la trattativa esce dall'elenco
+ * (QuoteContatto::SOLLECITI_MASSIMI, indicazione di Laura: "non posso
+ * tormentarli per sempre"). Esce, non si chiude: lo stato resta "scaduto",
+ * e l'interruttore "Anche i chiusi" la rimette a vedere.
  *
  * Fuori restano le bozze (mai uscite di qui, non c'e' niente da
  * sollecitare) e tutto cio' che una risposta l'ha avuta.
@@ -85,6 +99,18 @@ class PreventiviDaSollecitare extends Page implements HasTable
      */
     public const GIORNI_MINIMI = 7;
 
+    /**
+     * Mostra anche le trattative su cui abbiamo gia' chiesto due volte.
+     *
+     * Normalmente escono dall'elenco: dopo due solleciti senza risposta si
+     * smette (QuoteContatto::SOLLECITI_MASSIMI). Ma "fuori dall'elenco" non
+     * vuol dire sparite, e capita di volerle rivedere -- prima di buttare
+     * via una trattativa da ventimila euro, o quando il cliente ricompare
+     * sei mesi dopo. Il filtro e' un interruttore e non una Filter di
+     * Filament perche' non filtra: aggiunge.
+     */
+    public bool $ancheChiusi = false;
+
     public function getSubheading(): ?string
     {
         return 'Chi richiamare per avere un sì o un no, in ordine di urgenza. '
@@ -94,8 +120,20 @@ class PreventiviDaSollecitare extends Page implements HasTable
     /**
      * La chiave della trattativa: il gruppo se il preventivo sta in
      * un'offerta con alternative, altrimenti se stesso.
+     *
+     * Si passa da quote_groups.id e non da quotes.quote_group_id perche' il
+     * join esclude le offerte cancellate (vedi table()): di un preventivo
+     * rimasto attaccato a un'offerta buttata via, la trattativa torna a
+     * essere il preventivo stesso.
+     *
+     * Non e' teoria. Il 27/11/2026 in produzione ce n'erano due:
+     * PRV-2026-0080 sotto OFF-2026-0018 (cancellata il 09/10) e
+     * PRV-2026-0104 sotto OFF-2026-0023 (cancellata il 28/10), 25.064,60
+     * EUR di imponibile in tutto, tutti e due in questo elenco. Il link al
+     * cliente di un'offerta cancellata e' una pagina 404: il sollecito
+     * avrebbe mandato a due clienti veri un invito a vedere il nulla.
      */
-    private const TRATTATIVA = 'COALESCE(quotes.quote_group_id, quotes.id)';
+    private const TRATTATIVA = 'COALESCE(quote_groups.id, quotes.id)';
 
     /**
      * L'ultimo invio andato a buon fine della trattativa.
@@ -120,11 +158,21 @@ class PreventiviDaSollecitare extends Page implements HasTable
 
     private static function ultimoInvio(): string
     {
+        // Il sollecito e' escluso di proposito: "ultimo invio" vuol dire
+        // l'ultima volta che il cliente ha ricevuto l'offerta, e serve a
+        // decidere che frase dire al telefono ("come da nostra mail
+        // del..."). Una mail che chiedeva un si' o un no non ha rimandato
+        // niente, e contarla qui sposterebbe la data del documento. Il
+        // silenzio, invece, riparte anche dal sollecito: vedi silenzioDa().
+        $nonSollecito = fn (string $alias) => " AND COALESCE({$alias}.tipo, 'preventivo') <> '".QuoteEmail::TIPO_SOLLECITO."'";
+
         $singolo = '(SELECT MAX(qe.created_at) FROM quote_emails qe'
-            ." WHERE qe.quote_id = quotes.id AND qe.status = 'sent' AND qe.deleted_at IS NULL)";
+            ." WHERE qe.quote_id = quotes.id AND qe.status = 'sent' AND qe.deleted_at IS NULL"
+            .$nonSollecito('qe').')';
 
         $gruppo = '(SELECT MAX(qge.created_at) FROM quote_group_emails qge'
-            ." WHERE qge.quote_group_id = quotes.quote_group_id AND qge.status = 'sent' AND qge.deleted_at IS NULL)";
+            ." WHERE qge.quote_group_id = quote_groups.id AND qge.status = 'sent' AND qge.deleted_at IS NULL"
+            .$nonSollecito('qge').')';
 
         $singolo = "COALESCE({$singolo}, ".self::MAI.')';
         $gruppo = "COALESCE({$gruppo}, ".self::MAI.')';
@@ -133,14 +181,75 @@ class PreventiviDaSollecitare extends Page implements HasTable
     }
 
     /**
-     * Da quando il cliente tace: l'ultimo invio se lo conosciamo, la data
-     * del preventivo altrimenti. I preventivi importati e quelli mandati a
-     * mano fuori dal CRM non hanno una mail in archivio, e scartarli
-     * vorrebbe dire non richiamare proprio i piu' vecchi.
+     * L'ultima volta che abbiamo chiesto una risposta, in qualunque modo:
+     * la mail di sollecito o la telefonata.
+     *
+     * Serve perche' il CRM non vedeva le telefonate. Il 27/11/2026 Laura ha
+     * chiamato il NATO Stability Policing Centre -- stanno ancora valutando
+     * -- e il giorno dopo quella trattativa sarebbe tornata in cima
+     * all'elenco, ferma da 67 giorni, come se nessuno l'avesse mai sentita.
+     *
+     * Il contatto sta sulla trattativa: quote_group_id per le offerte con
+     * alternative, quote_id per il preventivo singolo (vedi QuoteContatto).
+     * Il MAX() esterno non scegle niente -- dentro un gruppo la sottoselect
+     * da' lo stesso valore su tutte le righe -- ma senza un aggregato
+     * ONLY_FULL_GROUP_BY rifiuterebbe la query.
+     */
+    private static function ultimoContatto(): string
+    {
+        return 'MAX((SELECT MAX(qc.data) FROM quote_contatti qc'
+            .' WHERE qc.deleted_at IS NULL'
+            .' AND (qc.quote_group_id = quote_groups.id OR qc.quote_id = quotes.id)))';
+    }
+
+    /**
+     * Quando e' partito l'ultimo sollecito.
+     *
+     * Diverso da ultimoContatto(), che e' il piu' recente di QUALUNQUE
+     * contatto. La colonna "Chiesto" conta i soli solleciti, e scriverci
+     * sotto la data di una telefonata faceva leggere "1 volta il
+     * 26/11/2026" a chi aveva scritto a settembre e telefonato ieri.
+     */
+    private static function ultimoSollecito(): string
+    {
+        return 'MAX((SELECT MAX(qc.data) FROM quote_contatti qc'
+            ." WHERE qc.deleted_at IS NULL AND qc.tipo = '".QuoteContatto::TIPO_SOLLECITO."'"
+            .' AND (qc.quote_group_id = quote_groups.id OR qc.quote_id = quotes.id)))';
+    }
+
+    /**
+     * Quante volte abbiamo gia' mandato la mail che chiede un si' o un no.
+     *
+     * Si contano solo i solleciti e non le telefonate: il tetto e' sulle
+     * mail (vedi QuoteContatto::SOLLECITI_MASSIMI), perche' telefonare e'
+     * una scelta che si fa guardando il cliente in faccia, mentre la mail
+     * e' la cosa che diventa molestia se si ripete.
+     */
+    private static function solleciti(): string
+    {
+        return 'MAX((SELECT COUNT(*) FROM quote_contatti qc'
+            ." WHERE qc.deleted_at IS NULL AND qc.tipo = '".QuoteContatto::TIPO_SOLLECITO."'"
+            .' AND (qc.quote_group_id = quote_groups.id OR qc.quote_id = quotes.id)))';
+    }
+
+    /**
+     * Da quando il cliente tace: l'ultima volta che gli abbiamo chiesto
+     * qualcosa -- mail dell'offerta, sollecito o telefonata, la piu'
+     * recente delle tre -- e, in mancanza di tutte, la data del preventivo.
+     * I preventivi importati e quelli consegnati a mano non hanno una mail
+     * in archivio, e scartarli vorrebbe dire non richiamare proprio i piu'
+     * vecchi.
+     *
+     * Il GREATEST passa per il fondo finto perche' torna NULL se uno degli
+     * argomenti e' NULL, e una trattativa ha quasi sempre una sola delle
+     * tre cose.
      */
     private static function silenzioDa(): string
     {
-        return 'COALESCE('.self::ultimoInvio().', MIN(quotes.date))';
+        $invio = 'COALESCE('.self::ultimoInvio().', '.self::MAI.')';
+        $contatto = 'COALESCE('.self::ultimoContatto().', '.self::MAI.')';
+
+        return 'COALESCE(NULLIF(GREATEST('.$invio.', '.$contatto.'), '.self::MAI.'), MIN(quotes.date))';
     }
 
     /**
@@ -151,7 +260,7 @@ class PreventiviDaSollecitare extends Page implements HasTable
      */
     private static function ordinamentoPerPeso(): string
     {
-        return 'MAX(quotes.total) * DATEDIFF(?, '.self::silenzioDa().') DESC';
+        return 'MAX(quotes.subtotal) * DATEDIFF(?, '.self::silenzioDa().') DESC';
     }
 
     /**
@@ -171,10 +280,18 @@ class PreventiviDaSollecitare extends Page implements HasTable
         return $tenant instanceof Tenant ? $tenant->id : null;
     }
 
-    /** Giorni interi trascorsi da una data, senza la parte decimale. */
+    /**
+     * Giorni di CALENDARIO trascorsi da una data.
+     *
+     * startOfDay su tutti e due i capi perche' l'HAVING della query usa
+     * DATEDIFF, che conta i giorni di calendario: con diffInDays, che
+     * conta le ore, una riga entrata in elenco a DATEDIFF 7 mostrava il
+     * badge "6 giorni", cioe' un numero sotto la soglia che la pagina
+     * stessa dichiara.
+     */
     private static function giorni(mixed $data): int
     {
-        return (int) Carbon::parse($data)->diffInDays(now());
+        return (int) Carbon::parse($data)->startOfDay()->diffInDays(now()->startOfDay());
     }
 
     /**
@@ -230,6 +347,32 @@ class PreventiviDaSollecitare extends Page implements HasTable
     }
 
     /**
+     * Quante volte abbiamo gia' chiesto una risposta, a parole.
+     *
+     * "Mai" non e' un rimprovero: su quasi tutte le righe e' la verita', e
+     * vuol dire che il primo sollecito e' ancora da mandare.
+     */
+    private static function chiesto(mixed $record): string
+    {
+        return match ((int) $record->solleciti) {
+            0 => 'mai',
+            1 => '1 volta',
+            default => (int) $record->solleciti.' volte',
+        };
+    }
+
+    /**
+     * Quando l'abbiamo sentito l'ultima volta, se e' successo. Sotto il
+     * conteggio: il numero dice quante, questa riga dice quando.
+     */
+    private static function quandoChiesto(mixed $record): ?string
+    {
+        return $record->ultimo_sollecito
+            ? 'il '.Carbon::parse($record->ultimo_sollecito)->format('d/m/Y')
+            : null;
+    }
+
+    /**
      * Una riga della stampa: le stesse diciture dello schermo, perche' la
      * stampa e' quella lista e non una sua riscrittura.
      *
@@ -244,6 +387,12 @@ class PreventiviDaSollecitare extends Page implements HasTable
             'dove' => self::dove($record),
             'importo' => (float) $record->importo,
             'giorni' => $record->silenzio_da ? self::giorni($record->silenzio_da) : null,
+            // Quante volte abbiamo gia' chiesto: al telefono cambia la
+            // prima frase, e chi stampa la lista la legge prima di
+            // comporre il numero.
+            'chiesto' => (int) $record->solleciti > 0
+                ? 'già sollecitato '.self::chiesto($record).' '.(self::quandoChiesto($record) ?? '')
+                : null,
         ];
     }
 
@@ -263,6 +412,27 @@ class PreventiviDaSollecitare extends Page implements HasTable
     protected function getHeaderActions(): array
     {
         return [
+            // L'interruttore dei chiusi. Non e' una Filter di Filament
+            // perche' non filtra: rimette dentro quello che la pagina
+            // toglie da sola. Metterlo fra i filtri lo avrebbe fatto
+            // sembrare uno dei tanti, e invece e' l'unico che cambia che
+            // cosa vuol dire questa lista.
+            Actions\Action::make('ancheChiusi')
+                ->label(fn (): string => $this->ancheChiusi ? 'Nascondi i chiusi' : 'Anche i chiusi')
+                // Dice "gia' sollecitate" e non "tutte": la soglia dei
+                // sette giorni di silenzio resta accesa comunque, anche
+                // con l'interruttore. Chi e' stato sentito ieri non
+                // ricompare, ed e' giusto cosi'.
+                ->tooltip(fn (): string => $this->ancheChiusi
+                    ? 'Torna a vedere solo chi aspetta ancora una risposta'
+                    : 'Rimetti nell\'elenco le trattative già sollecitate '.QuoteContatto::SOLLECITI_MASSIMI.' volte e ferme da almeno '.self::GIORNI_MINIMI.' giorni')
+                ->icon(fn (): string => $this->ancheChiusi ? 'heroicon-o-eye-slash' : 'heroicon-o-eye')
+                ->color('gray')
+                ->action(function (): void {
+                    $this->ancheChiusi = ! $this->ancheChiusi;
+                    $this->resetPage();
+                }),
+
             // La lista con cui si telefona, su carta: al telefono si segna
             // a penna. Esce quello che si vede a schermo, stesso ordine e
             // stessa ricerca, senza paginazione — stampare i primi 25 di
@@ -301,45 +471,131 @@ class PreventiviDaSollecitare extends Page implements HasTable
         ];
     }
 
+    /**
+     * Le trattative in attesa di risposta, una riga ciascuna.
+     *
+     * Le soglie — i giorni minimi di silenzio e il tetto dei due solleciti
+     * — sono un parametro perche' servono a DECIDERE CHI MOSTRARE, non a
+     * dire che cosa una trattativa e'. Quando Filament ri-risolve la riga
+     * per aprire un modale (vedi resolveTableRecord) le soglie vanno
+     * tolte, o il record sparisce proprio mentre ci si sta lavorando.
+     */
+    private function trattative(bool $conSoglie = true): Builder
+    {
+        return Quote::query()
+            ->leftJoin('customers', 'customers.id', '=', 'quotes.customer_id')
+            // La condizione sul cancellato sta nella ON e non in una
+            // where: in una where il leftJoin diventerebbe un inner, e
+            // i preventivi senza offerta — la maggioranza — sparirebbero
+            // tutti dall'elenco.
+            ->leftJoin('quote_groups', fn ($join) => $join
+                ->on('quote_groups.id', '=', 'quotes.quote_group_id')
+                ->whereNull('quote_groups.deleted_at'))
+            // Colonne nominate una per una: con due join un select *
+            // lascerebbe che l'id dell'ultima tabella sovrascriva
+            // quello della prima, e le righe punterebbero al cliente
+            // invece che al preventivo.
+            ->selectRaw('MIN(quotes.id) as id')
+            // Dal join e non da quotes: cosi' di un'offerta cancellata
+            // torna NULL, la riga si comporta come un preventivo
+            // singolo e il link che si manda al cliente e' il suo.
+            ->selectRaw('MAX(quote_groups.id) as quote_group_id')
+            ->selectRaw('MAX(quotes.customer_id) as customer_id')
+            ->selectRaw('MAX(customers.search_name) as cliente')
+            ->selectRaw('MIN(quotes.number) as numero')
+            ->selectRaw('MAX(quote_groups.number) as numero_gruppo')
+            // Del gruppo si conta l'alternativa piu' cara, non la
+            // somma: il cliente ne comprera' una.
+            //
+            // IMPONIBILE, non il totale con l'IVA. I clienti sono
+            // aziende: il numero di cui si parla al telefono e' sempre
+            // quello senza IVA, ed e' quello che scrivono la mail del
+            // preventivo, la pagina del cliente e il sollecito che
+            // parte da qui ("per un importo di X + IVA"). Con il totale
+            // questa pagina diceva 10.989,88 dove la mail diceva
+            // 9.008,10, e l'ordine per peso metteva in cima chi ha piu'
+            // IVA invece dell'affare piu' grosso.
+            ->selectRaw('MAX(quotes.subtotal) as importo')
+            ->selectRaw('COUNT(*) as alternative')
+            ->selectRaw('MIN(quotes.date) as data_invio')
+            ->selectRaw('MAX(quotes.valid_until) as scadenza')
+            // Basta un'alternativa ancora in validita' perche' la
+            // trattativa non sia scaduta.
+            ->selectRaw("MAX(CASE WHEN quotes.status = '".Quote::STATUS_INVIATO."' THEN 1 ELSE 0 END) as ancora_valido")
+            ->selectRaw(self::ultimoInvio().' as ultimo_invio')
+            ->selectRaw(self::silenzioDa().' as silenzio_da')
+            ->selectRaw(self::ultimoDestinatario().' as ultimo_destinatario')
+            ->selectRaw(self::ultimoContatto().' as ultimo_contatto')
+            ->selectRaw(self::solleciti().' as solleciti')
+            ->selectRaw(self::ultimoSollecito().' as ultimo_sollecito')
+            ->where('quotes.tenant_id', self::tenantId())
+            // Inviati e scaduti: tutto cio' che aspetta una risposta.
+            // Le bozze non sono mai uscite, il resto ha risposto.
+            ->whereIn('quotes.status', [Quote::STATUS_INVIATO, Quote::STATUS_SCADUTO])
+            ->whereNull('customers.deleted_at')
+            ->groupByRaw(self::TRATTATIVA)
+            // Le soglie si applicano DOPO il raggruppamento perche' il
+            // silenzio e' una proprieta' della trattativa, non del
+            // singolo preventivo: un'alternativa aggiunta ieri a
+            // un'offerta di marzo non azzera l'attesa.
+            ->when($conSoglie, fn (Builder $q): Builder => $q
+                ->havingRaw(self::giorniDiSilenzioOltre(), [now()->toDateString()])
+                // Il tetto: dopo due solleciti senza risposta la trattativa
+                // esce di qui. Non si chiude e non diventa un rifiuto --
+                // resta "scaduto", che un no non detto non si scrive in
+                // bocca al cliente -- semplicemente smette di comparire
+                // nell'elenco di chi richiamare.
+                ->when(! $this->ancheChiusi, fn (Builder $b): Builder => $b
+                    ->havingRaw(self::solleciti().' < '.QuoteContatto::SOLLECITI_MASSIMI)));
+    }
+
+    /**
+     * La trattativa dietro una riga, quando Filament deve riaprirla.
+     *
+     * Filament di suo fa `getFilteredTableQuery()->find($key)`, e quella
+     * query si porta dietro gli HAVING: basta che nel frattempo qualcuno
+     * segni una telefonata — da un'altra scheda, o tu stesso un momento
+     * prima — perche' il silenzio scenda sotto i sette giorni e il record
+     * non si trovi piu'. Filament allora smonta l'azione in silenzio: il
+     * modale non si apre, oppure si apre, scrivi la mail, premi "Manda" e
+     * non succede NIENTE. Nessun errore, nessuna notifica.
+     *
+     * E c'e' un secondo guaio, piu' subdolo: `find($key)` filtra su un id
+     * solo, quindi gli aggregati si ricalcolano su UNA riga. "2
+     * alternative" diventa 1, l'importo quello di un preventivo solo, e il
+     * conteggio dei solleciti perde quelli agganciati alle altre
+     * alternative — cioe' l'avviso "gli abbiamo gia' scritto due volte"
+     * non compare proprio quando serve.
+     *
+     * Percio' qui si risale alla TRATTATIVA intera e si tolgono le soglie.
+     */
+    protected function resolveTableRecord(?string $key): ?Model
+    {
+        if ($key === null) {
+            return null;
+        }
+
+        return $this->trattative(conSoglie: false)
+            ->whereRaw(self::TRATTATIVA.' = ('.self::trattativaDi().')', [$key])
+            ->first();
+    }
+
+    /**
+     * La chiave di trattativa di un singolo preventivo, come sottoselect.
+     * Rifa' la stessa COALESCE di TRATTATIVA (offerta cancellata compresa):
+     * se le due definizioni divergessero, il record non si troverebbe.
+     */
+    private static function trattativaDi(): string
+    {
+        return 'SELECT COALESCE(g3.id, q3.id) FROM quotes q3'
+            .' LEFT JOIN quote_groups g3 ON g3.id = q3.quote_group_id AND g3.deleted_at IS NULL'
+            .' WHERE q3.id = ?';
+    }
+
     public function table(Table $table): Table
     {
         return $table
-            ->query(fn (): Builder => Quote::query()
-                ->leftJoin('customers', 'customers.id', '=', 'quotes.customer_id')
-                ->leftJoin('quote_groups', 'quote_groups.id', '=', 'quotes.quote_group_id')
-                // Colonne nominate una per una: con due join un select *
-                // lascerebbe che l'id dell'ultima tabella sovrascriva
-                // quello della prima, e le righe punterebbero al cliente
-                // invece che al preventivo.
-                ->selectRaw('MIN(quotes.id) as id')
-                ->selectRaw('MAX(quotes.quote_group_id) as quote_group_id')
-                ->selectRaw('MAX(quotes.customer_id) as customer_id')
-                ->selectRaw('MAX(customers.search_name) as cliente')
-                ->selectRaw('MIN(quotes.number) as numero')
-                ->selectRaw('MAX(quote_groups.number) as numero_gruppo')
-                // Del gruppo si conta l'alternativa piu' cara, non la
-                // somma: il cliente ne comprera' una.
-                ->selectRaw('MAX(quotes.total) as importo')
-                ->selectRaw('COUNT(*) as alternative')
-                ->selectRaw('MIN(quotes.date) as data_invio')
-                ->selectRaw('MAX(quotes.valid_until) as scadenza')
-                // Basta un'alternativa ancora in validita' perche' la
-                // trattativa non sia scaduta.
-                ->selectRaw("MAX(CASE WHEN quotes.status = '".Quote::STATUS_INVIATO."' THEN 1 ELSE 0 END) as ancora_valido")
-                ->selectRaw(self::ultimoInvio().' as ultimo_invio')
-                ->selectRaw(self::silenzioDa().' as silenzio_da')
-                ->selectRaw(self::ultimoDestinatario().' as ultimo_destinatario')
-                ->where('quotes.tenant_id', self::tenantId())
-                // Inviati e scaduti: tutto cio' che aspetta una risposta.
-                // Le bozze non sono mai uscite, il resto ha risposto.
-                ->whereIn('quotes.status', [Quote::STATUS_INVIATO, Quote::STATUS_SCADUTO])
-                ->whereNull('customers.deleted_at')
-                ->groupByRaw(self::TRATTATIVA)
-                // La soglia si applica DOPO il raggruppamento perche' il
-                // silenzio e' una proprieta' della trattativa, non del
-                // singolo preventivo: un'alternativa aggiunta ieri a
-                // un'offerta di marzo non azzera l'attesa.
-                ->havingRaw(self::giorniDiSilenzioOltre(), [now()->toDateString()]))
+            ->query(fn (): Builder => $this->trattative())
             ->columns([
                 Tables\Columns\TextColumn::make('cliente')
                     ->label('Cliente')
@@ -358,7 +614,7 @@ class PreventiviDaSollecitare extends Page implements HasTable
 
                 Tables\Columns\TextColumn::make('importo')
                     ->label('In ballo')
-                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderByRaw("MAX(quotes.total) {$direction}"))
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderByRaw("MAX(quotes.subtotal) {$direction}"))
                     ->money('EUR')
                     ->alignEnd()
                     ->weight('bold')
@@ -380,18 +636,106 @@ class PreventiviDaSollecitare extends Page implements HasTable
                         default => 'info',
                     })
                     ->description(fn ($record) => self::contatto($record)),
+
+                // La quarta colonna dice se tocca ancora a noi: una
+                // trattativa ferma da 90 giorni a cui non abbiamo mai
+                // chiesto niente e una a cui abbiamo gia' scritto due volte
+                // sono due lavori diversi, e prima stavano identiche.
+                //
+                // E' VUOTA quando non abbiamo mai chiesto, che oggi e'
+                // quasi ogni riga: una colonna piena di "mai" identici non
+                // dice niente, la si smette di leggere, e il giorno in cui
+                // una riga diversa compare non la si vede piu'. Il bianco
+                // qui vuol dire "il primo sollecito e' ancora da mandare".
+                Tables\Columns\TextColumn::make('solleciti')
+                    ->label('Chiesto')
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderByRaw(self::solleciti().' '.$direction))
+                    ->badge()
+                    ->placeholder('')
+                    ->formatStateUsing(fn ($record): ?string => (int) $record->solleciti > 0 ? self::chiesto($record) : null)
+                    ->color(fn ($record): string => (int) $record->solleciti >= QuoteContatto::SOLLECITI_MASSIMI ? 'gray' : 'info')
+                    ->description(fn ($record) => (int) $record->solleciti > 0 ? self::quandoChiesto($record) : null),
             ])
             ->actions([
-                // Solo l'icona: la riga intera e' gia' un link (recordUrl),
-                // e un'etichetta lunga quanto "Vedi preventivo" mangiava la
-                // colonna del silenzio, che e' il motivo per cui si guarda
-                // questa pagina.
-                Tables\Actions\Action::make('apri')
-                    ->label(fn (mixed $record) => $record->quote_group_id ? 'Vedi offerta' : 'Vedi preventivo')
-                    ->tooltip(fn (mixed $record) => $record->quote_group_id ? 'Vedi offerta' : 'Vedi preventivo')
-                    ->icon('heroicon-m-arrow-right')
-                    ->iconButton()
-                    ->url(fn (mixed $record) => self::destinazione($record)),
+                Tables\Actions\ActionGroup::make([
+                    // Il sollecito: la mail che chiede un si' o un no. Non
+                    // riallega niente — vedi SollecitoPreventivoMail.
+                    Tables\Actions\Action::make('sollecita')
+                        ->label('Sollecita per mail')
+                        ->icon('heroicon-o-envelope')
+                        ->color('primary')
+                        ->modalHeading(fn (mixed $record) => 'Sollecito · '.self::riferimento($record))
+                        ->modalDescription(fn (mixed $record) => (int) $record->solleciti >= QuoteContatto::SOLLECITI_MASSIMI
+                            ? 'Gli abbiamo già scritto '.self::chiesto($record).': di norma qui si smette.'
+                            : 'Chiede un sì o un no. Non riallega il preventivo: il cliente lo riapre dal suo link.')
+                        ->modalSubmitActionLabel('Manda il sollecito')
+                        ->modalWidth('2xl')
+                        ->form(Solleciti::formSchema())
+                        // Nessun ->disabled() quando manca l'indirizzo:
+                        // costava una risoluzione del documento PER RIGA
+                        // (56 query su una pagina da 25) per togliere un
+                        // pulsante che si puo' usare lo stesso — il campo
+                        // e' obbligatorio, l'indirizzo si scrive a mano.
+                        ->action(fn (mixed $record, array $data) => Solleciti::invia($record, $data)),
+
+                    // La telefonata. Non manda niente: scrive che e'
+                    // successa, perche' il silenzio riparte da li' e domani
+                    // questa riga non deve ricomparire in cima.
+                    Tables\Actions\Action::make('telefonata')
+                        ->label('Ho telefonato')
+                        ->icon('heroicon-o-phone')
+                        ->color('gray')
+                        ->modalHeading(fn (mixed $record) => 'Contatto · '.self::riferimento($record))
+                        ->modalDescription('Da qui non parte nessuna mail: si segna solo che li abbiamo sentiti.')
+                        ->modalSubmitActionLabel('Segna')
+                        ->form([
+                            Forms\Components\Radio::make('tipo')
+                                ->label('Com\'è andata')
+                                ->options($tipiContatto = collect(QuoteContatto::tipi())
+                                    ->except(QuoteContatto::TIPO_SOLLECITO)
+                                    ->all())
+                                ->default(QuoteContatto::TIPO_TELEFONATA)
+                                // Il Radio di Filament non aggiunge nessuna
+                                // regola "in": senza questa, una richiesta
+                                // Livewire confezionata a mano potrebbe
+                                // scrivere tipo='sollecito' da qui e
+                                // bruciare un sollecito senza mandare
+                                // niente al cliente.
+                                ->in(array_keys($tipiContatto))
+                                ->required(),
+                            Forms\Components\DateTimePicker::make('data')
+                                ->label('Quando')
+                                // Come sulle richieste informazioni: il
+                                // campo nativo del browser scrive la data
+                                // all'americana (11/27/2026, 04:21 PM) e
+                                // in un CRM italiano si legge storta.
+                                ->native(false)
+                                ->displayFormat('d/m/Y H:i')
+                                ->seconds(false)
+                                ->default(now())
+                                ->maxDate(now())
+                                ->required(),
+                            Forms\Components\Textarea::make('nota')
+                                ->label('Cosa hanno detto')
+                                ->placeholder('Stanno ancora valutando, richiamare a gennaio…')
+                                ->rows(3),
+                        ])
+                        ->action(function (mixed $record, array $data): void {
+                            Solleciti::registra(Solleciti::documento($record), $data);
+
+                            Notification::make()
+                                ->title('Contatto segnato')
+                                ->body('Il conto dei giorni riparte da qui.')
+                                ->success()
+                                ->send();
+                        }),
+
+                    Tables\Actions\Action::make('apri')
+                        ->label(fn (mixed $record) => $record->quote_group_id ? 'Vedi offerta' : 'Vedi preventivo')
+                        ->icon('heroicon-m-arrow-top-right-on-square')
+                        ->color('gray')
+                        ->url(fn (mixed $record) => self::destinazione($record)),
+                ]),
             ])
             // Il peso e' l'ordine di partenza, ma solo un default:
             // cliccando un'intestazione l'utente lo scavalca. Sta in
@@ -422,17 +766,28 @@ class PreventiviDaSollecitare extends Page implements HasTable
     {
         // La trattativa, vista da dentro la sottoselect: si rifa' il
         // COALESCE perche' un aggregato del gruppo esterno qui dentro non
-        // e' ammesso.
-        $stessaTrattativa = 'COALESCE(q2.quote_group_id, q2.id) = '.self::TRATTATIVA;
+        // e' ammesso. Anche qui l'offerta cancellata non conta, o le due
+        // definizioni di trattativa — quella di fuori e quella di dentro —
+        // non combacerebbero piu' e l'indirizzo tornerebbe vuoto.
+        $stessaTrattativa = 'COALESCE(g2.id, q2.id) = '.self::TRATTATIVA;
+
+        // Il sollecito non conta nemmeno qui: questa riga sta sotto
+        // "inviato il <data del preventivo>", e mostrare l'indirizzo di
+        // una mail diversa da quella sarebbe la stessa bugia che la
+        // migrazione 2026_11_27_190000 e' andata a togliere.
+        $nonSollecito = fn (string $alias) => " AND COALESCE({$alias}.tipo, 'preventivo') <> '".QuoteEmail::TIPO_SOLLECITO."'";
 
         $singolo = 'SELECT qe.recipient_email FROM quote_emails qe'
             .' JOIN quotes q2 ON q2.id = qe.quote_id'
+            .' LEFT JOIN quote_groups g2 ON g2.id = q2.quote_group_id AND g2.deleted_at IS NULL'
             ." WHERE {$stessaTrattativa} AND qe.status = 'sent' AND qe.deleted_at IS NULL"
+            .$nonSollecito('qe')
             .' ORDER BY qe.created_at DESC LIMIT 1';
 
         $gruppo = 'SELECT qge.recipient_email FROM quote_group_emails qge'
-            .' WHERE qge.quote_group_id = quotes.quote_group_id'
+            .' WHERE qge.quote_group_id = quote_groups.id'
             ." AND qge.status = 'sent' AND qge.deleted_at IS NULL"
+            .$nonSollecito('qge')
             .' ORDER BY qge.created_at DESC LIMIT 1';
 
         return "MAX(COALESCE(({$singolo}), ({$gruppo})))";

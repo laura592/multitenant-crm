@@ -158,7 +158,7 @@ class LetturaCasettaResource extends Resource
                         ->live(onBlur: true)
                         ->helperText(fn (Get $get, ?LetturaCasetta $record) => static::differenza($get, $record, 'incasso_totale', '€')),
                     Forms\Components\TextInput::make('valore_vendite')
-                        ->label('Venduto totale')
+                        ->label('Val Vendite totale')
                         ->numeric()
                         ->step('0.01')
                         ->minValue(0)
@@ -184,7 +184,7 @@ class LetturaCasettaResource extends Resource
                 ->schema([
                     static::foto('foto_contatore', 'Contatore dell\'acqua'),
                     static::foto('foto_incasso', 'Display incasso'),
-                    static::foto('foto_vendite', 'Display venduto'),
+                    static::foto('foto_vendite', 'Display Val Vendite'),
                     Forms\Components\FileUpload::make('foto_altre')
                         ->label('Altre foto')
                         ->helperText('Filtro cambiato, guasto, cartello: quello che serve a far capire.')
@@ -234,7 +234,7 @@ class LetturaCasettaResource extends Resource
                     ->description(fn (LetturaCasetta $r) => static::descrizionePeriodo($r->incassoPeriodo(), '€'))
                     ->placeholder('—'),
                 Tables\Columns\TextColumn::make('valore_vendite')
-                    ->label('Venduto')
+                    ->label('Val Vendite')
                     ->money('EUR')
                     ->description(fn (LetturaCasetta $r) => static::descrizionePeriodo($r->vendutoPeriodo(), '€'))
                     ->placeholder('—')

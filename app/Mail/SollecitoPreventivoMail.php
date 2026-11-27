@@ -74,16 +74,28 @@ class SollecitoPreventivoMail extends Mailable
         $quando = $primo?->date?->locale('it')->isoFormat('D MMMM');
         $piuDiUno = $preventivi->count() > 1;
 
+        // Come si chiama il documento lo decide il DOCUMENTO, non quante
+        // alternative gli sono rimaste vive: un'offerta con una sola
+        // soluzione porta sempre un numero OFF-, e l'oggetto della mail la
+        // chiama "Offerta". Contando le alternative, su OFF-2026-0015 la
+        // stessa mail diceva "Offerta" nell'oggetto e "il preventivo
+        // OFF-2026-0015" nel testo.
+        $comeSiChiama = $documento instanceof QuoteGroup ? 'offerta' : 'preventivo';
+
         $cosa = $piuDiUno
-            ? "l'offerta {$documento->number}, con ".$preventivi->count().' soluzioni a confronto'
-            : "il preventivo {$documento->number}";
+            ? "l'{$comeSiChiama} {$documento->number}, con ".$preventivi->count().' soluzioni a confronto'
+            : ($comeSiChiama === 'offerta' ? "l'offerta {$documento->number}" : "il preventivo {$documento->number}");
 
         $importo = $primo && ! $piuDiUno
             ? ', per un importo di € '.number_format((float) $primo->subtotal, 2, ',', '.').' + IVA'
             : '';
 
         $testo = '<p>Buongiorno,</p>'
-            .'<p>'.($quando ? "lo scorso {$quando} le abbiamo inviato " : 'le abbiamo inviato ')
+            // "Le" maiuscolo: e' il pronome di cortesia, come sulla mail
+            // d'invio ("Se nel frattempo Le servisse piu' tempo"). I
+            // possessivi -- la sua decisione, un suo riscontro -- restano
+            // minuscoli, sempre come li'.
+            .'<p>'.($quando ? "lo scorso {$quando} Le abbiamo inviato " : 'Le abbiamo inviato ')
             .$cosa.$importo.'.</p>'
             .'<p>Volevamo sapere se ha avuto modo di valutare la nostra proposta e se '
             .($piuDiUno ? 'una delle soluzioni può essere ancora' : 'può essere ancora')
@@ -94,10 +106,23 @@ class SollecitoPreventivoMail extends Mailable
         // La riga sulla scadenza entra nel testo modificabile e non nel
         // template: cosi' si puo' togliere o riscrivere caso per caso.
         if ($primo && $primo->oltreLaValidita()) {
-            $testo .= '<p>'.($piuDiUno ? 'Le proposte sono scadute' : 'Il preventivo è scaduto')
+            $scaduto = match (true) {
+                $piuDiUno => 'Le proposte sono scadute',
+                $comeSiChiama === 'offerta' => 'L\'offerta è scaduta',
+                default => 'Il preventivo è scaduto',
+            };
+
+            $testo .= '<p>'.$scaduto
                 .' il '.$primo->scadeIl()->format('d/m/Y')
-                .'; qualora desiderasse riprender'.($piuDiUno ? 'le' : 'la')
-                .', saremo naturalmente disponibili ad aggiornar'.($piuDiUno ? 'le' : 'lo')
+                // Un pronome solo per tutti e due i verbi: prima
+                // "riprenderla ... aggiornarlo" mescolava i generi nella
+                // stessa frase.
+                .'; qualora desiderasse riprender'.($pronome = match (true) {
+                    $piuDiUno => 'le',
+                    $comeSiChiama === 'offerta' => 'la',
+                    default => 'lo',
+                })
+                .', saremo naturalmente disponibili ad aggiornar'.$pronome
                 .' alle condizioni attuali.</p>';
         }
 
