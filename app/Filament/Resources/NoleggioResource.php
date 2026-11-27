@@ -528,8 +528,7 @@ class NoleggioResource extends Resource
                     ->label('Nome del prodotto')
                     ->helperText('Scritto a mano: questo articolo non è a catalogo.')
                     ->maxLength(255)
-                    ->required(fn (Get $get): bool => blank($get('prodotto_caffe_id')) && blank($get('material_id')))
-                    ->hidden(fn (Get $get): bool => filled($get('prodotto_caffe_id')) || filled($get('material_id')))
+                    ->hidden()
                     ->dehydrated()
                     ->dehydratedWhenHidden()
                     ->columnSpan(3),
@@ -561,10 +560,11 @@ class NoleggioResource extends Resource
                     // solo un'altra cosa da guardare (Laura, 10/11/2026).
                     // dehydratedWhenHidden: nascosta si salva lo stesso, se
                     // no la pezzatura sparirebbe dal database.
-                    // Nascosta quando l'articolo c'e': la pezzatura la dice il
-                    // catalogo. Senza articolo si scrive, come il nome qui
-                    // sopra.
-                    ->hidden(fn (Get $get): bool => filled($get('prodotto_caffe_id')) || filled($get('material_id')))
+                    // Mai visibile: la pezzatura la dice l'articolo. Sulle
+                    // poche righe che un articolo non ce l'hanno il nome si
+                    // legge comunque nel titolo della riga, qui sotto
+                    // (itemLabel).
+                    ->hidden()
                     ->dehydrated()
                     ->dehydratedWhenHidden()
                     ->afterStateHydrated(function (Forms\Components\TextInput $campo, Get $get): void {
@@ -616,9 +616,19 @@ class NoleggioResource extends Resource
                             .'va messo nella sua anagrafica</span>');
                     }),
             ])
-            ->itemLabel(fn (array $state): ?string => filled($state['voce'] ?? null)
-                ? $state['voce'].' — '.rtrim(rtrim(number_format((float) ($state['quantita'] ?? 0), 3, ',', '.'), '0'), ',').' '.($state['unita'] ?? '').'/anno'
-                : null)
+            // Il titolo porta il nome: e' l'unico posto in cui si legge, da
+            // quando il campo e' nascosto. "96 1 kg/anno" si leggeva male,
+            // adesso e' "96 × 1 kg all'anno".
+            ->itemLabel(function (array $state): ?string {
+                if (blank($state['voce'] ?? null)) {
+                    return null;
+                }
+
+                $q = rtrim(rtrim(number_format((float) ($state['quantita'] ?? 0), 3, ',', '.'), '0'), ',');
+                $u = trim((string) ($state['unita'] ?? ''));
+
+                return $state['voce'].' — '.$q.($u !== '' ? ' × '.$u : '').' all\'anno';
+            })
             ->addActionLabel('Aggiungi una voce')
             ->defaultItems(0)
             ->columnSpanFull();
