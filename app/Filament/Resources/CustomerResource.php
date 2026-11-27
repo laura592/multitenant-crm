@@ -16,6 +16,8 @@ use App\Filament\Resources\CustomerResource\RelationManagers\RichiesteRelationMa
 use App\Filament\Resources\CustomerResource\RelationManagers\ServiceReportsRelationManager;
 use App\Models\Agente;
 use App\Models\Customer;
+use App\Support\Controlli\AnagraficheDoppie;
+use App\Support\Controlli\ClientiSenzaDatiFiscali;
 use App\Support\DisplayName;
 use App\Support\Gestionale\EurekaClient;
 use App\Support\Pdf\SchedaAnagraficaData;
@@ -291,6 +293,27 @@ class CustomerResource extends Resource
             ])
             ->defaultSort('company_name')
             ->filters([
+                // I tre filtri che fanno atterrare la pagina dei controlli
+                // (/admin/alex/controlli) sulle sue righe. Prima portavano
+                // all'elenco nudo: "vedi tutti i clienti? come faccio a
+                // capire i possibili problemi?" (Laura, 27/11/2026). La
+                // condizione non e' riscritta qui — e' la stessa che
+                // conta sulla scheda, altrimenti il numero annunciato e le
+                // righe che si aprono prenderebbero strade diverse.
+                //
+                // L'etichetta e' una frase e non una parola: chi arriva da
+                // un link la legge fra i filtri attivi, in cima alla
+                // tabella, ed e' l'unico posto che gli dice perche' sta
+                // guardando proprio quelle righe.
+                Tables\Filters\Filter::make('controllo_anagrafiche_doppie')
+                    ->label('Controllo: stessa P.IVA, stesso nome e stessa citta\'')
+                    ->query(fn (Builder $query) => $query->whereIn('id', AnagraficheDoppie::ids())),
+                Tables\Filters\Filter::make('controllo_codici_fiscali_ripetuti')
+                    ->label('Controllo: stesso codice fiscale su piu\' anagrafiche')
+                    ->query(fn (Builder $query) => $query->whereIn('id', AnagraficheDoppie::idsCodiciFiscaliRipetuti())),
+                Tables\Filters\Filter::make('controllo_senza_dati_fiscali')
+                    ->label('Controllo: lavoro aperto e nessun dato fiscale')
+                    ->query(fn (Builder $query) => ClientiSenzaDatiFiscali::applica($query)),
                 // "Tutti i clienti di Guirotto": e' il motivo per cui
                 // l'agente e' un'anagrafica e non un campo di testo.
                 Tables\Filters\SelectFilter::make('agente_id')

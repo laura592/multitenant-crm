@@ -51,14 +51,17 @@ class Controlli extends Page
     /**
      * I controlli che hanno qualcosa da dire, in cima; quelli a posto sotto.
      *
-     * Due collezioni di righe {controllo, quanti}: la prima con quanti > 0,
-     * la seconda con quanti === 0.
+     * Tre collezioni di righe {controllo, quanti, righe}: la prima con
+     * quanti > 0, la seconda con quanti === 0. "righe" c'e' solo dove non
+     * coincide con "quanti" — i controlli che raggruppano — e serve a non
+     * far trovare tredici anagrafiche a chi ne ha lette cinque.
      */
     public function divisi(): array
     {
         $righe = $this->controlli()->map(fn (Controllo $c) => [
             'controllo' => $c,
             'quanti' => $c->quanti(),
+            'righe' => $c->righe(),
         ]);
 
         return [

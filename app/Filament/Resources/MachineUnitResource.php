@@ -10,6 +10,9 @@ use App\Models\MachineUnit;
 use App\Models\MachineUnitPlacement;
 use App\Models\Material;
 use App\Models\Product;
+use App\Support\Controlli\FusioniDaDecidere;
+use App\Support\Controlli\MacchineForseSpostate;
+use App\Support\Controlli\MacchineSenzaPiano;
 use App\Support\DisplayName;
 use App\Support\Gestionale\EurekaClient;
 use App\Support\TariffeIntervento;
@@ -310,6 +313,23 @@ class MachineUnitResource extends Resource
                     ->color(fn (string $state) => static::statusColors()[$state] ?? 'gray'),
             ])
             ->filters([
+                // I tre filtri su cui atterra la pagina dei controlli.
+                // Senza di loro il link portava all'elenco di 844
+                // macchine, e le 31 da guardare bisognava trovarsele. Le
+                // condizioni non sono riscritte qui: sono le stesse che
+                // contano sulla scheda, cosi' il numero annunciato e le
+                // righe che si aprono non possono divergere. L'etichetta
+                // e' una frase perche' e' quello che si legge fra i filtri
+                // attivi in cima alla tabella.
+                Tables\Filters\Filter::make('controllo_senza_piano')
+                    ->label('Controllo: manutenute davvero ma senza piano')
+                    ->query(fn (Builder $query) => MacchineSenzaPiano::applica($query)),
+                Tables\Filters\Filter::make('controllo_forse_spostate')
+                    ->label('Controllo: Eureka le vede da un altro cliente')
+                    ->query(fn (Builder $query) => MacchineForseSpostate::applica($query)),
+                Tables\Filters\Filter::make('controllo_fusioni_da_decidere')
+                    ->label('Controllo: forse doppie, fusione da decidere')
+                    ->query(fn (Builder $query) => FusioniDaDecidere::applica($query)),
                 Tables\Filters\SelectFilter::make('status')
                     ->label('Stato')
                     ->options(static::statusLabels()),

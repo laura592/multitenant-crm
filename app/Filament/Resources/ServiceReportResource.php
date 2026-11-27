@@ -17,6 +17,7 @@ use App\Models\Material;
 use App\Models\Product;
 use App\Models\ServiceReport;
 use App\Policies\ServiceReportPolicy;
+use App\Support\Controlli\RapportiniMaiInviati;
 use App\Support\DisplayName;
 use App\Support\Gestionale\FattureRapportino;
 use App\Support\Gestionale\SenzaFatturaCollegata;
@@ -1741,6 +1742,18 @@ class ServiceReportResource extends Resource implements HasShieldPermissions
                     ->tooltip(fn (ServiceReport $record) => self::gestionaleSyncStatusLabels()[self::gestionaleDisplayState($record)] ?? self::gestionaleSyncStatusLabels()['none']),
             ])
             ->filters([
+                // Il filtro su cui atterra la pagina dei controlli. La
+                // condizione e' la stessa che conta sulla scheda: qui sono
+                // quattro where intrecciati, e riscriverli sarebbe il modo
+                // piu' rapido di ritrovarsi con due numeri diversi.
+                //
+                // Il link dei controlli porta anche activeTab=tutti: questo
+                // elenco si apre sull'anno in corso, e un rapportino del
+                // 2025 mai inviato resterebbe fuori dalle righe pur
+                // essendo dentro al conteggio.
+                Tables\Filters\Filter::make('controllo_mai_inviati')
+                    ->label('Controllo: chiusi e mai arrivati in Eureka')
+                    ->query(fn (Builder $query) => RapportiniMaiInviati::applica($query)),
                 // I 322 interventi che Eureka ha fatturato a zero mentre nel
                 // CRM hanno un importo: 38.756,00 € di lavoro che sembrava
                 // incassato. Senza un filtro restano un numero che si sa e

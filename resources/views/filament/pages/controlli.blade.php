@@ -32,6 +32,19 @@
                                 {{ $c->spiegazione }}
                             </p>
 
+                            {{-- Dove il controllo raggruppa, il numero sulla
+                                 scheda e le righe che si aprono NON sono lo
+                                 stesso: cinque gruppi di anagrafiche doppie
+                                 sono tredici anagrafiche. Si dice prima di
+                                 cliccare, perche' chi ne trova tredici dove
+                                 ne aveva lette cinque smette di fidarsi dei
+                                 numeri di questa pagina. --}}
+                            @if ($riga['righe'] !== null && $riga['righe'] !== $riga['quanti'])
+                                <p class="mt-1 text-xs font-medium text-amber-800 dark:text-amber-300">
+                                    Il numero sono i casi da decidere: il bottone apre le {{ $riga['righe'] }} righe che li compongono.
+                                </p>
+                            @endif
+
                             @if ($c->url())
                                 <a
                                     href="{{ $c->url() }}"

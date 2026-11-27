@@ -81,6 +81,51 @@ class AnagraficheDoppie
     }
 
     /**
+     * Gli id delle anagrafiche dentro quei gruppi.
+     *
+     * Il raggruppamento si fa in PHP (normalizzare nome e P.IVA in SQL
+     * vorrebbe dire riscrivere RUMORE in una espressione illeggibile e
+     * diversa fra MySQL e sqlite), quindi il filtro della tabella clienti
+     * non puo' essere un where: e' un whereIn su questi id. Che vengono
+     * dalla stessa gruppi() che conta sulla scheda — un elenco sfilato
+     * dalla query che ha prodotto il numero, non una seconda query che gli
+     * somiglia.
+     *
+     * Costa una lettura delle anagrafiche con P.IVA e il raggruppamento:
+     * 40 ms su 2226 clienti (27/11/2026), cioe' quanto la pagina dei
+     * controlli paga gia' ogni volta che si apre.
+     *
+     * Gli id sono UUID e si tengono come stringhe: castarli a int li
+     * trasforma in 19 (le prime cifre di "019f8a7e-..."), il whereIn non
+     * trova piu' niente di sensato e l'elenco si apre sbagliato senza
+     * lamentarsi.
+     *
+     * @return array<int, string>
+     */
+    public static function ids(): array
+    {
+        return self::gruppi()
+            ->flatten(1)
+            ->pluck('id')
+            ->map(fn ($id) => (string) $id)
+            ->all();
+    }
+
+    /**
+     * Gli id delle anagrafiche che condividono il codice fiscale.
+     *
+     * @return array<int, string>
+     */
+    public static function idsCodiciFiscaliRipetuti(): array
+    {
+        return self::codiciFiscaliRipetuti()
+            ->flatten(1)
+            ->pluck('id')
+            ->map(fn ($id) => (string) $id)
+            ->all();
+    }
+
+    /**
      * I codici fiscali di persona (16 caratteri) su piu' anagrafiche.
      *
      * Qui il doppio e' piu' spesso legittimo che nelle P.IVA — lo stesso

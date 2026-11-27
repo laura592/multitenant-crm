@@ -8,6 +8,7 @@ use App\Filament\Resources\MaintenanceScheduleResource\RelationManagers\LavaggiR
 use App\Models\Customer;
 use App\Models\MachineUnit;
 use App\Models\MaintenanceSchedule;
+use App\Support\Controlli\PianiScaduti;
 use App\Support\DisplayName;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -19,6 +20,7 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -457,6 +459,17 @@ class MaintenanceScheduleResource extends Resource
                     ->placeholder('Mai eseguito'),
             ])
             ->filters([
+                // Il filtro su cui atterra la pagina dei controlli. La
+                // condizione e' la stessa che conta sulla scheda, quindi
+                // comprende inCorso() e non ha bisogno di "nascondi
+                // chiusi": e meglio cosi', perche' arrivando da un link
+                // con i filtri nell'indirizzo Filament NON applica i
+                // default degli altri filtri, e un controllo che si
+                // appoggiasse a quello mostrerebbe righe diverse dal suo
+                // numero.
+                Tables\Filters\Filter::make('controllo_piani_scaduti')
+                    ->label('Controllo: scaduti e non in pausa')
+                    ->query(fn (Builder $query) => PianiScaduti::applica($query)),
                 Tables\Filters\Filter::make('nascondi_chiusi')
                     ->label('Nascondi chiusi')
                     ->query(fn ($query) => $query->where('status', '!=', MaintenanceSchedule::STATUS_CHIUSO))

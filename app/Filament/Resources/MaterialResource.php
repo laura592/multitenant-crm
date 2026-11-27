@@ -3,9 +3,10 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\MaterialResource\Pages;
-use App\Filament\Resources\MachineUnitResource;
 use App\Models\Material;
 use App\Models\Supplier;
+use App\Support\Controlli\MaterialiDoppi;
+use App\Support\Controlli\MaterialiSenzaPrezzo;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Infolists\Components\Section as InfolistSection;
@@ -14,7 +15,9 @@ use Filament\Infolists\Infolist;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 
 class MaterialResource extends Resource
 {
@@ -26,7 +29,6 @@ class MaterialResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-wrench-screwdriver';
 
     protected static ?string $navigationGroup = 'Magazzino';
-
 
     protected static ?int $navigationSort = 1;
 
@@ -172,6 +174,18 @@ class MaterialResource extends Resource
             ])
             ->defaultSort('category')
             ->filters([
+                // I due filtri su cui atterra la pagina dei controlli. Su
+                // 3600 materiali l'elenco nudo non serviva a niente: i 124
+                // senza prezzo si cercavano a occhio. L'etichetta e' una
+                // frase perche' e' quello che si legge fra i filtri attivi
+                // in cima alla tabella, e dice perche' si guardano proprio
+                // queste righe.
+                Tables\Filters\Filter::make('controllo_senza_prezzo')
+                    ->label('Controllo: senza prezzo ma usati dove si fattura')
+                    ->query(fn (Builder $query) => MaterialiSenzaPrezzo::applica($query)),
+                Tables\Filters\Filter::make('controllo_doppi')
+                    ->label('Controllo: stesso codice due volte, con prezzi diversi')
+                    ->query(fn (Builder $query) => $query->whereIn('id', MaterialiDoppi::ids())),
                 Tables\Filters\SelectFilter::make('category')
                     ->label('Categoria')
                     ->options(fn () => Material::query()->distinct()->orderBy('category')->pluck('category', 'category')),
@@ -199,7 +213,7 @@ class MaterialResource extends Resource
                         ])
                         ->requiresConfirmation()
                         ->modalDescription('La nuova categoria sostituira\' quella attuale su tutti i materiali selezionati.')
-                        ->action(fn (\Illuminate\Support\Collection $records, array $data) => $records
+                        ->action(fn (Collection $records, array $data) => $records
                             ->each(fn (Material $material) => $material->update(['category' => $data['category']])))
                         ->deselectRecordsAfterCompletion(),
                     Tables\Actions\DeleteBulkAction::make(),

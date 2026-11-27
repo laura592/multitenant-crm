@@ -175,6 +175,19 @@ class VehicleResource extends Resource
             ])
             ->defaultSort('plate')
             ->filters([
+                // Il filtro su cui atterra la pagina dei controlli. Qui la
+                // condizione era gia' una scope del modello
+                // (conScadenzeMancanti, con dentro le esenzioni: il bollo
+                // del Vito sta nel leasing), quindi non serviva altro che
+                // chiamarla — ed e' la stessa che conta sulla scheda.
+                //
+                // $query senza tipo come nel filtro qui sotto: una scope
+                // del modello su un Builder tipizzato non la vede
+                // l'analisi statica, e un adattatore scritto solo per
+                // farla contenta sarebbe la stessa condizione in due posti.
+                Tables\Filters\Filter::make('controllo_documenti_mancanti')
+                    ->label('Controllo: manca assicurazione, bollo o revisione')
+                    ->query(fn ($query) => $query->conScadenzeMancanti()),
                 Tables\Filters\SelectFilter::make('assigned_user_id')
                     ->label('Assegnato a')
                     ->relationship('assignedUser', 'name'),
