@@ -390,10 +390,13 @@ class NoleggioResource extends Resource
 
                                 // Se restano vuoti il contratto li esclude per nome, cosi' nessuno
                                 // dà per scontato che i bicchieri siano compresi.
-                                Forms\Components\Section::make('Consumabili')
-                                    ->description('Bicchieri, palette, zucchero. Lasciando vuoto, il contratto li dichiara esclusi.')
-                                    ->collapsible()
-                                    ->schema([static::ripetitoreForniture(NoleggioFornitura::GRUPPO_CONSUMABILI)]),
+                                // La sezione "Consumabili" (bicchieri, palette,
+                                // zucchero) non c'e' piu': non si danno mai, e a
+                                // sistema non c'e' una sola riga di quel gruppo
+                                // (Laura, 27/11/2026). Il contratto continua a
+                                // dichiararli esclusi, perche' quella clausola
+                                // scatta proprio quando il gruppo e' vuoto -- e
+                                // adesso e' vuoto sempre.
 
                             ]),
                     ]),
