@@ -1024,7 +1024,9 @@ class QuoteResource extends Resource
 
             $record->update([
                 'status' => $nuovoStato,
-                'valid_until' => now()->addDays(Quote::GIORNI_VALIDITA)->toDateString(),
+                // Non sempre 45 giorni: con dentro articoli Franke la
+                // validita' si ferma alla fine del listino (Quote::scadenzaDaOggi).
+                'valid_until' => $record->scadenzaDaOggi(),
             ]);
 
             Notification::make()->title('Preventivo inviato')->success()->send();

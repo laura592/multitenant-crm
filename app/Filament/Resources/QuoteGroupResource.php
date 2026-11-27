@@ -465,7 +465,7 @@ class QuoteGroupResource extends Resource
                     'status' => in_array($quote->status, [Quote::STATUS_BOZZA, Quote::STATUS_SCADUTO], true)
                         ? Quote::STATUS_INVIATO
                         : $quote->status,
-                    'valid_until' => now()->addDays(Quote::GIORNI_VALIDITA)->toDateString(),
+                    'valid_until' => $quote->scadenzaDaOggi(),
                 ]);
             });
 

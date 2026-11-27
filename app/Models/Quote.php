@@ -6,12 +6,17 @@ use App\Mail\CustomerGestionaleReviewMail;
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\HasClientLink;
 use App\Models\Concerns\LogsAuditTrail;
+use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 
 class Quote extends Model
@@ -199,6 +204,73 @@ class Quote extends Model
      * Numerazione scoped per tenant: un partner non deve vedere "buchi" dovuti
      * ai preventivi di altri tenant (vedi docs/architecture.md §10.5).
      */
+    /**
+     * Fino a quando vale un preventivo mandato oggi.
+     *
+     * Di norma 45 giorni (vedi GIORNI_VALIDITA). Ma se dentro c'e' roba
+     * Franke non si puo' promettere un prezzo oltre la fine del listino:
+     * dal 1° gennaio Franke aumenta, e un preventivo di dicembre valido a
+     * febbraio ci farebbe vendere in perdita o rimangiare la parola
+     * (indicazione di Laura, 27/11/2026).
+     *
+     * La data non e' scritta a mano: si legge dal listino Franke in vigore
+     * (price_lists, fornitore Franke). Se per qualche motivo non ce n'e'
+     * uno valido oggi, si ripiega sul 31 dicembre dell'anno corrente, che
+     * e' come i listini Franke sono sempre stati fatti.
+     *
+     * NB: al 27/11/2026 TUTTI i listini a sistema finiscono il 31/12 --
+     * Dalla Corte, Bianchi, Liebherr, Bravilor compresi. La regola qui
+     * guarda solo Franke perche' cosi' e' stata chiesta; allargarla agli
+     * altri fornitori e' una riga.
+     */
+    public function scadenzaDaOggi(): string
+    {
+        $limite = now()->addDays(self::GIORNI_VALIDITA);
+        $fineListino = $this->fineListinoFranke();
+
+        if ($fineListino && $fineListino->lt($limite)) {
+            $limite = $fineListino;
+        }
+
+        return $limite->toDateString();
+    }
+
+    /** Se il preventivo contiene articoli a listino Franke. */
+    public function haArticoliFranke(): bool
+    {
+        return $this->quoteProducts()
+            ->whereHas('product', function (Builder $query) {
+                $query->where('source', 'franke_ufficiale')
+                    ->orWhereHas('brand', fn (Builder $b) => $b->where('name', 'like', '%franke%'));
+            })
+            ->exists();
+    }
+
+    /**
+     * L'ultimo giorno del listino Franke in vigore, se il preventivo ha
+     * articoli Franke dentro. Null negli altri casi.
+     */
+    private function fineListinoFranke(): ?CarbonInterface
+    {
+        if (! $this->haArticoliFranke()) {
+            return null;
+        }
+
+        $oggi = now()->toDateString();
+
+        $fine = DB::table('price_lists')
+            ->join('suppliers', 'suppliers.id', '=', 'price_lists.supplier_id')
+            ->where('suppliers.name', 'like', '%franke%')
+            ->whereNotNull('price_lists.valid_to')
+            ->where(fn ($q) => $q->whereNull('price_lists.valid_from')->orWhere('price_lists.valid_from', '<=', $oggi))
+            ->where('price_lists.valid_to', '>=', $oggi)
+            ->min('price_lists.valid_to');
+
+        return $fine
+            ? Carbon::parse($fine)->endOfDay()
+            : now()->endOfYear();
+    }
+
     public static function nextNumberForTenant(?string $tenantId): string
     {
         $year = date('Y');
@@ -208,7 +280,7 @@ class Quote extends Model
             ->where('tenant_id', $tenantId)
             ->whereYear('created_at', $year)
             ->where('number', 'like', "{$prefix}%")
-            ->orderByRaw("CAST(SUBSTRING(number, -4) AS UNSIGNED) DESC")
+            ->orderByRaw('CAST(SUBSTRING(number, -4) AS UNSIGNED) DESC')
             ->first();
 
         $next = 1;
@@ -308,9 +380,9 @@ class Quote extends Model
      * sull'offerta intera (domande, richiamate, rifiuto di tutte le
      * soluzioni) - dal preventivo si vede cosi' tutta la conversazione.
      *
-     * @return \Illuminate\Support\Collection<int, QuoteResponse>
+     * @return Collection<int, QuoteResponse>
      */
-    public function clientResponses(): \Illuminate\Support\Collection
+    public function clientResponses(): Collection
     {
         return QuoteResponse::withoutGlobalScope('tenant')
             ->where(function ($query) {
@@ -353,13 +425,15 @@ class Quote extends Model
      * stata riempita all'indietro, ma una bozza salvata e mai inviata non
      * ce l'ha e la si calcola al volo.
      */
-    public function scadeIl(): ?\Illuminate\Support\Carbon
+    public function scadeIl(): CarbonInterface
     {
         if ($this->valid_until) {
             return $this->valid_until;
         }
 
-        return $this->date?->copy()->addDays(self::GIORNI_VALIDITA);
+        // quotes.date e' NOT NULL: una data c'e' sempre, quindi una
+        // scadenza si sa sempre calcolare.
+        return $this->date->copy()->addDays(self::GIORNI_VALIDITA);
     }
 
     /**
@@ -369,9 +443,7 @@ class Quote extends Model
      */
     public function oltreLaValidita(): bool
     {
-        $scadenza = $this->scadeIl();
-
-        return $scadenza !== null && $scadenza->isPast();
+        return $this->scadeIl()->isPast();
     }
 
     /**
@@ -382,7 +454,7 @@ class Quote extends Model
      */
     public function giorniDiSilenzio(): ?int
     {
-        if (! $this->inAttesa() || $this->date === null) {
+        if (! $this->inAttesa()) {
             return null;
         }
 
