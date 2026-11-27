@@ -740,6 +740,7 @@ class NoleggioResource extends Resource
                     ->color(fn (string $state) => match ($state) {
                         Noleggio::STATO_ATTIVO => 'success',
                         Noleggio::STATO_INVIATO => 'info',
+                        Noleggio::STATO_RIFIUTATO => 'danger',
                         Noleggio::STATO_CHIUSO => 'gray',
                         default => 'warning',
                     }),

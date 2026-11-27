@@ -35,6 +35,16 @@ class Noleggio extends Model
 
     public const STATO_CHIUSO = 'chiuso';
 
+    /**
+     * Il cliente ha detto di no.
+     *
+     * Mancava: gli stati erano bozza/inviato/attivo/chiuso, e una proposta
+     * rifiutata restava "Inviato" per sempre, in mezzo a quelle che
+     * aspettano ancora una firma (Laura, 27/11/2026). "Chiuso" non e' la
+     * stessa cosa: quello e' un noleggio che e' partito ed e' finito.
+     */
+    public const STATO_RIFIUTATO = 'rifiutato';
+
     protected $fillable = [
         'tenant_id', 'customer_id', 'machine_unit_id', 'quote_id', 'information_request_id', 'number', 'descrizione',
         'listino', 'sconto_acquisto', 'costo', 'mesi', 'base_consumo', 'margine',
@@ -221,7 +231,7 @@ class Noleggio extends Model
     }
 
     /** Lo storico degli invii al cliente. */
-    public function emails(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function emails(): HasMany
     {
         return $this->hasMany(NoleggioEmail::class)->latest();
     }
@@ -232,6 +242,7 @@ class Noleggio extends Model
             self::STATO_BOZZA => 'Bozza',
             self::STATO_INVIATO => 'Inviato',
             self::STATO_ATTIVO => 'Attivo',
+            self::STATO_RIFIUTATO => 'Rifiutato',
             self::STATO_CHIUSO => 'Chiuso',
         ];
     }
