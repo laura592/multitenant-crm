@@ -31,7 +31,7 @@ class NoleggioFornitura extends Model
 
     protected $fillable = [
         'noleggio_id', 'voce', 'prodotto_caffe_id', 'material_id', 'gruppo',
-        'quantita', 'unita', 'prezzo_unitario', 'prezzo_acquisto', 'ricarico', 'costo_mensile',
+        'quantita', 'unita', 'prezzo_unitario', 'prezzo_acquisto', 'costo_mensile',
         'ordine',
     ];
 
@@ -39,7 +39,6 @@ class NoleggioFornitura extends Model
         'quantita' => 'decimal:3',
         'prezzo_unitario' => 'decimal:4',
         'prezzo_acquisto' => 'decimal:4',
-        'ricarico' => 'decimal:2',
         'costo_mensile' => 'decimal:2',
         'ordine' => 'integer',
     ];
@@ -63,10 +62,10 @@ class NoleggioFornitura extends Model
         static::saving(function (self $f) {
             // La quantita' e' ANNUA (e' quella che il contratto promette):
             // il costo mensile la divide per dodici.
-            $f->costo_mensile = round(
-                (float) $f->quantita / 12 * (float) $f->prezzo_unitario * (1 + (float) $f->ricarico / 100),
-                2,
-            );
+            // Il prezzo scritto sulla riga e' gia' quello di vendita: il
+            // ricarico riga per riga e' stato tolto il 27/11/2026, era a
+            // zero su tutte e quaranta le righe a sistema.
+            $f->costo_mensile = round((float) $f->quantita / 12 * (float) $f->prezzo_unitario, 2);
         });
 
         // Il canone del noleggio dipende da queste righe: va rifatto.

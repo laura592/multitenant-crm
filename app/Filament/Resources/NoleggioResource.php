@@ -205,6 +205,16 @@ class NoleggioResource extends Resource
                                                     ->prefix('€')
                                                     ->helperText('Base del Full-Service.')
                                                     ->numeric()->required()->live(onBlur: true),
+                                                // Il Full-Service stava in mezzo ai quattro
+                                                // importi complessivi, che non si usano piu' da
+                                                // quando ci sono le righe. Lui pero' serve
+                                                // sempre -- in questi noleggi e' sempre
+                                                // compreso (Laura, 27/11/2026) -- quindi sta
+                                                // qui, accanto al listino su cui si calcola.
+                                                Forms\Components\TextInput::make('full_service_percentuale')
+                                                    ->label('Full-Service')
+                                                    ->suffix('% annuo del listino')
+                                                    ->numeric()->default(10)->live(onBlur: true),
                                                 Forms\Components\TextInput::make('sconto_acquisto')
                                                     ->label('Sconto fornitore')
                                                     ->suffix('%')
@@ -272,32 +282,43 @@ class NoleggioResource extends Resource
                                         // pero' aperti in mezzo alla pagina, quattro caselle a
                                         // 0,00 che sembrano da compilare e non servono a niente.
                                         // Si chiudono da sole, e il titolo dice perche'.
-                                        Forms\Components\Section::make(fn (Get $get) => static::ciSonoRighe($get)
-                                            ? 'Importi complessivi — non usati, ci sono le righe'
-                                            : 'Cosa consuma ogni mese')
-                                            ->collapsible()
-                                            ->collapsed(fn (Get $get): bool => static::ciSonoRighe($get))
+                                        Forms\Components\Section::make('Cosa consuma ogni mese')
+                                            // NASCOSTA, non piu' solo chiusa: con le righe in
+                                            // piedi questi quattro numeri non li legge nessuno,
+                                            // e un riquadro che dice "non usati" e' comunque
+                                            // un riquadro da scorrere (Laura, 27/11/2026).
+                                            //
+                                            // Nascosta e non cancellata perche' il canone ci
+                                            // ricade ancora sopra quando un gruppo non ha
+                                            // righe: su un noleggio senza prospetto a voci
+                                            // sono l'unico modo di prezzare caffe' e
+                                            // detergenti, e li' tornano a vedersi.
+                                            ->hidden(fn (Get $get): bool => static::ciSonoRighe($get))
                                             ->columns(4)
                                             ->schema([
                                                 Forms\Components\TextInput::make('caffe_mese')
                                                     ->label('Caffè')
                                                     ->prefix('€')
                                                     ->helperText('Stima: se consuma più del previsto la differenza è vostra.')
-                                                    ->numeric()->default(0)->live(onBlur: true),
+                                                    ->numeric()->default(0)->live(onBlur: true)
+                                                    ->dehydrated()->dehydratedWhenHidden(),
                                                 Forms\Components\TextInput::make('ricarico_caffe')
                                                     ->label('Ricarico')
                                                     ->suffix('%')
                                                     ->helperText("Zero se l'importo accanto è già un prezzo di vendita.")
-                                                    ->numeric()->default(0)->live(onBlur: true),
+                                                    ->numeric()->default(0)->live(onBlur: true)
+                                                    ->dehydrated()->dehydratedWhenHidden(),
                                                 Forms\Components\TextInput::make('detergenti_mese')
                                                     ->label('Detergenti')
                                                     ->prefix('€')
                                                     ->helperText('Non sono nel Full-Service, che copre i ricambi.')
-                                                    ->numeric()->default(0)->live(onBlur: true),
+                                                    ->numeric()->default(0)->live(onBlur: true)
+                                                    ->dehydrated()->dehydratedWhenHidden(),
                                                 Forms\Components\TextInput::make('ricarico_detergenti')
                                                     ->label('Ricarico')
                                                     ->suffix('%')
-                                                    ->numeric()->default(0)->live(onBlur: true),
+                                                    ->numeric()->default(0)->live(onBlur: true)
+                                                    ->dehydrated()->dehydratedWhenHidden(),
                                                 // "Caffè compreso (kg/mese)" e "Detergenti compresi"
                                                 // stavano qui: due caselle di testo libero per dire cosa
                                                 // spettava al cliente. Le ha sostituite la sezione "Cosa
@@ -307,11 +328,6 @@ class NoleggioResource extends Resource
                                                 // finiscano nel documento, e invece non le legge piu'
                                                 // nessuno (Laura, 07/10/2026). Le colonne restano, con
                                                 // quanto c'era scritto.
-                                                Forms\Components\TextInput::make('full_service_percentuale')
-                                                    ->label('Full-Service')
-                                                    ->suffix('% annuo del listino')
-                                                    ->numeric()->default(10)->live(onBlur: true)
-                                                    ->columnSpan(2),
                                             ]),
                                     ]),
 
@@ -491,9 +507,6 @@ class NoleggioResource extends Resource
                             $campo->state($prezzo);
                         }
                     }),
-                Forms\Components\TextInput::make('ricarico')
-                    ->label('Ricarico %')
-                    ->numeric()->default(0)->live(onBlur: true)->columnSpan(1),
             ])
             ->itemLabel(fn (array $state): ?string => filled($state['voce'] ?? null)
                 ? $state['voce'].' — '.rtrim(rtrim(number_format((float) ($state['quantita'] ?? 0), 3, ',', '.'), '0'), ',').' '.($state['unita'] ?? '').'/anno'
@@ -680,8 +693,7 @@ class NoleggioResource extends Resource
                     // salvataggio: sommando i valori pieni l'anteprima
                     // divergerebbe dal contratto di qualche centesimo.
                     ->sum(fn ($f) => round((float) ($f['quantita'] ?? 0) / 12
-                        * (float) ($f['prezzo_unitario'] ?? 0)
-                        * (1 + (float) ($f['ricarico'] ?? 0) / 100), 2))];
+                        * (float) ($f['prezzo_unitario'] ?? 0), 2))];
             });
 
         // Il totale si calcola con le righe che si stanno scrivendo: prima
