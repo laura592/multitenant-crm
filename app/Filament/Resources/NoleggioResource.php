@@ -424,10 +424,18 @@ class NoleggioResource extends Resource
                 // "Nome nel contratto" sembrava chiedere il nome DEL
                 // contratto. E' il nome del prodotto, quello che il cliente
                 // legge nell'elenco di cosa gli diamo (Laura, 27/11/2026).
+                // Il nome non si scrive: lo da' l'articolo scelto sopra
+                // (Laura, 27/11/2026 -- "uso il nome del materiale che c'e'
+                // nel gestionale"). Resta come componente nascosto, non
+                // cancellato, perche' e' lui a portare il valore nel
+                // database: e' quello che il contratto stampa.
+                //
+                // Stesso trattamento che l'unita' ha gia' dal 10/11/2026.
                 Forms\Components\TextInput::make('voce')
-                    ->label('Nome del prodotto')
-                    ->helperText('Come comparirà sul contratto.')
-                    ->required()->maxLength(255)->columnSpan(3),
+                    ->maxLength(255)
+                    ->hidden()
+                    ->dehydrated()
+                    ->dehydratedWhenHidden(),
                 // Si scrive quello che il contratto promette -- "890 kg di
                 // caffe' all'anno" -- e il mensile lo calcola il programma.
                 Forms\Components\TextInput::make('quantita')
@@ -450,7 +458,12 @@ class NoleggioResource extends Resource
                     // solo un'altra cosa da guardare (Laura, 10/11/2026).
                     // dehydratedWhenHidden: nascosta si salva lo stesso, se
                     // no la pezzatura sparirebbe dal database.
-                    ->hidden(fn (Get $get): bool => filled($get('prodotto_caffe_id')) || filled($get('material_id')))
+                    // Sempre nascosta, non piu' solo quando l'articolo c'e':
+                    // adesso l'articolo e' obbligatorio, quindi la pezzatura
+                    // la sa sempre il catalogo. Scrivendola a mano si poteva
+                    // contraddirlo, ed e' successo -- il cioccolato e' a
+                    // catalogo da 1 kg e in due noleggi c'e' scritto 500 g.
+                    ->hidden()
                     ->dehydrated()
                     ->dehydratedWhenHidden()
                     ->afterStateHydrated(function (Forms\Components\TextInput $campo, Get $get): void {
@@ -534,6 +547,7 @@ class NoleggioResource extends Resource
                         $set('prezzo_unitario', (float) $m->list_price);
                     }
                 })
+                ->required()
                 ->columnSpan(3);
         }
 
@@ -568,6 +582,7 @@ class NoleggioResource extends Resource
                 $set('unita', $p->formato);
                 $set('prezzo_unitario', (float) $p->prezzo);
             })
+            ->required()
             ->columnSpan(3);
     }
 
