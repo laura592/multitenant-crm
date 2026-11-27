@@ -141,7 +141,7 @@ class NoleggioResource extends Resource
                                             ->default(fn (Get $get) => $get('customer_id')
                                                 ? InformationRequest::withoutGlobalScopes()
                                                     ->where('customer_id', $get('customer_id'))
-                                                    ->whereIn('status', ['nuova', 'in_lavorazione'])
+                                                    ->whereIn('status', InformationRequest::DA_GESTIRE)
                                                     ->pluck('id')
                                                     ->whenCount(1, fn ($c) => $c->first())
                                                 : null)

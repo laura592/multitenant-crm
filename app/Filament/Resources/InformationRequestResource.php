@@ -24,9 +24,9 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\HtmlString;
+use Illuminate\Support\Str;
 
 class InformationRequestResource extends Resource
 {
@@ -52,7 +52,7 @@ class InformationRequestResource extends Resource
      */
     public static function getNavigationBadge(): ?string
     {
-        $count = InformationRequest::whereIn('status', ['nuova', 'in_lavorazione'])->count();
+        $count = InformationRequest::whereIn('status', InformationRequest::DA_GESTIRE)->count();
 
         return $count > 0 ? (string) $count : null;
     }
@@ -367,11 +367,16 @@ class InformationRequestResource extends Resource
                     ->dateTime('d/m/Y H:i')
                     ->placeholder('—')
                     ->sortable()
-                    // Rosso se l'appuntamento è passato e la richiesta non è ancora
-                    // stata chiusa: segnala a colpo d'occhio cosa richiede attenzione.
+                    // Rosso se l'appuntamento è passato e la richiesta è ancora
+                    // aperta: segnala a colpo d'occhio cosa richiede attenzione.
+                    //
+                    // Prima la regola era "tutto tranne gestita e chiusa", e
+                    // cosi' restava rosso anche l'appuntamento di una
+                    // trattativa accettata o rifiutata: la risposta e' gia'
+                    // arrivata, non c'e' niente da richiamare.
                     ->color(fn (?InformationRequest $record) => $record?->appointment_at
                         && $record->appointment_at->isPast()
-                        && ! in_array($record->status, ['gestita', 'chiusa'], true)
+                        && in_array($record->status, InformationRequest::OPEN_STATUSES, true)
                             ? 'danger'
                             : null),
                 // Le note sono il "cosa e' successo finora" della richiesta
@@ -444,7 +449,12 @@ class InformationRequestResource extends Resource
             ->filters([
                 Tables\Filters\SelectFilter::make('status')
                     ->label('Stato')
-                    ->options(static::statusLabels()),
+                    ->options(static::statusLabels())
+                    // Scelta multipla da quando gli stati sono undici: "le
+                    // proposte in attesa di risposta" sono tre stati diversi
+                    // (preventivo, offerta, noleggio) e con la scelta singola
+                    // bisognava guardarle una alla volta.
+                    ->multiple(),
             ])
             ->actions([
                 Tables\Actions\ActionGroup::make([
@@ -610,11 +620,18 @@ class InformationRequestResource extends Resource
         return [
             'nuova' => 'Nuova',
             'in_lavorazione' => 'In lavorazione',
-            // I tre "Preventivo ..." li mette da solo il preventivo collegato
-            // (InformationRequest::syncStatusFromQuotes).
+            // I nove stati "documento" li mette da solo quello che e'
+            // attaccato alla richiesta (InformationRequest::syncStatusFromQuotes):
+            // dicono insieme che cosa abbiamo proposto e com'e' finita.
             'preventivo_inviato' => 'Preventivo inviato',
             'preventivo_accettato' => 'Preventivo accettato',
             'preventivo_rifiutato' => 'Preventivo non accettato',
+            'offerta_inviata' => 'Offerta inviata',
+            'offerta_accettata' => 'Offerta accettata',
+            'offerta_rifiutata' => 'Offerta non accettata',
+            'noleggio_inviato' => 'Noleggio inviato',
+            'noleggio_accettato' => 'Noleggio accettato',
+            'noleggio_rifiutato' => 'Noleggio non accettato',
             'gestita' => 'Gestita',
             'chiusa' => 'Chiusa',
         ];
@@ -625,11 +642,25 @@ class InformationRequestResource extends Resource
         return [
             'nuova' => 'gray',
             'in_lavorazione' => 'warning',
+            // Il colore dice solo com'e' finita, non con che documento:
+            // blu = aspetta una risposta, verde = si', rosso = no. Tre
+            // colori su undici stati, e l'elenco si legge da lontano.
             'preventivo_inviato' => 'info',
             'preventivo_accettato' => 'success',
             'preventivo_rifiutato' => 'danger',
-            'gestita' => 'success',
-            'chiusa' => 'success',
+            'offerta_inviata' => 'info',
+            'offerta_accettata' => 'success',
+            'offerta_rifiutata' => 'danger',
+            'noleggio_inviato' => 'info',
+            'noleggio_accettato' => 'success',
+            'noleggio_rifiutato' => 'danger',
+            // Grigi, non verdi: sono i due stati che non dicono se la
+            // trattativa l'abbiamo vinta o persa. Erano entrambi 'success',
+            // e 173 richieste su 330 stavano su "Chiusa" verde — un elenco
+            // tutto verde che conteneva anche tutti i no (Laura, 27/11/2026).
+            // Il verde resta solo per un si' incassato.
+            'gestita' => 'gray',
+            'chiusa' => 'gray',
         ];
     }
 }

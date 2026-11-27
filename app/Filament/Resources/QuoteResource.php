@@ -825,7 +825,7 @@ class QuoteResource extends Resource
 
         $open = InformationRequest::query()
             ->where('customer_id', $customerId)
-            ->whereIn('status', ['nuova', 'in_lavorazione'])
+            ->whereIn('status', InformationRequest::DA_GESTIRE)
             ->limit(2)
             ->pluck('id');
 

@@ -58,7 +58,7 @@ class PrioritaWidget extends BaseWidget
         $stats = [];
 
         if ($user->can('view_any_information::request')) {
-            $openRequests = InformationRequest::whereIn('status', ['nuova', 'in_lavorazione'])->count();
+            $openRequests = InformationRequest::whereIn('status', InformationRequest::DA_GESTIRE)->count();
 
             $stats[] = Stat::make('Richieste da gestire', $openRequests)
                 ->description($openRequests > 0 ? 'Richieste informazioni aperte' : 'Nessuna richiesta in attesa')

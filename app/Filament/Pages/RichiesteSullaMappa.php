@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Filament\Resources\InformationRequestResource;
+use App\Models\Customer;
 use App\Models\InformationRequest;
 use App\Support\DisplayName;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
@@ -28,8 +29,15 @@ class RichiesteSullaMappa extends Page
 {
     use HasPageShield;
 
-    /** Gli stati che vuol dire "aperta": c'e' ancora qualcosa da fare. */
-    private const APERTE = ['nuova', 'in_lavorazione', 'preventivo_inviato'];
+    /**
+     * Gli stati che vuol dire "aperta": c'e' ancora qualcosa da fare.
+     *
+     * La lista sta nel modello (InformationRequest::OPEN_STATUSES) da quando
+     * gli stati distinguono preventivo, offerta e noleggio: una proposta
+     * mandata e' in attesa di risposta qualunque documento sia, e scritta
+     * qui a mano la mappa avrebbe perso le offerte e i noleggi.
+     */
+    private const APERTE = InformationRequest::OPEN_STATUSES;
 
     protected static ?string $navigationIcon = 'heroicon-o-map';
 
@@ -86,14 +94,14 @@ class RichiesteSullaMappa extends Page
             ->get()
             ->when($this->provincia, fn (Collection $c) => $c->filter(
                 function (InformationRequest $r): bool {
-                    /** @var \App\Models\Customer|null $cliente */
+                    /** @var Customer|null $cliente */
                     $cliente = $r->customer;
 
                     return $cliente?->province === $this->provincia;
                 }
             ))
             ->map(function (InformationRequest $r) use ($oggi): array {
-                /** @var \App\Models\Customer $cliente */
+                /** @var Customer $cliente */
                 $cliente = $r->customer;
 
                 return [
@@ -111,13 +119,19 @@ class RichiesteSullaMappa extends Page
                     'appuntamento' => $r->appointment_at?->format('d/m/Y'),
                     'appuntamentoFuturo' => $r->appointment_at?->isFuture() ?? false,
                     'stato' => $r->status,
+                    // L'etichetta, non la chiave: nel fumetto della mappa si
+                    // leggeva "preventivo inviato" con l'underscore tolto a
+                    // mano, e con undici stati le sfumature ("Offerta non
+                    // accettata") le sa solo la risorsa.
+                    'etichetta' => InformationRequestResource::statusLabels()[$r->status] ?? $r->status,
                     // Il colore e' quello che rende la mappa utilizzabile da
                     // soli. L'ordine conta: prima dove si va gia', poi chi
                     // aspetta una risposta da noi, poi chi aspetta e basta.
                     //
-                    // Il viola sono i preventivi mandati e non ancora
-                    // accettati: li' la palla e' nel loro campo, ma e' anche
-                    // la gente che una telefonata la merita piu' di tutti.
+                    // Il viola sono le proposte mandate e senza risposta
+                    // (preventivo, offerta o noleggio): li' la palla e' nel
+                    // loro campo, ma e' anche la gente che una telefonata la
+                    // merita piu' di tutti.
                     //
                     // Viola e non arancione: l'arancione accanto al rosso non
                     // si distingueva (Laura, 04/11/2026). E il pallino e' piu'
@@ -125,11 +139,21 @@ class RichiesteSullaMappa extends Page
                     // del colore.
                     'colore' => match (true) {
                         $r->appointment_at?->isFuture() ?? false => '#16a34a',
-                        $r->status === 'preventivo_inviato' => '#9333ea',
+                        in_array($r->status, InformationRequest::IN_ATTESA, true) => '#9333ea',
                         $r->created_at->diffInDays($oggi) > 60 => '#dc2626',
                         default => '#2563eb',
                     },
-                    'raggio' => $r->status === 'preventivo_inviato' ? 12 : 9,
+                    'raggio' => in_array($r->status, InformationRequest::IN_ATTESA, true) ? 12 : 9,
+                    // Che cosa aspetta risposta, quando ne aspetta una: in
+                    // elenco accanto al nome vale piu' del pallino viola,
+                    // perche' dice anche se la palla e' su un preventivo,
+                    // un'offerta o un contratto di noleggio.
+                    'attesa' => match ($r->status) {
+                        'preventivo_inviato' => 'preventivo mandato',
+                        'offerta_inviata' => 'offerta mandata',
+                        'noleggio_inviato' => 'noleggio mandato',
+                        default => null,
+                    },
                     'url' => InformationRequestResource::getUrl('edit', ['record' => $r->getKey()], tenant: Filament::getTenant()),
                 ];
             })
@@ -154,7 +178,7 @@ class RichiesteSullaMappa extends Page
             ->with('customer:id,province')
             ->get()
             ->groupBy(function (InformationRequest $r): string {
-                /** @var \App\Models\Customer|null $cliente */
+                /** @var Customer|null $cliente */
                 $cliente = $r->customer;
 
                 return $cliente?->province ?: '—';

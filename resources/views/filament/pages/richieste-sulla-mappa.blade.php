@@ -49,7 +49,7 @@
             @php($mapMarkersId = $mapUid.'-markers')
             @php($marker = $righe->map(fn ($r) => [
                 'name' => $r['nome'].' — '.$r['numero'],
-                'street' => $r['giorni'].' giorni di attesa · '.str_replace('_', ' ', $r['stato'])
+                'street' => $r['giorni'].' giorni di attesa · '.$r['etichetta']
                     .($r['appuntamento'] ? ' · appuntamento '.$r['appuntamento'] : ''),
                 'city' => trim(($r['citta'] ?? '').' ('.($r['provincia'] ?? '—').')'),
                 'lat' => $r['lat'],
@@ -80,7 +80,7 @@
                     </span>
                     <span class="flex items-center gap-1.5">
                         <span class="size-4 rounded-full" style="background:#9333ea"></span>
-                        Preventivo mandato, risposta non arrivata
+                        Proposta mandata, risposta non arrivata
                     </span>
                     <span class="flex items-center gap-1.5">
                         <span class="size-3 rounded-full" style="background:#dc2626"></span>
@@ -115,8 +115,8 @@
                             {{ $r['citta'] }} ({{ $r['provincia'] }}) · {{ $r['numero'] }}
                         </span>
 
-                        @if ($r['stato'] === 'preventivo_inviato')
-                            <span class="text-xs font-medium" style="color:#9333ea">preventivo mandato</span>
+                        @if ($r['attesa'])
+                            <span class="text-xs font-medium" style="color:#9333ea">{{ $r['attesa'] }}</span>
                         @endif
 
                         @if ($r['appuntamento'])
