@@ -122,7 +122,40 @@ class QuoteGroupResource extends Resource
                     ->formatStateUsing(fn (string $state) => static::statusLabels()[$state] ?? ucfirst($state))
                     ->color(fn (string $state) => static::statusColors()[$state] ?? 'gray'),
                 Tables\Columns\TextColumn::make('quotes_count')->visibleFrom('md')->counts('quotes')->label('Soluzioni'),
-                Tables\Columns\TextColumn::make('sent_at')->visibleFrom('md')->label('Inviata il')->dateTime()->placeholder('—'),
+                // Le stesse colonne dell'elenco dei preventivi: chi passa
+                // dall'uno all'altro deve trovare le stesse informazioni,
+                // non doverle cercare in due posti diversi.
+                Tables\Columns\TextColumn::make('customer.province')->visibleFrom('md')
+                    ->label('Prov.')
+                    ->badge()
+                    ->color('gray')
+                    ->searchable()
+                    ->sortable()
+                    ->placeholder('—'),
+                // Dell'offerta vale l'alternativa piu' cara, non la somma:
+                // il cliente ne comprera' una, e sommarne sei gonfierebbe
+                // il valore di sei volte (stessa regola della pagina "Da
+                // sollecitare" e della mail dell'offerta).
+                Tables\Columns\TextColumn::make('quotes_max_total')
+                    ->max('quotes', 'total')
+                    ->label('Totale')
+                    ->money('EUR')
+                    ->placeholder('—')
+                    ->sortable()
+                    ->tooltip('La soluzione più cara dell\'offerta'),
+                // Formato italiano e senza secondi: "set 23, 2026 07:07:11"
+                // non e' una data che qualcuno legge, e nel resto dell'app
+                // si scrive d/m/Y.
+                Tables\Columns\TextColumn::make('sent_at')->visibleFrom('md')->label('Inviata il')->dateTime('d/m/Y H:i')->placeholder('—'),
+                Tables\Columns\TextColumn::make('client_last_viewed_at')->visibleFrom('md')
+                    ->label('Visto')
+                    ->since()
+                    ->tooltip(fn (QuoteGroup $record) => $record->client_view_count
+                        ? "Aperta {$record->client_view_count} volte, l'ultima il ".$record->client_last_viewed_at?->format('d/m/Y H:i')
+                        : null)
+                    ->placeholder('—')
+                    ->sortable()
+                    ->toggleable(),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('status')

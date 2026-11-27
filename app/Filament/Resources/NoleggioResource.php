@@ -796,10 +796,19 @@ class NoleggioResource extends Resource
                         ->when($data['until'] ?? null, fn ($q, $d) => $q->whereDate('data_inizio', '<=', $d))),
             ])
             ->actions([
-                Tables\Actions\ViewAction::make(),
-                Tables\Actions\EditAction::make(),
+                // Stessa disposizione di Preventivi e Offerte: in riga
+                // restano il documento e l'azione che "conclude" qualcosa,
+                // il resto va sotto i tre puntini. Quattro pulsanti in fila
+                // su ogni riga erano un muro, e per leggere la riga bisognava
+                // scavalcarli.
                 static::azioneContratto(Tables\Actions\Action::make('contratto')),
                 static::azioneInvio(Tables\Actions\Action::make('invia')),
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\ViewAction::make()
+                        ->color('gray'),
+                    Tables\Actions\EditAction::make()
+                        ->color('gray'),
+                ]),
             ]);
     }
 
