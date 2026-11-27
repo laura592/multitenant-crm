@@ -139,9 +139,21 @@
 
             {{-- TELEFONO: i giorni pieni, uno sotto l'altro. --}}
             <div class="space-y-3 sm:hidden">
-                @forelse ($this->giorniPieni() as $g)
+                @forelse ($this->giorniPieni()->reject(fn (array $g): bool => $g['fuoriMese']) as $g)
+                    {{-- Fuori dal mese NON si mostra. giorniPieni() restituisce
+                         i giorni della GRIGLIA, e una griglia a sette colonne
+                         deve cominciare di lunedi': a novembre 2026 la prima
+                         riga parte dal 27 ottobre. Sulla griglia ha senso, in
+                         un elenco no -- si leggeva "Novembre 2026" e sotto
+                         "Martedi' 27 ottobre" (Laura, 27/11/2026). Quelle voci
+                         si vedono nel loro mese. --}}
                     @php($giorno = $g['giorno'])
                     @php($oggi = $giorno->isToday())
+                    {{-- La colonna dell'ora solo se in quel giorno qualcuno ce
+                         l'ha: lavaggi e manutenzioni non hanno orario, e una
+                         colonna di trattini mangiava quaranta pixel di nome su
+                         uno schermo che ne ha 390. --}}
+                    @php($conOrari = $g['voci']->contains(fn ($v): bool => filled($v['ora'])))
 
                     <div @class([
                         'overflow-hidden rounded-xl border',
@@ -168,9 +180,11 @@
                                     {{-- Riga alta quanto un dito (min-h-11): su un
                                          telefono si tocca andando, non si mira. --}}
                                     <a href="{{ $v['url'] ?? '#' }}" class="flex min-h-11 items-baseline gap-3 px-3 py-2.5 active:bg-gray-50 dark:active:bg-gray-900">
-                                        <span class="w-11 shrink-0 font-mono text-sm font-semibold {{ $classi }}">
-                                            {{ $v['ora'] ?: '—' }}
-                                        </span>
+                                        @if ($conOrari)
+                                            <span class="w-11 shrink-0 font-mono text-sm font-semibold {{ $classi }}">
+                                                {{ $v['ora'] ?: '—' }}
+                                            </span>
+                                        @endif
                                         <span class="min-w-0 flex-1">
                                             {{-- Il nome per intero: qui lo spazio c'e',
                                                  ed e' l'unica cosa che serve davvero. --}}
