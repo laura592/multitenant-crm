@@ -2,7 +2,6 @@
 
 namespace App\Support\Preventivi;
 
-use App\Filament\Forms\Components\AllegatiEmail;
 use App\Mail\SollecitoPreventivoMail;
 use App\Models\Customer;
 use App\Models\Quote;
@@ -10,13 +9,11 @@ use App\Models\QuoteContatto;
 use App\Models\QuoteEmail;
 use App\Models\QuoteGroup;
 use App\Models\Tenant;
-use App\Support\DisplayName;
 use Filament\Forms;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\HtmlString;
 
 /**
  * Chiedere un si' o un no su un preventivo gia' mandato.
@@ -86,21 +83,6 @@ class Solleciti
     public static function formSchema(): array
     {
         return [
-            // Che cosa si sta sollecitando, scritto in cima.
-            //
-            // Prima il modulo si apriva su un destinatario e un testo, e di
-            // quale documento si stesse parlando non c'era traccia: si
-            // premeva "Manda" fidandosi della riga che si era cliccata
-            // (Laura, 27/11/2026 — "non vedo che fields sto mandando").
-            // L'invio del preventivo questo problema l'aveva gia' risolto
-            // con il blocco "In allegato" (AllegatiEmail, 07/10/2026): qui
-            // si fa la stessa cosa, con quello che il sollecito ha al posto
-            // degli allegati.
-            Forms\Components\Placeholder::make('riepilogo_sollecito')
-                ->label('Stai sollecitando')
-                ->content(fn (mixed $record) => new HtmlString(self::riepilogo($record)))
-                ->columnSpanFull(),
-            AllegatiEmail::make([]),
             Forms\Components\TextInput::make('recipient_email')
                 ->label('Email destinatario')
                 ->email()
@@ -191,70 +173,6 @@ class Solleciti
         $cliente = $documento->customer;
 
         return $cliente instanceof Customer ? $cliente->primaryEmail() : null;
-    }
-
-    /**
-     * Il riepilogo in cima al modulo: documento, cliente, importo, come sta
-     * messo e quante volte abbiamo gia' chiesto.
-     *
-     * Le righe sono etichetta + valore, come il riepilogo del preventivo,
-     * e si saltano da sole quando non c'e' niente da dire: una riga
-     * "Sollecitato: mai" su quasi tutte le trattative sarebbe rumore.
-     */
-    private static function riepilogo(mixed $record): string
-    {
-        $documento = static::documento($record);
-        $preventivi = static::preventivi($documento);
-        $primo = $preventivi->first();
-
-        $cliente = $documento->customer;
-        $euro = fn ($v) => '€ '.number_format((float) $v, 2, ',', '.');
-
-        $righe = [
-            // Del gruppo si nomina l'alternativa piu' cara: e' il massimo
-            // che la trattativa puo' valere, non la somma di soluzioni che
-            // il cliente comprera' una sola.
-            'Documento' => ($documento instanceof QuoteGroup ? 'Offerta ' : 'Preventivo ')
-                .$documento->number
-                .($preventivi->count() > 1 ? ' · '.$preventivi->count().' soluzioni a confronto' : ''),
-            'Cliente' => $cliente instanceof Customer
-                ? DisplayName::titleCase($cliente->company_name ?: $cliente->full_name)
-                : null,
-            // IMPONIBILE, come in elenco e come nel testo della mail.
-            'Importo' => $primo
-                ? $euro($preventivi->max('subtotal')).' + IVA'
-                    .($preventivi->count() > 1 ? ' (la soluzione più cara)' : '')
-                : null,
-            'Validità' => $primo?->oltreLaValidita()
-                ? 'scaduto il '.$primo->scadeIl()->format('d/m/Y')
-                : ($primo ? 'valido fino al '.$primo->scadeIl()->format('d/m/Y') : null),
-            'Già sollecitato' => ($n = self::quantiSolleciti($documento)) > 0
-                ? $n.($n === 1 ? ' volta' : ' volte')
-                : null,
-        ];
-
-        $out = '';
-
-        foreach (array_filter($righe) as $etichetta => $valore) {
-            $out .= '<div style="display:flex;gap:.5rem;padding:1px 0;">'
-                .'<span style="opacity:.55;min-width:7.5rem;">'.e($etichetta).'</span>'
-                .'<span style="font-weight:600;">'.e($valore).'</span></div>';
-        }
-
-        return $out;
-    }
-
-    /** Quante mail di sollecito sono gia' partite su questa trattativa. */
-    private static function quantiSolleciti(Quote|QuoteGroup $documento): int
-    {
-        return QuoteContatto::query()
-            ->where('tipo', QuoteContatto::TIPO_SOLLECITO)
-            ->when(
-                $documento instanceof QuoteGroup,
-                fn ($q) => $q->where('quote_group_id', $documento->id),
-                fn ($q) => $q->where('quote_id', $documento->id),
-            )
-            ->count();
     }
 
     /** L'indirizzo, se quello che c'e' scritto e' un indirizzo solo. */
