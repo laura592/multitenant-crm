@@ -421,8 +421,13 @@ class NoleggioResource extends Resource
             ->mutateRelationshipDataBeforeSaveUsing(fn (array $data) => array_merge($data, ['gruppo' => $gruppo]))
             ->schema([
                 static::sceltaProdotto($gruppo),
+                // "Nome nel contratto" sembrava chiedere il nome DEL
+                // contratto. E' il nome del prodotto, quello che il cliente
+                // legge nell'elenco di cosa gli diamo (Laura, 27/11/2026).
                 Forms\Components\TextInput::make('voce')
-                    ->label('Nome nel contratto')->required()->maxLength(255)->columnSpan(3),
+                    ->label('Nome del prodotto')
+                    ->helperText('Come comparirà sul contratto.')
+                    ->required()->maxLength(255)->columnSpan(3),
                 // Si scrive quello che il contratto promette -- "890 kg di
                 // caffe' all'anno" -- e il mensile lo calcola il programma.
                 Forms\Components\TextInput::make('quantita')
@@ -476,8 +481,18 @@ class NoleggioResource extends Resource
                 Forms\Components\TextInput::make('ricarico')
                     ->label('Ricarico %')
                     ->numeric()->default(0)->live(onBlur: true)->columnSpan(1),
+                // Niente etichetta: il suggerimento sta dentro la casella.
+                // L'etichetta "Nota (come si e' calcolata la quantita')"
+                // occupava una riga intera per spiegare un campo
+                // facoltativo (Laura, 27/11/2026). Il contenuto resta: le
+                // 40 righe a sistema ci tengono dentro come si e' arrivati
+                // alla quantita' -- "50 ml al giorno: un flacone dura 20
+                // giorni", "250 colazioni contro 138 bevande (x1,81)" --
+                // e sul contratto non si stampa, e' roba nostra.
                 Forms\Components\TextInput::make('note')
-                    ->label('Nota (come si è calcolata la quantità)')->maxLength(255)->columnSpan(6),
+                    ->label('')
+                    ->placeholder('Come si è calcolata la quantità (facoltativo)')
+                    ->maxLength(255)->columnSpan(6),
             ])
             ->itemLabel(fn (array $state): ?string => filled($state['voce'] ?? null)
                 ? $state['voce'].' — '.rtrim(rtrim(number_format((float) ($state['quantita'] ?? 0), 3, ',', '.'), '0'), ',').' '.($state['unita'] ?? '').'/anno'
