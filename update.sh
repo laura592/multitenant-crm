@@ -28,6 +28,22 @@ if ! "$PHP_BIN" -r 'exit(version_compare(PHP_VERSION, $argv[1], ">=") ? 0 : 1);'
     exit 1
 fi
 
+# MANUTENZIONE PER TUTTA LA DURATA.
+#
+# Fra `optimize:clear` e `config:cache` php-fpm resta senza configurazione:
+# non trova APP_KEY, ripiega sul database sqlite di default e ogni richiesta
+# che arriva in quei secondi diventa un 500. Il 27/11/2026, dopo quindici
+# pubblicazioni in una giornata, il log ne contava 136: Igor ne ha preso uno
+# in faccia mentre caricava le foto di una casetta.
+#
+# `down` risponde 503 con la pagina di manutenzione -- "torniamo subito",
+# non un errore -- e i browser e le app sanno che cosa vuol dire. Il trap
+# rimette su il sito anche se lo script muore a meta': `set -e` fa uscire
+# dallo script, e uscendo si passa di qui.
+echo "==> Sito in manutenzione"
+"$PHP_BIN" artisan down --retry=30 || true
+trap '"$PHP_BIN" artisan up >/dev/null 2>&1 || true' EXIT
+
 echo "==> Git pull"
 git pull
 
@@ -80,5 +96,8 @@ echo "==> Filament optimize"
 
 echo "==> Riavvio queue worker (se attivo)"
 "$PHP_BIN" artisan queue:restart
+
+echo "==> Sito di nuovo online"
+"$PHP_BIN" artisan up
 
 echo "Fatto."
