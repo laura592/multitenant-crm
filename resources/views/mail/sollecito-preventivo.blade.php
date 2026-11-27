@@ -15,7 +15,7 @@
 
 <x-mail.hero
 	:kicker="$etichetta.$documento->number"
-	title="Ci aggiorna?"
+	title="Promemoria"
 	:subtitle="$nome ? 'Destinatario: '.$nome : null"
 />
 

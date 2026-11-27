@@ -47,9 +47,14 @@ class SollecitoPreventivoMail extends Mailable
 
     public static function oggettoPredefinito(Quote|QuoteGroup $documento): string
     {
+        // "Promemoria", non "Ci aggiorna?" (Laura, 27/11/2026: "orribile
+        // questa imposizione"). Un promemoria ricorda una cosa nostra; la
+        // domanda chiedeva al cliente di giustificarsi, e in un oggetto —
+        // l'unica riga che si legge sempre — suonava come una sollecitazione
+        // a sbrigarsi.
         return $documento instanceof QuoteGroup
-            ? "Offerta {$documento->number} – Ci aggiorna?"
-            : "Preventivo {$documento->number} – Ci aggiorna?";
+            ? "Promemoria offerta {$documento->number}"
+            : "Promemoria preventivo {$documento->number}";
     }
 
     /**

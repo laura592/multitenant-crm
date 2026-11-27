@@ -16,9 +16,11 @@ use App\Models\Customer;
 use App\Models\InformationRequest;
 use App\Models\PaymentMethod;
 use App\Models\Quote;
+use App\Models\QuoteContatto;
 use App\Models\QuoteEmail;
 use App\Models\QuoteGroup;
 use App\Models\QuoteResponse;
+use App\Models\User;
 use App\Support\DisplayName;
 use App\Support\OutsideLivewireRender;
 use App\Support\Pdf\OffertaCaffePdf;
@@ -327,6 +329,52 @@ class QuoteResource extends Resource
                                     ->modalCancelActionLabel('Chiudi')
                                     ->modalWidth('4xl'),
                             ]),
+                        ])
+                        ->columns(4),
+                ]),
+
+            // Le telefonate non comparivano da nessuna parte: si segnavano
+            // dalla pagina "Da sollecitare" e sparivano dentro il database.
+            // Chi apre la scheda per sapere "a che punto siamo con questo
+            // cliente" deve vedere anche quelle, o la mail di sollecito
+            // sembra l'unica cosa che e' successa.
+            //
+            // Si mostrano i contatti della TRATTATIVA, gruppo compreso: di
+            // un'offerta con sei alternative si telefona una volta sola, e
+            // quella telefonata sta sul gruppo.
+            InfolistSection::make('Quando abbiamo chiesto una risposta')
+                ->columnSpanFull()
+                ->extraAttributes([
+                    'class' => 'rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950',
+                ])
+                ->visible(fn (Quote $record) => $record->contattiDellaTrattativa()->isNotEmpty())
+                ->schema([
+                    RepeatableEntry::make('contatti')
+                        ->hiddenLabel()
+                        ->contained(false)
+                        ->state(fn (Quote $record) => $record->contattiDellaTrattativa()
+                            ->map(fn (QuoteContatto $c) => [
+                                'tipo' => QuoteContatto::tipi()[$c->tipo] ?? $c->tipo,
+                                'quando' => $c->data,
+                                // instanceof e non un ?->: la relazione user() non porta il
+                                // tipo, e l'analisi statica non sa che quel Model ha un nome.
+                                'chi' => ($autore = $c->user) instanceof User ? $autore->name : null,
+                                'dove' => $c->quote_group_id ? 'Su tutta l\'offerta' : 'Su questo preventivo',
+                                'nota' => $c->nota,
+                            ])
+                            ->all())
+                        ->schema([
+                            TextEntry::make('tipo')
+                                ->label('Come')
+                                ->badge()
+                                ->color(fn (string $state) => str_contains($state, 'sollecito') ? 'warning' : 'info'),
+                            TextEntry::make('quando')->label('Quando')->dateTime('d/m/Y H:i'),
+                            TextEntry::make('chi')->label('Chi')->placeholder('—'),
+                            TextEntry::make('dove')->label('Riferito a'),
+                            TextEntry::make('nota')
+                                ->label('Cosa hanno detto')
+                                ->columnSpanFull()
+                                ->visible(fn ($state) => filled($state)),
                         ])
                         ->columns(4),
                 ]),

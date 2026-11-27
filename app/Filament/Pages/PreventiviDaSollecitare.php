@@ -404,9 +404,17 @@ class PreventiviDaSollecitare extends Page implements HasTable
      */
     private static function destinazione(mixed $record): string
     {
+        // Del preventivo singolo si apre la VISUALIZZAZIONE, non la
+        // modifica: chi arriva da qui vuole sapere che cosa e' gia' stato
+        // mandato e quando lo abbiamo sentito, e quelle due cose — lo
+        // storico delle mail e i contatti — stanno sulla scheda in sola
+        // lettura. Il form di modifica le nasconde.
+        //
+        // L'offerta di gruppo non ha una pagina di visualizzazione: per
+        // quella resta la modifica, finche' non ce n'e' una.
         return $record->quote_group_id
             ? QuoteGroupResource::getUrl('edit', ['record' => $record->quote_group_id])
-            : QuoteResource::getUrl('edit', ['record' => $record->id]);
+            : QuoteResource::getUrl('view', ['record' => $record->id]);
     }
 
     protected function getHeaderActions(): array

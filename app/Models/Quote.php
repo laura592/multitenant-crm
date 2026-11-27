@@ -375,6 +375,34 @@ class Quote extends Model
     }
 
     /**
+     * Le volte in cui abbiamo chiesto una risposta su questa trattativa:
+     * le mail di sollecito e le telefonate.
+     *
+     * Non e' una relazione Eloquent perche' il contatto sta sulla
+     * TRATTATIVA, non sul preventivo: di un'offerta con sei alternative si
+     * telefona una volta sola, e quella telefonata e' agganciata al gruppo
+     * (vedi QuoteContatto). Guardando solo quote_id, aprendo una delle sei
+     * la scheda direbbe "mai sentiti" mentre il cliente e' stato chiamato
+     * ieri.
+     *
+     * @return \Illuminate\Database\Eloquent\Collection<int, QuoteContatto>
+     */
+    public function contattiDellaTrattativa(): \Illuminate\Database\Eloquent\Collection
+    {
+        return QuoteContatto::query()
+            ->with('user')
+            ->where(function ($q) {
+                $q->where('quote_id', $this->id);
+
+                if ($this->quote_group_id) {
+                    $q->orWhere('quote_group_id', $this->quote_group_id);
+                }
+            })
+            ->orderByDesc('data')
+            ->get();
+    }
+
+    /**
      * Le risposte del cliente dal link nella mail: quelle date su questo
      * preventivo e, se fa parte di un'offerta globale, anche quelle date
      * sull'offerta intera (domande, richiamate, rifiuto di tutte le
