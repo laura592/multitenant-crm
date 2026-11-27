@@ -537,6 +537,12 @@ class NoleggioResource extends Resource
                 // caffe' all'anno" -- e il mensile lo calcola il programma.
                 Forms\Components\TextInput::make('quantita')
                     ->label('Q.tà/anno')->numeric()->required()->live(onBlur: true)
+                    // La colonna tiene tre decimali e il campo li mostrava
+                    // tutti: 96 kg all'anno comparivano come "96.000", che in
+                    // italiano si legge novantaseimila.
+                    ->formatStateUsing(fn ($state) => $state === null || $state === ''
+                        ? $state
+                        : rtrim(rtrim(number_format((float) $state, 3, '.', ''), '0'), '.'))
                     ->columnSpan(2)
                     ->helperText(fn (Get $get) => filled($get('quantita'))
                         ? '= '.rtrim(rtrim(number_format((float) $get('quantita') / 12, 2, ',', '.'), '0'), ',').' al mese'
@@ -573,18 +579,41 @@ class NoleggioResource extends Resource
                 // il catalogo il prezzo non ce l'ha -- due terzi del magazzino
                 // -- la casella torna scrivibile, altrimenti il canone
                 // perderebbe quella voce senza dirlo.
+                // Il prezzo NON si scrive qui, mai (Laura, 27/11/2026): e' il
+                // prezzo dell'articolo, e scriverlo sulla riga vuol dire
+                // tenerne due copie che divergono al primo aggiornamento del
+                // listino. Il campo resta, nascosto, perche' e' lui a portare
+                // il valore nel database.
                 Forms\Components\TextInput::make('prezzo_unitario')
-                    ->label('€ vendita')->numeric()->required()->live(onBlur: true)->columnSpan(1)
-                    ->hidden(fn (Get $get): bool => static::prezzoDiCatalogo($get) !== null)
+                    ->numeric()
+                    ->hidden()
                     ->dehydrated()
                     ->dehydratedWhenHidden()
-                    ->helperText(fn (Get $get): ?string => filled($get('material_id')) || filled($get('prodotto_caffe_id'))
-                        ? 'Questo articolo non ha un prezzo a catalogo: si scrive qui.'
-                        : null)
                     ->afterStateHydrated(function (Forms\Components\TextInput $campo, Get $get): void {
                         if (($prezzo = static::prezzoDiCatalogo($get)) !== null) {
                             $campo->state($prezzo);
                         }
+                    }),
+                // Il prezzo si VEDE, non si tocca. E quando l'articolo non ce
+                // l'ha si dice dov'e' il buco: 2.435 materiali su 3.605 non
+                // hanno un listino, e una riga a zero non si nota finche' non
+                // manca nel canone.
+                Forms\Components\Placeholder::make('prezzo_visto')
+                    ->label('Prezzo')
+                    ->columnSpan(2)
+                    ->content(function (Get $get): HtmlString {
+                        if (($prezzo = static::prezzoDiCatalogo($get)) !== null) {
+                            return new HtmlString('<span style="font-weight:600">€ '
+                                .number_format($prezzo, 2, ',', '.').'</span>'
+                                .'<span style="color:#6b7280"> — dal catalogo</span>');
+                        }
+
+                        if (blank($get('material_id')) && blank($get('prodotto_caffe_id'))) {
+                            return new HtmlString('<span style="color:#6b7280">scegli l\'articolo</span>');
+                        }
+
+                        return new HtmlString('<span style="color:#b45309">questo articolo non ha un prezzo a listino: '
+                            .'va messo nella sua anagrafica</span>');
                     }),
             ])
             ->itemLabel(fn (array $state): ?string => filled($state['voce'] ?? null)
