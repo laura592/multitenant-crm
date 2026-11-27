@@ -23,6 +23,15 @@
 {!! \App\Support\HtmlSicuro::filtra($customMessage ?? '') !!}
 </x-mail.box>
 
+{{-- Prima di chiedere una risposta, il modo di RILEGGERE la proposta.
+     Finora gli unici link erano i tre pulsanti del riscontro, e ognuno
+     arriva sulla pagina con una risposta gia' scelta: chi voleva solo
+     ridare un'occhiata doveva fingere di accettare (Laura, 27/11/2026).
+
+     Il numero non si ripete sul pulsante: sta gia' nell'intestazione due
+     centimetri sopra. --}}
+<x-mail.quote-link :url="$clientUrl" :multiple="$piuDiUno" />
+
 <x-mail.sollecito-cta :url="$clientUrl" :tenant="$tenant" :multiple="$piuDiUno" />
 
 {{-- Chiusura prestampata, come sull'offerta di gruppo: sta qui e non nel
