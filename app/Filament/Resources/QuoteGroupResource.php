@@ -7,24 +7,38 @@ use App\Filament\Resources\QuoteGroupResource\Pages;
 use App\Filament\Resources\QuoteGroupResource\RelationManagers\InviiRelationManager;
 use App\Filament\Resources\QuoteGroupResource\RelationManagers\QuotesRelationManager;
 use App\Mail\QuoteGroupMail;
+use App\Mail\SollecitoPreventivoMail;
 use App\Models\Noleggio;
 use App\Models\Product;
 use App\Models\Quote;
+use App\Models\QuoteContatto;
 use App\Models\QuoteGroup;
+use App\Models\QuoteGroupEmail;
 use App\Models\QuoteProduct;
+use App\Models\Tenant;
+use App\Models\User;
 use App\Support\Assistenza\ContrattoAssistenza;
 use App\Support\Assistenza\ContrattoAssistenzaPdf;
 use App\Support\DisplayName;
+use App\Support\OutsideLivewireRender;
 use App\Support\Pdf\OffertaCaffePdf;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
+use Filament\Infolists\Components\Actions\Action as InfolistAction;
+use Filament\Infolists\Components\Actions as InfolistActions;
+use Filament\Infolists\Components\Grid;
+use Filament\Infolists\Components\RepeatableEntry;
+use Filament\Infolists\Components\Section as InfolistSection;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Infolist;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Support\Enums\IconPosition;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\HtmlString;
@@ -55,6 +69,340 @@ class QuoteGroupResource extends Resource
     protected static ?string $pluralModelLabel = 'Offerte globali';
 
     protected static ?string $recordTitleAttribute = 'number';
+
+    /**
+     * La scheda dell'offerta in sola lettura (27/11/2026).
+     *
+     * Serviva perche' dalla pagina "Da sollecitare" si finiva nel form di
+     * modifica, che nasconde proprio le due cose per cui si apre l'offerta
+     * prima di telefonare: che cosa gli abbiamo mandato e quando lo abbiamo
+     * sentito. Il preventivo singolo ce l'aveva gia' (QuoteResource), il
+     * gruppo no.
+     *
+     * Ricalca l'infolist del preventivo invece di reinventarla: chi passa
+     * dall'offerta a una delle sue alternative deve ritrovare le stesse
+     * sezioni nello stesso ordine.
+     */
+    public static function infolist(Infolist $infolist): Infolist
+    {
+        return $infolist->schema([
+            InfolistSection::make('Panoramica rapida')
+                ->columns(12)
+                ->columnSpanFull()
+                ->extraAttributes([
+                    'class' => 'fi-quick-overview rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50 shadow-sm',
+                ])
+                ->schema([
+                    TextEntry::make('number')->label('Offerta')->columnSpan(['default' => 1, 'lg' => 2]),
+                    TextEntry::make('customer.full_name')->label('Cliente')->columnSpan(['default' => 1, 'lg' => 5])
+                        ->formatStateUsing(fn (?string $state) => DisplayName::titleCase($state)),
+                    // L'offerta non ha una data propria come il preventivo:
+                    // quella che conta e' il giorno in cui e' nata.
+                    TextEntry::make('created_at')->label('Data')->date('d/m/Y')->columnSpan(['default' => 1, 'lg' => 2]),
+                    TextEntry::make('status')
+                        ->label('Stato')
+                        ->badge()
+                        ->formatStateUsing(fn (string $state) => static::statusLabels()[$state] ?? ucfirst($state))
+                        ->color(fn (string $state) => static::statusColors()[$state] ?? 'gray')
+                        ->columnSpan(['default' => 1, 'lg' => 3]),
+                    // Il valore dell'offerta e' l'alternativa piu' cara, non
+                    // la somma: il cliente ne comprera' una, e sommarne sei
+                    // gonfierebbe il valore di sei volte (stessa regola della
+                    // colonna "Totale" qui sotto e della pagina "Da
+                    // sollecitare").
+                    //
+                    // E' l'IMPONIBILE: i clienti sono aziende, e il numero di
+                    // cui si parla al telefono e' sempre senza IVA.
+                    TextEntry::make('valore')
+                        ->label('Valore dell\'offerta')
+                        ->state(fn (QuoteGroup $record) => $record->quotes()->max('subtotal'))
+                        ->money('EUR')
+                        ->weight('bold')
+                        ->helperText('imponibile della soluzione più cara: il cliente ne scegliera\' una')
+                        ->placeholder('—')
+                        ->columnSpan(['default' => 1, 'lg' => 4]),
+                    TextEntry::make('sent_at')
+                        ->label('Inviata il')
+                        ->dateTime('d/m/Y H:i')
+                        ->placeholder('non ancora inviata')
+                        ->columnSpan(['default' => 1, 'lg' => 4]),
+                    TextEntry::make('scelta')
+                        ->label('Soluzione scelta')
+                        ->state(fn (QuoteGroup $record) => $record->chosenQuote()?->number)
+                        ->placeholder('nessuna, ancora')
+                        ->columnSpan(['default' => 1, 'lg' => 4]),
+                ]),
+            // Le alternative sono il motivo per cui l'offerta esiste: una
+            // riga a testa, con il link alla scheda del singolo preventivo
+            // per chi vuole vedere le righe e il PDF.
+            InfolistSection::make('Soluzioni alternative')
+                ->columnSpanFull()
+                ->extraAttributes([
+                    'class' => 'rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950',
+                ])
+                ->schema([
+                    // Intestazione una volta sola: le TextEntry della
+                    // RepeatableEntry non hanno label, altrimenti
+                    // "Preventivo"/"Imponibile"/... si ripeterebbero su ogni
+                    // riga (stessa scelta delle righe preventivo in
+                    // QuoteResource).
+                    Grid::make(12)
+                        ->schema([
+                            TextEntry::make('header_numero')->hiddenLabel()->state('Preventivo')->weight('bold')->size(TextEntry\TextEntrySize::ExtraSmall)->color('gray')->columnSpan(['default' => 1, 'lg' => 3]),
+                            TextEntry::make('header_cosa')->hiddenLabel()->state('Che cosa propone')->weight('bold')->size(TextEntry\TextEntrySize::ExtraSmall)->color('gray')->columnSpan(['default' => 1, 'lg' => 5]),
+                            TextEntry::make('header_imponibile')->hiddenLabel()->state('Imponibile')->weight('bold')->size(TextEntry\TextEntrySize::ExtraSmall)->color('gray')->alignRight()->columnSpan(['default' => 1, 'lg' => 2]),
+                            TextEntry::make('header_stato')->hiddenLabel()->state('Stato')->weight('bold')->size(TextEntry\TextEntrySize::ExtraSmall)->color('gray')->columnSpan(['default' => 1, 'lg' => 2]),
+                        ]),
+                    // Niente ->state() su questa RepeatableEntry: con i
+                    // modelli le righe stampate si leggono sempre dalla
+                    // relazione, e un elenco diverso passato allo state fa
+                    // finire i link su righe sbagliate. L'ordine e il
+                    // precaricamento si decidono percio' sul record, in
+                    // ViewQuoteGroup::mount() — dove la trappola e'
+                    // raccontata per esteso.
+                    RepeatableEntry::make('quotes')
+                        ->hiddenLabel()
+                        ->contained(false)
+                        ->schema([
+                            TextEntry::make('number')
+                                ->hiddenLabel()
+                                ->weight('bold')
+                                ->color('primary')
+                                ->icon('heroicon-m-arrow-top-right-on-square')
+                                ->iconPosition(IconPosition::After)
+                                ->url(fn (Quote $record) => QuoteResource::getUrl('view', ['record' => $record]))
+                                ->columnSpan(['default' => 1, 'lg' => 3]),
+                            TextEntry::make('cosa')
+                                ->hiddenLabel()
+                                ->state(fn (Quote $record) => static::cosaPropone($record))
+                                ->placeholder('nessuna riga')
+                                ->columnSpan(['default' => 1, 'lg' => 5]),
+                            TextEntry::make('subtotal')
+                                ->hiddenLabel()
+                                ->money('EUR')
+                                ->alignRight()
+                                ->columnSpan(['default' => 1, 'lg' => 2]),
+                            TextEntry::make('status')
+                                ->hiddenLabel()
+                                ->badge()
+                                ->formatStateUsing(fn (string $state) => QuoteResource::statusLabels()[$state] ?? ucfirst($state))
+                                ->color(fn (string $state) => QuoteResource::statusColors()[$state] ?? 'gray')
+                                ->columnSpan(['default' => 1, 'lg' => 2]),
+                        ])
+                        ->columns(12),
+                ]),
+            // Nota interna: si mostra solo se c'e' scritto qualcosa, che una
+            // sezione vuota fa solo scorrere la pagina.
+            InfolistSection::make('Note interne')
+                ->columnSpanFull()
+                ->visible(fn (QuoteGroup $record) => filled($record->notes))
+                ->extraAttributes([
+                    'class' => 'rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950',
+                ])
+                ->schema([
+                    TextEntry::make('notes')
+                        ->hiddenLabel()
+                        ->html()
+                        ->columnSpanFull(),
+                ]),
+            InfolistSection::make('Storico invii email')
+                ->columnSpanFull()
+                ->extraAttributes([
+                    'class' => 'rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950',
+                ])
+                ->visible(fn (QuoteGroup $record) => $record->emails()->exists())
+                ->schema([
+                    RepeatableEntry::make('emails')
+                        ->hiddenLabel()
+                        ->contained(false)
+                        ->schema([
+                            TextEntry::make('recipient_email')->label('Destinatario'),
+                            // Qui dentro non c'e' solo l'invio dell'offerta:
+                            // c'e' anche il sollecito, che e' un'altra mail
+                            // con un altro testo e altri pulsanti. Senza
+                            // questa colonna le due si leggono uguali, e
+                            // questo e' il posto in cui si va a controllare
+                            // cosa e' partito.
+                            TextEntry::make('tipo')
+                                ->label('Che cosa')
+                                ->badge()
+                                ->formatStateUsing(fn (?string $state) => $state === QuoteGroupEmail::TIPO_SOLLECITO ? 'Sollecito' : 'Offerta')
+                                ->color(fn (?string $state) => $state === QuoteGroupEmail::TIPO_SOLLECITO ? 'warning' : 'gray'),
+                            TextEntry::make('created_at')
+                                ->label(fn (QuoteGroupEmail $record) => $record->tipo === QuoteGroupEmail::TIPO_SOLLECITO ? 'Sollecitato il' : 'Inviata il')
+                                ->dateTime('d/m/Y H:i'),
+                            TextEntry::make('status')
+                                ->label('Esito')
+                                ->badge()
+                                ->formatStateUsing(fn (string $state) => $state === 'sent' ? 'Inviata' : 'Fallita')
+                                ->color(fn (string $state) => $state === 'sent' ? 'success' : 'danger'),
+                            TextEntry::make('error_message')
+                                ->label('Errore')
+                                ->columnSpanFull()
+                                ->visible(fn (QuoteGroupEmail $record) => filled($record->error_message)),
+                            InfolistActions::make([
+                                InfolistAction::make('preview')
+                                    ->label('Anteprima')
+                                    ->icon('heroicon-o-eye')
+                                    ->color('gray')
+                                    ->modalHeading(fn (QuoteGroupEmail $record) => "Anteprima email — {$record->recipient_email}")
+                                    ->modalContent(fn (QuoteGroupEmail $record) => new HtmlString(
+                                        '<iframe srcdoc="'.e(static::corpoInviato($record)).'" style="width:100%;height:70vh;border:0;border-radius:0.5rem;background:#fff;"></iframe>'
+                                    ))
+                                    ->modalSubmitAction(false)
+                                    ->modalCancelActionLabel('Chiudi')
+                                    ->modalWidth('4xl'),
+                            ]),
+                        ])
+                        ->columns(4),
+                ]),
+            // Le telefonate non si vedevano da nessuna parte: si segnano
+            // dalla pagina "Da sollecitare" e finivano dentro il database.
+            // Chi apre la scheda per sapere "a che punto siamo" deve vederle,
+            // o la mail di sollecito sembra l'unica cosa che e' successa.
+            InfolistSection::make('Quando abbiamo chiesto una risposta')
+                ->columnSpanFull()
+                ->extraAttributes([
+                    'class' => 'rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950',
+                ])
+                ->visible(fn (QuoteGroup $record) => $record->contattiDellaTrattativa()->isNotEmpty())
+                ->schema([
+                    RepeatableEntry::make('contatti')
+                        ->hiddenLabel()
+                        ->contained(false)
+                        ->state(fn (QuoteGroup $record) => $record->contattiDellaTrattativa()
+                            ->map(fn (QuoteContatto $c) => [
+                                'tipo' => QuoteContatto::tipi()[$c->tipo] ?? $c->tipo,
+                                'quando' => $c->data,
+                                // instanceof e non un ?->: le relazioni
+                                // user() e quote() non portano il tipo, e
+                                // l'analisi statica non sa che quel Model ha
+                                // un nome o un numero.
+                                'chi' => ($autore = $c->user) instanceof User ? $autore->name : null,
+                                'dove' => ($preventivo = $c->quote) instanceof Quote
+                                    ? 'Sulla soluzione '.$preventivo->number
+                                    : 'Su tutta l\'offerta',
+                                'nota' => $c->nota,
+                            ])
+                            ->all())
+                        ->schema([
+                            TextEntry::make('tipo')
+                                ->label('Come')
+                                ->badge()
+                                ->color(fn (string $state) => str_contains($state, 'sollecito') ? 'warning' : 'info'),
+                            TextEntry::make('quando')->label('Quando')->dateTime('d/m/Y H:i'),
+                            TextEntry::make('chi')->label('Chi')->placeholder('—'),
+                            TextEntry::make('dove')->label('Riferito a'),
+                            TextEntry::make('nota')
+                                ->label('Cosa hanno detto')
+                                ->columnSpanFull()
+                                ->visible(fn ($state) => filled($state)),
+                        ])
+                        ->columns(4),
+                ]),
+        ]);
+    }
+
+    /**
+     * Che cosa distingue un'alternativa dalle altre, in una riga.
+     *
+     * Si riusa QuoteProduct::diceCosaInteressa(): di un preventivo da sei
+     * righe quelle che rispondono a "cosa gli stiamo proponendo?" sono la
+     * macchina e il depuratore, non l'installazione o il trasporto. Senza
+     * quel filtro la colonna diventava un elenco di conseguenze che
+     * sull'offerta si leggono tutte uguali -- cioe' inutile come una
+     * colonna vuota.
+     */
+    protected static function cosaPropone(Quote $quote): ?string
+    {
+        $nomi = [];
+
+        foreach ($quote->baseQuoteProducts as $riga) {
+            // instanceof e non un ?->: le relazioni non portano il tipo, e
+            // l'analisi statica non sa che quei Model sono una riga di
+            // preventivo e un prodotto a catalogo.
+            if (! $riga instanceof QuoteProduct || ! $riga->diceCosaInteressa()) {
+                continue;
+            }
+
+            $prodotto = $riga->product;
+
+            if ($prodotto instanceof Product && filled($prodotto->name)) {
+                // La chiave fa da unique(): la stessa macchina in due righe
+                // non si scrive due volte.
+                $nomi[$prodotto->name] = $prodotto->name;
+            }
+        }
+
+        return $nomi === [] ? null : implode(' · ', $nomi);
+    }
+
+    /**
+     * Le alternative dell'offerta, ordinate come nella mail al cliente
+     * (sendGroupEmail).
+     *
+     * Partire da Quote e non da $gruppo->quotes() e' una scelta di tipi:
+     * la relazione e' dichiarata senza generics e restituisce dei Model
+     * generici, mentre qui servono dei Quote — li chiedono sia
+     * SollecitoPreventivoMail sia QuoteGroupMail.
+     *
+     * @param  array<int, string>  $con  le relazioni da precaricare
+     * @return Collection<int, Quote>
+     */
+    protected static function alternative(QuoteGroup $gruppo, array $con = []): Collection
+    {
+        return Quote::query()
+            ->where('quote_group_id', $gruppo->getKey())
+            ->with($con)
+            ->orderBy('number')
+            ->get();
+    }
+
+    /**
+     * L'email com'era quando e' partita: testo e oggetto sono quelli
+     * salvati sulla riga, non quelli che si genererebbero oggi.
+     *
+     * Sta qui e non nel relation manager degli invii perche' la stessa
+     * anteprima si apre da due posti — la scheda "Vedi" e la scheda "Invii"
+     * della modifica — e due copie divergono alla prima correzione.
+     *
+     * Il sollecito va reso con il SUO modello: dentro quello dell'offerta
+     * si vedrebbe il testo giusto con i pulsanti sbagliati, cioe'
+     * l'anteprima di una mail che al cliente non e' mai arrivata.
+     *
+     * Vedi App\Support\OutsideLivewireRender: senza, il rendering parte da
+     * dentro una richiesta Livewire e i commenti <!--[if BLOCK]><![endif]-->
+     * finiscono visibili nel corpo (bug del 10/11/2026 sull'anteprima del
+     * preventivo all'Hotel Alemagna).
+     */
+    public static function corpoInviato(QuoteGroupEmail $email): string
+    {
+        $gruppo = $email->quoteGroup;
+
+        // La relazione e' dichiarata su Model: senza il controllo l'analisi
+        // statica non sa che e' un'offerta. Un invio senza offerta non
+        // esiste (FK), ma un'anteprima vuota e' meglio di un errore.
+        if (! $gruppo instanceof QuoteGroup) {
+            return '';
+        }
+
+        // Stesso eager load di sendGroupEmail(): il corpo elenca le
+        // proposte con le loro righe.
+        $quotes = static::alternative($gruppo, ['quoteProducts.product', 'quoteProducts.options.product']);
+
+        return OutsideLivewireRender::run(fn () => ($email->tipo === QuoteGroupEmail::TIPO_SOLLECITO
+            ? new SollecitoPreventivoMail($gruppo, $quotes, $gruppo->clientUrl(), $email->message, $email->subject)
+            : new QuoteGroupMail(
+                $gruppo,
+                $quotes,
+                // Nessun PDF: l'anteprima e' il corpo, gli allegati non
+                // entrano nel render().
+                [],
+                $email->message,
+                $email->subject,
+                clientUrl: $gruppo->public_token ? $gruppo->clientUrl() : null,
+            ))->render());
+    }
 
     public static function form(Form $form): Form
     {
@@ -184,6 +532,15 @@ class QuoteGroupResource extends Resource
                 static::previewPdfsTableAction(),
                 static::sendEmailTableAction(),
                 Tables\Actions\ActionGroup::make([
+                    // E' questa azione a mandare il clic sulla riga sulla
+                    // scheda in sola lettura invece che nel form: Filament
+                    // apre la riga con la prima fra le azioni "view" ed
+                    // "edit" che trova (ListRecords), e le cerca anche dentro
+                    // i menu. Sta nel menu e non in fila perche' la riga ha
+                    // gia' PDF e Invia, e una quarta voce spingeva le colonne
+                    // fuori dallo schermo.
+                    Tables\Actions\ViewAction::make()
+                        ->color('gray'),
                     Tables\Actions\EditAction::make()
                         ->color('gray'),
                     Tables\Actions\DeleteAction::make(),
@@ -373,10 +730,28 @@ class QuoteGroupResource extends Resource
             .'<div style="margin-top:10px;"><strong>Allegati:</strong> '.e($attachments).'</div>'
             .'<div style="margin-top:10px;padding-top:8px;border-top:1px solid #e2e8f0;color:#475569;">'
             .'Restiamo a disposizione per qualsiasi chiarimento.<br>Cordiali saluti,<br>'
-            .e($record->tenant?->legal_name ?: ($record->tenant?->name ?: config('app.name')))
+            .e(static::firma($record))
             .'<br><span style="font-size:11px;color:#64748b;">(chiusura e recapiti sono prestampati: non si modificano da qui)</span>'
             .'</div>'
             .'</div>';
+    }
+
+    /**
+     * Chi firma la mail: la ragione sociale del tenant, o il suo nome.
+     *
+     * instanceof e non un ?->: la relazione tenant() arriva dal trait e non
+     * porta il tipo, quindi l'analisi statica non sa che quel Model ha una
+     * ragione sociale (stessa ragione di Solleciti::inCopiaSempre).
+     */
+    protected static function firma(QuoteGroup $record): string
+    {
+        $tenant = $record->tenant;
+
+        if (! $tenant instanceof Tenant) {
+            return (string) config('app.name');
+        }
+
+        return $tenant->legal_name ?: ($tenant->name ?: (string) config('app.name'));
     }
 
     /**
@@ -410,10 +785,28 @@ class QuoteGroupResource extends Resource
 
     protected static function haMacchinaFranke(QuoteGroup $record): bool
     {
-        return $record->quotes()->with('quoteProducts.product.brand')->get()
-            ->flatMap->quoteProducts
-            ->contains(fn (QuoteProduct $riga) => $riga->product?->type === Product::TYPE_MACHINE
-                && ContrattoAssistenza::perMacchina($riga->product));
+        // Due cicli invece di flatMap + contains: le relazioni non portano
+        // il tipo, e senza gli instanceof l'analisi statica legge $type e
+        // chiama perMacchina() su dei Model generici. Si esce alla prima
+        // macchina trovata, che su un'offerta da sei alternative e' anche
+        // meno lavoro.
+        foreach (static::alternative($record, ['quoteProducts.product.brand']) as $quote) {
+            foreach ($quote->quoteProducts as $riga) {
+                if (! $riga instanceof QuoteProduct) {
+                    continue;
+                }
+
+                $prodotto = $riga->product;
+
+                if ($prodotto instanceof Product
+                    && $prodotto->type === Product::TYPE_MACHINE
+                    && ContrattoAssistenza::perMacchina($prodotto)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -616,6 +1009,7 @@ class QuoteGroupResource extends Resource
         return [
             'index' => Pages\ListQuoteGroups::route('/'),
             'create' => Pages\CreateQuoteGroup::route('/create'),
+            'view' => Pages\ViewQuoteGroup::route('/{record}'),
             'edit' => Pages\EditQuoteGroup::route('/{record}/edit'),
         ];
     }
