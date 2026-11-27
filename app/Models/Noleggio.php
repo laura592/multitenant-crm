@@ -128,6 +128,21 @@ class Noleggio extends Model
             $noleggio->canone = $r->canone;
             $noleggio->mese_pareggio = $r->mesePareggio;
         });
+
+        // Il noleggio e' una proposta come un preventivo: quando arriva a un
+        // si' o a un no, la richiesta da cui nasce si chiude. Senza questo
+        // RI-2026-0237 (Oberthaler) restava "nuova" con l'offerta gia'
+        // mandata, perche' la richiesta leggeva solo i preventivi
+        // (Laura, 27/11/2026).
+        static::saved(function (self $noleggio): void {
+            if (! $noleggio->information_request_id) {
+                return;
+            }
+
+            InformationRequest::withoutGlobalScope('tenant')
+                ->whereKey($noleggio->information_request_id)
+                ->first()?->syncStatusFromQuotes();
+        });
     }
 
     public function forniture(): HasMany

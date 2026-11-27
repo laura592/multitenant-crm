@@ -125,7 +125,21 @@ class InformationRequest extends Model
             return null;
         }
 
-        $statuses = $this->quotes()->withoutGlobalScope('tenant')->pluck('status');
+        // Si guardano ANCHE i noleggi, non solo i preventivi. Su Oberthaler
+        // (RI-2026-0237) la proposta era un noleggio operativo e non un
+        // preventivo: la richiesta restava "nuova" anche con l'offerta gia'
+        // mandata, perche' qui dentro i noleggi non li leggeva nessuno
+        // (Laura, 27/11/2026).
+        $statuses = $this->quotes()->withoutGlobalScope('tenant')->pluck('status')
+            ->merge($this->noleggi()->withoutGlobalScope('tenant')->pluck('stato')
+                ->map(fn (string $stato): string => match ($stato) {
+                    // Un noleggio attivo o finito e' un si' incassato; uno
+                    // rifiutato e' un no detto. Una bozza non e' ancora uscita.
+                    Noleggio::STATO_ATTIVO, Noleggio::STATO_CHIUSO => 'accettato',
+                    Noleggio::STATO_RIFIUTATO => 'rifiutato',
+                    Noleggio::STATO_INVIATO => 'inviato',
+                    default => 'bozza',
+                }));
 
         if ($statuses->isEmpty()) {
             return str_starts_with($this->status, 'preventivo_') ? 'in_lavorazione' : null;
