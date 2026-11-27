@@ -404,16 +404,13 @@ class PreventiviDaSollecitare extends Page implements HasTable
      */
     private static function destinazione(mixed $record): string
     {
-        // Del preventivo singolo si apre la VISUALIZZAZIONE, non la
-        // modifica: chi arriva da qui vuole sapere che cosa e' gia' stato
-        // mandato e quando lo abbiamo sentito, e quelle due cose — lo
+        // Si apre la VISUALIZZAZIONE, non la modifica — dell'offerta come
+        // del preventivo: chi arriva da qui vuole sapere che cosa e' gia'
+        // stato mandato e quando lo abbiamo sentito, e quelle due cose — lo
         // storico delle mail e i contatti — stanno sulla scheda in sola
         // lettura. Il form di modifica le nasconde.
-        //
-        // L'offerta di gruppo non ha una pagina di visualizzazione: per
-        // quella resta la modifica, finche' non ce n'e' una.
         return $record->quote_group_id
-            ? QuoteGroupResource::getUrl('edit', ['record' => $record->quote_group_id])
+            ? QuoteGroupResource::getUrl('view', ['record' => $record->quote_group_id])
             : QuoteResource::getUrl('view', ['record' => $record->id]);
     }
 
@@ -547,7 +544,7 @@ class PreventiviDaSollecitare extends Page implements HasTable
             // singolo preventivo: un'alternativa aggiunta ieri a
             // un'offerta di marzo non azzera l'attesa.
             ->when($conSoglie, fn (Builder $q): Builder => $q
-                ->havingRaw(self::giorniDiSilenzioOltre(), [now()->toDateString()])
+                ->havingRaw(self::daMostrare(), [now()->toDateString()])
                 // Il tetto: dopo due solleciti senza risposta la trattativa
                 // esce di qui. Non si chiude e non diventa un rifiuto --
                 // resta "scaduto", che un no non detto non si scrive in
@@ -753,7 +750,7 @@ class PreventiviDaSollecitare extends Page implements HasTable
             ->defaultSort(fn (Builder $query): Builder => $query->orderByRaw(self::ordinamentoPerPeso(), [now()->toDateString()]))
             ->recordUrl(fn ($record) => self::destinazione($record))
             ->emptyStateHeading('Nessuno da sollecitare')
-            ->emptyStateDescription('Nessun preventivo aspetta una risposta da più di '.self::GIORNI_MINIMI.' giorni.')
+            ->emptyStateDescription('Nessun preventivo aspetta una risposta da più di '.self::GIORNI_MINIMI.' giorni, e nessuno di quelli già sollecitati è ancora in attesa.')
             ->paginated([25, 50, 100]);
     }
 
@@ -808,5 +805,30 @@ class PreventiviDaSollecitare extends Page implements HasTable
     private static function giorniDiSilenzioOltre(): string
     {
         return 'DATEDIFF(?, '.self::silenzioDa().') >= '.self::GIORNI_MINIMI;
+    }
+
+    /**
+     * Chi compare nell'elenco.
+     *
+     * I sette giorni valgono per il PRIMO contatto: sotto quella soglia non
+     * si telefona, perche' un preventivo di tre giorni non e' un silenzio,
+     * e' un cliente che sta ancora leggendo.
+     *
+     * Ma una volta che il sollecito e' partito la trattativa deve RESTARE
+     * a vedersi fino al tetto, anche il giorno stesso. Il 27/11/2026 Laura
+     * ha sollecitato Hotel Someda e la riga e' sparita sotto i suoi occhi:
+     * il sollecito fa ripartire il conto del silenzio (e deve farlo, o
+     * domani quella trattativa tornerebbe in cima come se nessuno avesse
+     * scritto), e la soglia se la portava via. "Qua devo vederli fino a 2
+     * solleciti": chi e' stato sollecitato una volta e' lavoro ancora
+     * aperto, non lavoro finito.
+     *
+     * L'ordine per peso li manda comunque in fondo da soli, perche' i
+     * giorni di silenzio sono appena tornati a zero: restano visibili
+     * senza rubare il posto a chi aspetta da mesi.
+     */
+    private static function daMostrare(): string
+    {
+        return '('.self::giorniDiSilenzioOltre().' OR '.self::solleciti().' > 0)';
     }
 }
