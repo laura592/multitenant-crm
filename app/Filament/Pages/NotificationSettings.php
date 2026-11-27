@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Models\Tenant;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\TagsInput;
@@ -36,20 +37,25 @@ class NotificationSettings extends Page implements HasForms
 
     public function mount(): void
     {
+        // instanceof e non un ?->: Filament::getTenant() e' tipizzato
+        // ?Model, e senza il controllo l'analisi statica non sa che quel
+        // Model e' un'azienda con le sue liste di destinatari.
         $tenant = Filament::getTenant();
+        $azienda = $tenant instanceof Tenant ? $tenant : null;
 
         $this->form->fill([
-            'notify_information_request_emails' => $tenant?->notificationRecipients('information_request') ?? [],
-            'notify_leave_request_emails' => $tenant?->notificationRecipients('leave_request') ?? [],
-            'notify_quote_emails' => $tenant?->notificationRecipients('quote') ?? [],
-            'notify_quote_group_emails' => $tenant?->notificationRecipients('quote_group') ?? [],
-            'notify_deadline_emails' => $tenant?->notificationRecipients('deadline') ?? [],
-            'notify_lavaggio_emails' => $tenant?->notificationRecipients('lavaggio') ?? [],
-            'notify_customer_gestionale_review_emails' => $tenant?->notificationRecipients('customer_gestionale_review') ?? [],
-            'notify_gestionale_sync_digest_emails' => $tenant?->notificationRecipients('gestionale_sync_digest') ?? [],
-            'notify_gestionale_sync_failed_emails' => $tenant?->notificationRecipients('gestionale_sync_failed') ?? [],
-            'notify_service_report_emails' => $tenant?->notificationRecipients('service_report') ?? [],
-            'notify_quote_response_emails' => $tenant?->notificationRecipients('quote_response') ?? [],
+            'notify_information_request_emails' => $azienda?->notificationRecipients('information_request') ?? [],
+            'notify_leave_request_emails' => $azienda?->notificationRecipients('leave_request') ?? [],
+            'notify_quote_emails' => $azienda?->notificationRecipients('quote') ?? [],
+            'notify_quote_group_emails' => $azienda?->notificationRecipients('quote_group') ?? [],
+            'notify_deadline_emails' => $azienda?->notificationRecipients('deadline') ?? [],
+            'notify_lavaggio_emails' => $azienda?->notificationRecipients('lavaggio') ?? [],
+            'notify_customer_gestionale_review_emails' => $azienda?->notificationRecipients('customer_gestionale_review') ?? [],
+            'notify_gestionale_sync_digest_emails' => $azienda?->notificationRecipients('gestionale_sync_digest') ?? [],
+            'notify_gestionale_sync_failed_emails' => $azienda?->notificationRecipients('gestionale_sync_failed') ?? [],
+            'notify_service_report_emails' => $azienda?->notificationRecipients('service_report') ?? [],
+            'notify_quote_response_emails' => $azienda?->notificationRecipients('quote_response') ?? [],
+            'notify_sollecito_pagamento_emails' => $azienda?->notificationRecipients('sollecito_pagamento') ?? [],
         ]);
     }
 
@@ -140,6 +146,13 @@ class NotificationSettings extends Page implements HasForms
                     ->splitKeys([',', 'Tab'])
                     ->color('danger')
                     ->helperText('Avviso quando il sync automatico giornaliero non riesce a raggiungere Eureka.'),
+                TagsInput::make('notify_sollecito_pagamento_emails')
+                    ->label('Solleciti di pagamento')
+                    ->placeholder('indirizzo@esempio.it')
+                    ->nestedRecursiveRules(['email'])
+                    ->splitKeys([',', 'Tab'])
+                    ->color('warning')
+                    ->helperText('In copia ai promemoria delle fatture scadute mandati dalla pagina dello scaduto. Senza nessun indirizzo non parte copia a nessuno.'),
                 TagsInput::make('notify_service_report_emails')
                     ->label('Rapportini')
                     ->placeholder('indirizzo@esempio.it')
@@ -167,6 +180,7 @@ class NotificationSettings extends Page implements HasForms
         $gestionaleSyncFailedRecipients = array_values(array_unique(array_filter((array) ($state['notify_gestionale_sync_failed_emails'] ?? []))));
         $serviceReportRecipients = array_values(array_unique(array_filter((array) ($state['notify_service_report_emails'] ?? []))));
         $quoteResponseRecipients = array_values(array_unique(array_filter((array) ($state['notify_quote_response_emails'] ?? []))));
+        $sollecitoPagamentoRecipients = array_values(array_unique(array_filter((array) ($state['notify_sollecito_pagamento_emails'] ?? []))));
 
         $tenant?->update([
             'notify_information_request_emails' => $informationRecipients,
@@ -180,6 +194,7 @@ class NotificationSettings extends Page implements HasForms
             'notify_gestionale_sync_failed_emails' => $gestionaleSyncFailedRecipients,
             'notify_service_report_emails' => $serviceReportRecipients,
             'notify_quote_response_emails' => $quoteResponseRecipients,
+            'notify_sollecito_pagamento_emails' => $sollecitoPagamentoRecipients,
             // Manteniamo valorizzata la lista legacy finche' esiste codice
             // esterno che potrebbe ancora leggerla direttamente.
             'notify_staff_emails' => array_values(array_unique(array_filter(array_merge(

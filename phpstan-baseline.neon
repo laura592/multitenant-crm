@@ -193,12 +193,6 @@ parameters:
 			path: app/Filament/Pages/DettaglioScaduto.php
 
 		-
-			message: '#^Parameter \#1 \$array \(array\{0\: Filament\\Actions\\Action, 1\?\: Filament\\Actions\\Action\}\) of array_values is already a list, call has no effect\.$#'
-			identifier: arrayValues.list
-			count: 1
-			path: app/Filament/Pages/DettaglioScaduto.php
-
-		-
 			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:hasGestionaleEurekaCredentials\(\)\.$#'
 			identifier: method.notFound
 			count: 1
@@ -238,12 +232,6 @@ parameters:
 			message: '#^Access to an undefined property App\\Filament\\Pages\\NotificationSettings\:\:\$form\.$#'
 			identifier: property.notFound
 			count: 2
-			path: app/Filament/Pages/NotificationSettings.php
-
-		-
-			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:notificationRecipients\(\)\.$#'
-			identifier: method.notFound
-			count: 11
 			path: app/Filament/Pages/NotificationSettings.php
 
 		-

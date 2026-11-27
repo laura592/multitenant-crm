@@ -6,6 +6,7 @@ use App\Filament\Resources\CustomerResource;
 use App\Models\Customer;
 use App\Models\EurekaPartitaAperta;
 use App\Support\DisplayName;
+use App\Support\Scaduto\SollecitiPagamento;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Pages\Page;
@@ -157,7 +158,32 @@ class DettaglioScaduto extends Page implements HasTable
 
     protected function getHeaderActions(): array
     {
+        // E' la pagina che si tiene aperta mentre si telefona, quindi il
+        // sollecito sta QUI in testata e non nascosto in fondo: si guarda
+        // l'elenco delle fatture, e se non rispondono si manda la mail con
+        // dentro le stesse fatture che si ha davanti.
+        //
+        // Solo per i clienti, mai per i fornitori: una pagina che chiede
+        // soldi a un fornitore non e' un sollecito, e' un errore.
+        $motivo = $this->tipo === EurekaPartitaAperta::TIPO_CLIENTE
+            ? SollecitiPagamento::impossibile($this->codice)
+            : ['breve' => 'Solo per i clienti', 'perche' => 'Questa è una posizione da fornitore: qui i soldi li dobbiamo noi.'];
+
         return array_values(array_filter([
+            $this->codice > 0
+                ? Action::make('sollecita')
+                    ->label($motivo['breve'] ?? 'Sollecita')
+                    ->icon($motivo === null ? 'heroicon-o-envelope' : 'heroicon-m-no-symbol')
+                    ->color($motivo === null ? 'primary' : 'gray')
+                    ->disabled($motivo !== null)
+                    ->tooltip($motivo['perche'] ?? null)
+                    ->modalHeading('Sollecito di pagamento · '.$this->getTitle())
+                    ->modalDescription('Manda al cliente le sue fatture scadute, in allegato. Scrive a chi è intestata la fattura, non a chi paga per lui.')
+                    ->modalSubmitActionLabel('Manda il sollecito')
+                    ->modalWidth('2xl')
+                    ->form(fn (): array => SollecitiPagamento::formSchema($this->codice))
+                    ->action(fn (array $data) => SollecitiPagamento::invia($this->codice, $data))
+                : null,
             Action::make('indietro')
                 ->label('Torna allo scaduto')
                 ->icon('heroicon-m-arrow-left')

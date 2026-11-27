@@ -5,9 +5,12 @@ namespace App\Filament\Pages;
 use App\Filament\Concerns\ApreStampeInNuovaScheda;
 use App\Jobs\AggiornaSaldiEurekaJob;
 use App\Models\EurekaPartitaAperta;
+use App\Models\SollecitoPagamento;
+use App\Models\Tenant;
 use App\Support\DisplayName;
 use App\Support\OutsideLivewireRender;
 use App\Support\Pdf\StampaTemporanea;
+use App\Support\Scaduto\SollecitiPagamento;
 use Barryvdh\DomPDF\Facade\Pdf;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Actions;
@@ -149,6 +152,48 @@ class ScadutoClienti extends Page implements HasTable
     private const SCADENZA_PIU_VECCHIA = 'MIN(CASE WHEN saldo > 0 THEN '.self::SCADENZA_EFFETTIVA.' END)';
 
     /**
+     * Quante partite scadute hanno dietro una fattura da poter ALLEGARE a
+     * un sollecito di pagamento.
+     *
+     * Sono le stesse condizioni di FatturaDaAllegare::dallArchivio — la
+     * causale 101, l'importo positivo, l'id_b10_origine — riscritte qui in
+     * SQL per un motivo solo: in questa pagina la domanda si fa per ogni
+     * riga a schermo, e risolverla in PHP vorrebbe dire una query per ogni
+     * fattura di ogni cliente. Se quelle condizioni cambiano vanno cambiate
+     * in tutti e due i posti, ed e' scritto in tutti e due.
+     *
+     * Serve a spegnere il pulsante PRIMA: i tredici clienti il cui scaduto
+     * e' fatto solo di riporti di apertura non hanno niente da allegare, e
+     * scoprirlo dopo aver scritto la mail sarebbe il modo peggiore.
+     */
+    private const ALLEGABILI = 'SUM(CASE WHEN saldo > 0 AND '.self::SCADENZA_EFFETTIVA.' < ? AND EXISTS ('
+        .'SELECT 1 FROM eureka_fatture f'
+        .' WHERE f.tenant_id = eureka_partite_aperte.tenant_id'
+        ." AND f.tipo = 'cliente'"
+        .' AND f.gestionale_code = eureka_partite_aperte.gestionale_code'
+        .' AND YEAR(f.data_doc) = eureka_partite_aperte.anno'
+        .' AND CAST(f.numero_doc AS UNSIGNED) = CAST(eureka_partite_aperte.numero_fattura AS UNSIGNED)'
+        ." AND f.causale = '101' AND f.totale_doc > 0 AND f.id_b10_origine IS NOT NULL"
+        .') THEN 1 ELSE 0 END)';
+
+    /**
+     * Quando e' partito l'ultimo sollecito di pagamento riuscito a questa
+     * anagrafica.
+     *
+     * Il MAX() esterno non serve a scegliere — dentro il gruppo la
+     * sottoselect da' lo stesso valore su tutte le righe — ma senza un
+     * aggregato ONLY_FULL_GROUP_BY rifiuterebbe la query (stessa ragione di
+     * PreventiviDaSollecitare::ultimoDestinatario).
+     */
+    private static function ultimoSollecito(): string
+    {
+        return 'MAX((SELECT MAX(s.created_at) FROM solleciti_pagamento s'
+            .' WHERE s.tenant_id = ?'
+            .' AND s.gestionale_code = eureka_partite_aperte.gestionale_code'
+            .' AND s.status = ? AND s.deleted_at IS NULL)) as sollecitato_il';
+    }
+
+    /**
      * Ordinamento per peso: importo × giorni di ritardo.
      *
      * L'espressione dipende dal database perché l'aritmetica sulle date non
@@ -245,6 +290,37 @@ class ScadutoClienti extends Page implements HasTable
         };
 
         return self::euro($record->lordo).' − '.self::euro($crediti).' '.$voce;
+    }
+
+    /**
+     * Perche' questo cliente non si puo' sollecitare per mail, se non si
+     * puo'. Il conto delle fatture allegabili arriva gia' dalla query
+     * (vedi ALLEGABILI), cosi' la risposta costa al massimo la lettura
+     * dell'anagrafica, una volta per riga.
+     */
+    /** @return array{breve: string, perche: string}|null */
+    private static function motivo(EurekaPartitaAperta $record): ?array
+    {
+        // getAttribute e non ->allegabili: "allegabili" non e' una colonna
+        // della tabella ma un aggregato di questa query, e il modello non
+        // puo' saperlo.
+        return SollecitiPagamento::impossibile(
+            (int) $record->gestionale_code,
+            (int) $record->getAttribute('allegabili'),
+        );
+    }
+
+    /**
+     * L'azienda di chi sta guardando, con il tipo dichiarato:
+     * Filament::getTenant() e' tipizzato ?Model, e un ?->id non direbbe
+     * all'analisi statica che quel Model ha un id (stessa ragione di
+     * PreventiviDaSollecitare::tenantId).
+     */
+    private static function tenantId(): ?string
+    {
+        $tenant = Filament::getTenant();
+
+        return $tenant instanceof Tenant ? $tenant->id : null;
     }
 
     /**
@@ -361,6 +437,13 @@ class ScadutoClienti extends Page implements HasTable
                 // da sollecitare, e un riporto non ha un numero da citare.
                 ->selectRaw('SUM(CASE WHEN saldo > 0 AND NOT '.self::SENZA_NUMERO.' THEN 1 ELSE 0 END) as fatture')
                 ->selectRaw(self::SCADENZA_PIU_VECCHIA.' as piu_vecchia')
+                // Quante di quelle fatture si possono davvero ALLEGARE a un
+                // sollecito, e quando ne e' partito l'ultimo: due numeri
+                // che servono solo al pulsante "Sollecita", calcolati qui
+                // dentro perche' chiederli riga per riga vorrebbe dire una
+                // query per fattura per ogni cliente a schermo.
+                ->selectRaw(self::ALLEGABILI.' as allegabili', [now()->toDateString()])
+                ->selectRaw(self::ultimoSollecito(), [self::tenantId(), SollecitoPagamento::STATO_INVIATO])
                 ->where('tenant_id', Filament::getTenant()?->id)
                 ->where('tipo', EurekaPartitaAperta::TIPO_CLIENTE)
                 // Del dare entra solo cio' che e' gia' scaduto, dell'avere
@@ -429,11 +512,72 @@ class ScadutoClienti extends Page implements HasTable
                         self::giorni($state) > 60 => 'warning',
                         default => 'info',
                     }),
+
+                // Due cose nella stessa colonna, perche' sono la stessa
+                // domanda — "a questo gli abbiamo scritto?": la data
+                // dell'ultimo sollecito riuscito, oppure il motivo per cui
+                // non glielo si puo' mandare.
+                //
+                // VUOTA quando non abbiamo mai scritto e si potrebbe, che
+                // oggi e' quasi ogni riga: una colonna piena di "mai"
+                // identici si smette di leggere, e il giorno in cui una
+                // riga e' diversa non la si vede piu' (stessa scelta della
+                // colonna "Chiesto" in PreventiviDaSollecitare).
+                //
+                // Il motivo sta QUI e non solo nel suggerimento del
+                // pulsante: un bottone spento si spiega solo a chi ci passa
+                // sopra col mouse, e chi scorre l'elenco per decidere a chi
+                // scrivere non ci passa sopra.
+                Tables\Columns\TextColumn::make('sollecitato_il')
+                    ->label('Sollecito')
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderByRaw('sollecitato_il '.$direction))
+                    ->placeholder('')
+                    // Lo stato si compone QUI e non in formatStateUsing:
+                    // Filament salta il formatter quando lo stato e' null e
+                    // mette il placeholder al suo posto, e il caso che
+                    // proprio qui andava spiegato — non gli abbiamo mai
+                    // scritto perche' non si puo' — e' esattamente quello in
+                    // cui la data non c'e' (stessa trappola della colonna
+                    // "Ritardo" in DettaglioScaduto).
+                    ->getStateUsing(fn (EurekaPartitaAperta $record): ?string => ($quando = $record->getAttribute('sollecitato_il'))
+                        ? 'il '.Carbon::parse($quando)->format('d/m/Y')
+                        : (self::motivo($record)['breve'] ?? null))
+                    ->color('gray')
+                    ->size('sm'),
             ])
             ->actions([
+                // Il promemoria con le fatture in allegato. Da qui e dalla
+                // pagina di dettaglio, che e' quella che si tiene aperta al
+                // telefono: due porte sulla stessa cosa, un modulo solo
+                // (SollecitiPagamento::formSchema).
+                Tables\Actions\Action::make('sollecita')
+                    ->label('Sollecita')
+                    // Spento quando non si puo' mandare, con il perche' per
+                    // esteso nel suggerimento e in breve nella colonna qui
+                    // accanto. Mai un errore DOPO che l'utente ha scritto la
+                    // mail: il testo andrebbe perso e la fiducia pure.
+                    ->icon(fn (EurekaPartitaAperta $record): string => self::motivo($record) === null ? 'heroicon-o-envelope' : 'heroicon-m-no-symbol')
+                    ->color(fn (EurekaPartitaAperta $record): string => self::motivo($record) === null ? 'primary' : 'gray')
+                    ->disabled(fn (EurekaPartitaAperta $record): bool => self::motivo($record) !== null)
+                    ->tooltip(fn (EurekaPartitaAperta $record): ?string => self::motivo($record)['perche'] ?? null)
+                    ->modalHeading(fn (EurekaPartitaAperta $record) => 'Sollecito di pagamento · '.DisplayName::titleCase($record->ragione_sociale))
+                    ->modalDescription('Manda al cliente le sue fatture scadute, in allegato. Scrive a chi è intestata la fattura, non a chi paga per lui.')
+                    ->modalSubmitActionLabel('Manda il sollecito')
+                    ->modalWidth('2xl')
+                    ->form(fn (EurekaPartitaAperta $record): array => SollecitiPagamento::formSchema((int) $record->gestionale_code))
+                    ->action(fn (EurekaPartitaAperta $record, array $data) => SollecitiPagamento::invia((int) $record->gestionale_code, $data)),
+
+                // Solo la freccia, da quando accanto c'e' il sollecito: con
+                // due pulsanti scritti per esteso la colonna delle azioni
+                // usciva dallo schermo a 1440px e si perdeva per prima
+                // proprio "Sollecita". La riga intera e' gia' un link a
+                // questa stessa pagina (recordUrl), quindi la freccia e' un
+                // invito, non l'unica strada.
                 Tables\Actions\Action::make('dettaglio')
                     ->label('Vedi fatture')
                     ->icon('heroicon-m-arrow-right')
+                    ->iconButton()
+                    ->tooltip('Vedi le fatture')
                     ->url(fn ($record) => DettaglioScaduto::getUrl(['codice' => $record->gestionale_code])),
             ])
             // Il peso resta l'ordine di partenza, ma da qui in poi e' solo un

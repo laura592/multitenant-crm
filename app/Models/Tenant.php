@@ -49,6 +49,7 @@ class Tenant extends Model implements HasName
         'client_contact_name',
         'client_contact_phone',
         'notify_quote_response_emails',
+        'notify_sollecito_pagamento_emails',
     ];
 
     protected $casts = [
@@ -68,6 +69,7 @@ class Tenant extends Model implements HasName
         'notify_gestionale_sync_failed_emails' => 'array',
         'notify_service_report_emails' => 'array',
         'notify_quote_response_emails' => 'array',
+        'notify_sollecito_pagamento_emails' => 'array',
     ];
 
     protected static function booted(): void
@@ -279,6 +281,13 @@ class Tenant extends Model implements HasName
             // (conferma, domanda, richiamata, "per ora no"). Finche' la
             // lista e' vuota vanno a chi riceve gia' la copia dei preventivi.
             'quote_response' => $this->normalizedRecipients($this->notify_quote_response_emails, $this->normalizedRecipients($this->notify_quote_emails, $legacy)),
+            // Copia dei solleciti di pagamento. Nessuna riserva sui
+            // destinatari globali: una mail che chiede soldi a un cliente
+            // non si manda in copia a tutto lo staff perche' nessuno ha
+            // compilato la lista. Finche' e' vuota, la copia non parte e
+            // basta — chi ha premuto il pulsante lo sa, e il sollecito
+            // resta scritto nel CRM.
+            'sollecito_pagamento' => $this->normalizedRecipients($this->notify_sollecito_pagamento_emails),
             default => $legacy,
         };
     }
